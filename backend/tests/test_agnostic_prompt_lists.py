@@ -166,20 +166,21 @@ async def test_an_agnostic_selection_with_no_room_stays_agnostic(env):
     assert pinned.language == "zxx"
 
 
-async def test_an_agnostic_list_collides_with_the_room_s_list_under_the_room_s_fold(env):
+async def test_an_agnostic_list_may_share_a_word_with_the_room_s_list(env):
     """`Mädchen` in a German list and `Maedchen` in an agnostic one are one
-    answer to a German room, so the room refuses to draw from both."""
+    answer to a German room: the room takes both lists and plays one of the
+    two (#1396)."""
     _, users, prompts, _ = env
     owner = await _owner(users)
     await _bundled(prompts, "german_standard", "de", "Mädchen")
     names = await _list(prompts, owner.id, "Names", "zxx", "Maedchen")
 
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await prompts.authorize_selection(
-            ["german_standard", names.slug],
-            requesting_user_id=owner.id,
-            expected_language="de",
-        )
+    pinned = await prompts.authorize_selection(
+        ["german_standard", names.slug],
+        requesting_user_id=owner.id,
+        expected_language="de",
+    )
+    assert pinned.prompt_count == 2
     # An English room folds them apart, so it takes both.
     await _bundled(prompts, "english_standard", "en", "girl")
     pinned = await prompts.authorize_selection(
@@ -279,20 +280,19 @@ async def test_a_copy_or_duplicate_of_an_agnostic_list_stays_agnostic(env):
     assert pinned.language == "de"
 
 
-async def test_resolving_refuses_an_agnostic_twin_under_the_room_s_fold(env):
-    """The same collision `authorize_selection` refuses, on the path that
-    loads the prompts."""
+async def test_resolving_keeps_one_of_an_agnostic_twin_under_the_room_s_fold(env):
+    """The path that loads the prompts keeps one of two lists' shared word."""
     _, users, prompts, _ = env
     owner = await _owner(users)
     await _bundled(prompts, "german_standard", "de", "Mädchen")
     names = await _list(prompts, owner.id, "Names", "zxx", "Maedchen")
 
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await prompts.resolve_selection(
-            ["german_standard", names.slug],
-            requesting_user_id=owner.id,
-            expected_language="de",
-        )
+    resolved = await prompts.resolve_selection(
+        ["german_standard", names.slug],
+        requesting_user_id=owner.id,
+        expected_language="de",
+    )
+    assert list(resolved.prompts) == ["Mädchen"]
 
 
 async def test_the_draw_compares_quick_prompts_only_with_keys_in_the_room_s_fold(env):

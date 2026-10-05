@@ -3801,17 +3801,17 @@ class _BundledFamilies:
     names: dict[UUID, str]
 
 
-AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
 
 
 @dataclass(frozen=True, slots=True)
 class _SelectionVerdict:
     """What checking a selection's content concluded: how many prompts it
-    offers, and whether any answer reaches two of them."""
+    offers. Lists may share a word (a champion called Poppy beside the flower):
+    a game keeps one of each at its draw, so a selection is never refused for
+    one (#1396)."""
 
     prompt_count: int
-    ambiguous: bool
 
 
 async def _lock_versions(session: AsyncSession, *where) -> None:
@@ -4017,47 +4017,16 @@ async def _source_lists(
 
 
 def _single_language_verdict(rows: Sequence[Row], language: str) -> _SelectionVerdict:
-    """Fold every active answer and alias under `language`; off the loop.
-
-    Keyed from the *text* under the fold in force now, not the stored keys
-    (review of #1070): a fold that widened since the rows were written makes
-    two stored keys one answer, and the game matches under the new fold.
-    """
-    owners = AnswerOwners(language)
-    for version_id, answer in rows:
-        if not owners.claim(version_id, answer):
-            return _SelectionVerdict(prompt_count=0, ambiguous=True)
-    return _SelectionVerdict(prompt_count=len({version_id for version_id, _ in rows}), ambiguous=False)
+    """How many prompts the rows offer; off the loop. Shared words between
+    lists are the draw's to settle (`game_flow._one_of_each_word`)."""
+    return _SelectionVerdict(prompt_count=len({version_id for version_id, _ in rows}))
 
 
 def _mixed_verdict(
     rows: Sequence[Row], alias_rows: Sequence[Row], language_of: dict[UUID, str]
 ) -> _SelectionVerdict:
-    """A mixed room's check, every room language at once; off the loop.
-
-    Each room language sees its own lists and the lists in no language, and
-    judges them by every spelling its guesses are accepted under
-    (`AnswerOwners`), not by the stored key alone. A list in a language is
-    folded once; a list in no language once per transliteration. The
-    rows arrive as the database returned them, so none of this - not even
-    grouping the aliases - runs on the loop.
-    """
-    aliases: dict[UUID, list[str]] = defaultdict(list)
-    for version_id, answer in alias_rows:
-        aliases[version_id].append(answer)
-    owners = {language: AnswerOwners(language) for language in PROMPT_LANGUAGES}
-    for list_id, version_id, _concept, answer in rows:
-        list_language = language_of[list_id]
-        languages = (
-            PROMPT_LANGUAGES if list_language == AGNOSTIC_PROMPT_LANGUAGE else (list_language,)
-        )
-        for text in (answer, *aliases.get(version_id, ())):
-            for language, spellings in prompt_match_variants_by_language(text, languages).items():
-                if not owners[language].claim(version_id, text, spellings):
-                    return _SelectionVerdict(prompt_count=0, ambiguous=True)
-    return _SelectionVerdict(
-        prompt_count=len({concept for _, _, concept, _ in rows}), ambiguous=False
-    )
+    """A mixed room's count: concepts, one however many languages spell it."""
+    return _SelectionVerdict(prompt_count=len({concept for _, _, concept, _ in rows}))
 
 
 class SqlAlchemyPromptListRepository(PromptListRepository):
@@ -6465,21 +6434,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                     if prompt_version.id in seen_versions:
                         continue
-                    # Judged from the text under the fold in force now, not
-                    # from the keys the rows were written with: a fold that
-                    # widened since (#1011's apostrophes) makes two stored
-                    # keys one answer, and the game matches under the new
-                    # fold, so the check that keeps a game's answers apart
-                    # has to see what the game will see (review of #1070) -
-                    # every spelling a guess is accepted under (#1396).
-                    if not all(
+                    # Two lists may share a word; the selection keeps the
+                    # first (#1396). Judged from the text under the fold in
+                    # force now, not the stored keys (review of #1070), and by
+                    # every spelling a guess is accepted under.
+                    texts = (
+                        prompt_version.canonical_answer,
+                        *(link.alias.answer for link in prompt_version.version_aliases),
+                    )
+                    if any(owners.clashes(prompt_version.id, text) for text in texts):
+                        continue
+                    for text in texts:
                         owners.claim(prompt_version.id, text)
-                        for text in (
-                            prompt_version.canonical_answer,
-                            *(link.alias.answer for link in prompt_version.version_aliases),
-                        )
-                    ):
-                        raise PromptListSelectionError(AMBIGUOUS_SELECTION)
                     seen_versions.add(prompt_version.id)
                     answer = prompt_version.canonical_answer
                     prompts.append(answer)
@@ -6534,8 +6500,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 lambda: self._single_language_rows(session, lists),
                 lambda rows: _single_language_verdict(rows, language),
             )
-            if verdict.ambiguous:
-                raise PromptListSelectionError(AMBIGUOUS_SELECTION)
             if not verdict.prompt_count:
                 raise PromptListSelectionError(EMPTY_SELECTION)
             prompt_count = verdict.prompt_count
@@ -6904,8 +6868,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             read_rows,
             lambda read: _mixed_verdict(*read, language_of),
         )
-        if verdict.ambiguous:
-            raise PromptListSelectionError(AMBIGUOUS_SELECTION)
         if not verdict.prompt_count:
             raise PromptListSelectionError(EMPTY_SELECTION)
 

@@ -23,7 +23,6 @@ from app.repositories.interfaces import (
     BundledPromptDefinition,
     MixedRoomListError,
     PromptListEntryInput,
-    PromptListSelectionError,
 )
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
@@ -600,7 +599,7 @@ def test_what_the_whole_room_reads_carries_every_spelling():
             assert highlight["prompts"]["en"] == "bow tie", highlight
 
 
-async def test_a_mixed_room_asks_each_language_about_collisions_and_letters(seeded):
+async def test_a_mixed_room_prices_each_language_and_admits_shared_words(seeded):
     prompts, owner = seeded
     pinned = await prompts.authorize_selection(
         ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
@@ -610,17 +609,17 @@ async def test_a_mixed_room_asks_each_language_about_collisions_and_letters(seed
     assert pinned.letter_counts_by_language["de"] != pinned.letter_counts_by_language["en"]
 
     # "Hund" in no language is one answer with German Standard's dog to a
-    # German seat, so the room refuses to draw from both.
+    # German seat: the room takes both, and its draw keeps one (#1396).
     names = await prompts.create_owned(
         owner.id, name="Names", description="", language="zxx",
         prompts=(PromptListEntryInput(answer="Hund"),),
     )
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await prompts.authorize_selection(
-            ["english_standard", names.slug],
-            requesting_user_id=owner.id,
-            expected_language="mul",
-        )
+    both = await prompts.authorize_selection(
+        ["english_standard", names.slug],
+        requesting_user_id=owner.id,
+        expected_language="mul",
+    )
+    assert both.prompt_count == pinned.prompt_count + 1
 
 
 async def test_a_concept_taken_down_in_one_language_is_not_drawn(seeded):

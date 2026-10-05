@@ -12,14 +12,17 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import Mapping, Protocol
 
 from app.announcements import Announcement
 from app.auth.avatars import avatar_url
+from app.encode_pool import off_loop
 from app.flow_timing import timing
 from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase, PromptForm
 from app.domain_values import (
     MIXED_PROMPT_LANGUAGE,
+    PROMPT_LANGUAGES,
     GameOutcome,
     RuntimeEventType,
     TurnEligibilityReason,
@@ -46,7 +49,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug, prompt_match_key
+from app.prompt_content import AnswerOwners, default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.refusals import ErrorCode
 from app.repositories.interfaces import (
@@ -74,6 +77,56 @@ HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
 #: then ~0.24 s once staging began preparing each drawing's stored form (#1259).
 ENVELOPE_ENCODE_SECONDS = 0.25
 
+
+
+def _one_of_each_word(
+    prompts: Sequence[SampledPrompt], forms: Callable[[SampledPrompt], Iterable[tuple[str, str]]]
+) -> list[SampledPrompt]:
+    """The draw, keeping one prompt per word: lists may share a word - a
+    champion called Poppy beside the flower - but a game never offers both
+    (#1396). `forms` gives each prompt's (language, text) pairs, every one of
+    which a guess is accepted under; a prompt whose word another kept prompt
+    already answers to is dropped. The draw arrives in random order, so which
+    of the two a game keeps is the draw's to decide."""
+    owners: dict[str, AnswerOwners] = {}
+    kept: list[SampledPrompt] = []
+    for prompt in prompts:
+        owner = prompt.concept_id or prompt.answer
+        pairs = list(forms(prompt))
+        if any(owners.setdefault(language, AnswerOwners(language)).clashes(owner, text) for language, text in pairs):
+            continue
+        for language, text in pairs:
+            owners[language].claim(owner, text)
+        kept.append(prompt)
+    return kept
+
+
+async def _distinct_draw(
+    draw: Callable[[int], Awaitable[PromptSample]],
+    needed: int,
+    keep: Callable[[SampledPrompt], bool],
+    forms: Callable[[SampledPrompt], Iterable[tuple[str, str]]],
+) -> tuple[PromptSample, list[SampledPrompt]]:
+    """Draw until `needed` prompts with distinct words are in hand, or the
+    lists hold no more (review of #1410). Dropping a shared word shortens the
+    draw, and a short draw made up again only from what was drawn would let
+    nineteen lists that all hold "Poppy" crowd out a twentieth's other words:
+    so a short draw asks again for four times as many, up to everything the
+    lists hold. Overlaps are rare, and the first draw is almost always the
+    last. The folding runs off the loop: a list in no language is folded in
+    every language, and the loop is every room's (N-01)."""
+    limit = needed
+    while True:
+        sample = await draw(limit)
+        candidates = await off_loop(
+            _one_of_each_word, [prompt for prompt in sample.prompts if keep(prompt)], forms
+        )
+        # Fewer rows than asked for means there are no more, whatever the
+        # count said (a takedown can land between the two statements).
+        larger = min(sample.drawable, limit * 4)
+        if len(candidates) >= needed or len(sample.prompts) < limit or larger <= limit:
+            return sample, candidates
+        limit = larger
 
 def history_encode_drain_seconds() -> float:
     """What a shutdown allows for encodes still queued, on top of the write's
@@ -712,16 +765,33 @@ class GameFlowService:
         form in every room language, from the families the room pinned. No
         quick prompts - the room refused them - so nothing is weighted or
         shadowed; everything else is `_draw_prompt_sample`'s reasoning."""
-        try:
-            sample = await asyncio.wait_for(
+        def draw(limit: int) -> Awaitable[PromptSample]:
+            return asyncio.wait_for(
                 self._ctx.prompt_list_repo.sample_mixed_prompts(
                     list(room.prompt_list_ids),
-                    limit=needed,
+                    limit=limit,
                     expected_versions=dict(room.prompt_list_versions),
                     edition_ids=dict(room.prompt_edition_ids),
                 ),
                 timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
             )
+
+        # Each form in its own language; a list in no language is played as
+        # its one spelling by every seat, so it is held to every language.
+        try:
+            sample, drawn = await _distinct_draw(draw, needed, lambda prompt: True, lambda prompt: (
+                [
+                    (language, text)
+                    for language, form in prompt.translations.items()
+                    for text in (form.answer, *form.aliases)
+                ]
+                if prompt.translations
+                else [
+                    (language, text)
+                    for language in PROMPT_LANGUAGES
+                    for text in (prompt.answer, *prompt.aliases)
+                ]
+            ))
         except PromptListsChangedError:
             raise
         except Exception as error:
@@ -729,7 +799,7 @@ class GameFlowService:
             raise RoomPromptResolutionError(
                 "Prompt lists could not be loaded. Please try again."
             ) from error
-        drawn = list(sample.prompts)
+        drawn = drawn[:needed]
         if not drawn:
             logger.warning("Mixed room %s drew an empty prompt pool", room.id)
             raise RoomPromptResolutionError(
@@ -832,19 +902,40 @@ class GameFlowService:
         # Drawn before the split, because the split needs to know how much
         # curated content there was to draw. `needed` is the most the curated
         # half could ever claim, so a prefix of this always covers it.
+        # The database compares stored keys, and only those stored in the
+        # room's language: a list in no language (#821) stores its keys
+        # without the room's transliteration - "Müller" is `muller` there and
+        # `mueller` to a German room, and "Bär" is `bar`, which is another
+        # German word. So its shadow is asked here, of the text, under the
+        # room's fold - by the canonical key and not the wider spelling set
+        # (R-GUESS-01): which prompt a turn draws does not widen. For a list
+        # in the room's language this is the stored key again and removes
+        # nothing more. A word two lists share is kept once (#1396).
+        shadowed = room.custom_prompt_match_keys()
         sample = PromptSample()
+        candidates: list[SampledPrompt] = []
         if room.draws_from_prompt_lists():
-            try:
-                sample = await asyncio.wait_for(
+            def draw(limit: int) -> Awaitable[PromptSample]:
+                return asyncio.wait_for(
                     self._ctx.prompt_list_repo.sample_prompts(
                         list(room.prompt_list_ids),
-                        limit=needed,
-                        exclude_match_keys=room.custom_prompt_match_keys(),
+                        limit=limit,
+                        exclude_match_keys=shadowed,
                         exclude_language=room.prompt_language,
                         expected_versions=dict(room.prompt_list_versions),
                         edition_ids=dict(room.prompt_edition_ids),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
+                )
+
+            try:
+                sample, candidates = await _distinct_draw(
+                    draw,
+                    needed,
+                    lambda prompt: prompt_match_key(prompt.answer, room.prompt_language) not in shadowed,
+                    lambda prompt: (
+                        (room.prompt_language, text) for text in (prompt.answer, *prompt.aliases)
+                    ),
                 )
             except PromptListsChangedError:
                 raise
@@ -857,21 +948,6 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        # The database compares stored keys, and only those stored in the
-        # room's language: a list in no language (#821) stores its keys
-        # without the room's transliteration - "Müller" is `muller` there and
-        # `mueller` to a German room, and "Bär" is `bar`, which is another
-        # German word. So its shadow is asked here, of the text, under the
-        # room's fold - by the canonical key and not the wider spelling set
-        # (R-GUESS-01): which prompt a turn draws does not widen. For a list in the room's language this is the stored
-        # key again and removes nothing more; twins are few, so the sample is
-        # not over-drawn for them.
-        shadowed = room.custom_prompt_match_keys()
-        candidates = [
-            prompt
-            for prompt in sample.prompts
-            if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
-        ]
         drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
 
         total = len(custom) + drawable
