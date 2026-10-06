@@ -2212,6 +2212,8 @@ export const NL: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "In de {terms} en de {privacy} staat hoe je je gegevens nog kunt downloaden of verwijderen.",
     yourAccountSuspended: "Je account is geschorst",
     signingOut: "Uitloggen…",
     signOut: "Uitloggen",

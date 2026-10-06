@@ -18,6 +18,8 @@ import {
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
+const READABLE_WHILE_SUSPENDED = new Set(["/privacy", "/terms", "/rules"]);
+
 /** Tell a suspended player what happened, before they are simply signed out.
 
 Suspending revokes every session and ends every live seat at once, so without
@@ -53,6 +55,12 @@ export function SuspensionNotice() {
   }, []);
 
   if (!suspension) return null;
+  // The pages a suspended player may still read (#1417): the terms and the
+  // privacy notice say how to download or delete their data, and the rules
+  // say what a decision's category means. On those the notice is a bar, not
+  // a dialog over the page. Read off the address rather than the router,
+  // which this sits outside: every way here from the dialog is a full load.
+  const reading = READABLE_WHILE_SUSPENDED.has(window.location.pathname.toLowerCase());
 
   async function signOut() {
     if (busy) return;
@@ -70,6 +78,17 @@ export function SuspensionNotice() {
     // Hard reload rather than a route change: every store in memory belongs to
     // the account that just went away.
     window.location.href = "/";
+  }
+
+  if (reading) {
+    return (
+      <div className="suspension-reading-bar" role="status">
+        <span>{ui.suspensionNotice.yourAccountSuspended}</span>
+        <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void signOut()}>
+          {busy ? ui.suspensionNotice.signingOut : ui.suspensionNotice.signOut}
+        </button>
+      </div>
+    );
   }
 
   // No way to set it aside - there is nothing behind it to go back to - so no
@@ -111,6 +130,12 @@ export function SuspensionNotice() {
         <p className="modal-body suspension-reason">{suspension.reason}</p>
       )}
       <p className="modal-body">{suspensionDuration(suspension, new Date(), timeFormat)}</p>
+      <p className="modal-body suspension-rights">
+        {fill(ui.suspensionNotice.yourDataStillYours, {
+          terms: <a href="/terms">{ui.accountMenu.terms2}</a>,
+          privacy: <a href="/privacy">{ui.accountMenu.privacy2}</a>,
+        })}
+      </p>
       {suspension.messages.length > 0 && (
         <>
           <p className="modal-body suspension-evidence-label">

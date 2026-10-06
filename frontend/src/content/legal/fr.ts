@@ -146,7 +146,7 @@ export const LEGAL_FR: LegalDocuments = {
           "Comptes : jusqu'à ce que tu les supprimes. Amitiés, blocages, listes " +
             "de mots, réglages de salon enregistrés et favoris : jusqu'à ce que " +
             "tu les retires ou que tu supprimes ton compte.",
-          "Connexions : jusqu'à leur expiration, puis 30 jours.",
+          "Connexions : jusqu'à leur expiration, puis 30 jours – sauf celles d'un compte suspendu, conservées tant que dure la suspension, car elles sont son seul moyen de télécharger ou de supprimer ses données.",
           "Entrées et sorties des salons : 30 jours.",
           "E-mails qui te sont envoyés : 30 jours.",
           "Exports de données que tu demandes : 7 jours.",

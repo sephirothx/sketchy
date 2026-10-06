@@ -143,7 +143,7 @@ export const LEGAL_IT: LegalDocuments = {
           "Account: finché non li elimini. Amicizie, blocchi, liste di parole, " +
             "impostazioni di stanza salvate e stelle: finché non li rimuovi o " +
             "elimini il tuo account.",
-          "Accessi: finché non scadono, e 30 giorni dopo.",
+          "Accessi: finché non scadono, e 30 giorni dopo – tranne quelli di un account sospeso, conservati finché dura la sospensione, perché sono il suo unico modo per scaricare o eliminare i propri dati.",
           "Entrate e uscite dalle stanze: 30 giorni.",
           "Email inviate a te: 30 giorni.",
           "Esportazioni di dati che richiedi: 7 giorni.",

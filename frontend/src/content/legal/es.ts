@@ -137,7 +137,7 @@ export const LEGAL_ES: LegalDocuments = {
           "Cuentas: hasta que las elimines. Amistades, bloqueos, listas de " +
             "palabras, ajustes de sala guardados y estrellas: hasta que los " +
             "quites o elimines tu cuenta.",
-          "Inicios de sesión: hasta que caduquen, y 30 días después.",
+          "Inicios de sesión: hasta que caduquen, y 30 días después, salvo los de una cuenta suspendida, que se conservan mientras dure la suspensión, porque son su única vía para descargar o eliminar sus datos.",
           "Entradas y salidas de las salas: 30 días.",
           "Correos que se te envían: 30 días.",
           "Exportaciones de datos que pidas: 7 días.",

@@ -29,6 +29,7 @@ import {
 } from "../hooks/useSettingsRoute";
 import { useCloseOverlay } from "../hooks/useOverlayRoute";
 import { AuthDialog } from "./AccountMenu";
+import { IdentityAgreement } from "./IdentityAgreement";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
@@ -490,6 +491,8 @@ function NamelessCard({ onAuth }: { onAuth: (mode: AuthMode) => void }) {
           {busy ? ui.settingsOverlay.saving : ui.settingsOverlay.save}
         </button>
       </form>
+      {/* Saving a name here starts a new identity, as the lobby's tag does. */}
+      <IdentityAgreement />
       <div className="settings-guest-actions">
         <button type="button" className="btn btn-secondary" onClick={() => onAuth("claim")}>
           <PlusIcon size={15} />

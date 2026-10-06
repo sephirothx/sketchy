@@ -604,6 +604,25 @@
   font-weight: 600;
 }
 
+/* What starting to play agrees to (#1417), under the invite's Join and
+   Spectate and the Settings name form: fine print, never a third button. */
+.identity-agreement {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.identity-agreement a {
+  color: inherit;
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+
+.invite-agreement {
+  text-align: center;
+}
+
 .invite-account-line {
   margin: 16px 0 0;
   color: var(--muted);

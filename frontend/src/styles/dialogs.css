@@ -442,3 +442,26 @@
 .btn.afk-check-answer {
   width: 100%;
 }
+
+/* On the pages a suspended player may still read - the terms, the privacy
+   notice, the rules (#1417) - the notice is a bar over the top of the page
+   rather than a dialog in front of it. */
+.suspension-reading-bar {
+  align-items: center;
+  background: var(--card);
+  border-bottom: 1.5px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-wrap: wrap;
+  font-weight: 700;
+  gap: 8px 14px;
+  justify-content: center;
+  padding: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-banner);
+}
+
+.suspension-rights a {
+  font-weight: 700;
+}

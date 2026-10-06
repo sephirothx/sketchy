@@ -140,7 +140,7 @@ export const LEGAL_PL: LegalDocuments = {
             "bez gry, jeśli mają już jakąś ukończoną.",
           "Konta: do ich usunięcia. Znajomości, blokady, listy haseł, zapisane " +
             "ustawienia pokoi i gwiazdki: do ich usunięcia albo usunięcia konta.",
-          "Logowania: do wygaśnięcia, a potem jeszcze 30 dni.",
+          "Logowania: do wygaśnięcia, a potem jeszcze 30 dni – z wyjątkiem logowań zawieszonego konta, przechowywanych przez cały czas zawieszenia, bo to jedyna droga do pobrania lub usunięcia jego danych.",
           "Wejścia do pokoi i wyjścia z nich: 30 dni.",
           "Wysłane do ciebie e-maile: 30 dni.",
           "Zamówione eksporty danych: 7 dni.",

@@ -138,7 +138,7 @@ export const LEGAL_PT: LegalDocuments = {
           "Contas: até as eliminares. Amizades, bloqueios, listas de palavras, " +
             "definições de sala guardadas e estrelas: até os removeres ou " +
             "eliminares a tua conta.",
-          "Inícios de sessão: até expirarem, e 30 dias depois.",
+          "Inícios de sessão: até expirarem, e 30 dias depois – exceto os de uma conta suspensa, guardados enquanto a suspensão durar, por serem o seu único meio de descarregar ou eliminar os seus dados.",
           "Entradas e saídas das salas: 30 dias.",
           "Emails enviados para ti: 30 dias.",
           "Exportações de dados que pedires: 7 dias.",

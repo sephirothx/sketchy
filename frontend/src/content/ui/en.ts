@@ -2233,6 +2233,8 @@ export const EN = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "The {terms} and the {privacy} say how you can still download or delete your data.",
     yourAccountSuspended: "Your account is suspended",
     signingOut: "Signing out…",
     signOut: "Sign out",

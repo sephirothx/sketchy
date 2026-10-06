@@ -2213,6 +2213,8 @@ export const IT: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "I {terms} e l'{privacy} spiegano come puoi ancora scaricare o eliminare i tuoi dati.",
     yourAccountSuspended: "Il tuo account è sospeso",
     signingOut: "Uscita…",
     signOut: "Esci",

@@ -81,10 +81,12 @@ keyboard that takes half the screen, and one thumb.
   between them, in all eight interface languages: what is kept, why and for how long, who
   else handles it, what the Gallery publishes, every right and how to use it, and the
   agreement a player accepts — the minimum age (16), the licence for what they draw and
-  publish, moderation, and Swiss law. A new identity is told what it accepts where it
-  starts, under the name tag and on account creation; the account menu has a *Privacy and
-  terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`, which
-  production refuses to start without.
+  publish, moderation, and Swiss law. A new identity is told what it accepts wherever it
+  starts — the lobby's name tag, an invite link's name field, Settings for a visitor with
+  no name, and account creation — and a suspended player can still read both, and the
+  Rules, under a bar rather than behind a dialog. The account menu has a *Privacy and
+  terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`,
+  which production refuses to start without.
 - Gallery — every kept drawing from a public-room game, shown at `/gallery` to anyone
   signed in, guests included, whether or not they were in the game: a feed of framed
   drawings, one to a row, that loads more as you scroll, with the sort and This week in a

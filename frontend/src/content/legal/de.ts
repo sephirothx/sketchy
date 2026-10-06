@@ -144,7 +144,7 @@ export const LEGAL_DE: LegalDocuments = {
           "Konten: bis du sie löschst. Freundschaften, Blockierungen, " +
             "Begriffslisten, gespeicherte Raumeinstellungen und Sterne: bis du " +
             "sie entfernst oder dein Konto löschst.",
-          "Anmeldungen: bis sie ablaufen, und 30 Tage danach.",
+          "Anmeldungen: bis sie ablaufen, und 30 Tage danach – außer denen eines gesperrten Kontos, die für die Dauer der Sperre bleiben, weil sie sein einziger Weg sind, seine Daten herunterzuladen oder zu löschen.",
           "Betreten und Verlassen von Räumen: 30 Tage.",
           "E-Mails an dich: 30 Tage.",
           "Datenexporte, die du anforderst: 7 Tage.",

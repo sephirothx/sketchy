@@ -2226,6 +2226,8 @@ export const PL: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "Jak nadal pobrać lub usunąć swoje dane, wyjaśniają {terms} i {privacy}.",
     yourAccountSuspended: "Twoje konto jest zawieszone",
     signingOut: "Wylogowywanie…",
     signOut: "Wyloguj się",

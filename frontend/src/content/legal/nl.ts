@@ -145,7 +145,7 @@ export const LEGAL_NL: LegalDocuments = {
           "Accounts: tot je ze verwijdert. Vriendschappen, blokkeringen, " +
             "woordenlijsten, opgeslagen kamerinstellingen en sterren: tot je ze " +
             "weghaalt of je account verwijdert.",
-          "Aanmeldingen: tot ze verlopen, en 30 dagen daarna.",
+          "Aanmeldingen: tot ze verlopen, en 30 dagen daarna – behalve die van een geschorst account, die blijven zolang de schorsing duurt, omdat ze de enige manier zijn om de gegevens te downloaden of te verwijderen.",
           "Binnenkomen en verlaten van kamers: 30 dagen.",
           "E-mails aan jou: 30 dagen.",
           "Gegevensexports die je aanvraagt: 7 dagen.",

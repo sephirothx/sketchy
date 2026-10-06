@@ -145,7 +145,7 @@ export const LEGAL_EN: LegalDocuments = {
           "Accounts: until you delete them. Friendships, blocks, prompt " +
             "lists, saved room settings and stars: until you remove them or " +
             "delete your account.",
-          "Sign-ins: until they expire, and 30 days after that.",
+          "Sign-ins: until they expire, and 30 days after that — except those of a suspended account, which are kept while the suspension lasts, since they are its only way to download or delete its data.",
           "Room joins and leaves: 30 days.",
           "Emails sent to you: 30 days.",
           "Data exports you ask for: 7 days.",

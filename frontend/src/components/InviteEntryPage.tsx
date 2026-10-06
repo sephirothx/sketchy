@@ -4,6 +4,7 @@ import { useRoomEntry } from "../hooks/useRoomEntry";
 import { useRoomEntryStore } from "../store/roomEntryStore";
 import { AppHeader } from "./AppHeader";
 import { RoomFacts } from "./RoomFacts";
+import { IdentityAgreement } from "./IdentityAgreement";
 import { AuthDialog } from "./AccountMenu";
 import { EyeIcon, XIcon } from "./icons";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -182,6 +183,9 @@ export function InviteEntryPage({ code }: { code: string }) {
               </button>
             </div>
             {room.isFull && <p className="invite-action-hint">{ui.inviteEntryPage.noPlayerSeatsOpenSpectate}</p>}
+            {/* Join or Spectate is where an invite link's visitor starts:
+                the same agreement the lobby's name tag states (#1417). */}
+            {asksForName && <IdentityAgreement className="invite-agreement" />}
           </div>
 
           {/* Somebody who has an account on another device should arrive as
