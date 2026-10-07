@@ -1,4 +1,5 @@
-"""The Gallery's ranking projections (#524): the Hot score, and their rebuild."""
+"""The Gallery's projections (#524, #1430): the reaction count, the first
+share and the Hot score kept on each drawing row, and their rebuild."""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import GameRecord, TurnDrawing, TurnDrawingReaction
+from app.db.models import TurnDrawing, TurnDrawingReaction, TurnDrawingShare
 
 # Reddit's constant: a decade of reactions is worth 45 000 seconds, twelve and
 # a half hours. With at most sixteen seats in a room, the room's own verdict
@@ -31,11 +32,17 @@ MAX_GALLERY_PAGE = 24
 MAX_GALLERY_OFFSET = 480
 
 
-def hot_score(reaction_count: int, finished_at: datetime) -> float:
-    """`log10(max(n, 1)) + finished_at / 45 000 s`: kept on the row rather than
+def hot_score(reaction_count: int, shared_at: datetime | None) -> float:
+    """`log10(max(n, 1)) + shared_at / 45 000 s`: kept on the row rather than
     computed in the query, because the score of one row never changes except
-    when its count does - the decay is the newer rows' larger second term."""
-    seconds = finished_at.replace(tzinfo=finished_at.tzinfo or timezone.utc).timestamp()
+    when its count or its first share does - the decay is the newer rows'
+    larger second term. Measured from the first share, not the game's finish
+    (#1430): a drawing shared from history a month later enters the Gallery
+    that day, and is new there. Zero while nobody has shared it - no order
+    reads an unshared row, and a constant keeps the rebuild exact."""
+    if shared_at is None:
+        return 0.0
+    seconds = shared_at.replace(tzinfo=shared_at.tzinfo or timezone.utc).timestamp()
     return math.log10(max(reaction_count, 1)) + seconds / HOT_DECAY_SECONDS
 
 
@@ -48,10 +55,18 @@ def _count_by_turn():
     )
 
 
+def _first_share_by_turn():
+    return (
+        select(func.min(TurnDrawingShare.created_at))
+        .where(TurnDrawingShare.turn_id == TurnDrawing.turn_id)
+        .scalar_subquery()
+    )
+
+
 async def _rebuild_batch(session: AsyncSession, after: UUID | None) -> tuple[int, UUID | None]:
-    """One batch of rows, locked before they are counted: a reaction landing
-    meanwhile waits for the batch and then sets the row itself, so the count
-    written here is never staler than the rows it was read from."""
+    """One batch of rows, locked before they are counted: a reaction or a
+    share landing meanwhile waits for the batch and then sets the row itself,
+    so what is written here is never staler than the rows it was read from."""
     locked = (
         select(TurnDrawing.turn_id)
         .order_by(TurnDrawing.turn_id)
@@ -65,26 +80,26 @@ async def _rebuild_batch(session: AsyncSession, after: UUID | None) -> tuple[int
         return 0, None
     rows = (
         await session.execute(
-            select(TurnDrawing.turn_id, GameRecord.finished_at, _count_by_turn())
-            .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
+            select(TurnDrawing.turn_id, _first_share_by_turn(), _count_by_turn())
             .where(TurnDrawing.turn_id.in_(turn_ids))
         )
     ).all()
-    for turn_id, finished_at, count in rows:
+    for turn_id, shared_at, count in rows:
         await session.execute(
             update(TurnDrawing)
             .where(TurnDrawing.turn_id == turn_id)
             .values(
                 reaction_count=int(count),
-                hot_score=hot_score(int(count), finished_at),
+                gallery_shared_at=shared_at,
+                hot_score=hot_score(int(count), shared_at),
             )
         )
     return len(rows), turn_ids[-1]
 
 
 async def rebuild_gallery_ranking_in_session(session: AsyncSession) -> int:
-    """Replace every drawing's count and score with what the reaction rows
-    say, in the caller's transaction. Returns how many rows were written."""
+    """Replace every drawing's count, first share and score with what the
+    reaction and share rows say, in the caller's transaction. Returns how many rows were written."""
     written = 0
     last: UUID | None = None
     while True:
@@ -119,14 +134,17 @@ async def _run_cli() -> None:
     try:
         await init_db(engine)
         rows = await rebuild_gallery_ranking(factory)
-        print(f"Rebuilt the reaction count and Hot score of {rows} drawings.")
+        print(f"Rebuilt the reaction count, first share and Hot score of {rows} drawings.")
     finally:
         await engine.dispose()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Rebuild the Gallery's reaction counts and Hot scores from the reaction rows."
+        description=(
+            "Rebuild the Gallery's reaction counts, first shares and Hot scores "
+            "from the reaction and share rows."
+        )
     )
     parser.parse_args()
     asyncio.run(_run_cli())

@@ -89,6 +89,7 @@ from app.repositories.interfaces import (
     StoredDrawingInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -107,7 +108,9 @@ logger = logging.getLogger("sketchy.services.game_handoff")
 # 3 since #1358: provenance names lists, not revisions (`prompt_source_list_ids`,
 # an offer's `source_list_ids`, `usage_list_ids`), and the usage batch carries
 # each version's `sources`, which is what its facts are credited to now.
-ENVELOPE_VERSION = 3
+# 4 since #1430: the shares to the Gallery made from the turn results, and
+# the turns whose drawer took theirs back out.
+ENVELOPE_VERSION = 4
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -451,6 +454,26 @@ def _reaction_out(reaction: TurnDrawingReactionInput) -> dict:
     }
 
 
+def _share_out(share: TurnDrawingShareInput) -> dict:
+    return {
+        "turn_id": share.turn_id,
+        "seat_id": share.seat_id,
+        "user_id": share.user_id,
+        "shared_at": _iso(share.shared_at),
+        "notify_drawer": share.notify_drawer,
+    }
+
+
+def _share_in(value: dict) -> TurnDrawingShareInput:
+    return TurnDrawingShareInput(
+        turn_id=value["turn_id"],
+        seat_id=value["seat_id"],
+        user_id=value["user_id"],
+        shared_at=_when(value["shared_at"]),
+        notify_drawer=bool(value["notify_drawer"]),
+    )
+
+
 def _usage_out(usage: PromptUsage | None) -> dict | None:
     if usage is None:
         return None
@@ -510,6 +533,8 @@ def _encoded(envelope: FinishedGameEnvelope) -> tuple[bytes, list[tuple[str, flo
         "score_events": [_score_event_out(event) for event in history.score_events],
         "drawings": drawings,
         "reactions": [_reaction_out(reaction) for reaction in history.reactions],
+        "shares": [_share_out(share) for share in history.shares],
+        "withdrawn_turn_ids": list(history.withdrawn_turn_ids),
         "usage": _usage_out(envelope.usage),
         "usage_list_ids": list(envelope.usage_list_ids),
     }
@@ -533,6 +558,8 @@ def decode_envelope(payload: bytes, version: int) -> FinishedGameEnvelope:
             reactions=[
                 TurnDrawingReactionInput(**reaction) for reaction in document["reactions"]
             ],
+            shares=[_share_in(share) for share in document["shares"]],
+            withdrawn_turn_ids=list(document["withdrawn_turn_ids"]),
         )
         return FinishedGameEnvelope(
             history=history,
@@ -969,6 +996,8 @@ async def replay_claim(
                         history.score_events,
                         history.drawings,
                         history.reactions,
+                        history.shares,
+                        history.withdrawn_turn_ids,
                     ),
                     timeout=write_timeout,
                 )

@@ -125,7 +125,7 @@ async def test_the_gallery_is_for_any_session_and_no_session_gets_nothing(env):
     assert set(entry) == {
         "turnId", "roundNumber", "turnNumber", "drawerDisplayName", "drawerNameColor",
         "drawerIsAnonymous", "prompt", "strokeCount", "finishedAt", "reactionCounts",
-        "myReaction", "drawnByMe",
+        "myReaction", "drawnByMe", "sharedAt", "sharedBy", "sharedByMe",
     }
     assert "gameId" not in entry and entry["reactionCounts"] == {"heart": 1}
     assert entry["myReaction"] is None and entry["drawnByMe"] is False

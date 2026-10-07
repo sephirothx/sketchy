@@ -1,6 +1,8 @@
-"""The Gallery's REST surface (#524): reactions from outside the game."""
+"""The Gallery's REST surface (#524): reactions from outside the game, and
+taking a shared drawing back out (#1430)."""
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 import hashlib
 
@@ -9,7 +11,12 @@ from pydantic import ConfigDict, Field
 from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
-from app.api.profiles import reaction_payload, serve_drawing, validator_matches
+from app.api.profiles import (
+    announce_share,
+    reaction_payload,
+    serve_drawing,
+    validator_matches,
+)
 from app.api.serializers import _timestamp as serialize_timestamp
 from app.auth.rate_limit import RateLimiter, client_key
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES
@@ -39,7 +46,8 @@ drawing_limiter = RateLimiter(limit=600, window_seconds=60)
 
 def gallery_entry_payload(entry: GalleryEntry) -> dict:
     """What an entry publishes (R-GAL-03): the pin's shape, the finish time,
-    and the viewer's own facts. No `gameId`, no room, no reactor's name."""
+    who shared it first and when (R-SHARE-06), and the viewer's own facts. No
+    `gameId`, no room, no reactor's name."""
     return {
         "turnId": entry.turn_id,
         "roundNumber": entry.round_number,
@@ -53,6 +61,17 @@ def gallery_entry_payload(entry: GalleryEntry) -> dict:
         "reactionCounts": dict(entry.reaction_counts),
         "myReaction": entry.my_reaction,
         "drawnByMe": entry.drawn_by_me,
+        "sharedAt": serialize_timestamp(entry.shared_at),
+        "sharedBy": (
+            None
+            if entry.shared_by_drawer or entry.sharer_display_name is None
+            else {
+                "displayName": entry.sharer_display_name,
+                "nameColor": entry.sharer_name_color,
+                "isAnonymous": entry.sharer_is_anonymous,
+            }
+        ),
+        "sharedByMe": entry.shared_by_me,
     }
 
 
@@ -68,6 +87,7 @@ def create_gallery_router(
     game_history_repo: GameHistoryRepository,
     *,
     shelf: GalleryShelfCache | None = None,
+    on_share_notice: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     """`shelf` is the process-wide cache of This week; a router built
     without one gets a cache of its own over the repository."""
@@ -176,8 +196,9 @@ def create_gallery_router(
             gallery_entry_payload(
                 replace(
                     entry,
-                    my_reaction=facts.get(entry.turn_id, (None, False))[0],
-                    drawn_by_me=facts.get(entry.turn_id, (None, False))[1],
+                    my_reaction=facts.get(entry.turn_id, (None, False, False))[0],
+                    drawn_by_me=facts.get(entry.turn_id, (None, False, False))[1],
+                    shared_by_me=facts.get(entry.turn_id, (None, False, False))[2],
                 )
             )
             for entry in snapshot.entries
@@ -235,5 +256,25 @@ def create_gallery_router(
     async def clear_gallery_reaction(turn_id: str, request: Request):
         """Take the signed-in player's reaction back."""
         return await _write_reaction(turn_id, request, None)
+
+    @router.delete("/{turn_id}/share")
+    async def withdraw_gallery_drawing(turn_id: str, request: Request):
+        """Take a drawing back out of the Gallery from the Gallery (R-SHARE-04):
+        the drawer's whole drawing, or anybody else's own share of it. The turn
+        alone is named, as everywhere on this door; the caller must still have
+        sat in its game, and every refusal is the same 404."""
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        result = await game_history_repo.set_drawing_share(
+            None, turn_id, requesting_user_id=requesting_user_id, shared=False
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        await announce_share(
+            result, on_share_notice=on_share_notice, on_gallery_changed=shelf_cache.invalidate
+        )
+        return {"turnId": result.turn_id, "inGallery": bool(result.shares)}
 
     return router

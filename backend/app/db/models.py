@@ -3074,10 +3074,28 @@ class TurnDrawing(Base):
             "reaction_count >= 0", name="ck_turn_drawings_reaction_count"
         ),
         Index("ix_turn_drawings_status_created_at", "status", "created_at"),
-        # Top and Hot read the kept drawings in count or score order; the
-        # status prefix keeps an erased or unavailable row out of the scan.
-        Index("ix_turn_drawings_gallery_top", "status", "reaction_count"),
-        Index("ix_turn_drawings_gallery_hot", "status", "hot_score"),
+        # Top, Hot and New read only the drawings somebody shared (#1430),
+        # which are a small part of every drawing kept; partial, so an
+        # unshared row is never in the scan at all.
+        Index(
+            "ix_turn_drawings_gallery_top",
+            "reaction_count",
+            "gallery_shared_at",
+            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
+            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+        ),
+        Index(
+            "ix_turn_drawings_gallery_hot",
+            "hot_score",
+            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
+            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+        ),
+        Index(
+            "ix_turn_drawings_gallery_new",
+            "gallery_shared_at",
+            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
+            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+        ),
     )
 
     turn_id: Mapped[uuid.UUID] = mapped_column(
@@ -3114,10 +3132,11 @@ class TurnDrawing(Base):
     stored_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # How many reactions the drawing holds, and its Hot score - reddit's
-    # `log10(max(n, 1)) + finished_at / 45 000 s` - kept beside the row so
-    # the Gallery orders by a column rather than counting on read (#524).
-    # Both are disposable projections of `turn_drawing_reactions`: every
-    # reaction write sets them under the row's lock, and
+    # `log10(max(n, 1)) + gallery_shared_at / 45 000 s`, zero while nobody
+    # has shared it - kept beside the row so the Gallery orders by a column
+    # rather than counting on read (#524). Both are disposable projections of
+    # `turn_drawing_reactions` and `turn_drawing_shares`: every reaction and
+    # share write sets them under the row's lock, and
     # `app.services.gallery_ranking` rebuilds them from the rows (R-GAL-05).
     reaction_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
@@ -3129,6 +3148,20 @@ class TurnDrawing(Base):
     # set, the drawing leaves the Gallery, the shelf and the gallery routes
     # in one act while the players who were there keep seeing it.
     gallery_hidden_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+    # When the drawing first entered the Gallery: the earliest of its
+    # `turn_drawing_shares` rows, null while it has none (#1430, R-SHARE-01).
+    # A disposable projection like the two above, set under the row's lock by
+    # every share write and rebuilt from the rows; the Gallery's New order and
+    # its windows read it, and its presence is what "in the Gallery" means.
+    gallery_shared_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+    # The drawer took the drawing out of the Gallery (R-SHARE-04): every share
+    # went with it, and nobody else may share it again until the drawer does.
+    # A fact, not a projection - it is the drawer's act, and no row says it.
+    gallery_withdrawn_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
 
@@ -3460,6 +3493,141 @@ class TurnDrawingReaction(Base):
     participant: Mapped[GameParticipant | None] = relationship(
         primaryjoin=(
             "GameParticipant.id == foreign(TurnDrawingReaction.participant_id)"
+        ),
+    )
+
+
+class TurnDrawingShare(Base):
+    """One player's act of putting a drawing in the Gallery (#1430).
+
+    A drawing is in the Gallery while it holds at least one of these
+    (R-SHARE-01); `turn_drawings.gallery_shared_at` is the earliest, kept on
+    the drawing row so the Gallery orders by a column. Every sharer sat in the
+    game - the drawer from any game, anyone else from a public one
+    (R-SHARE-02) - so the row hangs off the **seat**, which carries the frozen
+    presentation the Gallery credits (R-SHARE-06), with the account beside it
+    for the writes that go by account: withdrawing one's own share, and
+    erasure. The account is the canonical one when the row was written; a
+    later merge leaves it on the alias, which every read resolves.
+
+    Erasure is a status on `turn_drawings`, which no cascade reaches, so the
+    account-erasure path deletes the shares on the drawings it erases and
+    every share the erased account made, the way it deletes pins.
+    """
+
+    __tablename__ = "turn_drawing_shares"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_turn_drawing_shares_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_turn_drawing_shares_seat_same_game",
+            ondelete="CASCADE",
+        ),
+        # The seat constraint above is served by the primary key's second
+        # column only through the turn, so the seat gets its own index: the
+        # erasure path and the cascade from a seat both go by it.
+        Index("ix_turn_drawing_shares_participant_id", "participant_id"),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    # Flush-ordering edges (see TurnRecord.drawer_seat): the finished-game
+    # write adds these beside the turns and seats they point at.
+    turn_record: Mapped[TurnRecord] = relationship(
+        foreign_keys=[game_id, turn_id],
+    )
+    participant: Mapped[GameParticipant] = relationship(
+        primaryjoin="GameParticipant.id == foreign(TurnDrawingShare.participant_id)",
+    )
+
+
+class DrawingShareNotice(Base):
+    """What a drawer still has to be told: somebody else shared their drawing.
+
+    Somebody else may share a drawing from a public game without asking
+    (R-SHARE-02), so the drawer is told once, and can take it back out from
+    the notice (R-SHARE-09). One row per drawing, ever - the first sharer who
+    was not the drawer - because the second and the tenth share say nothing
+    the first did not. The `role_change_notices` pattern: a connected account
+    hears it on the socket, everybody else on their next visit, and
+    acknowledging records that it landed.
+    """
+
+    __tablename__ = "drawing_share_notices"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_drawing_share_notices_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "sharer_participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_drawing_share_notices_sharer_same_game",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("turn_id", name="uq_drawing_share_notices_turn_id"),
+        Index("ix_drawing_share_notices_user_pending", "user_id", "acknowledged_at"),
+        Index("ix_drawing_share_notices_sharer", "sharer_participant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    # The drawer's account, canonical when written.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    # Named through the seat, so the notice credits the frozen name the
+    # Gallery does, and goes with the seat's game.
+    sharer_participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
+    turn_record: Mapped[TurnRecord] = relationship(
+        foreign_keys=[game_id, turn_id],
+    )
+    sharer: Mapped[GameParticipant] = relationship(
+        primaryjoin=(
+            "GameParticipant.id == foreign(DrawingShareNotice.sharer_participant_id)"
         ),
     )
 

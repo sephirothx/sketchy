@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import random
 import re
 import secrets
@@ -535,6 +536,13 @@ class Room:
     # rather than participant ids because a token is what the room can name
     # and broadcast (R-ROOM-07); the history write maps them to seats.
     drawing_reactions: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Shares of this game's drawings to the Gallery (#1430): turn id -> the
+    # sharer's seat token -> when, in the order they were made. Kept like the
+    # reactions above, for the same reasons, and folded into the same write;
+    # `drawing_share_withdrawn` holds the turns whose drawer took theirs back
+    # out, which nobody else may share again until the drawer does.
+    drawing_shares: dict[str, dict[str, datetime]] = field(default_factory=dict)
+    drawing_share_withdrawn: set[str] = field(default_factory=set)
     # The last game's durable id and where its history write got to. A recap
     # reaction is a write to that game's row, so the handler needs to know
     # the row exists before it tries: `pending` while the write is in the
@@ -639,6 +647,7 @@ class Room:
             {
                 **drawing.metadata(index),
                 "reactions": self.drawing_reactions_for(drawing.turn_id),
+                **self.drawing_share_state(drawing.turn_id),
             }
             for index, drawing in enumerate(self.last_game_drawings)
         ]
@@ -669,6 +678,43 @@ class Room:
             {"playerId": token, "emoji": emoji}
             for token, emoji in self.drawing_reactions.get(turn_id, {}).items()
         ]
+
+    def set_drawing_share(
+        self, turn_id: str, token: str, shared: bool, *, at: datetime | None = None
+    ) -> None:
+        """Record or take back one seat's share of one turn's drawing.
+
+        A share made again keeps its first moment: the order is who shared
+        first, and pressing twice does not move anyone to the back."""
+        shares = self.drawing_shares.setdefault(turn_id, {})
+        if shared:
+            shares.setdefault(token, at or datetime.now(timezone.utc))
+        else:
+            shares.pop(token, None)
+        if not shares:
+            self.drawing_shares.pop(turn_id, None)
+
+    def withdraw_drawing(self, turn_id: str) -> None:
+        """The drawer took the drawing back out (R-SHARE-04): every share goes,
+        and nobody else may share it again until the drawer does."""
+        self.drawing_shares.pop(turn_id, None)
+        self.drawing_share_withdrawn.add(turn_id)
+
+    def drawing_shares_for(self, turn_id: str | None) -> list[str]:
+        """The seat tokens sharing one drawing, the first sharer first."""
+        if turn_id is None:
+            return []
+        shares = self.drawing_shares.get(turn_id, {})
+        return sorted(shares, key=lambda token: (shares[token], token))
+
+    def drawing_share_state(self, turn_id: str | None) -> dict:
+        """A drawing's share state as room payloads carry it: seat tokens only
+        (R-ROOM-07), and whether its drawer took it out."""
+        return {
+            "shares": self.drawing_shares_for(turn_id),
+            "shareWithdrawn": turn_id is not None
+            and turn_id in self.drawing_share_withdrawn,
+        }
 
     def allocate_canvas_generation(self) -> int:
         """Return the next room-lifetime canvas protocol identity."""

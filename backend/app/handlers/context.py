@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
 from time import monotonic, perf_counter
+from collections.abc import Awaitable, Callable
 from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 
 import socketio
@@ -131,6 +132,11 @@ class HandlerContext:
     # Gallery doors charge (#1243). None without a database, where reporting
     # is unavailable anyway.
     report_budget: ReportBudget | None = None
+    # What a committed share from the recap owes the rest of the process
+    # (#1430): the drawer it left a notice for is told now if connected, and
+    # This week is read again. Bound by the application once both exist.
+    on_share_notice: Callable[[str], Awaitable[None]] | None = None
+    on_gallery_changed: Callable[[], None] | None = None
     room_quotas: RoomQuotaService = field(init=False)
     room_capacity: RoomCapacityService = field(init=False)
     # Who is connected at all, as opposed to who is holding a seat. Built

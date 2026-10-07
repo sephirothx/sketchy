@@ -3604,7 +3604,7 @@ def create_moderation_router(
                     entries = [
                         entry
                         for entry in entries
-                        if not facts.get(entry.turn_id, (None, False))[1]
+                        if not facts.get(entry.turn_id, (None, False, False))[1]
                     ]
                 candidates.extend(entries[: REVIEW_CANDIDATES - len(candidates)])
                 cursor = page.next_cursor

@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.repositories.interfaces import (
     DrawingReactionResult,
+    DrawingShareResult,
     GalleryPage,
     GameDetail,
     GameHistoryConflictError,
@@ -20,6 +21,7 @@ from app.repositories.interfaces import (
     TurnDrawingInput,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
+    TurnDrawingShareInput,
     TurnRecordInput,
     ProfilePinDetail,
     ProfilePinEntry,
@@ -35,6 +37,8 @@ class SavedGame:
     score_events: list[ScoreEventInput]
     drawings: list[TurnDrawingInput]
     reactions: list[TurnDrawingReactionInput]
+    shares: list[TurnDrawingShareInput]
+    withdrawn_turn_ids: list[str]
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,15 @@ class ReactionWrite:
     turn_id: str
     requesting_user_id: str
     emoji: str | None
+
+
+@dataclass(frozen=True)
+class ShareWrite:
+    game_id: str | None
+    turn_id: str
+    requesting_user_id: str
+    shared: bool
+    notify_drawer: bool
 
 
 def _lock_not_available() -> Exception:
@@ -79,6 +92,9 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self.reaction_result: DrawingReactionResult | None = None
         self.accept_reactions = False
         self.pin_writes: list[tuple[str, tuple[str, ...]]] = []
+        # Later share writes, and what the next one answers; `None` refuses.
+        self.share_writes: list[ShareWrite] = []
+        self.share_result: DrawingShareResult | None = None
         self.accept_pins = True
         self.reaction_seat_id = "seat-1"
 
@@ -90,6 +106,8 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
+        shares: list[TurnDrawingShareInput] | None = None,
+        withdrawn_turn_ids: list[str] | None = None,
     ) -> str:
         self.attempts += 1
         if self.fail:
@@ -120,9 +138,27 @@ class FakeGameHistoryRepository(GameHistoryRepository):
                 score_events=list(score_events or []),
                 drawings=list(drawings or []),
                 reactions=list(reactions or []),
+                shares=list(shares or []),
+                withdrawn_turn_ids=list(withdrawn_turn_ids or []),
             )
         )
         return record_id
+
+    async def set_drawing_share(
+        self,
+        game_id: str | None,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+        shared: bool,
+        notify_drawer: bool = True,
+    ) -> DrawingShareResult | None:
+        if self.fail:
+            raise RuntimeError("database unavailable")
+        self.share_writes.append(
+            ShareWrite(game_id, turn_id, requesting_user_id, shared, notify_drawer)
+        )
+        return self.share_result
 
     async def set_drawing_reaction(
         self,

@@ -615,6 +615,15 @@ class ReactToDrawingPayload(RequestModel):
     emoji: Literal["heart", "laugh", "wow", "fire"] | None = None
 
 
+class ShareDrawingPayload(RequestModel):
+    """One seat's share of one drawing to the Gallery, or its taking back
+    (#1430): ``shared: false`` is the sharer's own share, or - from the
+    drawer - the whole drawing."""
+
+    turn_id: str = Field(alias="turnId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH)
+    shared: bool
+
+
 class ToggleAfkPayload(RequestModel):
     afk: bool | None = None
 

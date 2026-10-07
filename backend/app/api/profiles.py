@@ -33,6 +33,7 @@ from app.compression import accepted_encodings
 from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
+    DrawingShareResult,
     GameHistoryRepository,
     ProfilePinEntry,
     ProfilePinsResult,
@@ -390,14 +391,54 @@ async def _fill_cache(
             _fills.pop(key, None)
 
 
+def share_payload(result: DrawingShareResult) -> dict:
+    """A share write's answer for a participant: the seats sharing the drawing
+    now, first first, and whether its drawer took it out (R-SHARE-07)."""
+    return {
+        "turnId": result.turn_id,
+        "shares": list(result.shares),
+        "withdrawn": result.withdrawn,
+    }
+
+
+async def announce_share(
+    result: DrawingShareResult | ProfilePinsResult,
+    *,
+    on_share_notice: Callable[[str], Awaitable[None]] | None,
+    on_gallery_changed: Callable[[], None] | None,
+) -> None:
+    """What a committed share write owes the rest of the process: the drawer
+    it left a notice for hears it now if connected (R-SHARE-09), and This week
+    is read again, since a drawing may have entered or left the Gallery
+    (R-GAL-07)."""
+    if on_gallery_changed is not None:
+        on_gallery_changed()
+    if on_share_notice is None:
+        return
+    if isinstance(result, DrawingShareResult):
+        notified = (result.notify_user_id,) if result.notify_user_id else ()
+    else:
+        notified = result.notify_user_ids
+    for user_id in notified:
+        try:
+            await on_share_notice(user_id)
+        except Exception:  # noqa: BLE001 - the share stands; the visit catches up
+            logger.exception("Failed to push a share notice")
+
+
 def create_profile_router(
     user_repo: UserRepository,
     game_history_repo: GameHistoryRepository,
     *,
     is_online: Callable[[str], bool] = lambda user_id: False,
+    on_share_notice: Callable[[str], Awaitable[None]] | None = None,
+    on_gallery_changed: Callable[[], None] | None = None,
 ) -> APIRouter:
     """`is_online` is the presence registry's answer for an account id; the
-    default, for a router built without one, says nobody is."""
+    default, for a router built without one, says nobody is.
+    `on_share_notice` pushes a drawer's pending share notices to their open
+    sockets, and `on_gallery_changed` expires This week, after a share write
+    commits."""
     router = APIRouter(prefix="/api")
 
     def throttle(request: Request) -> None:
@@ -617,6 +658,41 @@ def create_profile_router(
         """Take the signed-in player's reaction back."""
         return await _write_reaction(game_id, turn_id, request, None)
 
+    async def _write_share(
+        game_id: str, turn_id: str, request: Request, shared: bool
+    ) -> dict:
+        """The shared body of the share routes (#1430).
+
+        Every refusal is a 404, the reaction routes' rule (R-HIST-16): a
+        stranger, a private game for anyone but the drawer, a withdrawn,
+        hidden, erased, blank or unkept drawing and a game that does not exist
+        all get the same answer. Guests may share: it is not a reaction.
+        """
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        result = await game_history_repo.set_drawing_share(
+            game_id, turn_id, requesting_user_id=requesting_user_id, shared=shared
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        await announce_share(
+            result, on_share_notice=on_share_notice, on_gallery_changed=on_gallery_changed
+        )
+        return share_payload(result)
+
+    @router.put("/games/{game_id}/turns/{turn_id}/share")
+    async def share_turn_drawing(game_id: str, turn_id: str, request: Request):
+        """Put a stored drawing in the Gallery (R-SHARE-02)."""
+        return await _write_share(game_id, turn_id, request, True)
+
+    @router.delete("/games/{game_id}/turns/{turn_id}/share")
+    async def unshare_turn_drawing(game_id: str, turn_id: str, request: Request):
+        """Take one's own share back - or, for the drawer, take the drawing out
+        of the Gallery altogether (R-SHARE-04)."""
+        return await _write_share(game_id, turn_id, request, False)
+
     @router.put("/me/pins")
     async def set_my_pins(body: PinsBody, request: Request):
         """Replace the signed-in player's pinned drawings with the list given.
@@ -648,6 +724,9 @@ def create_profile_router(
         )
         if result is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        await announce_share(
+            result, on_share_notice=on_share_notice, on_gallery_changed=on_gallery_changed
+        )
         return pins_payload(result)
 
     return router

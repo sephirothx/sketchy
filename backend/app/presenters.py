@@ -306,6 +306,9 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         # cleared, so it still names the turn whose results these are.
         "turnId": game.current_turn_id,
         "reactions": room.drawing_reactions_for(game.current_turn_id),
+        # Who has shared the drawing to the Gallery from these results (#1430),
+        # so a reconnect sees the control as it stands.
+        **room.drawing_share_state(game.current_turn_id),
         "drawerId": game.current_drawer,
         "drawerBonus": drawer_bonus,
         "seconds": (

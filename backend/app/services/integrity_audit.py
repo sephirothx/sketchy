@@ -15,8 +15,8 @@ bad one:
 
 - `drawings` - the stored-drawing walk of #610 (checksum, declared size and
   format, decodability), held to a byte and a time budget per pass;
-- `drawing_projections` - `turn_drawings.reaction_count` and `hot_score`
-  against the reaction rows;
+- `drawing_projections` - `turn_drawings.reaction_count`, `gallery_shared_at`
+  and `hot_score` against the reaction and share rows;
 - `user_stats` - each account's `user_stats_daily` rows against a rebuild from
   the facts, computed inside a transaction that is rolled back, so the check
   uses the rebuild's own logic and never repairs anything;
@@ -51,6 +51,7 @@ import argparse
 import asyncio
 import contextlib
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 import json
 import logging
 import math
@@ -74,6 +75,7 @@ from app.db.models import (
     ScoreEvent,
     TurnDrawing,
     TurnDrawingReaction,
+    TurnDrawingShare,
     TurnParticipantOutcome,
     TurnRecord,
     User,
@@ -239,6 +241,20 @@ async def _drawings_slice(
     return result
 
 
+def _same_instant(left, right) -> bool:
+    """Two timestamps, either possibly null, naming the same instant: SQLite
+    hands one back naive and PostgreSQL aware, and the aggregate is read raw."""
+    if left is None or right is None:
+        return left is None and right is None
+    if isinstance(right, str):
+        right = datetime.fromisoformat(right)
+    if left.tzinfo is None:
+        left = left.replace(tzinfo=timezone.utc)
+    if right.tzinfo is None:
+        right = right.replace(tzinfo=timezone.utc)
+    return left == right
+
+
 async def _drawing_projections_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
     await _one_snapshot(session)
     statement = (
@@ -246,9 +262,8 @@ async def _drawing_projections_slice(session: AsyncSession, cursor: str | None) 
             TurnDrawing.turn_id,
             TurnDrawing.reaction_count,
             TurnDrawing.hot_score,
-            GameRecord.finished_at,
+            TurnDrawing.gallery_shared_at,
         )
-        .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
         .order_by(TurnDrawing.turn_id)
         .limit(PROJECTION_SLICE_ROWS)
     )
@@ -267,15 +282,29 @@ async def _drawing_projections_slice(session: AsyncSession, cursor: str | None) 
             )
         ).all()
     )
+    first_shares = dict(
+        (
+            await session.execute(
+                select(TurnDrawingShare.turn_id, func.min(TurnDrawingShare.created_at))
+                .where(TurnDrawingShare.turn_id.in_(turn_ids))
+                .group_by(TurnDrawingShare.turn_id)
+            )
+        ).all()
+    )
     result = SliceResult(rows=len(rows), cursor=str(turn_ids[-1]))
     for row in rows:
         actual = int(counts.get(row.turn_id, 0))
+        shared_at = first_shares.get(row.turn_id)
         if row.reaction_count != actual:
             result.mismatches.append(
                 Mismatch("drawing_projections", str(row.turn_id), "reaction_count", AuditTargetType.DRAWING.value)
             )
+        elif not _same_instant(row.gallery_shared_at, shared_at):
+            result.mismatches.append(
+                Mismatch("drawing_projections", str(row.turn_id), "gallery_shared_at", AuditTargetType.DRAWING.value)
+            )
         elif not math.isclose(
-            row.hot_score, hot_score(actual, row.finished_at), abs_tol=HOT_SCORE_TOLERANCE
+            row.hot_score, hot_score(actual, shared_at), abs_tol=HOT_SCORE_TOLERANCE
         ):
             result.mismatches.append(
                 Mismatch("drawing_projections", str(row.turn_id), "hot_score", AuditTargetType.DRAWING.value)

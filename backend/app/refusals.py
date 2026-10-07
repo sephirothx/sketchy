@@ -125,6 +125,13 @@ class ErrorCode(StrEnum):
     GAME_NOT_RECORDED = "game_not_recorded"
     REACTION_NOT_ACCEPTED = "reaction_not_accepted"
 
+    # Sharing to the Gallery (#1430)
+    SPECTATORS_CANNOT_SHARE = "spectators_cannot_share"
+    SHARE_NOT_VISIBLE = "share_not_visible"
+    SHARE_NOT_ALLOWED = "share_not_allowed"
+    SHARE_WITHDRAWN = "share_withdrawn"
+    SHARE_NOT_ACCEPTED = "share_not_accepted"
+
     # Friends
     FRIENDS_UNAVAILABLE = "friends_unavailable"
     FRIEND_REFUSED = "friend_refused"

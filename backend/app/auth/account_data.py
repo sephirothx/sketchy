@@ -66,6 +66,8 @@ from app.db.models import (
     TurnDrawing,
     ProfileDrawingPin,
     TurnDrawingReaction,
+    TurnDrawingShare,
+    DrawingShareNotice,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnRecord,
@@ -81,6 +83,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.services.avatars import delete_avatars_for
+from app.services.gallery_ranking import hot_score
 from app.services.prompt_reclaim import delete_owned_lists
 from app.services.prompt_takedowns import release_takedowns
 from app.domain_values import (
@@ -1717,6 +1720,8 @@ async def anonymize_account(
                     updated_at=deleted_at,
                     reaction_count=0,
                     hot_score=0.0,
+                    gallery_shared_at=None,
+                    gallery_withdrawn_at=None,
                 )
             )
             # An erased drawing takes its reactions with it: they were about
@@ -1745,6 +1750,70 @@ async def anonymize_account(
                         ProfileDrawingPin.turn_id.in_(
                             select(TurnRecord.id).where(
                                 TurnRecord.drawer_user_id.in_(identity_ids)
+                            )
+                        ),
+                    )
+                )
+            )
+            # Shares go the same two ways (#1430, R-SHARE-08): the ones on the
+            # erased drawings, and the ones this account made of other
+            # players' drawings - a share is the sharer's act, and their name
+            # is its credit. A drawing that loses its first share to this has
+            # its projection set again from what is left, under its row lock
+            # (the accounts are already held, the barrier's order); one with
+            # no share left leaves the Gallery.
+            erased_drawings = select(TurnRecord.id).where(
+                TurnRecord.drawer_user_id.in_(identity_ids)
+            )
+            others_shared = set(
+                (
+                    await session.scalars(
+                        select(TurnDrawingShare.turn_id).where(
+                            TurnDrawingShare.user_id.in_(identity_ids),
+                            TurnDrawingShare.turn_id.not_in(erased_drawings),
+                        )
+                    )
+                ).all()
+            )
+            await session.execute(
+                delete(TurnDrawingShare).where(
+                    or_(
+                        TurnDrawingShare.user_id.in_(identity_ids),
+                        TurnDrawingShare.turn_id.in_(erased_drawings),
+                    )
+                )
+            )
+            if others_shared:
+                for drawing in (
+                    await session.scalars(
+                        select(TurnDrawing)
+                        .where(TurnDrawing.turn_id.in_(sorted(others_shared)))
+                        .options(defer(TurnDrawing.payload))
+                        .order_by(TurnDrawing.turn_id)
+                        .with_for_update()
+                    )
+                ).all():
+                    first = await session.scalar(
+                        select(func.min(TurnDrawingShare.created_at)).where(
+                            TurnDrawingShare.turn_id == drawing.turn_id
+                        )
+                    )
+                    if isinstance(first, str):
+                        first = datetime.fromisoformat(first)
+                    if first is not None and first.tzinfo is None:
+                        first = first.replace(tzinfo=timezone.utc)
+                    drawing.gallery_shared_at = first
+                    drawing.hot_score = hot_score(drawing.reaction_count, first)
+            # Notices go with both sides: the ones this account was still to
+            # be told, and the ones naming it as the sharer, which would
+            # otherwise tell a drawer about a share that no longer exists.
+            await session.execute(
+                delete(DrawingShareNotice).where(
+                    or_(
+                        DrawingShareNotice.user_id.in_(identity_ids),
+                        DrawingShareNotice.sharer_participant_id.in_(
+                            select(GameParticipant.id).where(
+                                GameParticipant.user_id.in_(identity_ids)
                             )
                         ),
                     )

@@ -1082,6 +1082,8 @@ class GameFlowService:
         room.last_game_highlights = []
         room.last_game_drawings = []
         room.drawing_reactions = {}
+        room.drawing_shares = {}
+        room.drawing_share_withdrawn = set()
         room.last_game_id = None
         room.last_game_history = "none"
         # Only this game's leavers matter to its history, and the room may
