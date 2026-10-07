@@ -38,52 +38,45 @@ export function ShareControl({ offer, credit, onShare, disabled = false }: Share
     try {
       await onShare(shared);
     } catch (failure) {
-      notify(refusalText(failure, ui.shareControl.thatDrawingCouldNotBeShared), "error");
+      notify(
+        refusalText(
+          failure,
+          shared
+            ? ui.shareControl.thatDrawingCouldNotBeShared
+            : ui.shareControl.thatCouldNotBeTakenBack,
+        ),
+        "error",
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  // One button whatever it offers, so pressing it keeps the focus where it
+  // was: a button swapped for another under the pointer drops it.
+  const button =
+    offer === "share"
+      ? { label: ui.shareControl.share, title: ui.shareControl.shareThisDrawing, pressed: false, shared: true, testId: "share-toggle", look: "btn-secondary" }
+      : offer === "unshare"
+        ? { label: ui.shareControl.shared, title: ui.shareControl.takeBackYourShare, pressed: true, shared: false, testId: "share-toggle", look: "btn-secondary is-shared" }
+        : offer === "takeOut"
+          ? { label: ui.shareControl.takeOut, title: ui.shareControl.takeThisDrawingOut, pressed: undefined, shared: false, testId: "share-take-out", look: "btn-ghost" }
+          : null;
+
   return (
     <div className="share-control" data-testid="share-control">
-      {offer === "share" && (
+      {button && (
         <button
           type="button"
-          className="btn btn-secondary btn-compact share-control-button"
-          aria-pressed={false}
-          title={ui.shareControl.shareThisDrawing}
+          className={`btn ${button.look} btn-compact share-control-button`}
+          aria-pressed={button.pressed}
+          title={button.title}
           disabled={busy || disabled}
-          data-testid="share-toggle"
-          onClick={() => void press(true)}
+          data-testid={button.testId}
+          onClick={() => void press(button.shared)}
         >
-          <ImageIcon size={14} />
-          {ui.shareControl.share}
-        </button>
-      )}
-      {offer === "unshare" && (
-        <button
-          type="button"
-          className="btn btn-secondary btn-compact share-control-button is-shared"
-          aria-pressed={true}
-          title={ui.shareControl.takeBackYourShare}
-          disabled={busy || disabled}
-          data-testid="share-toggle"
-          onClick={() => void press(false)}
-        >
-          <ImageIcon size={14} />
-          {ui.shareControl.shared}
-        </button>
-      )}
-      {offer === "takeOut" && (
-        <button
-          type="button"
-          className="btn btn-ghost btn-compact share-control-button"
-          title={ui.shareControl.takeThisDrawingOut}
-          disabled={busy || disabled}
-          data-testid="share-take-out"
-          onClick={() => void press(false)}
-        >
-          {ui.shareControl.takeOut}
+          {button.look !== "btn-ghost" && <ImageIcon size={14} />}
+          {button.label}
         </button>
       )}
       {offer === "withdrawn" && (

@@ -100,7 +100,7 @@ keyboard that takes half the screen, and one thumb.
   reacted. Any
   registered player can react to an entry from the gallery or from a pinned shelf, one
   reaction per player per drawing; reactions given outside the room count but are not
-  named. "This week" — the six most-reacted drawings of the last seven days — sits in
+  named. "This week" — the six most-reacted drawings shared in the last seven days — sits in
   the gallery's rail. A drawing can be reported from the gallery, a moderator can hide
   one from it without touching the players' own history, and an operator switch can
   hold This week for review while the rest of the gallery publishes freely. A signed-out visitor sees
@@ -460,9 +460,10 @@ cd backend
 .venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
 ```
 
-The gallery's reaction count and Hot score on each drawing are the same kind of
-thing: set by every reaction write, rebuilt from the reaction rows on demand,
-never trusted as counters.
+The gallery's reaction count, share count, first share and Hot score on each
+drawing are the same kind of thing: set by every reaction and share write, rebuilt
+from the reaction and share rows on demand, never trusted as counters (the first
+share is only ever filled in or moved earlier).
 
 ```bash
 cd backend
@@ -1585,7 +1586,7 @@ your players share one address:
 | `AUTH_VERIFY_ACCOUNT_LIMIT` | 5 per day | `PUT /api/auth/email`, per account, charged after the password proof (#1240) |
 | `AUTH_VERIFY_RECIPIENT_LIMIT` | 3 per day | Verification mails to one address, whichever accounts ask; past it nothing is sent and the answer is unchanged |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
-| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
+| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - and the reaction, share and pin writes beside them, per address |
 | `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
@@ -1788,6 +1789,7 @@ backend/
       chat.py        Guessing, chat, and purchasable hint handlers
       moderation.py Vote-kick and AFK handlers
       reactions.py  Reactions to drawings: the live command and the recap write
+      shares.py     Sharing a drawing to the gallery: the live command and the recap write
       restart.py    Majority-vote game restart handlers
       connection.py Socket connect/disconnect and reconnect-grace handling
       payloads.py    Typed boundary models and parsers for every client command
@@ -1796,7 +1798,8 @@ backend/
       game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
-      gallery_ranking.py The Gallery's reaction count and Hot score on each drawing, and their rebuild
+      drawing_shares.py Who may share which drawing from the room, and the room broadcast
+      gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
@@ -2567,7 +2570,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    their field says they guess from the next turn.
 5. **Turn results** (5s by default): the prompt is revealed and scores update - each row
    shows the place and total its player came in with, then slides to the new order - reactions
-   stay open on the drawing, then the next player's turn begins. A guesser who bought hints
+   stay open on the drawing, and **Share to gallery** puts it in the gallery (the drawer's own
+   from any room; anybody else's from a public one), then the next player's turn begins. A guesser who bought hints
    also sees how their points were reached: "This turn: +300 − 12 hints = 288 points".
 
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
@@ -2580,8 +2584,9 @@ into all eight (the Pokémon generations, League of Legends, the video-game icon
 in Any language - never a Local list;
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
-   shows the final standings, the highlights, and the drawing recap — where a registered
-   player in a public room can **Pin** a drawing to their profile. Back in the waiting
+   shows the final standings, the highlights, and the drawing recap — where a player can
+   **Share** a drawing to the gallery, and a registered player can **Pin** one they may share
+   to their profile, which shares it too. Back in the waiting
    room each seat keeps its place and final score until the next game starts: in the
    players panel on a desktop, on the roster's tiles on a phone.
 

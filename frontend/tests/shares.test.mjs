@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shareCredit, shareOffer, sharesAfter } from "../src/lib/shares.ts";
+import { shareCredit, shareOffer } from "../src/lib/shares.ts";
 import { laterOf, pendingShareNoticesFrom } from "../src/lib/shareNotices.ts";
 
 const situation = {
@@ -62,13 +62,6 @@ test("the credit is the first sharer, in the viewer's own words", () => {
     isAnonymous: false,
   });
   assert.deepEqual(shareCredit(["gone"], context), { kind: "someone" }, "a seat that left");
-});
-
-test("a press is mirrored the way the room answers it", () => {
-  assert.deepEqual(sharesAfter(["a"], "me", true, false), ["a", "me"]);
-  assert.deepEqual(sharesAfter(["a", "me"], "me", true, false), ["a", "me"], "a second press moves nobody");
-  assert.deepEqual(sharesAfter(["a", "me"], "me", false, false), ["a"]);
-  assert.deepEqual(sharesAfter(["a", "me"], "me", false, true), [], "the drawer takes everybody's");
 });
 
 test("a pushed notice is read only when it has the right shape, and the newest read wins", () => {

@@ -107,6 +107,8 @@ erDiagram
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
     users ||--o{ role_change_notices : "told about a role"
+    users ||--o{ drawing_share_notices : "told about a share"
+    users ||--o{ turn_drawing_shares : "shares"
 
     game_records ||--o{ game_participants : "seats"
     game_records ||--o{ turn_records : "turns"
@@ -1389,6 +1391,10 @@ to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `cla
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
 
+Since `envelope_version` 4 (#1430) an envelope carries the shares to the Gallery made
+from the turn results (`shares`, each with its seat, account, moment and whether the
+drawer should be told) and the turns whose drawer took theirs back out
+(`withdrawn_turn_ids`); both are in the payload digest.
 Since `envelope_version` 3 (#1358) an envelope's provenance names lists rather than
 revisions, and its usage batch carries each version's source lists (`sources`).
 Since `envelope_version` 2 (#1259) a drawing is prepared once, at staging on the
@@ -2646,7 +2652,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, share notices, usage facts | Indefinite | — | Permanently kept (R-PRIV-05); a share and the notices are the account's to take back, and go with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -3049,7 +3055,7 @@ repairing**:
 | Check | What it compares | On a mismatch |
 | --- | --- | --- |
 | `drawings` | every ready drawing: declared size and format, checksum, decodability — the #610 walk | **pages** (`SketchyDrawingCorrupt`): the bytes are lost until a restore |
-| `drawing_projections` | `reaction_count` and `hot_score` against the reaction rows | warns; `python -m app.services.gallery_ranking` rebuilds |
+| `drawing_projections` | `reaction_count`, `gallery_share_count`, `gallery_shared_at` (set, and never later than the earliest share) and `hot_score` against the reaction and share rows | warns; `python -m app.services.gallery_ranking` rebuilds |
 | `user_stats` | each account's `user_stats_daily` rows against a rebuild from facts, run in a transaction that is **rolled back** | warns; `python -m app.services.user_stats_projection` rebuilds |
 | `games` | each seat's ledger sum against `final_score` (ledgered games), each turn's `guesser_count` against its eligible outcome rows | warns; a writer bug, investigate |
 | `alias_chains` | no merged identity points at another merged identity | warns |

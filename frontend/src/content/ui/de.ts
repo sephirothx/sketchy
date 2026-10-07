@@ -944,7 +944,7 @@ export const DE: Catalogue = {
   pinControl: {
     pin: "Anheften",
     pinned: "Angeheftet",
-    pinThisDrawing: "Diese Zeichnung an dein Profil heften",
+    pinThisDrawing: "Diese Zeichnung an dein Profil heften und in der Galerie zeigen",
     unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
     thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",
   },
@@ -954,7 +954,7 @@ export const DE: Catalogue = {
     shared: "Geteilt",
     takeOut: "Aus der Galerie nehmen",
     shareThisDrawing: "Diese Zeichnung in der öffentlichen Galerie zeigen",
-    takeBackYourShare: "Dein Teilen zurücknehmen",
+    takeBackYourShare: "Nicht mehr teilen",
     takeThisDrawingOut: "Diese Zeichnung für alle aus der Galerie nehmen",
     theDrawerKeptItOut: "Die zeichnende Person hat diese Zeichnung aus der Galerie genommen.",
     inTheGallery: "In der Galerie",
@@ -962,6 +962,7 @@ export const DE: Catalogue = {
     inTheGallerySharedByYou: "In der Galerie · von dir geteilt",
     inTheGallerySharedByTheDrawer: "In der Galerie · von der zeichnenden Person geteilt",
     thatDrawingCouldNotBeShared: "Diese Zeichnung konnte nicht geteilt werden.",
+    thatCouldNotBeTakenBack: "Das ließ sich nicht zurücknehmen. Versuch es noch einmal.",
   },
 
   drawingRecapGallery: {

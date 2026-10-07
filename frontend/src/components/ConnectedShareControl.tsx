@@ -3,6 +3,7 @@ import { sendDrawingShare } from "../lib/shareRequests";
 import { shareCredit, shareOffer } from "../lib/shares";
 import { useAuthStore } from "../store/authStore";
 import { selectMe, useGameStore } from "../store/gameStore";
+import { usePinsStore } from "../store/pinsStore";
 import type { DrawingShareState } from "../types";
 
 const NOT_SHARED: DrawingShareState = { shares: [], withdrawn: false };
@@ -41,11 +42,16 @@ export function ConnectedShareControl({
   const players = useGameStore((state) => state.players);
   const state = useGameStore((s) => (turnId ? s.drawingShares[turnId] ?? NOT_SHARED : NOT_SHARED));
   const hasAccount = useAuthStore((s) => s.user !== null);
+  // From the recap, only a seat that played the game: somebody who arrived
+  // in the waiting room afterwards is shown it, and has nothing to share.
+  const played = useGameStore((s) =>
+    !recap || (s.finalScores ?? []).some((entry) => entry.playerId === s.playerId),
+  );
   if (!turnId) return null;
   const isDrawer = Boolean(drawerId) && drawerId === playerId;
   const offer = shareOffer({
     isDrawer,
-    canAct: hasAccount && !isSpectator && playerId !== null,
+    canAct: hasAccount && !isSpectator && playerId !== null && played,
     isPublicGame: isPublic,
     shareable,
     shares: state.shares,
@@ -68,6 +74,7 @@ export function ConnectedShareControl({
       credit={credit}
       onShare={async (shared) => {
         const answer = await sendDrawingShare(turnId, shared);
+        if (!shared) usePinsStore.getState().forget(turnId);
         if (answer.shares) {
           useGameStore.getState().applyDrawingShare({
             turnId,

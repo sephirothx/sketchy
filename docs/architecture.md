@@ -1707,14 +1707,19 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   of duplicating or silently replacing history.
 - In the same transaction: the game record, participants, turns, per-seat outcomes,
   prompt offers and their sources, guesses, the score-event ledger, the turn drawings,
-  the reactions given while the game was live, the prompt-usage facts, and the daily
-  user-stat projection increments.
+  the reactions and the shares to the Gallery given while the game was live, the
+  drawers' withdrawals and the share notices they leave (#1430), the prompt-usage facts,
+  and the daily user-stat projection increments.
 - The room is told which game it just held and whether a row is coming
-  (`Room.last_game_id`, `Room.last_game_history`), because a reaction given from the
-  recap afterwards is a write to that row (`handlers/reactions.py`): it is refused while
-  the write is pending, and when there was never going to be one. The loop reports
-  back through `GameFlowService.note_history_outcome`, which finds the room by the
-  game it last held and ignores an outcome for a game the room has moved on from.
+  (`Room.last_game_id`, `Room.last_game_history`, and `Room.last_game_public` for who
+  may share from its recap), because a reaction or a share given from the recap
+  afterwards is a write to that row (`handlers/reactions.py`, `handlers/shares.py`): it
+  is refused while the write is pending, and when there was never going to be one. The
+  loop reports back through `GameFlowService.note_history_outcome`, which finds the room
+  by the game it last held and ignores an outcome for a game the room has moved on from;
+  and, once the history has landed, through `bind_recorded` to the application, which
+  expires This week and pushes `drawing_share_notice` to the drawers its live shares left
+  a notice for (R-SHARE-09).
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
 - Guesser outcomes and score events, the rows that grow with turns × seats (2,400 and

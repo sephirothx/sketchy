@@ -3555,7 +3555,7 @@ class TurnDrawingShare(Base):
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     # SET NULL rather than CASCADE: a guest the retention purge removes
-    # (R-PRIV-07) leaves its seat, and its share with it, credited to the
+    # (R-PRIV-10) leaves its seat, and its share with it, credited to the
     # seat's frozen name like the rest of that game's history. Erasure, which
     # is a request, removes the share itself (R-SHARE-08).
     user_id: Mapped[uuid.UUID | None] = mapped_column(

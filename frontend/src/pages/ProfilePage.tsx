@@ -207,13 +207,14 @@ function GameRow({
   // Share, or take back (#1430): the turn's share state as the server left it.
   async function shareTurn(turnId: string, shared: boolean) {
     const result = await setHistoryShare(game.id, turnId, shared);
+    if (!shared) usePinsStore.getState().forget(turnId);
     setDetail((current) =>
       current
         ? {
             ...current,
             turns: current.turns.map((turn) =>
               turn.id === turnId
-                ? { ...turn, shares: result.shares, galleryWithdrawn: result.withdrawn }
+                ? { ...turn, shares: result.shares, shareWithdrawn: result.shareWithdrawn }
                 : turn,
             ),
           }
@@ -223,7 +224,9 @@ function GameRow({
 
   // Pin or unpin one turn: the whole shelf, rewritten (R-PIN-02). The turn
   // table and the gallery share it, and the shelf above follows the store.
-  // A pin is a share (R-PIN-03), so a new pin reads the turn's shares again.
+  // A pin is a share (R-PIN-03): the pin write shares it, and the share
+  // request after it - which finds the share already made - is what brings
+  // the turn's share state back to this table.
   const togglePin = async (turnId: string) => {
     const pinning = !isPinned(myPins.turnIds, turnId);
     const done = await myPins.mutate((current) =>
@@ -247,7 +250,7 @@ function GameRow({
         open: turn.drawingStatus === "ready",
         isDrawer: isMine(turn),
         blank: turn.strokeCount <= 0,
-        withdrawn: turn.galleryWithdrawn,
+        withdrawn: turn.shareWithdrawn,
       })}
       onToggle={() => togglePin(turn.id)}
     />
@@ -400,7 +403,7 @@ function GameRow({
                   shareable: turn.drawingStatus === "ready" && turn.strokeCount > 0,
                   shares: turn.shares ?? [],
                   mine: detail.mySeatId,
-                  withdrawn: turn.galleryWithdrawn ?? false,
+                  withdrawn: turn.shareWithdrawn ?? false,
                 })}
                 credit={shareCredit(turn.shares ?? [], {
                   mine: detail.mySeatId,

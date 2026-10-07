@@ -117,7 +117,7 @@ export interface GameTurn {
   /** The seats that shared the drawing to the Gallery, first first (#1430). */
   shares: string[];
   /** Its drawer took it out of the Gallery: nobody else may share it again. */
-  galleryWithdrawn: boolean;
+  shareWithdrawn: boolean;
 }
 
 export interface GameRuleSnapshot {
@@ -242,7 +242,7 @@ export function setGalleryReaction(
 export interface HistoryShareResult {
   turnId: string;
   shares: string[];
-  withdrawn: boolean;
+  shareWithdrawn: boolean;
 }
 
 /**

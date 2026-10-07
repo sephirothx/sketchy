@@ -397,7 +397,7 @@ def share_payload(result: DrawingShareResult) -> dict:
     return {
         "turnId": result.turn_id,
         "shares": list(result.shares),
-        "withdrawn": result.withdrawn,
+        "shareWithdrawn": result.withdrawn,
     }
 
 

@@ -944,7 +944,7 @@ export const FR: Catalogue = {
   pinControl: {
     pin: "Épingler",
     pinned: "Épinglé",
-    pinThisDrawing: "Épingler ce dessin sur ton profil",
+    pinThisDrawing: "Épingler ce dessin sur ton profil et le partager dans la galerie",
     unpinThisDrawing: "Retirer ce dessin de ton profil",
     thatDrawingCouldNotBePinned: "Ce dessin n’a pas pu être épinglé.",
   },
@@ -962,6 +962,7 @@ export const FR: Catalogue = {
     inTheGallerySharedByYou: "Dans la galerie · partagé par toi",
     inTheGallerySharedByTheDrawer: "Dans la galerie · partagé par la personne qui l’a dessiné",
     thatDrawingCouldNotBeShared: "Ce dessin n’a pas pu être partagé.",
+    thatCouldNotBeTakenBack: "Impossible d’annuler. Réessaie.",
   },
 
   drawingRecapGallery: {

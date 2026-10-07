@@ -1901,6 +1901,7 @@
    "turnId"
   ],
   "api.profiles:share_payload": [
+   "shareWithdrawn",
    "turnId"
   ],
   "api.profiles:user_games": [
@@ -1989,7 +1990,6 @@
    "drawingStatus",
    "durationSeconds",
    "eligibilityReason",
-   "galleryWithdrawn",
    "hintsUsed",
    "mySeatId",
    "nearMissCount",
@@ -2002,6 +2002,7 @@
    "roundNumber",
    "ruleSnapshot",
    "seatId",
+   "shareWithdrawn",
    "strokeCount",
    "terminalState",
    "turnNumber",

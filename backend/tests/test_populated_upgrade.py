@@ -14,11 +14,11 @@ import os
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db import upgrade_database
-from app.db.models import GamePromptSource, GameRecord, TurnDrawing, User
+from app.db.models import GamePromptSource, GameRecord, TurnDrawing, TurnRecord, User
 
 from tests.dbfixtures import create_test_engine
 from tests.populated_upgrade import (
@@ -77,6 +77,19 @@ async def test_the_populated_baseline_upgrades_to_head_and_reads_back_whole():
         assert detail is not None
         drawing = await history.get_turn_drawing(str(public_game), str(turn), requesting_user_id=guesser)
         assert drawing is not None
+        # Nothing is carried into sharing (#1430, `e7f8a9b0c1d4`): the Gallery
+        # starts empty, and its drawer's share puts the drawing back. The
+        # fixture's turn predates stroke counts that mean anything, and a
+        # blank drawing is not shareable (R-SHARE-03), so it is given one.
+        assert (await history.list_gallery(sort="top")).entries == ()
+        async with factory() as session:
+            await session.execute(
+                update(TurnRecord).where(TurnRecord.id == turn).values(stroke_count=5)
+            )
+            await session.commit()
+        assert await history.set_drawing_share(
+            str(public_game), str(turn), requesting_user_id=drawer, shared=True
+        )
         gallery = await history.list_gallery(sort="top")
         assert [entry.turn_id for entry in gallery.entries] == [str(turn)]
         pins = await history.get_profile_pins(drawer)

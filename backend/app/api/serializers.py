@@ -170,7 +170,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 # The seats that shared the drawing to the Gallery, first
                 # first, and whether its drawer took it out (#1430).
                 "shares": list(r.shares),
-                "galleryWithdrawn": r.gallery_withdrawn,
+                "shareWithdrawn": r.gallery_withdrawn,
             }
             for r in detail.turns
         ],

@@ -944,7 +944,7 @@ export const NL: Catalogue = {
   pinControl: {
     pin: "Vastzetten",
     pinned: "Vastgezet",
-    pinThisDrawing: "Deze tekening op je profiel vastzetten",
+    pinThisDrawing: "Deze tekening op je profiel vastzetten en in de galerij delen",
     unpinThisDrawing: "Deze tekening van je profiel losmaken",
     thatDrawingCouldNotBePinned: "Deze tekening kon niet worden vastgezet.",
   },
@@ -954,7 +954,7 @@ export const NL: Catalogue = {
     shared: "Gedeeld",
     takeOut: "Uit de galerij halen",
     shareThisDrawing: "Deze tekening in de openbare galerij zetten",
-    takeBackYourShare: "Je deling intrekken",
+    takeBackYourShare: "Niet meer delen",
     takeThisDrawingOut: "Deze tekening voor iedereen uit de galerij halen",
     theDrawerKeptItOut: "Degene die hem tekende, heeft hem uit de galerij gehaald.",
     inTheGallery: "In de galerij",
@@ -962,6 +962,7 @@ export const NL: Catalogue = {
     inTheGallerySharedByYou: "In de galerij · gedeeld door jou",
     inTheGallerySharedByTheDrawer: "In de galerij · gedeeld door degene die hem tekende",
     thatDrawingCouldNotBeShared: "Deze tekening kon niet gedeeld worden.",
+    thatCouldNotBeTakenBack: "Dat kon niet ongedaan gemaakt worden. Probeer het opnieuw.",
   },
 
   drawingRecapGallery: {

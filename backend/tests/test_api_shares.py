@@ -69,7 +69,7 @@ async def test_a_participant_shares_from_history_and_the_drawer_is_told(env):
     assert shared.json() == {
         "turnId": game.turn_id,
         "shares": [game.reactor_seat],
-        "withdrawn": False,
+        "shareWithdrawn": False,
     }
     assert pushed == [ann.id] and changed == [True]
 
@@ -139,7 +139,7 @@ async def test_the_drawer_takes_a_drawing_out_from_the_gallery(env):
         await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
     ).status_code == 404, "withdrawn holds against everyone else"
     detail = (await http.get(f"/api/games/{game.game_id}")).json()
-    assert detail["turns"][0]["shares"] == [] and detail["turns"][0]["galleryWithdrawn"]
+    assert detail["turns"][0]["shares"] == [] and detail["turns"][0]["shareWithdrawn"]
 
 
 async def test_the_pending_read_lists_the_newest_and_counts_the_rest(env):

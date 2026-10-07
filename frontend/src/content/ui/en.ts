@@ -960,7 +960,7 @@ export const EN = {
   pinControl: {
     pin: "Pin",
     pinned: "Pinned",
-    pinThisDrawing: "Pin this drawing to your profile",
+    pinThisDrawing: "Pin this drawing to your profile and share it to the gallery",
     unpinThisDrawing: "Unpin this drawing from your profile",
     thatDrawingCouldNotBePinned: "That drawing could not be pinned.",
   },
@@ -978,6 +978,7 @@ export const EN = {
     inTheGallerySharedByYou: "In the gallery · shared by you",
     inTheGallerySharedByTheDrawer: "In the gallery · shared by its drawer",
     thatDrawingCouldNotBeShared: "That drawing could not be shared.",
+    thatCouldNotBeTakenBack: "That could not be taken back. Try again.",
   },
 
   drawingRecapGallery: {

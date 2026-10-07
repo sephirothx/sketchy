@@ -944,7 +944,7 @@ export const ES: Catalogue = {
   pinControl: {
     pin: "Fijar",
     pinned: "Fijado",
-    pinThisDrawing: "Fijar este dibujo en tu perfil",
+    pinThisDrawing: "Fijar este dibujo en tu perfil y compartirlo en la galería",
     unpinThisDrawing: "Quitar este dibujo de tu perfil",
     thatDrawingCouldNotBePinned: "No se pudo fijar ese dibujo.",
   },
@@ -962,6 +962,7 @@ export const ES: Catalogue = {
     inTheGallerySharedByYou: "En la galería · compartido por ti",
     inTheGallerySharedByTheDrawer: "En la galería · compartido por quien lo dibujó",
     thatDrawingCouldNotBeShared: "No se pudo compartir ese dibujo.",
+    thatCouldNotBeTakenBack: "No se pudo deshacer. Inténtalo de nuevo.",
   },
 
   drawingRecapGallery: {

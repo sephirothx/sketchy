@@ -41,14 +41,20 @@ export function ConnectedPinControl({
   const withdrawn = useGameStore((state) =>
     turnId ? state.drawingShares[turnId]?.withdrawn ?? false : false,
   );
-  const isSpectator = useGameStore((state) => selectMe(state)?.isSpectator ?? false);
+  // Somebody who arrived in the waiting room after the game is shown its
+  // recap, and has nothing to pin from it (R-PIN-01: only a game they sat in).
+  const notASeatThatPlayed = useGameStore(
+    (state) =>
+      (selectMe(state)?.isSpectator ?? false)
+      || !(state.finalScores ?? []).some((entry) => entry.playerId === state.playerId),
+  );
   const user = useAuthStore((state) => state.user);
   const pins = useMyPins();
   const { notify } = useToast();
   if (!turnId) return null;
   const eligibility = pinEligibility({
     isRegistered: Boolean(user && !user.isAnonymous),
-    isSpectator,
+    isSpectator: notASeatThatPlayed,
     isPublicGame: isPublic,
     open: visible,
     isDrawer: Boolean(drawerId) && drawerId === playerId,
@@ -69,6 +75,12 @@ export function ConnectedPinControl({
           // something they watched happen (R-SHARE-09); the pin write then
           // finds the share already made.
           if (!isPinned(pins.turnIds, turnId)) {
+            // Refused before anything is shared: a seventh pin that shared
+            // the drawing anyway would publish what the press was told no to.
+            if (withPin(pins.turnIds, turnId) === null) {
+              notify(refusalSentence("pinned_drawings_full"), "error");
+              return;
+            }
             const answer = await sendDrawingShare(turnId, true);
             if (answer.shares) {
               useGameStore.getState().applyDrawingShare({

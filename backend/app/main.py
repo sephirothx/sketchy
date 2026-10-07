@@ -727,14 +727,17 @@ handler_context.on_share_notice = push_share_notice_to_account
 handler_context.on_gallery_changed = gallery_shelf.invalidate
 
 
-async def push_share_notices_for_game(game_id: str) -> None:
-    """A finished game's history is in: tell the drawers its live shares left
-    a notice for, if any of their sockets is connected (R-SHARE-09)."""
+async def announce_recorded_game(game_id: str) -> None:
+    """A finished game's history is in. Its live shares may have put drawings
+    in the Gallery, so This week is read again (R-GAL-07), and the drawers
+    they left a notice for are told if any of their sockets is connected
+    (R-SHARE-09)."""
+    gallery_shelf.invalidate()
     for user_id in await drawers_told_about_game(async_session_factory, game_id):
         await push_share_notice_to_account(user_id)
 
 
-finished_game_worker.bind_recorded(push_share_notices_for_game)
+finished_game_worker.bind_recorded(announce_recorded_game)
 
 
 def request_process_exit() -> None:

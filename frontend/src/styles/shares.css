@@ -24,3 +24,8 @@
   justify-content: center;
   margin: -4px 0 10px;
 }
+
+/* Nothing offered and nothing to credit: no gap where the control would be. */
+.turn-results-share:empty {
+  display: none;
+}

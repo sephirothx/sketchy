@@ -13,6 +13,7 @@ import {
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
+import { usePinsStore } from "../store/pinsStore";
 import { ModalShell } from "./ui/ModalShell";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -39,14 +40,25 @@ export function ShareNotice() {
   const askedFor = useRef<string | null>(null);
   const primaryRef = useRef<HTMLButtonElement | null>(null);
 
+  // A card belongs to the identity it was read for: signing out, or into
+  // another account, takes it down rather than leaving one nobody here can
+  // acknowledge.
+  useEffect(() => {
+    setPending(null);
+    setTakenOut(new Set());
+    setFailed(false);
+  }, [userId]);
+
   useEffect(() => {
     // Guests too: a guest's drawing can be shared like anybody's. Once per
     // identity per visit, not per reconnect.
     if (!hasResolved || !userId || askedFor.current === userId) return;
     askedFor.current = userId;
     let cancelled = false;
+    let landed = false;
     void fetchPendingShareNotices()
       .then((read) => {
+        landed = true;
         if (!cancelled) setPending((current) => laterOf(current, read));
       })
       .catch(() => {
@@ -55,6 +67,9 @@ export function ShareNotice() {
       });
     return () => {
       cancelled = true;
+      // A read torn down before it answered was not a read: the next run
+      // asks again (StrictMode runs every effect twice in development).
+      if (!landed && askedFor.current === userId) askedFor.current = null;
     };
   }, [hasResolved, userId]);
 
@@ -80,12 +95,13 @@ export function ShareNotice() {
     setFailed(false);
     try {
       await acknowledgeShareNotices(newest.id);
+    } catch {
+      // Closed all the same: the notices stay pending on the server and are
+      // shown again next visit, which beats a card that cannot be closed.
+    } finally {
       // Only what was settled: a push that arrived meanwhile stays up.
       setPending((current) => (current && current.notices[0]?.id === newest.id ? null : current));
       setTakenOut(new Set());
-    } catch {
-      setFailed(true);
-    } finally {
       setBusy(false);
     }
   }
@@ -96,6 +112,7 @@ export function ShareNotice() {
     setFailed(false);
     try {
       await withdrawFromGallery(turnId);
+      usePinsStore.getState().forget(turnId);
       setTakenOut((current) => new Set(current).add(turnId));
     } catch {
       setFailed(true);

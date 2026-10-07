@@ -75,15 +75,3 @@ export function shareCredit(
   const named = context.nameOf(first);
   return named ? { kind: "player", ...named } : { kind: "someone" };
 }
-
-/** The share state after the viewer's own act, as the room would answer it -
-    so a control can show the press before the broadcast lands. */
-export function sharesAfter(
-  shares: readonly string[],
-  mine: string,
-  shared: boolean,
-  isDrawer: boolean,
-): string[] {
-  if (!shared) return isDrawer ? [] : shares.filter((id) => id !== mine);
-  return shares.includes(mine) ? [...shares] : [...shares, mine];
-}
