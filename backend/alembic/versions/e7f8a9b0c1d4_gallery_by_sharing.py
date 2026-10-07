@@ -6,9 +6,10 @@ Create Date: 2026-10-07 00:00:00.000000
 
 A drawing used to be in the Gallery because its game was public (#524); now
 it is there because somebody shared it (#1430). `turn_drawing_shares` holds
-who did, one row per sharer's seat; `turn_drawings.gallery_shared_at` is the
-earliest of them, kept on the drawing row so the Gallery orders by a column,
-and `gallery_withdrawn_at` is the drawer's act of taking it back out.
+who did, one row per sharer's seat; `turn_drawings.gallery_share_count` is
+how many, kept on the drawing row so the Gallery filters by a column,
+`gallery_shared_at` the moment it first entered, which it keeps, and
+`gallery_withdrawn_at` the drawer's act of taking it back out.
 `drawing_share_notices` tells a drawer once that somebody else shared their
 drawing. The Gallery's ranking indexes become partial on the shared rows,
 since those are the only rows any order reads.
@@ -33,7 +34,7 @@ down_revision: str | Sequence[str] | None = "d6e7f8a9b0c3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_SHARED = "gallery_shared_at IS NOT NULL"
+_SHARED = "gallery_share_count > 0"
 _UUID = sa.Uuid(as_uuid=True, native_uuid=True)
 
 
@@ -44,7 +45,19 @@ def upgrade() -> None:
     op.drop_index("ix_turn_drawings_gallery_hot", table_name="turn_drawings")
     with op.batch_alter_table("turn_drawings") as batch:
         batch.add_column(
+            sa.Column(
+                "gallery_share_count",
+                sa.Integer(),
+                nullable=False,
+                server_default=sa.text("0"),
+            )
+        )
+        batch.add_column(
             sa.Column("gallery_shared_at", sa.DateTime(timezone=True), nullable=True)
+        )
+        # online-ddl: nothing is deployed; the table has no live writer to lock out.
+        batch.create_check_constraint(
+            "ck_turn_drawings_gallery_share_count", "gallery_share_count >= 0"
         )
         batch.add_column(
             sa.Column("gallery_withdrawn_at", sa.DateTime(timezone=True), nullable=True)
@@ -86,8 +99,8 @@ def upgrade() -> None:
         sa.Column(
             "user_id",
             _UUID,
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
         ),
         sa.Column(
             "created_at",
@@ -128,7 +141,6 @@ def upgrade() -> None:
         ),
         sa.Column("game_id", _UUID, nullable=False),
         sa.Column("turn_id", _UUID, nullable=False),
-        sa.Column("sharer_participant_id", _UUID, nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -142,12 +154,6 @@ def upgrade() -> None:
             name="fk_drawing_share_notices_turn_same_game",
             ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["game_id", "sharer_participant_id"],
-            ["game_participants.game_id", "game_participants.id"],
-            name="fk_drawing_share_notices_sharer_same_game",
-            ondelete="CASCADE",
-        ),
         sa.UniqueConstraint("turn_id", name="uq_drawing_share_notices_turn_id"),
     )
     op.create_index(
@@ -155,17 +161,11 @@ def upgrade() -> None:
         "drawing_share_notices",
         ["user_id", "acknowledged_at"],
     )
-    op.create_index(
-        "ix_drawing_share_notices_sharer",
-        "drawing_share_notices",
-        ["sharer_participant_id"],
-    )
 
     op.execute("DELETE FROM profile_drawing_pins")
 
 
 def downgrade() -> None:
-    op.drop_index("ix_drawing_share_notices_sharer", table_name="drawing_share_notices")
     op.drop_index(
         "ix_drawing_share_notices_user_pending", table_name="drawing_share_notices"
     )
@@ -179,8 +179,10 @@ def downgrade() -> None:
     op.drop_index("ix_turn_drawings_gallery_hot", table_name="turn_drawings")
     op.drop_index("ix_turn_drawings_gallery_top", table_name="turn_drawings")
     with op.batch_alter_table("turn_drawings") as batch:
+        batch.drop_constraint("ck_turn_drawings_gallery_share_count", type_="check")
         batch.drop_column("gallery_withdrawn_at")
         batch.drop_column("gallery_shared_at")
+        batch.drop_column("gallery_share_count")
     op.create_index(
         "ix_turn_drawings_gallery_top", "turn_drawings", ["status", "reaction_count"]
     )

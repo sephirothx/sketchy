@@ -9,9 +9,10 @@ visit through `GET /api/share-notices/pending`, and both build their payload
 here so the two cannot drift.
 
 The share the notice is about may be gone by the time it is read - its sharer
-took it back, the drawer already withdrew it, a moderator hid it - and a
-notice about a drawing that is not in the Gallery has nothing to say, so the
-pending read shows only the ones still true.
+took it back or was erased, the drawer already withdrew it, a moderator hid
+it - so who a notice names is read here, not kept on it: the earliest share
+still standing by somebody other than the drawer. A notice with no such share
+left has nothing to say, and is neither shown nor counted.
 """
 from __future__ import annotations
 
@@ -19,11 +20,17 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
-from app.db.models import DrawingShareNotice, GameParticipant, TurnDrawing, TurnRecord
+from app.db.models import (
+    DrawingShareNotice,
+    GameParticipant,
+    TurnDrawing,
+    TurnDrawingShare,
+    TurnRecord,
+)
 from app.refusals import ErrorCode
 from app.repositories.sqlalchemy import _identity_ids
 
@@ -36,8 +43,16 @@ def _still_shared():
     """A notice is still worth reading while its drawing is in the Gallery."""
     return and_(
         TurnDrawing.turn_id == DrawingShareNotice.turn_id,
-        TurnDrawing.gallery_shared_at.is_not(None),
+        TurnDrawing.gallery_share_count > 0,
         TurnDrawing.gallery_hidden_at.is_(None),
+    )
+
+
+def _not_the_drawers():
+    """A share of the notice's drawing by somebody other than its drawer."""
+    return and_(
+        TurnDrawingShare.turn_id == DrawingShareNotice.turn_id,
+        TurnDrawingShare.participant_id != TurnRecord.drawer_participant_id,
     )
 
 
@@ -54,56 +69,108 @@ async def pending_share_notice_payload(
         return {"notices": [], "total": 0}
     async with session_factory() as session:
         identity_ids = await _identity_ids(session, target)
-        pending = (
+        standing = (
             DrawingShareNotice.user_id.in_(identity_ids),
             DrawingShareNotice.acknowledged_at.is_(None),
+            exists().where(_not_the_drawers()),
         )
+
+        def pending(statement):
+            return (
+                statement.join(TurnDrawing, _still_shared())
+                .join(TurnRecord, TurnRecord.id == DrawingShareNotice.turn_id)
+                .where(*standing)
+            )
+
         total = int(
             await session.scalar(
-                select(func.count())
-                .select_from(DrawingShareNotice)
-                .join(TurnDrawing, _still_shared())
-                .where(*pending)
+                pending(select(func.count()).select_from(DrawingShareNotice))
             )
             or 0
         )
         rows = (
             await session.execute(
-                select(
-                    DrawingShareNotice.id,
-                    DrawingShareNotice.turn_id,
-                    DrawingShareNotice.created_at,
-                    TurnRecord.prompt,
-                    GameParticipant.display_name_snapshot,
-                    GameParticipant.name_color_snapshot,
-                    GameParticipant.is_anonymous_snapshot,
+                pending(
+                    select(
+                        DrawingShareNotice.id,
+                        DrawingShareNotice.turn_id,
+                        DrawingShareNotice.created_at,
+                        TurnRecord.prompt,
+                        TurnRecord.drawer_participant_id,
+                    )
                 )
-                .join(TurnDrawing, _still_shared())
-                .join(TurnRecord, TurnRecord.id == DrawingShareNotice.turn_id)
-                .join(
-                    GameParticipant,
-                    GameParticipant.id == DrawingShareNotice.sharer_participant_id,
-                )
-                .where(*pending)
                 .order_by(DrawingShareNotice.created_at.desc(), DrawingShareNotice.id.desc())
                 .limit(PENDING_SHOWN)
             )
         ).all()
+        # Who to name: each drawing's earliest share still standing that is
+        # not its drawer's. One statement over the shown drawings' shares,
+        # bounded by a room's seats each.
+        sharers: dict = {}
+        if rows:
+            drawers = {row.turn_id: row.drawer_participant_id for row in rows}
+            for share in (
+                await session.execute(
+                    select(
+                        TurnDrawingShare.turn_id,
+                        TurnDrawingShare.participant_id,
+                        GameParticipant.display_name_snapshot,
+                        GameParticipant.name_color_snapshot,
+                        GameParticipant.is_anonymous_snapshot,
+                    )
+                    .join(GameParticipant, GameParticipant.id == TurnDrawingShare.participant_id)
+                    .where(TurnDrawingShare.turn_id.in_(list(drawers)))
+                    .order_by(
+                        TurnDrawingShare.turn_id,
+                        TurnDrawingShare.created_at,
+                        TurnDrawingShare.participant_id,
+                    )
+                )
+            ).all():
+                if share.turn_id in sharers or share.participant_id == drawers[share.turn_id]:
+                    continue
+                sharers[share.turn_id] = share
     return {
         "notices": [
             {
                 "id": str(row.id),
                 "turnId": str(row.turn_id),
                 "prompt": row.prompt,
-                "sharerDisplayName": row.display_name_snapshot,
-                "sharerNameColor": row.name_color_snapshot,
-                "sharerIsAnonymous": row.is_anonymous_snapshot,
+                "sharerDisplayName": sharers[row.turn_id].display_name_snapshot,
+                "sharerNameColor": sharers[row.turn_id].name_color_snapshot,
+                "sharerIsAnonymous": sharers[row.turn_id].is_anonymous_snapshot,
                 "createdAt": row.created_at.isoformat(),
             }
             for row in rows
+            if row.turn_id in sharers
         ],
         "total": total,
     }
+
+
+async def drawers_told_about_game(
+    session_factory: async_sessionmaker[AsyncSession], game_id: str
+) -> list[str]:
+    """The drawers a finished game's history left an unread notice for: the
+    shares made from its results, written with it, which nobody pushed while
+    the game was still only in memory."""
+    try:
+        target = UUID(game_id)
+    except (ValueError, TypeError):
+        return []
+    async with session_factory() as session:
+        users = (
+            await session.scalars(
+                select(DrawingShareNotice.user_id)
+                .join(TurnRecord, TurnRecord.id == DrawingShareNotice.turn_id)
+                .where(
+                    TurnRecord.game_id == target,
+                    DrawingShareNotice.acknowledged_at.is_(None),
+                )
+                .distinct()
+            )
+        ).all()
+    return [str(user_id) for user_id in users]
 
 
 def create_share_notice_router(

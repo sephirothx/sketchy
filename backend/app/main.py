@@ -48,6 +48,7 @@ from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
 from app.api.share_notices import (
     create_share_notice_router,
+    drawers_told_about_game,
     pending_share_notice_payload,
 )
 from app.api.role_notices import (
@@ -724,6 +725,16 @@ async def push_share_notice_to_account(user_id: str) -> None:
 
 handler_context.on_share_notice = push_share_notice_to_account
 handler_context.on_gallery_changed = gallery_shelf.invalidate
+
+
+async def push_share_notices_for_game(game_id: str) -> None:
+    """A finished game's history is in: tell the drawers its live shares left
+    a notice for, if any of their sockets is connected (R-SHARE-09)."""
+    for user_id in await drawers_told_about_game(async_session_factory, game_id):
+        await push_share_notice_to_account(user_id)
+
+
+finished_game_worker.bind_recorded(push_share_notices_for_game)
 
 
 def request_process_exit() -> None:

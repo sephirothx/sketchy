@@ -114,6 +114,10 @@ export interface GameTurn {
   reactions: HistoryReaction[];
   /** Every reaction by code, the seatless ones included (R-REACT-05). */
   reactionCounts: ReactionTally;
+  /** The seats that shared the drawing to the Gallery, first first (#1430). */
+  shares: string[];
+  /** Its drawer took it out of the Gallery: nobody else may share it again. */
+  galleryWithdrawn: boolean;
 }
 
 export interface GameRuleSnapshot {
@@ -233,6 +237,27 @@ export function setGalleryReaction(
   return emoji === null
     ? apiRequest<HistoryReactionResult>(path, { method: "DELETE" })
     : apiRequest<HistoryReactionResult>(path, { method: "PUT", body: { emoji } });
+}
+
+export interface HistoryShareResult {
+  turnId: string;
+  shares: string[];
+  withdrawn: boolean;
+}
+
+/**
+ * Share a stored drawing to the Gallery (PUT), or take it back (DELETE): the
+ * viewer's own share, or - from its drawer - the drawing altogether (#1430).
+ * Every refusal is a 404, like the drawing itself.
+ */
+export function setHistoryShare(
+  gameId: string,
+  turnId: string,
+  shared: boolean,
+): Promise<HistoryShareResult> {
+  const path =
+    `/api/games/${encodeURIComponent(gameId)}/turns/${encodeURIComponent(turnId)}/share`;
+  return apiRequest<HistoryShareResult>(path, { method: shared ? "PUT" : "DELETE" });
 }
 
 /** A profile's pinned drawings, in the owner's order (#440). Any session may ask. */

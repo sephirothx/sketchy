@@ -25,8 +25,8 @@ from app.services.drawing_reactions import (
 # The refusals are player-facing copy; the handler returns them as-is.
 NOT_VISIBLE = "That drawing can no longer be shared from here."
 NOT_SHAREABLE = "That drawing can't be shared."
-PRIVATE_ROOM = "Only the artist can share a drawing from a private room."
-WITHDRAWN = "The artist took this drawing out of the Gallery."
+PRIVATE_ROOM = "Only its drawer can share a drawing from a private room."
+WITHDRAWN = "Its drawer took this drawing out of the Gallery."
 NOT_ACCEPTED = "That drawing could not be shared. Try again in a moment."
 
 __all__ = [
@@ -52,9 +52,11 @@ def is_drawer(room: Room, entry: DrawingRecapEntry, player: Player) -> bool:
 
 
 def _rules_refusal(
-    room: Room, entry: DrawingRecapEntry, player: Player, shared: bool
+    room: Room, entry: DrawingRecapEntry, player: Player, shared: bool, *, public: bool
 ) -> str | None:
-    """What every share, live or from the recap, has to hold."""
+    """What every share, live or from the recap, has to hold. `public` is the
+    game's visibility: the room's while it is being played, and the one the
+    game was recorded with once it is over."""
     if not shared:
         # Taking back is always one's own to do: the drawer's whole drawing,
         # anyone else's own share.
@@ -64,7 +66,7 @@ def _rules_refusal(
         return NOT_SHAREABLE
     if is_drawer(room, entry, player):
         return None
-    if not room.is_public:
+    if not public:
         return PRIVATE_ROOM
     if entry.turn_id in room.drawing_share_withdrawn:
         return WITHDRAWN
@@ -86,7 +88,7 @@ def live_share_refusal(
     entry = recap_entry_for(room, turn_id)
     if entry is None:
         return NOT_VISIBLE
-    return _rules_refusal(room, entry, player, shared)
+    return _rules_refusal(room, entry, player, shared, public=room.is_public)
 
 
 def recap_share_refusal(
@@ -95,7 +97,7 @@ def recap_share_refusal(
     """Why a share from the recap is refused before any write is tried. The
     recap outlives the game, so the share lands on the game's row, which has
     to exist first - the recap reaction's rule."""
-    refusal = _rules_refusal(room, entry, player, shared)
+    refusal = _rules_refusal(room, entry, player, shared, public=room.last_game_public)
     if refusal:
         return refusal
     if room.last_game_history == "pending":

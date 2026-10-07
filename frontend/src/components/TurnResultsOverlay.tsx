@@ -35,6 +35,8 @@ interface TurnResultsOverlayProps {
   nextTurnDurationSeconds?: number;
   /** The reaction control for the drawing these results are about. */
   reactions?: ReactNode;
+  /** The Share to Gallery control for the same drawing (#1430). */
+  share?: ReactNode;
 }
 
 // Must match the height of .turn-results-score-row in game-results.css - used to
@@ -66,6 +68,7 @@ export function TurnResultsOverlay({
   nextTurnStartedAt = 0,
   nextTurnDurationSeconds = 0,
   reactions,
+  share,
 }: TurnResultsOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
@@ -137,6 +140,7 @@ export function TurnResultsOverlay({
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>
         {reactions && <div className="turn-results-reactions">{reactions}</div>}
+        {share && <div className="turn-results-share">{share}</div>}
         {/* Only when hints were bought, as how the row's points were
             reached (#1278). It was said to every guesser as "Your turn: +N
             points · now #k" - the row directly below, again, under a name

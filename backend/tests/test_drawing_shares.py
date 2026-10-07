@@ -9,6 +9,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select, update
 
+from app.api.share_notices import pending_share_notice_payload
 from app.auth.account_data import anonymize_account
 from app.db.models import (
     DrawingShareNotice,
@@ -46,10 +47,16 @@ async def _gallery_ids(history) -> list[str]:
     return [entry.turn_id for entry in (await history.list_gallery(sort="new")).entries]
 
 
-async def _notices(factory) -> list[tuple[UUID, UUID, UUID]]:
+async def _notices(factory) -> list[tuple[UUID, UUID]]:
     async with factory() as session:
         rows = (await session.scalars(select(DrawingShareNotice))).all()
-    return [(row.user_id, row.turn_id, row.sharer_participant_id) for row in rows]
+    return [(row.user_id, row.turn_id) for row in rows]
+
+
+async def _told(factory, user_id: str) -> list[tuple[str, str]]:
+    """What the drawer is shown: each notice's drawing and the name on it."""
+    payload = await pending_share_notice_payload(factory, user_id)
+    return [(notice["turnId"], notice["sharerDisplayName"]) for notice in payload["notices"]]
 
 
 async def _drawing(factory, turn_id: str) -> TurnDrawing:
@@ -187,7 +194,7 @@ async def test_the_drawers_withdrawal_takes_every_share_and_pin_and_holds(repos)
     async with factory() as session:
         assert (await session.scalars(select(ProfileDrawingPin))).all() == []
     row = await _drawing(factory, game.turn_id)
-    assert row.gallery_shared_at is None and row.gallery_withdrawn_at is not None
+    assert row.gallery_share_count == 0 and row.gallery_withdrawn_at is not None
 
     assert await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
@@ -236,8 +243,9 @@ async def test_a_sharer_takes_back_only_their_own_share_and_pin(repos):
         )
         await session.commit()
     await rebuild_gallery_ranking(factory)
-    moved = (await _drawing(factory, game.turn_id)).gallery_shared_at
-    assert moved is not None and moved > first, "the first share is the earliest left"
+    kept = await _drawing(factory, game.turn_id)
+    assert kept.gallery_share_count == 1
+    assert kept.gallery_shared_at == first, "the first entry is kept, not moved later"
     await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
     )
@@ -297,9 +305,8 @@ async def test_a_share_leaves_the_drawer_one_notice_unless_they_saw_it(repos):
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
     )
     assert told.notify_user_id == ann.id
-    assert await _notices(factory) == [
-        (UUID(ann.id), UUID(game.turn_id), UUID(game.reactor_seat))
-    ]
+    assert await _notices(factory) == [(UUID(ann.id), UUID(game.turn_id))]
+    assert await _told(factory, ann.id) == [(game.turn_id, "Reactor")]
     await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
     )
@@ -364,7 +371,7 @@ async def test_pinning_shares_and_tells_the_drawer(repos):
     assert sorted(map(str, sharers)) == sorted([ann.id, bob.id])
 
 
-async def test_erasing_a_sharer_takes_their_shares_and_the_notices_naming_them(repos):
+async def test_erasing_a_sharer_takes_their_shares_and_their_name_off_the_notice(repos):
     """R-SHARE-08: a share is the sharer's act, and their name is its credit."""
     users, history, factory = repos
     ann = await registered(users, "Ann")
@@ -375,12 +382,12 @@ async def test_erasing_a_sharer_takes_their_shares_and_the_notices_naming_them(r
     await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
     )
-    assert await _notices(factory)
+    assert await _told(factory, ann.id) == [(game.turn_id, "Reactor")]
     await anonymize_account(factory, user_id=bob.id)
     assert await _gallery_ids(history) == []
-    assert await _notices(factory) == []
+    assert await _told(factory, ann.id) == [], "a notice naming nobody says nothing"
     row = await _drawing(factory, game.turn_id)
-    assert row.gallery_shared_at is None and row.hot_score == 0.0
+    assert row.gallery_share_count == 0 and row.hot_score == 0.0
     assert await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
     ) is None, "a tombstoned account shares nothing"
@@ -480,7 +487,76 @@ async def test_the_fold_leaves_a_notice_only_where_the_drawer_was_gone(repos):
         history, drawer=ann.id, reactor=bob.id, visibility="public",
         shared_by=("drawer", "reactor"), notify_drawer=True,
     )
-    assert await _notices(factory) == [
-        (UUID(ann.id), UUID(gone.turn_id), UUID(gone.reactor_seat))
-    ]
+    assert await _notices(factory) == [(UUID(ann.id), UUID(gone.turn_id))]
     assert watched.turn_id != gone.turn_id
+
+
+async def test_taking_the_last_share_back_and_sharing_again_is_not_new(repos):
+    """R-SHARE-05: pressing twice must not bump a drawing to the top of New,
+    or back into Hot's horizon and This week."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    old = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by="reactor",
+        finished_at=NOW - timedelta(days=20),
+    )
+    recent = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by="reactor",
+        finished_at=NOW - timedelta(hours=1),
+    )
+    first = (await _drawing(factory, old.turn_id)).gallery_shared_at
+    for who in (bob, ann):
+        await history.set_drawing_share(
+            old.game_id, old.turn_id, requesting_user_id=who.id, shared=False
+        )
+        assert old.turn_id not in await _gallery_ids(history)
+        await history.set_drawing_share(
+            old.game_id, old.turn_id, requesting_user_id=ann.id, shared=True
+        )
+        assert await _gallery_ids(history) == [recent.turn_id, old.turn_id]
+        assert (await _drawing(factory, old.turn_id)).gallery_shared_at == first
+    hot = [entry.turn_id for entry in (await history.list_gallery(sort="hot")).entries]
+    assert old.turn_id not in hot, "twenty days old is past Hot's horizon still"
+
+
+async def test_the_notice_names_the_sharer_still_standing(repos):
+    """R-SHARE-09: never somebody who took their share back."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    cid = await registered(users, "Cid")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public",
+        shared_by=("drawer", "reactor"), notify_drawer=True,
+    )
+    assert await _told(factory, ann.id) == [(game.turn_id, "Reactor")]
+    await history.set_drawing_share(
+        game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
+    )
+    assert await _told(factory, ann.id) == [], "the drawer's own share names nobody"
+    assert cid  # a third player who never sat in it cannot be named
+
+
+async def test_a_purged_guest_leaves_their_share_standing(repos):
+    """The retention purge removes a guest's row, not the history it made: the
+    share stays, credited to the seat's frozen name (SET NULL, not CASCADE)."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    guest = await users.create_anonymous(display_name="Guest")
+    game = await record_game(
+        history, drawer=ann.id, reactor=guest.id, reactor_is_anonymous=True,
+        visibility="public", shared_by="reactor",
+    )
+    from app.db.models import User
+
+    async with factory() as session:
+        await session.execute(User.__table__.delete().where(User.id == UUID(guest.id)))
+        await session.commit()
+    async with factory() as session:
+        [share] = (await session.scalars(select(TurnDrawingShare))).all()
+    assert share.user_id is None
+    entry = await history.get_gallery_entry(game.turn_id)
+    assert entry is not None and entry.sharer_display_name == "Reactor"
+    async with factory() as session:
+        assert (await _drawing_projections_slice(session, None)).mismatches == []

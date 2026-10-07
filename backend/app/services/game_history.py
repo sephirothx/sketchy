@@ -80,6 +80,8 @@ class _Seat:
     score: int
     present: bool
     turns_played: int = 0
+    # Seated and connected at the end: there to see what happened in the room.
+    connected: bool = False
     participant_id: str = ""
 
 
@@ -99,6 +101,7 @@ def _resolve_seats(room: Room, game: Game) -> dict[str, _Seat]:
                 is_anonymous=player.is_anonymous,
                 score=player.score,
                 present=True,
+                connected=player.connected,
             )
             continue
         departed = room.departed_seats.get(token)
@@ -369,10 +372,11 @@ def _shares(
     earlier moment kept. The room already refused what the rules refuse
     (R-SHARE-02); the write checks again against what it is writing. A share
     the drawer did not see happen - their seat gone or disconnected by the
-    end - is one they are told about afterwards (R-SHARE-09).
+    end, the recap's own test (`drawer_is_watching`) - is one they are told
+    about afterwards (R-SHARE-09).
     """
     drawer_present = {
-        seat.participant_id for seat in seats.values() if seat.present
+        seat.participant_id for seat in seats.values() if seat.present and seat.connected
     }
     shares: dict[tuple[str, str], TurnDrawingShareInput] = {}
     withdrawn: list[str] = []

@@ -1,0 +1,26 @@
+/* Share to gallery (#1430): the control beside a drawing, and the line that
+   says whose share put it there. The button is the design system's compact
+   secondary, pressed like the Pin toggle when it is the viewer's share. */
+.share-control {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.share-control-button.is-shared {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.share-control-line {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.turn-results-share {
+  display: flex;
+  justify-content: center;
+  margin: -4px 0 10px;
+}

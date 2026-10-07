@@ -46,6 +46,54 @@ def hot_score(reaction_count: int, shared_at: datetime | None) -> float:
     return math.log10(max(reaction_count, 1)) + seconds / HOT_DECAY_SECONDS
 
 
+def aware(moment: datetime | str | None) -> datetime | None:
+    """A timestamp read raw - an aggregate, on SQLite a string or a naive
+    value - as the aware moment every write compares it with."""
+    if isinstance(moment, str):
+        moment = datetime.fromisoformat(moment)
+    if moment is not None and moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def drawing_hot_score(drawing: TurnDrawing) -> float:
+    """A loaded row's Hot score from its own projections: measured from when it
+    entered the Gallery, and zero while nobody shares it."""
+    return hot_score(
+        drawing.reaction_count,
+        drawing.gallery_shared_at if drawing.gallery_share_count > 0 else None,
+    )
+
+
+def _earlier(kept: datetime | None, found: datetime | None) -> datetime | None:
+    kept, found = aware(kept), aware(found)
+    if kept is None:
+        return found
+    if found is None:
+        return kept
+    return min(kept, found)
+
+
+async def refresh_share_projection(session: AsyncSession, drawing: TurnDrawing) -> None:
+    """Set a drawing row's share count, first share and Hot score from its
+    share rows, in the caller's transaction and under the row lock the caller
+    holds (R-GAL-05): the count is the rows', never an increment. The first
+    share is kept once set - taking the last share back and sharing again is
+    not a new entry (R-SHARE-05) - and is moved only earlier, which is what a
+    finished game's live share written after a later one does."""
+    await session.flush()
+    count, first = (
+        await session.execute(
+            select(func.count(), func.min(TurnDrawingShare.created_at)).where(
+                TurnDrawingShare.turn_id == drawing.turn_id
+            )
+        )
+    ).one()
+    drawing.gallery_share_count = int(count)
+    drawing.gallery_shared_at = _earlier(drawing.gallery_shared_at, first)
+    drawing.hot_score = drawing_hot_score(drawing)
+
+
 def _count_by_turn():
     return (
         select(func.count())
@@ -58,6 +106,15 @@ def _count_by_turn():
 def _first_share_by_turn():
     return (
         select(func.min(TurnDrawingShare.created_at))
+        .where(TurnDrawingShare.turn_id == TurnDrawing.turn_id)
+        .scalar_subquery()
+    )
+
+
+def _shares_by_turn():
+    return (
+        select(func.count())
+        .select_from(TurnDrawingShare)
         .where(TurnDrawingShare.turn_id == TurnDrawing.turn_id)
         .scalar_subquery()
     )
@@ -80,18 +137,25 @@ async def _rebuild_batch(session: AsyncSession, after: UUID | None) -> tuple[int
         return 0, None
     rows = (
         await session.execute(
-            select(TurnDrawing.turn_id, _first_share_by_turn(), _count_by_turn())
-            .where(TurnDrawing.turn_id.in_(turn_ids))
+            select(
+                TurnDrawing.turn_id,
+                TurnDrawing.gallery_shared_at,
+                _first_share_by_turn(),
+                _shares_by_turn(),
+                _count_by_turn(),
+            ).where(TurnDrawing.turn_id.in_(turn_ids))
         )
     ).all()
-    for turn_id, shared_at, count in rows:
+    for turn_id, kept, first, shares, count in rows:
+        shared_at = _earlier(kept, first)
         await session.execute(
             update(TurnDrawing)
             .where(TurnDrawing.turn_id == turn_id)
             .values(
                 reaction_count=int(count),
+                gallery_share_count=int(shares),
                 gallery_shared_at=shared_at,
-                hot_score=hot_score(int(count), shared_at),
+                hot_score=hot_score(int(count), shared_at if shares else None),
             )
         )
     return len(rows), turn_ids[-1]

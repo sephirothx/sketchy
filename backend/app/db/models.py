@@ -3073,6 +3073,9 @@ class TurnDrawing(Base):
         CheckConstraint(
             "reaction_count >= 0", name="ck_turn_drawings_reaction_count"
         ),
+        CheckConstraint(
+            "gallery_share_count >= 0", name="ck_turn_drawings_gallery_share_count"
+        ),
         Index("ix_turn_drawings_status_created_at", "status", "created_at"),
         # Top, Hot and New read only the drawings somebody shared (#1430),
         # which are a small part of every drawing kept; partial, so an
@@ -3081,20 +3084,20 @@ class TurnDrawing(Base):
             "ix_turn_drawings_gallery_top",
             "reaction_count",
             "gallery_shared_at",
-            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
-            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+            postgresql_where=sql_text("gallery_share_count > 0"),
+            sqlite_where=sql_text("gallery_share_count > 0"),
         ),
         Index(
             "ix_turn_drawings_gallery_hot",
             "hot_score",
-            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
-            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+            postgresql_where=sql_text("gallery_share_count > 0"),
+            sqlite_where=sql_text("gallery_share_count > 0"),
         ),
         Index(
             "ix_turn_drawings_gallery_new",
             "gallery_shared_at",
-            postgresql_where=sql_text("gallery_shared_at IS NOT NULL"),
-            sqlite_where=sql_text("gallery_shared_at IS NOT NULL"),
+            postgresql_where=sql_text("gallery_share_count > 0"),
+            sqlite_where=sql_text("gallery_share_count > 0"),
         ),
     )
 
@@ -3131,13 +3134,14 @@ class TurnDrawing(Base):
     )
     stored_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    # How many reactions the drawing holds, and its Hot score - reddit's
-    # `log10(max(n, 1)) + gallery_shared_at / 45 000 s`, zero while nobody
-    # has shared it - kept beside the row so the Gallery orders by a column
-    # rather than counting on read (#524). Both are disposable projections of
-    # `turn_drawing_reactions` and `turn_drawing_shares`: every reaction and
-    # share write sets them under the row's lock, and
-    # `app.services.gallery_ranking` rebuilds them from the rows (R-GAL-05).
+    # How many reactions the drawing holds, how many shares, and its Hot
+    # score - reddit's `log10(max(n, 1)) + gallery_shared_at / 45 000 s`,
+    # zero while nobody shares it - kept beside the row so the Gallery orders
+    # and filters by a column rather than counting on read (#524, #1430).
+    # Disposable projections of `turn_drawing_reactions` and
+    # `turn_drawing_shares`: every reaction and share write sets them under
+    # the row's lock, and `app.services.gallery_ranking` rebuilds them from
+    # the rows (R-GAL-05).
     reaction_count: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
@@ -3150,11 +3154,17 @@ class TurnDrawing(Base):
     gallery_hidden_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
-    # When the drawing first entered the Gallery: the earliest of its
-    # `turn_drawing_shares` rows, null while it has none (#1430, R-SHARE-01).
-    # A disposable projection like the two above, set under the row's lock by
-    # every share write and rebuilt from the rows; the Gallery's New order and
-    # its windows read it, and its presence is what "in the Gallery" means.
+    # In the Gallery while at least one share holds it (R-SHARE-01).
+    gallery_share_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # When the drawing first entered the Gallery, and it keeps that moment:
+    # taking the last share back and sharing again does not make it new
+    # again, or anyone could bump a drawing to the top of New - and back into
+    # Hot and This week - by pressing twice (R-SHARE-05). A fact rather than a
+    # projection, then: the rebuild fills it from the rows only where it is
+    # missing, and only erasure clears it. The New order and the windows
+    # read it.
     gallery_shared_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
@@ -3544,10 +3554,14 @@ class TurnDrawingShare(Base):
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    # SET NULL rather than CASCADE: a guest the retention purge removes
+    # (R-PRIV-07) leaves its seat, and its share with it, credited to the
+    # seat's frozen name like the rest of that game's history. Erasure, which
+    # is a request, removes the share itself (R-SHARE-08).
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -3569,9 +3583,12 @@ class DrawingShareNotice(Base):
 
     Somebody else may share a drawing from a public game without asking
     (R-SHARE-02), so the drawer is told once, and can take it back out from
-    the notice (R-SHARE-09). One row per drawing, ever - the first sharer who
-    was not the drawer - because the second and the tenth share say nothing
-    the first did not. The `role_change_notices` pattern: a connected account
+    the notice (R-SHARE-09). One row per drawing, ever, because the second and
+    the tenth share say nothing the first did not. Who to name is read when
+    the notice is shown, not kept here: the earliest share still standing by
+    somebody other than the drawer, so a sharer who took theirs back or was
+    erased is never the one named, and a notice with no such share left has
+    nothing to say. The `role_change_notices` pattern: a connected account
     hears it on the socket, everybody else on their next visit, and
     acknowledging records that it landed.
     """
@@ -3584,15 +3601,8 @@ class DrawingShareNotice(Base):
             name="fk_drawing_share_notices_turn_same_game",
             ondelete="CASCADE",
         ),
-        ForeignKeyConstraint(
-            ["game_id", "sharer_participant_id"],
-            ["game_participants.game_id", "game_participants.id"],
-            name="fk_drawing_share_notices_sharer_same_game",
-            ondelete="CASCADE",
-        ),
         UniqueConstraint("turn_id", name="uq_drawing_share_notices_turn_id"),
         Index("ix_drawing_share_notices_user_pending", "user_id", "acknowledged_at"),
-        Index("ix_drawing_share_notices_sharer", "sharer_participant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -3610,11 +3620,6 @@ class DrawingShareNotice(Base):
     turn_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
-    # Named through the seat, so the notice credits the frozen name the
-    # Gallery does, and goes with the seat's game.
-    sharer_participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -3624,11 +3629,6 @@ class DrawingShareNotice(Base):
 
     turn_record: Mapped[TurnRecord] = relationship(
         foreign_keys=[game_id, turn_id],
-    )
-    sharer: Mapped[GameParticipant] = relationship(
-        primaryjoin=(
-            "GameParticipant.id == foreign(DrawingShareNotice.sharer_participant_id)"
-        ),
     )
 
 

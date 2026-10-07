@@ -205,6 +205,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   game_still_saving: "Esa partida todavía se está guardando. Inténtalo en un momento.",
   game_not_recorded: "Esa partida no se registró.",
   reaction_not_accepted: "No se pudo enviar esa reacción.",
+  spectators_cannot_share: "Los espectadores no pueden compartir un dibujo.",
+  share_not_visible: "Ese dibujo ya no se puede compartir desde aquí.",
+  share_not_allowed: "Ese dibujo no se puede compartir.",
+  share_withdrawn: "Quien lo dibujó lo ha quitado de la galería.",
+  share_not_accepted: "No se pudo compartir ese dibujo. Inténtalo de nuevo en un momento.",
 
   // Friends
   friends_unavailable: "Los amigos no están disponibles ahora mismo.",
@@ -944,6 +949,21 @@ export const ES: Catalogue = {
     thatDrawingCouldNotBePinned: "No se pudo fijar ese dibujo.",
   },
 
+  shareControl: {
+    share: "Compartir en la galería",
+    shared: "Compartido",
+    takeOut: "Quitar de la galería",
+    shareThisDrawing: "Poner este dibujo en la galería pública",
+    takeBackYourShare: "Dejar de compartirlo",
+    takeThisDrawingOut: "Quitar este dibujo de la galería para todos",
+    theDrawerKeptItOut: "Quien lo dibujó lo ha quitado de la galería.",
+    inTheGallery: "En la galería",
+    inTheGallerySharedBy: "En la galería · compartido por {sharer}",
+    inTheGallerySharedByYou: "En la galería · compartido por ti",
+    inTheGallerySharedByTheDrawer: "En la galería · compartido por quien lo dibujó",
+    thatDrawingCouldNotBeShared: "No se pudo compartir ese dibujo.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Dibujo de ${p.prompt} por ${p.drawer}`,
@@ -1259,7 +1279,7 @@ export const ES: Catalogue = {
   galleryPage: {
     gallery: "Galería",
     backToLobby: "Volver al vestíbulo",
-    drawingsFromPublicGames: "Todos los dibujos de las partidas públicas.",
+    drawingsPlayersShared: "Los dibujos que los jugadores han compartido.",
     loading: "Cargando…",
     sortBy: "Ordenar por",
     hot: "Populares",
@@ -1280,6 +1300,7 @@ export const ES: Catalogue = {
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `hace ${counted(p.count, { one: { minute: "minuto", hour: "hora", day: "día" }[p.unit], other: { minute: "minutos", hour: "horas", day: "días" }[p.unit] })}`,
     justNow: "ahora mismo",
     byDrawerPrefix: "de",
+    sharedBy: "compartido por {sharer}",
     thatIsAllOfIt: "Eso es todo",
     endOfHot: "Todo lo de las últimas dos semanas, lo más candente primero.",
     endOfTheRest: "No hay más por aquí.",
@@ -1287,7 +1308,7 @@ export const ES: Catalogue = {
     findARoom: "Buscar una sala",
     backToTop: "Volver arriba",
     topOfTheWeek: "Lo mejor de la semana",
-    nothingHereYetBody: "Juega una partida pública y sus dibujos serán los primeros aquí.",
+    nothingHereYetBody: "Comparte un dibujo desde los resultados o el resumen de una partida y será el primero aquí.",
     signInBody: "O elige un nombre en el vestíbulo para mirar como invitado.",
     backToGallery: "Volver a la galería",
     replay: "Reproducir",
@@ -1297,7 +1318,7 @@ export const ES: Catalogue = {
     percentDrawn: (p: { percent: number }) => `${number(p.percent)} % dibujado`,
     saveImage: "Guardar imagen",
     notInTheGallery: "Este dibujo no está en la galería",
-    notInTheGalleryBody: "Puede que se haya borrado u ocultado, o que nunca estuviera aquí.",
+    notInTheGalleryBody: "Puede que lo hayan quitado, borrado u ocultado, o que nunca se compartiera.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "En el catálogo de la comunidad",
@@ -1804,6 +1825,19 @@ export const ES: Catalogue = {
     oneMoment: "Espera, por favor…",
     signInAgain: "Volver a iniciar sesión",
     understood: "Vale",
+  },
+
+  shareNotice: {
+    title: (p: { count: number }) =>
+      p.count === 1 ? "Tu dibujo está en la galería" : "Tus dibujos están en la galería",
+    sharedYourDrawing: "{sharer} ha compartido tu dibujo de {prompt} en la galería.",
+    view: "Ver",
+    takeOut: "Quitarlo",
+    takenOut: "Quitado",
+    andMore: (p: { count: number }) =>
+      `Y ${counted(p.count, { one: "dibujo más", other: "dibujos más" })}.`,
+    youCanAlways: "Puedes quitar un dibujo de la galería cuando quieras, desde su página o desde tu historial de partidas.",
+    ok: "Vale",
   },
 
   roomChatPanel: {

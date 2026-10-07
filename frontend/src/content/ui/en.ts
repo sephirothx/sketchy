@@ -217,6 +217,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   game_still_saving: "That game is still being saved. Try again in a moment.",
   game_not_recorded: "That game was not recorded.",
   reaction_not_accepted: "That reaction could not be sent.",
+  spectators_cannot_share: "Spectators cannot share a drawing.",
+  share_not_visible: "That drawing can no longer be shared from here.",
+  share_not_allowed: "That drawing cannot be shared.",
+  share_withdrawn: "Its drawer took this drawing out of the gallery.",
+  share_not_accepted: "That drawing could not be shared. Try again in a moment.",
 
   // Friends
   friends_unavailable: "Friends are unavailable right now.",
@@ -960,6 +965,21 @@ export const EN = {
     thatDrawingCouldNotBePinned: "That drawing could not be pinned.",
   },
 
+  shareControl: {
+    share: "Share to gallery",
+    shared: "Shared",
+    takeOut: "Take out of gallery",
+    shareThisDrawing: "Put this drawing in the public gallery",
+    takeBackYourShare: "Take back your share",
+    takeThisDrawingOut: "Take this drawing out of the gallery for everyone",
+    theDrawerKeptItOut: "Its drawer took this one out of the gallery.",
+    inTheGallery: "In the gallery",
+    inTheGallerySharedBy: "In the gallery · shared by {sharer}",
+    inTheGallerySharedByYou: "In the gallery · shared by you",
+    inTheGallerySharedByTheDrawer: "In the gallery · shared by its drawer",
+    thatDrawingCouldNotBeShared: "That drawing could not be shared.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Drawing of ${p.prompt} by ${p.drawer}`,
@@ -1281,7 +1301,7 @@ export const EN = {
   galleryPage: {
     gallery: "Gallery",
     backToLobby: "Back to lobby",
-    drawingsFromPublicGames: "Every drawing from a public game.",
+    drawingsPlayersShared: "Drawings players chose to share.",
     loading: "Loading…",
     sortBy: "Sort by",
     hot: "Hot",
@@ -1302,6 +1322,7 @@ export const EN = {
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: p.unit, other: `${p.unit}s` })} ago`,
     justNow: "just now",
     byDrawerPrefix: "by",
+    sharedBy: "shared by {sharer}",
     thatIsAllOfIt: "That is all of it",
     endOfHot: "Everything from the last two weeks, hottest first.",
     endOfTheRest: "Nothing more this way.",
@@ -1309,7 +1330,7 @@ export const EN = {
     findARoom: "Find a room",
     backToTop: "Back to top",
     topOfTheWeek: "Top of the week",
-    nothingHereYetBody: "Play a public game, and its drawings will be the first here.",
+    nothingHereYetBody: "Share a drawing from a game's results or recap, and it will be the first here.",
     signInBody: "Or choose a name in the lobby to look around as a guest.",
     backToGallery: "Back to gallery",
     replay: "Replay",
@@ -1319,7 +1340,7 @@ export const EN = {
     percentDrawn: (p: { percent: number }) => `${number(p.percent)}% drawn`,
     saveImage: "Save image",
     notInTheGallery: "This drawing is not in the gallery",
-    notInTheGalleryBody: "It may have been erased or hidden, or it was never there.",
+    notInTheGalleryBody: "It may have been taken out, erased or hidden, or it was never shared.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "In the community catalogue",
@@ -1820,6 +1841,19 @@ export const EN = {
     oneMoment: "Please wait…",
     signInAgain: "Sign in again",
     understood: "OK",
+  },
+
+  shareNotice: {
+    title: (p: { count: number }): string =>
+      p.count === 1 ? "Your drawing is in the gallery" : "Your drawings are in the gallery",
+    sharedYourDrawing: "{sharer} shared your drawing of {prompt} to the gallery.",
+    view: "View",
+    takeOut: "Take it out",
+    takenOut: "Taken out",
+    andMore: (p: { count: number }) =>
+      `And ${counted(p.count, { one: "more drawing", other: "more drawings" })}.`,
+    youCanAlways: "You can take a drawing out of the gallery at any time, from its page or from your game history.",
+    ok: "OK",
   },
 
   roomChatPanel: {

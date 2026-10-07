@@ -344,7 +344,7 @@ export function GalleryPage() {
                 introduces its lists. */}
             <div className="gallery-head">
               <h1>{ui.galleryPage.gallery}</h1>
-              {!narrow && <p>{ui.galleryPage.drawingsFromPublicGames}</p>}
+              {!narrow && <p>{ui.galleryPage.drawingsPlayersShared}</p>}
             </div>
             {feed}
           </div>

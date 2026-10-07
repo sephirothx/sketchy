@@ -82,7 +82,8 @@ from app.services.gallery_ranking import (
     MAX_GALLERY_OFFSET,
     MAX_GALLERY_PAGE,
     TOP_WINDOWS,
-    hot_score,
+    drawing_hot_score,
+    refresh_share_projection,
 )
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
@@ -725,7 +726,7 @@ def _gallery_predicate():
     return (
         TurnDrawing.status == TurnDrawingStatus.READY.value,
         TurnDrawing.payload.is_not(None),
-        TurnDrawing.gallery_shared_at.is_not(None),
+        TurnDrawing.gallery_share_count > 0,
         TurnDrawing.gallery_hidden_at.is_(None),
     )
 
@@ -738,7 +739,7 @@ def _gallery_shows(drawing: TurnDrawing | None) -> bool:
         drawing is not None
         and drawing.status == TurnDrawingStatus.READY.value
         and drawing.checksum_sha256 is not None
-        and drawing.gallery_shared_at is not None
+        and drawing.gallery_share_count > 0
         and drawing.gallery_hidden_at is None
     )
 
@@ -767,23 +768,21 @@ def _shareable(drawing: TurnDrawing | None, turn: TurnRecord) -> bool:
     )
 
 
-async def _refresh_share_projection(session: AsyncSession, drawing: TurnDrawing) -> None:
-    """Set the drawing row's first share and Hot score from its share rows, in
-    the caller's transaction and under the row lock the caller holds: the
-    projection is the rows' minimum, never something a write increments
-    (R-GAL-05)."""
-    await session.flush()
-    first = await session.scalar(
-        select(func.min(TurnDrawingShare.created_at)).where(
-            TurnDrawingShare.turn_id == drawing.turn_id
+def _own_seat_in(turn: TurnRecord, identity_ids: Sequence[UUID]):
+    """The caller's seat in a turn's game, the drawer's seat first: a person
+    merged from two identities that both sat in one game holds two seats, and
+    a drawer's own share belongs on the seat that drew."""
+    return (
+        select(GameParticipant)
+        .where(
+            GameParticipant.game_id == turn.game_id,
+            GameParticipant.user_id.in_(identity_ids),
+        )
+        .order_by(
+            case((GameParticipant.id == turn.drawer_participant_id, 0), else_=1),
+            GameParticipant.id,
         )
     )
-    if isinstance(first, str):
-        first = datetime.fromisoformat(first)
-    if first is not None and first.tzinfo is None:
-        first = first.replace(tzinfo=timezone.utc)
-    drawing.gallery_shared_at = first
-    drawing.hot_score = hot_score(drawing.reaction_count, first)
 
 
 async def _share_seats(session: AsyncSession, turn_id: UUID) -> tuple[str, ...]:
@@ -801,7 +800,7 @@ async def _share_seats(session: AsyncSession, turn_id: UUID) -> tuple[str, ...]:
 
 
 async def _leave_share_notice(
-    session: AsyncSession, turn: TurnRecord, sharer_seat_id: UUID, *, now: datetime
+    session: AsyncSession, turn: TurnRecord, *, now: datetime
 ) -> UUID | None:
     """Tell the drawer, once per drawing, that somebody else shared it
     (R-SHARE-09). Answers the drawer's account when a notice was written, so
@@ -819,7 +818,6 @@ async def _leave_share_notice(
             user_id=drawer,
             game_id=turn.game_id,
             turn_id=turn.id,
-            sharer_participant_id=sharer_seat_id,
             created_at=now,
         )
     )
@@ -2568,8 +2566,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     withdrawn_turns.add(parsed)
                 first_shares: dict[UUID, datetime] = {}
+                share_counts: Counter[UUID] = Counter()
                 seen_shares: set[tuple[UUID, UUID]] = set()
-                notices: dict[UUID, UUID] = {}
+                notices: set[UUID] = set()
                 for share in shares:
                     share_turn_id = _optional_entity_id(share.turn_id)
                     if share_turn_id is None or share_turn_id not in created_turn_ids:
@@ -2624,14 +2623,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
                     first_shares.setdefault(share_turn_id, shared_at)
+                    share_counts[share_turn_id] += 1
                     if not by_drawer and share.notify_drawer:
-                        notices.setdefault(share_turn_id, share_seat_id)
+                        notices.add(share_turn_id)
                 for withdrawn_turn in withdrawn_turns:
                     if withdrawn_turn in drawing_rows:
                         drawing_rows[withdrawn_turn].gallery_withdrawn_at = (
                             game_record.finished_at
                         )
-                for notice_turn_id, sharer_seat_id in notices.items():
+                for notice_turn_id in sorted(notices):
                     drawer_user_id = turn_inputs_by_id[notice_turn_id].drawer_user_id
                     if not drawer_user_id:
                         continue
@@ -2642,7 +2642,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             ),
                             game_id=record_id,
                             turn_id=notice_turn_id,
-                            sharer_participant_id=sharer_seat_id,
                             created_at=first_shares[notice_turn_id],
                         )
                     )
@@ -2650,10 +2649,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # the rows they count (R-GAL-05).
                 for drawing_turn_id, drawing_row in drawing_rows.items():
                     count = written_reactions.get(drawing_turn_id, 0)
-                    first_shared = first_shares.get(drawing_turn_id)
                     drawing_row.reaction_count = count
-                    drawing_row.gallery_shared_at = first_shared
-                    drawing_row.hot_score = hot_score(count, first_shared)
+                    drawing_row.gallery_share_count = share_counts.get(drawing_turn_id, 0)
+                    drawing_row.gallery_shared_at = first_shares.get(drawing_turn_id)
+                    drawing_row.hot_score = drawing_hot_score(drawing_row)
 
                 if game_record.score_ledger_version not in (0, 1):
                     raise ValueError("Unsupported score ledger version")
@@ -3104,7 +3103,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 if drawing_row is not None:
                     total = sum(summary.counts.values())
                     drawing_row.reaction_count = total
-                    drawing_row.hot_score = hot_score(total, drawing_row.gallery_shared_at)
+                    drawing_row.hot_score = drawing_hot_score(drawing_row)
                 return DrawingReactionResult(
                     turn_id=_public_id(db_turn_id),
                     seat_id=_public_id(seat.id) if seat is not None else None,
@@ -3147,13 +3146,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # turn alone, but only somebody who was there has a share to
                 # make or take back. Guests included - sharing is not reacting.
                 seat = await session.scalar(
-                    select(GameParticipant)
-                    .where(
-                        GameParticipant.game_id == turn.game_id,
-                        GameParticipant.user_id.in_(identity_ids),
-                    )
-                    .order_by(GameParticipant.id)
-                    .limit(1)
+                    _own_seat_in(turn, identity_ids).limit(1)
                 )
                 if seat is None:
                     return None
@@ -3204,9 +3197,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             )
                         )
                         if not is_drawer and notify_drawer:
-                            notify = await _leave_share_notice(
-                                session, turn, seat.id, now=now
-                            )
+                            notify = await _leave_share_notice(session, turn, now=now)
                 elif is_drawer:
                     # The drawer's withdrawal (R-SHARE-04): every share, every
                     # pin - a pin is a share (R-PIN-03) - and a bar on the
@@ -3247,7 +3238,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
                 drawing_row.updated_at = now
-                await _refresh_share_projection(session, drawing_row)
+                await refresh_share_projection(session, drawing_row)
                 return DrawingShareResult(
                     turn_id=_public_id(db_turn_id),
                     shares=await _share_seats(session, db_turn_id),
@@ -3655,12 +3646,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     if turn is None:
                         return None
                     seat_id = await session.scalar(
-                        select(GameParticipant.id)
-                        .where(
-                            GameParticipant.game_id == turn.game_id,
-                            GameParticipant.user_id.in_(identity_ids),
-                        )
-                        .order_by(GameParticipant.id)
+                        _own_seat_in(turn, identity_ids)
+                        .with_only_columns(GameParticipant.id)
                         .limit(1)
                     )
                     drawing_row = drawing_rows.get(db_turn_id)
@@ -3716,11 +3703,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
                     if not is_drawer:
-                        drawer = await _leave_share_notice(session, turn, seat_id, now=now)
+                        drawer = await _leave_share_notice(session, turn, now=now)
                         if drawer is not None:
                             notified.append(drawer)
                     drawing_row.updated_at = now
-                    await _refresh_share_projection(session, drawing_row)
+                    await refresh_share_projection(session, drawing_row)
         return rows, notified
 
     def _pinned_drawing_predicate(self, profile_user_id: UUID, turn_id: UUID):
@@ -3744,7 +3731,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             TurnDrawing.turn_id == turn_id,
             TurnDrawing.status == TurnDrawingStatus.READY.value,
             TurnDrawing.payload.is_not(None),
-            TurnDrawing.gallery_shared_at.is_not(None),
+            TurnDrawing.gallery_share_count > 0,
             # A drawing a moderator hid from the Gallery is hidden from every
             # shelf that shows it to strangers (R-GAL-09): a pin is not a way
             # around a takedown any more than around a withdrawal.
@@ -3781,7 +3768,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         ProfileDrawingPin.user_id == canonical,
                         TurnDrawing.status == TurnDrawingStatus.READY.value,
                         TurnDrawing.payload.is_not(None),
-                        TurnDrawing.gallery_shared_at.is_not(None),
+                        TurnDrawing.gallery_share_count > 0,
                         TurnDrawing.gallery_hidden_at.is_(None),
                     )
                     .order_by(ProfileDrawingPin.position)

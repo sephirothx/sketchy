@@ -12,6 +12,7 @@ import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSugg
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
+import { ConnectedShareControl } from "../components/ConnectedShareControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RestartVoteAnnouncer } from "../components/RestartVoteNotice";
@@ -636,7 +637,20 @@ export function ActiveGameRoom({ code }: { code: string }) {
                   />
                 )}
                 renderActions={(entry) => (
-                  <ConnectedPinControl turnId={entry.turnId} visible={entry.available !== false} />
+                  <>
+                    <ConnectedShareControl
+                      turnId={entry.turnId}
+                      drawerId={entry.drawerId}
+                      shareable={entry.available !== false && entry.actionCount > 0}
+                      recap
+                    />
+                    <ConnectedPinControl
+                      turnId={entry.turnId}
+                      drawerId={entry.drawerId}
+                      visible={entry.available !== false}
+                      blank={entry.actionCount <= 0}
+                    />
+                  </>
                 )}
               />
             ) : highlightsOpen ? (

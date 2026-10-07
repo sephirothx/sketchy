@@ -53,7 +53,7 @@ import zlib
 from time import thread_time
 from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -1115,6 +1115,9 @@ class FinishedGameHandoffWorker:
         # Told which game ended up where, so the room that held it can open
         # its recap to reactions ("recorded") or stop offering them.
         self._on_outcome = on_outcome
+        # Told, once a game's history is in, so the drawers whose drawings
+        # were shared from its results hear about it now (#1430).
+        self._on_recorded: Callable[[str], Awaitable[None]] | None = None
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._wake = asyncio.Event()
 
@@ -1129,6 +1132,10 @@ class FinishedGameHandoffWorker:
     def bind_outcome(self, callback: Callable[[str, str], None] | None) -> None:
         """Say who is told when a replay ends; the flow service, in practice."""
         self._on_outcome = callback
+
+    def bind_recorded(self, callback: Callable[[str], Awaitable[None]] | None) -> None:
+        """Say who is told, by game id, once a game's history has landed."""
+        self._on_recorded = callback
 
     def wake(self) -> None:
         """Ask for a sweep now. Safe from any coroutine on the loop."""
@@ -1204,6 +1211,11 @@ class FinishedGameHandoffWorker:
                 self._on_outcome(claim.game_id, "recorded")
             elif outcome is ReplayOutcome.FAILED:
                 self._on_outcome(claim.game_id, "failed")
+        if history_recorded and self._on_recorded is not None:
+            try:
+                await self._on_recorded(claim.game_id)
+            except Exception:  # noqa: BLE001 - the history stands; a visit catches up
+                logger.exception("Failed to announce game %s's recorded history", claim.game_id)
         return result
 
     async def drain(self, *, limit: int | None = None) -> ReplayReport:

@@ -93,7 +93,9 @@ async def test_the_score_is_reddits_and_the_projections_follow_every_write(repos
     # A rebuild reproduces exactly what the writes left, from the rows.
     async with factory() as session:
         await session.execute(
-            update(TurnDrawing).values(reaction_count=7, hot_score=0.0, gallery_shared_at=None)
+            update(TurnDrawing).values(
+                reaction_count=7, hot_score=0.0, gallery_share_count=0, gallery_shared_at=None
+            )
         )
         await session.commit()
     assert await rebuild_gallery_ranking(factory) >= 1
@@ -101,7 +103,7 @@ async def test_the_score_is_reddits_and_the_projections_follow_every_write(repos
     assert count == 1 and math.isclose(score, hot_score(1, shared))
 
     # Taken back out, it holds a count and no score; shared again, the score
-    # starts from the new share.
+    # is measured from when it first entered, not from the new share.
     assert await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=ann.id, shared=False
     )
@@ -112,7 +114,9 @@ async def test_the_score_is_reddits_and_the_projections_follow_every_write(repos
         game.game_id, game.turn_id, requesting_user_id=ann.id, shared=True
     )
     count, score = await _count_and_score(factory, game.turn_id)
-    assert count == 1 and score > hot_score(1, shared)
+    assert count == 1 and math.isclose(score, hot_score(1, shared)), (
+        "shared again, it keeps the moment it first entered (R-SHARE-05)"
+    )
 
 
 async def test_the_gallery_shows_every_kept_public_drawing_and_nothing_else(repos):

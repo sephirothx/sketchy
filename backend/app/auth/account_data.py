@@ -83,7 +83,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.services.avatars import delete_avatars_for
-from app.services.gallery_ranking import hot_score
+from app.services.gallery_ranking import refresh_share_projection
 from app.services.prompt_reclaim import delete_owned_lists
 from app.services.prompt_takedowns import release_takedowns
 from app.domain_values import (
@@ -1695,6 +1695,51 @@ async def anonymize_account(
                     drawer_is_anonymous_snapshot=True,
                 )
             )
+            # Every drawing row this erasure writes, locked before any row that
+            # hangs off one is touched, in one ascending statement: its own
+            # drawings, and the other players' drawings it shared or pinned
+            # (#1430). A drawer's withdrawal holds its drawing's row and then
+            # deletes the shares and pins on it; deleting this account's share
+            # first and locking the drawing after was a cycle with that, and
+            # two statements were a cycle with another erasure.
+            erased_drawings = select(TurnRecord.id).where(
+                TurnRecord.drawer_user_id.in_(identity_ids)
+            )
+            own_drawings = set((await session.scalars(erased_drawings)).all())
+            others_shared = set(
+                (
+                    await session.scalars(
+                        select(TurnDrawingShare.turn_id).where(
+                            TurnDrawingShare.user_id.in_(identity_ids)
+                        )
+                    )
+                ).all()
+            ) - own_drawings
+            others_pinned = set(
+                (
+                    await session.scalars(
+                        select(ProfileDrawingPin.turn_id).where(
+                            ProfileDrawingPin.user_id.in_(identity_ids)
+                        )
+                    )
+                ).all()
+            ) - own_drawings
+            locked_drawings = {
+                drawing.turn_id: drawing
+                for drawing in (
+                    await session.scalars(
+                        select(TurnDrawing)
+                        .where(
+                            TurnDrawing.turn_id.in_(
+                                sorted(own_drawings | others_shared | others_pinned)
+                            )
+                        )
+                        .options(defer(TurnDrawing.payload))
+                        .order_by(TurnDrawing.turn_id)
+                        .with_for_update()
+                    )
+                ).all()
+            } if own_drawings | others_shared | others_pinned else {}
             # A drawing is authored content, so it goes rather than being
             # anonymised like the turn around it. The row stays behind saying
             # so, which keeps an erased drawing distinguishable from one the
@@ -1720,6 +1765,7 @@ async def anonymize_account(
                     updated_at=deleted_at,
                     reaction_count=0,
                     hot_score=0.0,
+                    gallery_share_count=0,
                     gallery_shared_at=None,
                     gallery_withdrawn_at=None,
                 )
@@ -1758,23 +1804,9 @@ async def anonymize_account(
             # Shares go the same two ways (#1430, R-SHARE-08): the ones on the
             # erased drawings, and the ones this account made of other
             # players' drawings - a share is the sharer's act, and their name
-            # is its credit. A drawing that loses its first share to this has
-            # its projection set again from what is left, under its row lock
-            # (the accounts are already held, the barrier's order); one with
-            # no share left leaves the Gallery.
-            erased_drawings = select(TurnRecord.id).where(
-                TurnRecord.drawer_user_id.in_(identity_ids)
-            )
-            others_shared = set(
-                (
-                    await session.scalars(
-                        select(TurnDrawingShare.turn_id).where(
-                            TurnDrawingShare.user_id.in_(identity_ids),
-                            TurnDrawingShare.turn_id.not_in(erased_drawings),
-                        )
-                    )
-                ).all()
-            )
+            # is its credit. A drawing that loses a share to this has its
+            # projection set again from what is left, under the row lock taken
+            # above; one with no share left leaves the Gallery.
             await session.execute(
                 delete(TurnDrawingShare).where(
                     or_(
@@ -1783,40 +1815,15 @@ async def anonymize_account(
                     )
                 )
             )
-            if others_shared:
-                for drawing in (
-                    await session.scalars(
-                        select(TurnDrawing)
-                        .where(TurnDrawing.turn_id.in_(sorted(others_shared)))
-                        .options(defer(TurnDrawing.payload))
-                        .order_by(TurnDrawing.turn_id)
-                        .with_for_update()
-                    )
-                ).all():
-                    first = await session.scalar(
-                        select(func.min(TurnDrawingShare.created_at)).where(
-                            TurnDrawingShare.turn_id == drawing.turn_id
-                        )
-                    )
-                    if isinstance(first, str):
-                        first = datetime.fromisoformat(first)
-                    if first is not None and first.tzinfo is None:
-                        first = first.replace(tzinfo=timezone.utc)
-                    drawing.gallery_shared_at = first
-                    drawing.hot_score = hot_score(drawing.reaction_count, first)
-            # Notices go with both sides: the ones this account was still to
-            # be told, and the ones naming it as the sharer, which would
-            # otherwise tell a drawer about a share that no longer exists.
+            for turn_id in sorted(others_shared):
+                if turn_id in locked_drawings:
+                    await refresh_share_projection(session, locked_drawings[turn_id])
+            # The notices this account was still to be told. One naming it as
+            # a sharer names nobody now: who a notice names is read when it
+            # is shown, from the shares still standing.
             await session.execute(
                 delete(DrawingShareNotice).where(
-                    or_(
-                        DrawingShareNotice.user_id.in_(identity_ids),
-                        DrawingShareNotice.sharer_participant_id.in_(
-                            select(GameParticipant.id).where(
-                                GameParticipant.user_id.in_(identity_ids)
-                            )
-                        ),
-                    )
+                    DrawingShareNotice.user_id.in_(identity_ids)
                 )
             )
             # Ordinary retained messages are short-lived user content and are

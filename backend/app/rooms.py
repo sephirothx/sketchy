@@ -550,6 +550,10 @@ class Room:
     # when there was nothing to write (too few seats, or no repository).
     last_game_id: str | None = None
     last_game_history: str = "none"
+    # Whether the last game was played in public, as its history records it
+    # (R-HIST-25): the room's own flag can change in the waiting room while
+    # the recap is still up, and who may share from it is the game's rule.
+    last_game_public: bool = True
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
@@ -640,6 +644,8 @@ class Room:
             "scoringMode": self.last_game_scoring_mode or self.scoring_mode,
             "highlights": self.last_game_highlights,
             "drawings": self.drawing_recap_metadata(),
+            # Who may share from the recap is the game's rule (#1430).
+            "isPublic": self.last_game_public,
         }
 
     def drawing_recap_metadata(self) -> list[dict]:
@@ -715,6 +721,14 @@ class Room:
             "shareWithdrawn": turn_id is not None
             and turn_id in self.drawing_share_withdrawn,
         }
+
+    def drawing_shareable(self, turn_id: str | None) -> bool:
+        """Whether this game's drawing for a turn is there to share at all:
+        kept by the room, and not blank (R-SHARE-03)."""
+        for drawing in self.last_game_drawings:
+            if drawing.turn_id == turn_id:
+                return drawing.is_available and drawing.action_count > 0
+        return False
 
     def allocate_canvas_generation(self) -> int:
         """Return the next room-lifetime canvas protocol identity."""

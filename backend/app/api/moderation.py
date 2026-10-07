@@ -39,6 +39,7 @@ from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
+    _gallery_predicate,
     _lock_versions,
     apply_gallery_decision,
 )
@@ -100,7 +101,6 @@ from app.services.incidents import (
 from app.domain_values import (
     AccountState,
     TurnDrawingStatus,
-    GameVisibility,
     GalleryShelfDecision,
     AuditTargetType,
     EmailTemplate,
@@ -3481,18 +3481,14 @@ def create_moderation_router(
                     await require_live_account(session, db_reporter_id)
                 except AccountErasedError:
                     raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
+                # Only what the Gallery shows (R-GAL-08): its own predicate,
+                # so a drawing shared from a private game is reportable and
+                # one nobody shared is not.
                 row = (
                     await session.execute(
                         select(TurnRecord, TurnDrawing)
                         .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
-                        .join(GameRecord, GameRecord.id == TurnRecord.game_id)
-                        .where(
-                            TurnRecord.id == db_turn_id,
-                            GameRecord.visibility == GameVisibility.PUBLIC.value,
-                            TurnDrawing.status == TurnDrawingStatus.READY.value,
-                            TurnDrawing.payload.is_not(None),
-                            TurnDrawing.gallery_hidden_at.is_(None),
-                        )
+                        .where(TurnRecord.id == db_turn_id, *_gallery_predicate())
                     )
                 ).first()
                 if row is None:
@@ -3699,18 +3695,16 @@ def create_moderation_router(
         except ValueError:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from None
 
-        # A public game's kept drawing, hidden from the Gallery or not - but
-        # never a private game's: those are the players' own (R-HIST-16), the
-        # queue never lists them, and a turn id is not a permission.
+        # A shared drawing, hidden from the Gallery or not - but never one
+        # nobody shared: those are the players' own (R-HIST-16), the queue
+        # never lists them, and a turn id is not a permission. Shared from a
+        # private game is shared all the same (R-SHARE-02).
         def staff_readable():
-            return (
-                select(TurnDrawing)
-                .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
-                .where(
-                    TurnDrawing.turn_id == db_turn_id,
-                    TurnDrawing.status == TurnDrawingStatus.READY.value,
-                    GameRecord.visibility == GameVisibility.PUBLIC.value,
-                )
+            return select(TurnDrawing).where(
+                TurnDrawing.turn_id == db_turn_id,
+                TurnDrawing.status == TurnDrawingStatus.READY.value,
+                TurnDrawing.payload.is_not(None),
+                TurnDrawing.gallery_share_count > 0,
             )
 
         async def checksum_of():

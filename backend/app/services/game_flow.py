@@ -1865,6 +1865,7 @@ class GameFlowService:
         forgotten its game but not yet said what became of it.
         """
         room.last_game_id = game.id
+        room.last_game_public = room.is_public
         room.last_game_history = (
             "pending"
             if history is not None and self._ctx.finished_games is not None

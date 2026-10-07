@@ -136,7 +136,7 @@ async def test_only_the_finished_turns_results_can_be_shared_from_a_live_game():
     await replay_staged(ctx)
 
 
-async def test_a_private_room_shares_only_by_its_artist_and_spectators_never():
+async def test_a_private_room_shares_only_by_its_drawer_and_spectators_never():
     room_manager, room, players = build_room(rounds=1)
     room.is_public = False
     ctx = build_context(room_manager, FakeGameHistoryRepository())
