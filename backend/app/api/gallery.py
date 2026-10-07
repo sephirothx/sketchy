@@ -1,5 +1,7 @@
-"""The Gallery's REST surface (#524): reactions from outside the game, and
-taking a shared drawing back out (#1430)."""
+"""The Gallery's REST surface (#524): its pages, reactions, and taking a drawing out.
+
+Taking a drawing back out of the Gallery is #1430's: the drawer's whole drawing,
+or anybody else's own share of it."""
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable

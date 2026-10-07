@@ -68,25 +68,36 @@ keyboard that takes half the screen, and one thumb.
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
 - Pinned drawings — a registered player keeps up to six drawings at the top of their
-  profile, in their own order, chosen from any public-room game they played: their own
-  drawings or another player's, always credited to the drawer's name as it was that day.
-  A private room's game cannot be pinned, so a pin never shows what the game list would
-  not. Pins go with the game, the turn, or an erased drawing, and with the account that
+  profile, in their own order, chosen from games they played: their own drawings or
+  another player's, always credited to the drawer's name as it was that day. A pin is a
+  share: only a drawing the player may share can be pinned, pinning it puts it in the
+  gallery, and its drawer taking it out of the gallery takes it off every shelf. Pins go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
   owner moves a drawing left or right and unpins it there, and anyone opens one in
   the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
-  profile's game history, for a registered player in a public game.
-- Gallery — every kept drawing from a public-room game, shown at `/gallery` to anyone
+  profile's game history, for a registered player who may share it.
+- Sharing — a drawing reaches the gallery only when a player who sat in its game shares
+  it: the drawer their own from any game, anybody else - guests included - a public
+  room's, without asking. **Share to gallery** sits on the turn results, the game-over
+  recap and game history, beside a kept drawing that is not blank. A player takes back
+  their own share, and the drawer takes the drawing out for everybody, which nobody else
+  can undo until the drawer shares it again. The drawer is told once, with a way to take
+  it out, when somebody else shares their drawing - not when they watched it happen. A
+  drawing keeps the moment it first entered the gallery, so sharing it again does not
+  make it new again.
+- Gallery — the drawings players shared, shown at `/gallery` to anyone
   signed in, guests included, whether or not they were in the game: a feed of framed
   drawings, one to a row, that loads more as you scroll, with the sort and This week in a
   rail beside it on a wide screen and the sort under the title on a phone. Ordered by
-  Hot, New or Top, with Top over all time, a month or a week; the measure is reactions.
+  Hot, New or Top, with Top over all time, a month or a week, by when each drawing first
+  entered the gallery; the measure is reactions.
   Opening a drawing is a page of its own with a link to share, where the drawing is
   replayed stroke by stroke the way the room saw it drawn, over a few seconds whatever
   its size, with a pause and a watch-again; the reaction picker and Report live there. An entry
   shows the drawing, the prompt, the round and turn, the drawer's name as it was that
-  day, and its reaction counts — never the game, the room or who reacted. Any
+  day, who shared it first, and its reaction counts — never the game, the room or who
+  reacted. Any
   registered player can react to an entry from the gallery or from a pinned shelf, one
   reaction per player per drawing; reactions given outside the room count but are not
   named. "This week" — the six most-reacted drawings of the last seven days — sits in

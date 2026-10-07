@@ -1,5 +1,8 @@
-"""The Gallery's projections (#524, #1430): the reaction count, the first
-share and the Hot score kept on each drawing row, and their rebuild."""
+"""The Gallery's projections (#524, #1430): counts, first share, Hot score, rebuild.
+
+The reaction count, the share count, the first share and the Hot score are kept
+on each drawing row so the Gallery orders by a column; the rebuild reproduces
+them from the rows."""
 from __future__ import annotations
 
 import argparse

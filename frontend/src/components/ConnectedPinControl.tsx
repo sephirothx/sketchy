@@ -63,22 +63,14 @@ export function ConnectedPinControl({
       disabled={!pins.ready || pins.pending}
       onToggle={async () => {
         try {
-          // Computed when the queue reaches it, from the list as it stands
-          // then: a press that lands beside another cannot forget its pin.
-          const pinning = !isPinned(pins.turnIds, turnId);
-          const done = await pins.mutate((current) =>
-            isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
-          );
-          if (!done) {
-            notify(refusalSentence("pinned_drawings_full"), "error");
-            return;
-          }
-          // A pin is a share (R-PIN-03): the write shared it on the finished
-          // game's row, and this tells the room so, through the same path a
-          // Share press takes - which finds the share already there.
-          if (pinning) {
-            const answer = await sendDrawingShare(turnId, true).catch(() => null);
-            if (answer?.shares) {
+          // A pin is a share (R-PIN-03). Shared first, the way the Share
+          // control does it, so the room hears it and the drawer - who may be
+          // right here, looking at the same recap - is not sent a notice about
+          // something they watched happen (R-SHARE-09); the pin write then
+          // finds the share already made.
+          if (!isPinned(pins.turnIds, turnId)) {
+            const answer = await sendDrawingShare(turnId, true);
+            if (answer.shares) {
               useGameStore.getState().applyDrawingShare({
                 turnId,
                 playerId: playerId ?? "",
@@ -89,6 +81,12 @@ export function ConnectedPinControl({
               });
             }
           }
+          // Computed when the queue reaches it, from the list as it stands
+          // then: a press that lands beside another cannot forget its pin.
+          const done = await pins.mutate((current) =>
+            isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
+          );
+          if (!done) notify(refusalSentence("pinned_drawings_full"), "error");
         } catch (failure) {
           if (failure instanceof ApiError && failure.status === 404) {
             notify(refusalSentence("game_still_saving"), "error");
