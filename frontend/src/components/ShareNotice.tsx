@@ -29,25 +29,31 @@ socket reaches a drawer who is connected when the share lands, and
 Held while a game is being played: a card over somebody's turn would be the
 one thing worse than not being told. It waits for the waiting room, the lobby,
 or any page outside a room. */
+/** The card after a read for `owner` arrives: the newest read wins, and a read
+    for another identity than the one held replaces it outright. */
+function heldAfter(
+  current: { owner: string; read: PendingShareNotices } | null,
+  owner: string,
+  read: PendingShareNotices,
+): { owner: string; read: PendingShareNotices } | null {
+  const kept = laterOf(current?.owner === owner ? current.read : null, read);
+  return kept ? { owner, read: kept } : null;
+}
+
 export function ShareNotice() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const playing = useGameStore((state) => state.roomId !== null && state.roomState === "playing");
-  const [pending, setPending] = useState<PendingShareNotices | null>(null);
+  // A card belongs to the identity it was read for: signing out, or into
+  // another account, hides it rather than leaving one nobody here can
+  // acknowledge.
+  const [held, setHeld] = useState<{ owner: string; read: PendingShareNotices } | null>(null);
+  const pending = held && held.owner === userId ? held.read : null;
   const [takenOut, setTakenOut] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const askedFor = useRef<string | null>(null);
   const primaryRef = useRef<HTMLButtonElement | null>(null);
-
-  // A card belongs to the identity it was read for: signing out, or into
-  // another account, takes it down rather than leaving one nobody here can
-  // acknowledge.
-  useEffect(() => {
-    setPending(null);
-    setTakenOut(new Set());
-    setFailed(false);
-  }, [userId]);
 
   useEffect(() => {
     // Guests too: a guest's drawing can be shared like anybody's. Once per
@@ -59,7 +65,7 @@ export function ShareNotice() {
     void fetchPendingShareNotices()
       .then((read) => {
         landed = true;
-        if (!cancelled) setPending((current) => laterOf(current, read));
+        if (!cancelled) setHeld((current) => heldAfter(current, userId, read));
       })
       .catch(() => {
         // Nothing to do: the notices stay pending and are read next visit.
@@ -74,15 +80,16 @@ export function ShareNotice() {
   }, [hasResolved, userId]);
 
   useEffect(() => {
+    if (!userId) return;
     function onPushed(payload: unknown) {
       const read = pendingShareNoticesFrom(payload);
-      if (read) setPending((current) => laterOf(current, read));
+      if (read && userId) setHeld((current) => heldAfter(current, userId, read));
     }
     socket.on("drawing_share_notice", onPushed);
     return () => {
       socket.off("drawing_share_notice", onPushed);
     };
-  }, []);
+  }, [userId]);
 
   if (!pending || pending.notices.length === 0 || playing) return null;
   const shown = pending.notices;
@@ -100,7 +107,7 @@ export function ShareNotice() {
       // shown again next visit, which beats a card that cannot be closed.
     } finally {
       // Only what was settled: a push that arrived meanwhile stays up.
-      setPending((current) => (current && current.notices[0]?.id === newest.id ? null : current));
+      setHeld((current) => (current && current.read.notices[0]?.id === newest.id ? null : current));
       setTakenOut(new Set());
       setBusy(false);
     }
