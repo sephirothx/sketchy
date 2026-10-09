@@ -167,6 +167,10 @@ def game_detail_payload(detail: GameDetail) -> dict:
                     for reaction in r.reactions
                 ],
                 "reactionCounts": dict(r.reaction_counts),
+                # The seats that shared the drawing to the Gallery, first
+                # first, and whether its drawer took it out (#1430).
+                "shares": list(r.shares),
+                "shareWithdrawn": r.gallery_withdrawn,
             }
             for r in detail.turns
         ],

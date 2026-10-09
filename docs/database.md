@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d6e7f8a9b0c3_lists_are_deleted_outright.py` (#1362). Both this line and the table
+`e7f8a9b0c1d4_gallery_by_sharing.py` (#1430). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-63 tables in eight domains.
+65 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -107,6 +107,8 @@ erDiagram
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
     users ||--o{ role_change_notices : "told about a role"
+    users ||--o{ drawing_share_notices : "told about a share"
+    users ||--o{ turn_drawing_shares : "shares"
 
     game_records ||--o{ game_participants : "seats"
     game_records ||--o{ turn_records : "turns"
@@ -120,6 +122,9 @@ erDiagram
     game_participants ||--o{ turn_drawing_reactions : "reactor seat"
     users ||--o{ profile_drawing_pins : "shelf"
     turn_records ||--o{ profile_drawing_pins : "pinned"
+    turn_records ||--o{ turn_drawing_shares : "shared"
+    game_participants ||--o{ turn_drawing_shares : "sharer seat"
+    turn_records ||--o| drawing_share_notices : "drawer told"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -145,7 +150,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `drawing_share_notices`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
@@ -1386,6 +1391,10 @@ to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `cla
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
 
+Since `envelope_version` 4 (#1430) an envelope carries the shares to the Gallery made
+from the turn results (`shares`, each with its seat, account, moment and whether the
+drawer should be told) and the turns whose drawer took theirs back out
+(`withdrawn_turn_ids`); both are in the payload digest.
 Since `envelope_version` 3 (#1358) an envelope's provenance names lists rather than
 revisions, and its usage batch carries each version's source lists (`sources`).
 Since `envelope_version` 2 (#1259) a drawing is prepared once, at staging on the
@@ -1562,33 +1571,48 @@ goes with its whole game.
 ### `turn_drawings`
 `turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
 `format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
-`unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · `gallery_hidden_at` · timestamps.
+`unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · `gallery_share_count` ·
+`gallery_shared_at` · `gallery_withdrawn_at` · `gallery_hidden_at` · timestamps.
 
 `status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
 `ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
 identity, size, checksum, and either inline bytes or an object key.
 `ck_turn_drawings_erased` requires a null payload once unavailable or deleted.
-`byte_size` ≤ 8 MiB. `ck_turn_drawings_reaction_count` keeps the count non-negative;
-`ix_turn_drawings_gallery_top` `(status, reaction_count)` and `ix_turn_drawings_gallery_hot`
-`(status, hot_score)` serve the **Gallery**'s Top and Hot orders (#524).
+`byte_size` ≤ 8 MiB. `ck_turn_drawings_reaction_count` and
+`ck_turn_drawings_gallery_share_count` keep both counts non-negative;
+`ix_turn_drawings_gallery_top` `(reaction_count, gallery_shared_at)`,
+`ix_turn_drawings_gallery_hot` `(hot_score)` and `ix_turn_drawings_gallery_new`
+`(gallery_shared_at)` serve the **Gallery**'s Top, Hot and New orders (#524), each
+**partial** on `gallery_share_count > 0`: only shared drawings are in the Gallery
+(#1430), they are a small part of every drawing kept, and no order reads another row.
 
-`reaction_count` and `hot_score` are the Gallery's **projections** (R-GAL-05): how many
-rows `turn_drawing_reactions` holds for the turn, and reddit's
-`log10(max(n, 1)) + finished_at / 45 000 s`, kept on the row so Top over the whole history
-orders by a column rather than counting on read, and Hot orders by a score that never
-changes for one row except when its count does — the decay is the newer rows' larger
-second term. Every reaction write sets both from the rows **under the row's lock**
+`reaction_count`, `gallery_share_count` and `hot_score` are the Gallery's
+**projections** (R-GAL-05): how many rows `turn_drawing_reactions` and
+`turn_drawing_shares` hold for the turn, and reddit's
+`log10(max(n, 1)) + gallery_shared_at / 45 000 s` — zero while nobody shares it — kept
+on the row so the Gallery filters and Top over the whole history orders by a column
+rather than counting on read, and Hot orders by a score that never changes for one row
+except when its count does — the decay is the newer rows' larger second term.
+`gallery_shared_at` is the moment the drawing first entered the Gallery, and it keeps
+it (R-SHARE-05): taking the last share back and sharing again is not a new entry, or a
+drawing could be bumped to the top of New by pressing twice. It is a fact rather than
+a projection — the rebuild fills it from the share rows only where it is missing, and
+moves it only earlier — and only erasure clears it. `gallery_withdrawn_at` is the
+drawer's taking it out of the Gallery (R-SHARE-04): every share and pin went with it,
+and nobody else may share it again until the drawer does, which clears it. Every reaction write sets both from the rows **under the row's lock**
 (`SELECT … FOR UPDATE`, taken after the drawer's account lock — *Synchronization* under
-`user_stats_daily`), so two reactions landing together cannot each count only their
-own — from one grouped count by code, hydrating only the seated rows the room names,
+`user_stats_daily`), and so does every share write, so two writes landing together
+cannot each count only their own — from one grouped count by code, hydrating only the seated rows the room names,
 never a row per reaction: every other reaction to a popular drawing waits on that lock,
 and loading 5,000 rows under it held it for 22 ms median, 44 ms p95, against 2.6 and
 2.8 ms now, flat in the number of reactions (#897, `benchmarks/reaction_write.py`, PostgreSQL 17); the finished-game write sets them with the row; erasure zeroes them with the bytes.
-They are never the source of truth: `app.services.gallery_ranking` rebuilds both from the
-reaction rows, one transaction per batch of rows locked before they are counted, so a
+They are never the source of truth: `app.services.gallery_ranking` rebuilds them from the
+reaction and share rows, one transaction per batch of rows locked before they are counted, so a
 reaction landing mid-rebuild waits for its batch and then sets the row itself; a rebuild
-reproduces exactly what the writes left. The revision that added the columns backfilled
-both, the score in Python, so a drawing written before it ranks where a later one would.
+reproduces exactly what the writes left. The revision that added the first two columns
+backfilled both, the score in Python, so a drawing written before it ranked where a later
+one would; the sharing revision (`e7f8a9b0c1d4`) zeroed every score, since nothing was
+shared yet and nothing is deployed.
 
 ```bash
 cd backend
@@ -1598,7 +1622,7 @@ cd backend
 `gallery_hidden_at` is a moderator's judgement about the lobby (R-GAL-09), not an
 erasure: set, the drawing is out of the Gallery, This week, the gallery bytes route,
 the gallery reaction door and every pinned shelf in one act — all of them read the flag —
-and it cannot be newly pinned, while its
+and it cannot be newly pinned or shared, while its
 bytes stay and the players who were there keep seeing it in their history. Released
 clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
 `target_type = 'drawing'` and the drawer as the target account, in the same transaction as
@@ -1735,6 +1759,60 @@ drawing, upserts or deletes the row, and moves the drawer's `reactions_received`
 Deleting an account deletes the reactions on the drawings it erases; the reactions that
 account *gave* stay, attributed through the tombstoned seat.
 
+### `turn_drawing_shares`
+`turn_id` · `participant_id` — together the **PK** · `game_id` (denormalized) ·
+`user_id` (the sharer's account, nullable, indexed, FK to `users` **SET NULL**) ·
+`created_at`, with `fk_turn_drawing_shares_turn_same_game` on `(game_id, turn_id)` and
+`fk_turn_drawing_shares_seat_same_game` on `(game_id, participant_id)`, both CASCADE, and
+`ix_turn_drawing_shares_participant_id`.
+
+A player who sat in the game putting its drawing in the **Gallery** (#1430). A drawing
+is in the Gallery while it holds at least one (R-SHARE-01), counted on the drawing row
+(`gallery_share_count`). One row per sharer's **seat**: every sharer sat in the game —
+the drawer from any game, anybody else, guests included, from a public one
+(R-SHARE-02) — and the seat carries the frozen presentation the Gallery credits the first
+sharer with (R-SHARE-06). The account sits beside it, canonical when written, for the
+writes that go by account: taking one's own share back, and erasure. SET NULL rather
+than CASCADE: the retention purge of a guest removes the account row and not the
+history it made, so the share stays, credited to the seat (R-SHARE-08).
+
+**Flow.** Shares made from the turn results while the game is live sit on the `Room` and
+ride in the finished-game transaction with their moments, validated against the rows
+being written like the reactions — a share by somebody other than the drawer of a
+private game's drawing, or of one its drawer took out, is a `ValueError`; a blank or
+unkept drawing's is dropped. They are part of the payload digest and of the handoff
+envelope (version 4). Later writes — the recap, history, the Gallery's door, and the
+pin write, since a pin is a share (R-PIN-03) — go through `set_drawing_share` (or the pin
+write's own copy of its rules), one transaction that locks the sharer's and the drawer's
+accounts in one ascending statement and then the drawing row, checks who may share,
+inserts or deletes, and sets the projections. The drawer's withdrawal deletes every
+share and every pin of the drawing and sets `gallery_withdrawn_at`.
+
+Deleting an account deletes the shares of the drawings it erases and every share it
+made, and sets the projections again on the drawings that lose one (§11).
+
+### `drawing_share_notices`
+`id` · `user_id` (the drawer's account, canonical when written, FK to `users` CASCADE) ·
+`game_id` · `turn_id` · `created_at` · `acknowledged_at`, with
+`uq_drawing_share_notices_turn_id`, `ix_drawing_share_notices_user_pending` on
+`(user_id, acknowledged_at)` and `fk_drawing_share_notices_turn_same_game` on
+`(game_id, turn_id)`, CASCADE.
+
+What a drawer still has to be told: somebody else shared their drawing (R-SHARE-09).
+One row per drawing, ever, written by the first share by somebody other than the drawer
+that the drawer did not watch happen; the second share says nothing the first did not.
+Who to name is not kept: the pending read names the earliest share still standing by
+somebody other than the drawer, so a sharer who took theirs back or was erased is never
+named, and a notice with no such share — or whose drawing has left the Gallery — is
+neither shown nor counted.
+
+**Flow.** Written in the share's transaction — a live share's by the finished-game
+write — and pushed to the drawer's connected sockets (`drawing_share_notice`) once it
+commits; everybody else reads `GET /api/share-notices/pending` on their next visit. The
+same two routes as `role_change_notices`, sharing one payload builder. Acknowledging the
+newest settles every older one; the drawer's withdrawal settles the drawing's. Deleting
+the drawer's account deletes them.
+
 ### `gallery_shelf_reviews`
 `turn_id` **PK** (→ `turn_records`, CASCADE) · `decision` ∈ `released \| hidden` ·
 `decided_by_user_id` (→ `users`, SET NULL, indexed) · `decided_at`.
@@ -1764,13 +1842,16 @@ whatever writes it. The `game_id` denormalization is the same-game edge the rest
 history graph uses (#512), so a turn from another game can never be named by mistake.
 
 What may be pinned is checked by the write, since neither rule is expressible here: a turn
-with a `ready` drawing from a **public** game (R-HIST-25) the pinner sat in — their own
-drawing or another player's, credited through the turn's frozen drawer snapshot. Only a
-`registered` account may pin, so a guest merge never brings a shelf with it.
+with a `ready`, unhidden, non-blank drawing the pinner sat in the game of and may share
+(R-SHARE-02) — their own from any game, another player's from a public one its drawer has
+not taken out — credited through the turn's frozen drawer snapshot. A pin **is** a share
+(R-PIN-03): the write shares every pinned drawing the pinner has not shared yet, in the
+same transaction, with its notice. Only a `registered` account may pin, so a guest merge
+never brings a shelf with it.
 
-**Reads.** `get_profile_pins` lists the shelf, joined to the turn, the game and the
-drawing so a pin whose game is no longer public or whose drawing is no longer ready is
-left out rather than shown as a hole. `get_pinned_drawing` and its checksum twin are the
+**Reads.** `get_profile_pins` lists the shelf, joined to the turn and the drawing so a pin
+whose drawing has left the Gallery or is no longer ready is left out rather than shown as
+a hole. `get_pinned_drawing` and its checksum twin are the
 one other door beside `get_turn_drawing`'s participant check (R-HIST-16): a separate
 query whose authorization is the join to this table, so the two can never loosen each
 other by accident (R-PIN-06).
@@ -1781,7 +1862,8 @@ before anything is deleted, and a refused list leaves the shelf as it was. Delet
 game or the turn takes the pin through the cascade. Erasing a drawing does not — erasure
 is a status on `turn_drawings`, and no cascade reaches a status — so the account-erasure
 path deletes the pins on the drawings it erases, the way it deletes their reactions, and
-the pins the erased account itself made.
+the pins the erased account itself made. A drawer's withdrawal deletes every pin of the
+drawing, and taking one's own share back deletes one's own pin of it (R-SHARE-04).
 
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
@@ -2570,7 +2652,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, share notices, usage facts | Indefinite | — | Permanently kept (R-PRIV-05); a share and the notices are the account's to take back, and go with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -2690,6 +2772,12 @@ Deletion:
   tombstoned seat;
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
+- deletes the shares of those erased drawings and every share the account made, setting
+  the Gallery's projections again on the other players' drawings that lose one, and the
+  share notices it was still to be told (`turn_drawing_shares`, `drawing_share_notices` in
+  §6). Every drawing row it writes - its own, and the others' it shared or pinned - is
+  locked first, in one ascending statement, before any row that hangs off one is touched:
+  a drawer's withdrawal holds its drawing and then deletes the shares and pins on it;
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
 
@@ -2967,7 +3055,7 @@ repairing**:
 | Check | What it compares | On a mismatch |
 | --- | --- | --- |
 | `drawings` | every ready drawing: declared size and format, checksum, decodability — the #610 walk | **pages** (`SketchyDrawingCorrupt`): the bytes are lost until a restore |
-| `drawing_projections` | `reaction_count` and `hot_score` against the reaction rows | warns; `python -m app.services.gallery_ranking` rebuilds |
+| `drawing_projections` | `reaction_count`, `gallery_share_count`, `gallery_shared_at` (set, and never later than the earliest share) and `hot_score` against the reaction and share rows | warns; `python -m app.services.gallery_ranking` rebuilds |
 | `user_stats` | each account's `user_stats_daily` rows against a rebuild from facts, run in a transaction that is **rolled back** | warns; `python -m app.services.user_stats_projection` rebuilds |
 | `games` | each seat's ledger sum against `final_score` (ledgered games), each turn's `guesser_count` against its eligible outcome rows | warns; a writer bug, investigate |
 | `alias_chains` | no merged identity points at another merged identity | warns |

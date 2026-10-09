@@ -39,6 +39,7 @@ import { AppBanners } from "./components/AppBanners";
 import { SettingsSyncNotices } from "./components/SettingsSyncNotices";
 import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { SuspensionNotice } from "./components/SuspensionNotice";
+import { ShareNotice } from "./components/ShareNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
 import { WarningNotice } from "./components/WarningNotice";
@@ -192,6 +193,8 @@ function App() {
         <ScrollToTop />
         {/* Inside the router: answering an invitation navigates. */}
         <FriendInviteNotice />
+        {/* Inside the router too: a notice links to the drawing. */}
+        <ShareNotice />
         <AppRoutes />
         <ConfettiCanvas />
       </BrowserRouter>

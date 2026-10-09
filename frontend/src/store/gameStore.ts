@@ -9,6 +9,8 @@ import type {
   ColorMode,
   DrawingReaction,
   DrawingReactionEvent,
+  DrawingSharedEvent,
+  DrawingShareState,
   DrawingToolGroup,
   DrawingRecapMetadata,
   GameEndedPayload,
@@ -32,6 +34,10 @@ interface GameStore {
   /** The language this seat plays in, as the join acknowledged it: which of a
   mixed-language room's `prompts` is this player's (#1182). */
   seatLanguage: PromptLanguage | null;
+  /** Every token of the current or last game that is this seat's account,
+      its own included (#1430): the drawings, standings and shares of a game
+      left and rejoined still name the old one. */
+  ownSeatTokens: string[];
   /**
    * The room being deliberately left (leave, kick, a seat taken over
    * elsewhere, the crash page, an invitation's Join), or null. Clearing the
@@ -121,6 +127,17 @@ interface GameStore {
   drawingReactions: Record<string, DrawingReaction[]>;
   /** The latest broadcast, so a control can float a glyph for it. */
   lastReactionEvent: (DrawingReactionEvent & { seq: number }) | null;
+  /**
+   * Who has shared each drawing to the Gallery, by turn id (#1430): the seat
+   * tokens, first sharer first, and whether its drawer took it out. For the
+   * current turn's results and the last game's recap, like the reactions.
+   */
+  drawingShares: Record<string, DrawingShareState>;
+  /** Whether the last finished game was public, for its recap's controls. */
+  lastGamePublic: boolean | null;
+  /** Every seat token that played the last game, seated at its end or not:
+      with `ownSeatTokens`, whether this seat sat in it (#1430). */
+  lastGameSeatTokens: string[];
 
   messages: ChatMessage[];
   lastTurnResult: TurnEndedPayload | null;
@@ -136,6 +153,7 @@ interface GameStore {
     code: string;
     playerId: string;
     seatLanguage?: PromptLanguage | null;
+    ownSeatTokens?: string[];
   }) => void;
   clearSession: () => void;
   /** Name the room being left, or null once the exit is over. */
@@ -195,6 +213,7 @@ interface GameStore {
   /** The recap for a socket that arrived after the game ended (#871). */
   applyLastGame: (payload: LastGamePayload) => void;
   applyDrawingReaction: (event: DrawingReactionEvent) => void;
+  applyDrawingShare: (event: DrawingSharedEvent) => void;
   clearDrawingReactions: () => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
@@ -209,6 +228,20 @@ function withMostReacted(highlights: GameHighlight[], card: GameHighlight | null
   if (card === null) return position < 0 ? highlights : highlights.filter((_, index) => index !== position);
   if (position < 0) return [...highlights, card];
   return highlights.map((item, index) => (index === position ? card : item));
+}
+
+/** The recap's per-entry share state, re-keyed by turn id for the store. */
+function sharesByTurn(entries: DrawingRecapMetadata[]): Record<string, DrawingShareState> {
+  const byTurn: Record<string, DrawingShareState> = {};
+  for (const entry of entries) {
+    if (entry.turnId) {
+      byTurn[entry.turnId] = {
+        shares: entry.shares ?? [],
+        withdrawn: entry.shareWithdrawn ?? false,
+      };
+    }
+  }
+  return byTurn;
 }
 
 /** The recap's per-entry reactions, re-keyed by turn id for the store. */
@@ -244,6 +277,9 @@ const initialGameFields = {
   currentTurnId: null as string | null,
   drawingReactions: {} as Record<string, DrawingReaction[]>,
   lastReactionEvent: null as (DrawingReactionEvent & { seq: number }) | null,
+  drawingShares: {} as Record<string, DrawingShareState>,
+  lastGamePublic: null as boolean | null,
+  lastGameSeatTokens: [] as string[],
   messages: [] as ChatMessage[],
   lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -255,6 +291,7 @@ const initialGameFields = {
 export const useGameStore = create<GameStore>((set, get) => ({
   playerId: null,
   seatLanguage: null,
+  ownSeatTokens: [],
   exitingRoomCode: null,
   roomId: null,
   code: null,
@@ -282,7 +319,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   error: null,
   ...initialGameFields,
 
-  setSession: ({ roomId, code, playerId, seatLanguage }) => {
+  setSession: ({ roomId, code, playerId, seatLanguage, ownSeatTokens }) => {
     // Nothing is persisted: the session cookie is the credential and the room
     // code comes from the URL.
     set((state) => ({
@@ -290,6 +327,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       code,
       playerId,
       seatLanguage: seatLanguage ?? null,
+      ownSeatTokens: ownSeatTokens ?? [playerId],
       // A seat in the room being left again ends that exit: the route has a
       // session to draw. A seat anywhere else leaves it standing - the left
       // room's route can still be on screen until the navigation to the new
@@ -300,7 +338,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }));
   },
   clearSession: () => {
-    set({ playerId: null, roomId: null, code: null, seatLanguage: null });
+    set({ playerId: null, roomId: null, code: null, seatLanguage: null, ownSeatTokens: [] });
   },
   setExitingRoom: (code) => set({ exitingRoomCode: code === null ? null : code.toUpperCase() }),
   setRoomState: (payload) =>
@@ -338,7 +376,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             gameHighlights: [],
             // A different room also leaves the last one's screen: its game-over
             // moment must not open over a recap this room sends afterwards.
-            ...(payload.id !== state.roomId ? { drawingReactions: {}, phase: "idle" as const } : {}),
+            ...(payload.id !== state.roomId
+              ? { drawingReactions: {}, drawingShares: {}, phase: "idle" as const }
+              : {}),
           }
         : {}),
       moderation: payload.moderation,
@@ -478,6 +518,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         payload.turnId && payload.reactions
           ? { ...s.drawingReactions, [payload.turnId]: payload.reactions }
           : s.drawingReactions,
+      drawingShares:
+        payload.turnId && payload.shares
+          ? {
+              ...s.drawingShares,
+              [payload.turnId]: { shares: payload.shares, withdrawn: payload.shareWithdrawn ?? false },
+            }
+          : s.drawingShares,
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: payload.seconds ?? 0,
@@ -496,6 +543,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     finalScoringMode: payload.scoringMode,
     drawingRecap: payload.drawings ?? [],
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
+    drawingShares: { ...s.drawingShares, ...sharesByTurn(payload.drawings ?? []) },
+    lastGamePublic: payload.isPublic ?? null,
+    lastGameSeatTokens: payload.seatTokens ?? [],
     gameHighlights: payload.highlights ?? [],
   })),
   endGame: (payload) => set((s) => ({
@@ -504,6 +554,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     finalScoringMode: payload.scoringMode,
     drawingRecap: payload.drawings ?? [],
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
+    drawingShares: { ...s.drawingShares, ...sharesByTurn(payload.drawings ?? []) },
+    lastGamePublic: payload.isPublic ?? null,
+    lastGameSeatTokens: payload.seatTokens ?? [],
     gameHighlights: payload.highlights ?? [],
     roomState: "waiting",
   })),
@@ -518,13 +571,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? { gameHighlights: withMostReacted(s.gameHighlights, event.highlight) }
         : {}),
     })),
+  applyDrawingShare: (event) =>
+    set((s) => ({
+      drawingShares: {
+        ...s.drawingShares,
+        [event.turnId]: { shares: event.shares, withdrawn: event.shareWithdrawn },
+      },
+    })),
   clearDrawingReactions: () =>
-    set({ drawingReactions: {}, currentTurnId: null, lastReactionEvent: null }),
+    set({ drawingReactions: {}, drawingShares: {}, currentTurnId: null, lastReactionEvent: null }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
   reset: () => set({
     playerId: null,
     seatLanguage: null,
+    ownSeatTokens: [],
     roomId: null,
     code: null,
     players: [],

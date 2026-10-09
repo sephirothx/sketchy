@@ -89,6 +89,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "send_chat": payloads.TextPayload,
     "send_lobby_chat": payloads.TextPayload,
     "session_ping": payloads.EmptyPayload,
+    "share_drawing": payloads.ShareDrawingPayload,
     "start_game": payloads.EmptyPayload,
     "toggle_afk": payloads.ToggleAfkPayload,
     "undo_stroke": "parse_undo_payload",

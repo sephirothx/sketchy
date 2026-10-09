@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import math
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from app.db.models import TurnDrawing, TurnDrawingReaction
 from app.domain_values import TurnDrawingStatus
@@ -54,8 +54,9 @@ async def _count_and_score(factory, turn_id: str) -> tuple[int, float]:
 
 
 async def test_the_score_is_reddits_and_the_projections_follow_every_write(repos):
-    """`log10(max(n, 1)) + finished_at / 45 000 s`: set with the game, moved
-    by every reaction write under the row's lock, zeroed by erasure."""
+    """`log10(max(n, 1)) + shared_at / 45 000 s`: set with the game, moved by
+    every reaction write under the row's lock, rebuilt from the rows, and
+    zero while nobody has shared the drawing (#1430)."""
     users, history, factory = repos
     ann = await registered(users, "Ann")
     bob = await registered(users, "Bob")
@@ -65,35 +66,57 @@ async def test_the_score_is_reddits_and_the_projections_follow_every_write(repos
         history, drawer=ann.id, reactor=bob.id, reactions="default",
         visibility="public", finished_at=finished,
     )
-    base = finished.timestamp() / HOT_DECAY_SECONDS
-    assert hot_score(0, finished) == base
-    assert hot_score(1, finished) == base
-    assert math.isclose(hot_score(10, finished), base + 1)
+    # `record_game` has the drawer share it half a minute before the finish.
+    shared = finished - timedelta(seconds=30)
+    base = shared.timestamp() / HOT_DECAY_SECONDS
+    assert hot_score(0, shared) == base
+    assert hot_score(1, shared) == base
+    assert math.isclose(hot_score(10, shared), base + 1)
+    assert hot_score(10, None) == 0.0
 
     count, score = await _count_and_score(factory, game.turn_id)
-    assert count == 1 and math.isclose(score, hot_score(1, finished))
+    assert count == 1 and math.isclose(score, hot_score(1, shared))
 
     await history.set_drawing_reaction(
         None, game.turn_id, requesting_user_id=cid.id, emoji="wow", from_gallery=True
     )
     count, score = await _count_and_score(factory, game.turn_id)
-    assert count == 2 and math.isclose(score, hot_score(2, finished))
-    assert score > hot_score(1, finished)
+    assert count == 2 and math.isclose(score, hot_score(2, shared))
+    assert score > hot_score(1, shared)
 
     await history.set_drawing_reaction(
         game.game_id, game.turn_id, requesting_user_id=bob.id, emoji=None
     )
     count, score = await _count_and_score(factory, game.turn_id)
-    assert count == 1 and math.isclose(score, hot_score(1, finished))
+    assert count == 1 and math.isclose(score, hot_score(1, shared))
 
     # A rebuild reproduces exactly what the writes left, from the rows.
     async with factory() as session:
         await session.execute(
-            update(TurnDrawing).values(reaction_count=7, hot_score=0.0)
+            update(TurnDrawing).values(
+                reaction_count=7, hot_score=0.0, gallery_share_count=0, gallery_shared_at=None
+            )
         )
         await session.commit()
     assert await rebuild_gallery_ranking(factory) >= 1
-    assert await _count_and_score(factory, game.turn_id) == (1, hot_score(1, finished))
+    count, score = await _count_and_score(factory, game.turn_id)
+    assert count == 1 and math.isclose(score, hot_score(1, shared))
+
+    # Taken back out, it holds a count and no score; shared again, the score
+    # is measured from when it first entered, not from the new share.
+    assert await history.set_drawing_share(
+        game.game_id, game.turn_id, requesting_user_id=ann.id, shared=False
+    )
+    assert await _count_and_score(factory, game.turn_id) == (1, 0.0)
+    await rebuild_gallery_ranking(factory)
+    assert await _count_and_score(factory, game.turn_id) == (1, 0.0)
+    assert await history.set_drawing_share(
+        game.game_id, game.turn_id, requesting_user_id=ann.id, shared=True
+    )
+    count, score = await _count_and_score(factory, game.turn_id)
+    assert count == 1 and math.isclose(score, hot_score(1, shared)), (
+        "shared again, it keeps the moment it first entered (R-SHARE-05)"
+    )
 
 
 async def test_the_gallery_shows_every_kept_public_drawing_and_nothing_else(repos):
@@ -292,10 +315,21 @@ async def test_the_migration_backfills_both_projections(tmp_path):
         finished = NOW - timedelta(hours=2)
         game = await record_game(history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public", finished_at=finished)
         await _migrate(engine, alembic_command.downgrade, "b0c1d2e3f4a5")
-        await _migrate(engine, alembic_command.upgrade, "head")
-        count, score = await _count_and_score(factory, game.turn_id)
+        # The ranking revision itself, read raw: the models are head's. Its
+        # score was the game's finish then; sharing (#1430) moved it later.
+        await _migrate(engine, alembic_command.upgrade, "c1d2e3f4a5b6")
+        async with engine.connect() as connection:
+            [(count, score)] = (
+                await connection.execute(
+                    text("SELECT reaction_count, hot_score FROM turn_drawings")
+                )
+            ).all()
         assert count == 1
-        assert math.isclose(score, hot_score(1, finished))
+        assert math.isclose(score, finished.timestamp() / HOT_DECAY_SECONDS)
+        # At head nothing is shared, so the score is the unshared zero and
+        # the count stays (R-GAL-05).
+        await _migrate(engine, alembic_command.upgrade, "head")
+        assert await _count_and_score(factory, game.turn_id) == (1, 0.0)
     finally:
         await engine.dispose()
 

@@ -1,8 +1,12 @@
-"""The Gallery (#524) end to end: two players finish a public game, and a
-third account that was never in it finds the drawing on `/gallery`, opens
-it, and reacts - counted, unnamed. A visitor with no session sees no
-gallery at all. A report filed from the Gallery reaches the moderation
-queue with its drawing, and a moderator hides the drawing from there."""
+"""The Gallery (#524) end to end: two players finish a public game, and one
+of them shares both drawings from the recap (#1430) - one their own, one the
+other player's, without asking - and a third account that was never in it
+finds them on `/gallery`, opens one, and reacts - counted, unnamed. (The
+turn results offer Share too, but this suite runs them for half a second; the
+handler tests cover that path.) A visitor
+with no session sees no gallery at all. A report filed from the Gallery
+reaches the moderation queue with its drawing, a moderator hides the drawing
+from there, and the other drawing's drawer takes theirs out."""
 from __future__ import annotations
 
 import re
@@ -56,6 +60,25 @@ async def load_next_page(page: Page) -> bool:
     except PlaywrightTimeoutError:
         return False
     return await page.locator(CARDS).count() > shown
+
+
+async def share_from_recap(page: Page, recap: Locator) -> None:
+    """Share the recap's current drawing. The history write lands just before
+    the recap is offered, so the first press may be answered "still being
+    saved"; the control stays, and another press is the retry it asks for.
+    Read before every press: a share that landed turns the button into the
+    one that takes it back."""
+    credit = recap.locator('[data-testid="share-credit"]')
+    toggle = recap.locator('[data-testid="share-toggle"]')
+    for _ in range(20):
+        if await credit.count() and (await credit.inner_text()).strip() == SHARED_BY_YOU:
+            return
+        await toggle.click()
+        await page.wait_for_timeout(1_000)
+    await expect(credit).to_have_text(SHARED_BY_YOU)
+
+
+SHARED_BY_YOU = "In the gallery · shared by you"
 
 
 async def find_in_gallery(
@@ -221,13 +244,31 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
 
             pages = [host, other]
             prompts: list[str] = []
+            drawers: list[Page] = []
             for _ in range(2):
                 drawer, guesser, prompt = await choose_prompt(pages)
                 prompts.append(prompt)
+                drawers.append(drawer)
                 await scribble(drawer)
                 await guesser.fill(".chat-input input", prompt)
                 await guesser.keyboard.press("Enter")
-            await host.locator('[data-testid="game-end-overlay"]').wait_for(timeout=12_000)
+            game_end = host.locator('[data-testid="game-end-overlay"]')
+            await game_end.get_by_role("button", name="Drawings", exact=True).wait_for(timeout=12_000)
+
+            # Nothing is in the Gallery until somebody shares it (R-SHARE-01):
+            # the host shares both from the recap - the one they drew, and the
+            # other player's, without asking (R-SHARE-02). The other player is
+            # in the room watching, so nobody is sent a notice (R-SHARE-09).
+            await game_end.get_by_role("button", name="Drawings", exact=True).click()
+            recap = host.locator(".drawing-recap")
+            await recap.wait_for()
+            for index in range(2):
+                await share_from_recap(host, recap)
+                await expect(
+                    other.locator('[data-testid="share-notice"]')
+                ).to_have_count(0)
+                if index == 0:
+                    await recap.get_by_role("button", name="Next").click()
 
             # A stranger, registered, never in the game: the gallery lists
             # both drawings once the history write lands (R-GAL-01).
@@ -236,8 +277,8 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await stranger.goto(BASE_URL)
             await use_guest_name(stranger, "GalStranger")
             await register_account(stranger, "galstranger")
-            # New orders by the finish alone, so a drawing that just finished
-            # is on the first page whatever other tests reacted to.
+            # New orders by when a drawing was first shared, so one shared a
+            # moment ago is on the first page whatever other tests reacted to.
             await stranger.goto(f"{BASE_URL}/gallery?sort=new")
             # Other tests' public games share this server, so the feed is
             # read for *these* drawings rather than counted.
@@ -333,6 +374,23 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await load_next_page(checker)
             await expect(checker.locator(CARDS).filter(has_text=prompts[0])).to_have_count(0)
             await checker_context.close()
+
+            # The other drawing's drawer takes it out from its own page
+            # (R-SHARE-04): out for everybody, and the page says so.
+            owner = drawers[1]
+            await owner.goto(f"{BASE_URL}/gallery?sort=new")
+            [theirs] = await find_in_gallery(
+                owner, prompts[1:], explain=lambda: why_not_listed(host, owner, prompts[1:])
+            )
+            await theirs.get_by_role("button").first.click()
+            await owner.locator('[data-testid="gallery-drawing-page"]').wait_for()
+            await owner.locator('[data-testid="share-take-out"]').click()
+            # It ends every other share and pin, so it asks first.
+            confirm = owner.get_by_role(
+                "alertdialog", name="Take this drawing out of the gallery?"
+            )
+            await confirm.get_by_role("button", name="Take it out", exact=True).click()
+            await owner.get_by_test_id("gallery-drawing-missing").wait_for()
 
             # No session: no gallery (R-GAL-02).
             anonymous_context = await browser.new_context()

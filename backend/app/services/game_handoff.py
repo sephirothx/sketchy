@@ -53,7 +53,7 @@ import zlib
 from time import thread_time
 from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -89,6 +89,7 @@ from app.repositories.interfaces import (
     StoredDrawingInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -107,7 +108,9 @@ logger = logging.getLogger("sketchy.services.game_handoff")
 # 3 since #1358: provenance names lists, not revisions (`prompt_source_list_ids`,
 # an offer's `source_list_ids`, `usage_list_ids`), and the usage batch carries
 # each version's `sources`, which is what its facts are credited to now.
-ENVELOPE_VERSION = 3
+# 4 since #1430: the shares to the Gallery made from the turn results, and
+# the turns whose drawer took theirs back out.
+ENVELOPE_VERSION = 4
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -451,6 +454,26 @@ def _reaction_out(reaction: TurnDrawingReactionInput) -> dict:
     }
 
 
+def _share_out(share: TurnDrawingShareInput) -> dict:
+    return {
+        "turn_id": share.turn_id,
+        "seat_id": share.seat_id,
+        "user_id": share.user_id,
+        "shared_at": _iso(share.shared_at),
+        "notify_drawer": share.notify_drawer,
+    }
+
+
+def _share_in(value: dict) -> TurnDrawingShareInput:
+    return TurnDrawingShareInput(
+        turn_id=value["turn_id"],
+        seat_id=value["seat_id"],
+        user_id=value["user_id"],
+        shared_at=_when(value["shared_at"]),
+        notify_drawer=bool(value["notify_drawer"]),
+    )
+
+
 def _usage_out(usage: PromptUsage | None) -> dict | None:
     if usage is None:
         return None
@@ -510,6 +533,8 @@ def _encoded(envelope: FinishedGameEnvelope) -> tuple[bytes, list[tuple[str, flo
         "score_events": [_score_event_out(event) for event in history.score_events],
         "drawings": drawings,
         "reactions": [_reaction_out(reaction) for reaction in history.reactions],
+        "shares": [_share_out(share) for share in history.shares],
+        "withdrawn_turn_ids": list(history.withdrawn_turn_ids),
         "usage": _usage_out(envelope.usage),
         "usage_list_ids": list(envelope.usage_list_ids),
     }
@@ -533,6 +558,8 @@ def decode_envelope(payload: bytes, version: int) -> FinishedGameEnvelope:
             reactions=[
                 TurnDrawingReactionInput(**reaction) for reaction in document["reactions"]
             ],
+            shares=[_share_in(share) for share in document["shares"]],
+            withdrawn_turn_ids=list(document["withdrawn_turn_ids"]),
         )
         return FinishedGameEnvelope(
             history=history,
@@ -969,6 +996,8 @@ async def replay_claim(
                         history.score_events,
                         history.drawings,
                         history.reactions,
+                        history.shares,
+                        history.withdrawn_turn_ids,
                     ),
                     timeout=write_timeout,
                 )
@@ -1086,6 +1115,9 @@ class FinishedGameHandoffWorker:
         # Told which game ended up where, so the room that held it can open
         # its recap to reactions ("recorded") or stop offering them.
         self._on_outcome = on_outcome
+        # Told, once a game's history is in, so the drawers whose drawings
+        # were shared from its results hear about it now (#1430).
+        self._on_recorded: Callable[[str], Awaitable[None]] | None = None
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._wake = asyncio.Event()
 
@@ -1100,6 +1132,10 @@ class FinishedGameHandoffWorker:
     def bind_outcome(self, callback: Callable[[str, str], None] | None) -> None:
         """Say who is told when a replay ends; the flow service, in practice."""
         self._on_outcome = callback
+
+    def bind_recorded(self, callback: Callable[[str], Awaitable[None]] | None) -> None:
+        """Say who is told, by game id, once a game's history has landed."""
+        self._on_recorded = callback
 
     def wake(self) -> None:
         """Ask for a sweep now. Safe from any coroutine on the loop."""
@@ -1175,6 +1211,11 @@ class FinishedGameHandoffWorker:
                 self._on_outcome(claim.game_id, "recorded")
             elif outcome is ReplayOutcome.FAILED:
                 self._on_outcome(claim.game_id, "failed")
+        if history_recorded and self._on_recorded is not None:
+            try:
+                await self._on_recorded(claim.game_id)
+            except Exception:  # noqa: BLE001 - the history stands; a visit catches up
+                logger.exception("Failed to announce game %s's recorded history", claim.game_id)
         return result
 
     async def drain(self, *, limit: int | None = None) -> ReplayReport:

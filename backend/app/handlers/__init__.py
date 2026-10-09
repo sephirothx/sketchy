@@ -14,6 +14,7 @@ from app.handlers import (
     lobby,
     moderation,
     reactions,
+    shares,
     restart,
     rooms,
 )
@@ -142,6 +143,7 @@ def register_all_handlers(
     game.register(ctx)
     friends.register(ctx)
     reactions.register(ctx)
+    shares.register(ctx)
     lobby.register(ctx)
     connection.register(ctx)
     # After the handlers, so the wire counters wrap the server they use.

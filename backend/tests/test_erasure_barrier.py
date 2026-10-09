@@ -818,12 +818,12 @@ async def _four_seat_public_game(history, factory, *, a: str, b: str, a_guest: s
             TurnRecordInput(
                 id=turn_a_guest, round_number=1, turn_number=1, drawer_user_id=a_guest,
                 drawer_seat_id=seats[a_guest], prompt="one", duration_seconds=10,
-                prompt_source_kind="custom", guesser_count=0,
+                prompt_source_kind="custom", guesser_count=0, stroke_count=3,
             ),
             TurnRecordInput(
                 id=turn_b_guest, round_number=1, turn_number=2, drawer_user_id=b_guest,
                 drawer_seat_id=seats[b_guest], prompt="two", duration_seconds=10,
-                prompt_source_kind="custom", guesser_count=0,
+                prompt_source_kind="custom", guesser_count=0, stroke_count=3,
             ),
         ],
         [],

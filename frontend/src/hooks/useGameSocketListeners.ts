@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
+import { usePinsStore } from "../store/pinsStore";
 import { triggerConfettiBurst, triggerConfettiShower } from "../lib/confetti";
 import {
   playCloseGuessSound,
@@ -17,6 +18,7 @@ import type {
   CorrectGuessPayload,
   DrawingReaction,
   DrawingReactionEvent,
+  DrawingSharedEvent,
   GameEndedPayload,
   GuessBreakdown,
   LastGamePayload,
@@ -241,6 +243,13 @@ export function useGameSocketListeners() {
       );
     };
 
+    const onDrawingShared = (payload: DrawingSharedEvent) => {
+      store.getState().applyDrawingShare(payload);
+      // Its drawer took it out: every pin of it went too (R-SHARE-04), mine
+      // included, and the shelf must not send it back on its next write.
+      if (payload.shareWithdrawn) usePinsStore.getState().forget(payload.turnId);
+    };
+
     const onSyncGame = (payload: {
       phase: string;
       turnId?: string;
@@ -303,6 +312,7 @@ export function useGameSocketListeners() {
     socket.on("last_game", onLastGame);
     socket.on("sync_game", onSyncGame);
     socket.on("drawing_reaction", onDrawingReaction);
+    socket.on("drawing_shared", onDrawingShared);
 
     return () => {
       socket.off("room_state", onRoomState);
@@ -320,6 +330,7 @@ export function useGameSocketListeners() {
       socket.off("last_game", onLastGame);
       socket.off("sync_game", onSyncGame);
       socket.off("drawing_reaction", onDrawingReaction);
+      socket.off("drawing_shared", onDrawingShared);
     };
   }, []);
 }

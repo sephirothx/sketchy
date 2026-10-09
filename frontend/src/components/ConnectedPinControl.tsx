@@ -3,6 +3,8 @@ import { ApiError } from "../lib/api";
 import { useToast } from "../lib/toast";
 import { refusalSentence } from "../lib/refusals.ts";
 import { isPinned, pinEligibility, withPin, withoutPin } from "../lib/pinnedDrawings";
+import { sendDrawingShare } from "../lib/shareRequests";
+import { satIn } from "../lib/shares";
 import { selectMe, useGameStore } from "../store/gameStore";
 import { useAuthStore } from "../store/authStore";
 import { useMyPins } from "../store/pinsStore";
@@ -12,6 +14,10 @@ interface ConnectedPinControlProps {
   turnId: string | null | undefined;
   /** False for a recap entry whose bitmap the room gave up: nothing to pin. */
   visible?: boolean;
+  /** Who drew it, by seat token: the drawer may pin - share - from any game. */
+  drawerId?: string | null;
+  /** Nothing was drawn: a blank canvas is not shared, so it is not pinned. */
+  blank?: boolean;
 }
 
 /**
@@ -24,18 +30,42 @@ interface ConnectedPinControlProps {
  * route answers the same 404 it answers a stranger; here, on the screen the
  * game just ended on, that 404 means one thing, and is said as such.
  */
-export function ConnectedPinControl({ turnId, visible = true }: ConnectedPinControlProps) {
-  const isPublic = useGameStore((state) => state.isPublic);
-  const isSpectator = useGameStore((state) => selectMe(state)?.isSpectator ?? false);
+export function ConnectedPinControl({
+  turnId,
+  visible = true,
+  drawerId = null,
+  blank = false,
+}: ConnectedPinControlProps) {
+  // The recap's: the finished game's visibility, not the room's since.
+  const isPublic = useGameStore((state) => state.lastGamePublic ?? state.isPublic);
+  const playerId = useGameStore((state) => state.playerId);
+  // The seat's tokens in this game: one who left and came back still sat in
+  // it, and still drew what they drew, under the old one.
+  const own = useGameStore((state) => state.ownSeatTokens);
+  const withdrawn = useGameStore((state) =>
+    turnId ? state.drawingShares[turnId]?.withdrawn ?? false : false,
+  );
+  // Somebody who arrived in the waiting room after the game is shown its
+  // recap, and has nothing to pin from it (R-PIN-01: only a game they sat in).
+  const notASeatThatPlayed = useGameStore(
+    (state) =>
+      (selectMe(state)?.isSpectator ?? false)
+      // By the game's seats, not its standings: a seat that left before the
+      // end sat in it too.
+      || !satIn(state.lastGameSeatTokens, state.ownSeatTokens),
+  );
   const user = useAuthStore((state) => state.user);
   const pins = useMyPins();
   const { notify } = useToast();
   if (!turnId) return null;
   const eligibility = pinEligibility({
     isRegistered: Boolean(user && !user.isAnonymous),
-    isSpectator,
+    isSpectator: notASeatThatPlayed,
     isPublicGame: isPublic,
     open: visible,
+    isDrawer: Boolean(drawerId) && (drawerId === playerId || own.includes(drawerId ?? "")),
+    blank,
+    withdrawn,
   });
   const pinned = isPinned(pins.turnIds, turnId);
   return (
@@ -45,6 +75,27 @@ export function ConnectedPinControl({ turnId, visible = true }: ConnectedPinCont
       disabled={!pins.ready || pins.pending}
       onToggle={async () => {
         try {
+          // A pin is a share (R-PIN-03). Shared first, the way the Share
+          // control does it, so the room hears it and the drawer - who may be
+          // right here, looking at the same recap - is not sent a notice about
+          // something they watched happen (R-SHARE-09); the pin write then
+          // finds the share already made.
+          if (!isPinned(pins.turnIds, turnId)) {
+            // Refused before anything is shared: a seventh pin that shared
+            // the drawing anyway would publish what the press was told no to.
+            if (withPin(pins.turnIds, turnId) === null) {
+              notify(refusalSentence("pinned_drawings_full"), "error");
+              return;
+            }
+            const answer = await sendDrawingShare(turnId, true);
+            if (answer.shares) {
+              useGameStore.getState().applyDrawingShare({
+                turnId,
+                shares: answer.shares,
+                shareWithdrawn: answer.shareWithdrawn ?? false,
+              });
+            }
+          }
           // Computed when the queue reaches it, from the list as it stands
           // then: a press that lands beside another cannot forget its pin.
           const done = await pins.mutate((current) =>

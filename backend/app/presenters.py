@@ -69,6 +69,10 @@ def session_payload(room: Room, player: Player) -> dict:
         # The language this seat plays in (#1182): what the client picks from
         # a mixed-language room's `prompts`. The room's own everywhere else.
         "seatLanguage": room.seat_language(player),
+        # Every token of this room's current or last game that is this seat's
+        # account (#1430): one who left and came back holds a new token, and
+        # the game's drawings, standings and shares still name the old one.
+        "ownSeatTokens": room.own_tokens(player),
     }
 
 
@@ -306,6 +310,10 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         # cleared, so it still names the turn whose results these are.
         "turnId": game.current_turn_id,
         "reactions": room.drawing_reactions_for(game.current_turn_id),
+        # Who has shared the drawing to the Gallery from these results (#1430),
+        # so a reconnect sees the control as it stands.
+        **room.drawing_share_state(game.current_turn_id),
+        "shareable": room.drawing_shareable(game.current_turn_id),
         "drawerId": game.current_drawer,
         "drawerBonus": drawer_bonus,
         "seconds": (

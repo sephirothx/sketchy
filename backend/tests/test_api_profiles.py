@@ -118,6 +118,7 @@ async def record_game(
                 prompt="jackpot",
                 duration_seconds=42.5,
                 guesser_count=1,
+                stroke_count=8,
                 participant_outcomes=(
                     TurnParticipantOutcomeInput(
                         seat_id=loser_seat,
@@ -940,7 +941,7 @@ async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(e
         # snapshot says guest: the shelf repeats the snapshot, not the account.
         "drawerIsAnonymous": True,
         "prompt": "jackpot",
-        "strokeCount": 0,
+        "strokeCount": 8,
         "reactions": [{"seatId": reacted.json()["seatId"], "emoji": "fire"}],
         "reactionCounts": {"fire": 1},
         "myReaction": "fire",

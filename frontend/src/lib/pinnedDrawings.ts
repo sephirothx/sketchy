@@ -59,9 +59,11 @@ export type PinEligibility = "offered" | "hidden";
 
 /**
  * Whether a Pin control is offered at all (R-PIN-09): the write would be
- * refused for a guest, a spectator, a private game or a drawing that was not
- * kept, and a control that cannot work is not shown. Guests are not told
- * here how to become able to: the reaction control beside every drawing
+ * refused for a guest, a spectator or a drawing that was not kept, and - since
+ * a pin is a share (R-PIN-03) - for a drawing the viewer may not share: a
+ * private game's that is not theirs, a blank one, or one its drawer took out
+ * of the Gallery. A control that cannot work is not shown. Guests are not
+ * told here how to become able to: the reaction control beside every drawing
  * already says it once.
  */
 export function pinEligibility(input: {
@@ -69,10 +71,14 @@ export function pinEligibility(input: {
   isSpectator?: boolean;
   isPublicGame: boolean;
   open: boolean;
+  isDrawer?: boolean;
+  blank?: boolean;
+  withdrawn?: boolean;
 }): PinEligibility {
-  if (!input.isRegistered || input.isSpectator || !input.isPublicGame || !input.open) {
+  if (!input.isRegistered || input.isSpectator || !input.open || input.blank) {
     return "hidden";
   }
+  if (!input.isDrawer && (!input.isPublicGame || input.withdrawn)) return "hidden";
   return "offered";
 }
 

@@ -14,6 +14,8 @@ import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
 import { PinControl } from "../components/PinControl";
+import { ShareControl } from "../components/ShareControl";
+import { shareCredit, shareOffer } from "../lib/shares";
 import { PinnedDrawingsShelf } from "../components/PinnedDrawingsShelf";
 import { ReactionTally } from "../components/ReactionTally";
 import type { DrawingRecapMetadata, DrawingReaction } from "../types";
@@ -33,6 +35,7 @@ import {
   formatTimestamp,
   HISTORY_PAGE_SIZE,
   setHistoryReaction,
+  setHistoryShare,
   type GameDetail,
   type GameTurn,
   type GameSummary,
@@ -201,14 +204,42 @@ function GameRow({
     );
   }
 
+  // Share, or take back (#1430): the turn's share state as the server left it.
+  async function shareTurn(turnId: string, shared: boolean) {
+    const result = await setHistoryShare(game.id, turnId, shared);
+    if (!shared) usePinsStore.getState().forget(turnId);
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            turns: current.turns.map((turn) =>
+              turn.id === turnId
+                ? { ...turn, shares: result.shares, shareWithdrawn: result.shareWithdrawn }
+                : turn,
+            ),
+          }
+        : current,
+    );
+  }
+
   // Pin or unpin one turn: the whole shelf, rewritten (R-PIN-02). The turn
   // table and the gallery share it, and the shelf above follows the store.
+  // A pin is a share (R-PIN-03): the pin write shares it, and the share
+  // request after it - which finds the share already made - is what brings
+  // the turn's share state back to this table.
   const togglePin = async (turnId: string) => {
+    const pinning = !isPinned(myPins.turnIds, turnId);
     const done = await myPins.mutate((current) =>
       isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
     );
-    if (!done) notify(refusalSentence("pinned_drawings_full"), "error");
+    if (!done) {
+      notify(refusalSentence("pinned_drawings_full"), "error");
+      return;
+    }
+    if (pinning) await shareTurn(turnId, true).catch(() => undefined);
   };
+  const isMine = (turn: GameTurn) =>
+    Boolean(turn.drawerSeatId) && turn.drawerSeatId === detail?.mySeatId;
   const pinControlFor = (turn: GameTurn) => (
     <PinControl
       pinned={isPinned(myPins.turnIds, turn.id)}
@@ -217,6 +248,9 @@ function GameRow({
         isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
         isPublicGame: game.visibility === "public",
         open: turn.drawingStatus === "ready",
+        isDrawer: isMine(turn),
+        blank: turn.strokeCount <= 0,
+        withdrawn: turn.shareWithdrawn,
       })}
       onToggle={() => togglePin(turn.id)}
     />
@@ -360,6 +394,34 @@ function GameRow({
             const bySeat = new Map(
               detail.participants.map((participant) => [participant.seatId, participant]),
             );
+            const shareControlFor = (turn: GameTurn) => (
+              <ShareControl
+                offer={shareOffer({
+                  isDrawer: isMine(turn),
+                  canAct: Boolean(currentUser) && detail.mySeatId !== null,
+                  isPublicGame: game.visibility === "public",
+                  shareable: turn.drawingStatus === "ready" && turn.strokeCount > 0,
+                  shares: turn.shares ?? [],
+                  mine: detail.mySeatId,
+                  withdrawn: turn.shareWithdrawn ?? false,
+                })}
+                credit={shareCredit(turn.shares ?? [], {
+                  mine: detail.mySeatId,
+                  drawer: turn.drawerSeatId,
+                  nameOf: (seatId) => {
+                    const participant = bySeat.get(seatId);
+                    return participant
+                      ? {
+                          name: participant.displayName,
+                          nameColor: participant.nameColor,
+                          isAnonymous: participant.isAnonymous,
+                        }
+                      : null;
+                  },
+                })}
+                onShare={(shared) => shareTurn(turn.id, shared)}
+              />
+            );
             const named = (
               seatId: string | null,
               fallbackName: string,
@@ -435,7 +497,12 @@ function GameRow({
                     />
                   );
                 }}
-                renderActions={(entry) => pinControlFor(detail.turns[entry.index])}
+                renderActions={(entry) => (
+                  <>
+                    {shareControlFor(detail.turns[entry.index])}
+                    {pinControlFor(detail.turns[entry.index])}
+                  </>
+                )}
               />
             )}
             <table className="profile-turns">

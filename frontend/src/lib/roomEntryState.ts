@@ -109,6 +109,8 @@ export interface RoomSession {
   playerId: string;
   /** The language this seat plays in, which a mixed-language room asks (#1182). */
   seatLanguage: PromptLanguage | null;
+  /** This seat's tokens in the room's current or last game (#1430). */
+  ownSeatTokens: string[];
 }
 
 export interface RoomEntrySnapshot {
@@ -141,6 +143,7 @@ export function sessionFrom(response: AckResponse): RoomSession | null {
     code: response.code,
     playerId: response.playerId,
     seatLanguage: response.seatLanguage ?? null,
+    ownSeatTokens: response.ownSeatTokens ?? [response.playerId],
   };
 }
 

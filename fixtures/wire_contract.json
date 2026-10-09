@@ -925,6 +925,31 @@
    },
    "silent": false
   },
+  "share_drawing": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "One seat's share of one drawing to the Gallery, or its taking back\n(#1430): ``shared: false`` is the sharer's own share, or - from the\ndrawer - the whole drawing.",
+    "properties": {
+     "shared": {
+      "title": "Shared",
+      "type": "boolean"
+     },
+     "turnId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Turnid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "turnId",
+     "shared"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
   "start_game": {
    "commandClass": "action",
    "payload": {
@@ -1323,6 +1348,12 @@
   "drawing_reaction": {
    "shape": "object"
   },
+  "drawing_share_notice": {
+   "shape": "object"
+  },
+  "drawing_shared": {
+   "shape": "object"
+  },
   "email_state_changed": {
    "shape": "object"
   },
@@ -1594,23 +1625,35 @@
    "userId"
   ],
   "api.gallery:create_gallery_router": [
-   "nextCursor"
+   "inGallery",
+   "nextCursor",
+   "turnId"
   ],
   "api.gallery:gallery": [
    "nextCursor"
   ],
   "api.gallery:gallery_entry_payload": [
+   "displayName",
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
    "drawnByMe",
    "finishedAt",
+   "isAnonymous",
    "myReaction",
+   "nameColor",
    "reactionCounts",
    "roundNumber",
+   "sharedAt",
+   "sharedBy",
+   "sharedByMe",
    "strokeCount",
    "turnId",
    "turnNumber"
+  ],
+  "api.gallery:withdraw_gallery_drawing": [
+   "inGallery",
+   "turnId"
   ],
   "api.moderation:_ban_payload": [
    "bannedByUserId",
@@ -1857,6 +1900,10 @@
    "seatId",
    "turnId"
   ],
+  "api.profiles:share_payload": [
+   "shareWithdrawn",
+   "turnId"
+  ],
   "api.profiles:user_games": [
    "hasMore"
   ],
@@ -1955,6 +2002,7 @@
    "roundNumber",
    "ruleSnapshot",
    "seatId",
+   "shareWithdrawn",
    "strokeCount",
    "terminalState",
    "turnNumber",
@@ -2042,6 +2090,13 @@
    "lastLoginAt",
    "nameColor",
    "pendingRole"
+  ],
+  "api.share_notices:pending_share_notice_payload": [
+   "createdAt",
+   "sharerDisplayName",
+   "sharerIsAnonymous",
+   "sharerNameColor",
+   "turnId"
   ],
   "api.user_blocks:_block_payload": [
    "createdAt",
@@ -2541,6 +2596,15 @@
   "handlers.rooms:update_room_settings": [
    "errorCode"
   ],
+  "handlers.shares:_accepted": [
+   "turnId"
+  ],
+  "handlers.shares:_refused": [
+   "errorCode"
+  ],
+  "handlers.shares:share_drawing": [
+   "errorCode"
+  ],
   "main:legal": [
    "contactAddress"
   ],
@@ -2568,6 +2632,7 @@
   ],
   "presenters:session_payload": [
    "isAnonymous",
+   "ownSeatTokens",
    "playerId",
    "roomId",
    "seatLanguage"
@@ -2613,8 +2678,13 @@
   "rooms:drawing_reactions_for": [
    "playerId"
   ],
+  "rooms:drawing_share_state": [
+   "shareWithdrawn"
+  ],
   "rooms:last_game_payload": [
-   "scoringMode"
+   "isPublic",
+   "scoringMode",
+   "seatTokens"
   ],
   "rooms:metadata": [
    "actionCount",
@@ -2687,6 +2757,9 @@
    "isAnonymous",
    "nameColor",
    "playerId",
+   "turnId"
+  ],
+  "services.drawing_shares:share_broadcast": [
    "turnId"
   ],
   "services.drawing_storage:as_json": [
@@ -2864,7 +2937,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 61,
+ "protocolVersion": 62,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2941,6 +3014,11 @@
    "game_still_saving",
    "game_not_recorded",
    "reaction_not_accepted",
+   "spectators_cannot_share",
+   "share_not_visible",
+   "share_not_allowed",
+   "share_withdrawn",
+   "share_not_accepted",
    "friends_unavailable",
    "friend_refused",
    "friend_not_in_game",

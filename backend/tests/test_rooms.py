@@ -279,7 +279,11 @@ def test_the_recap_is_metadata_only_and_offered_only_while_waiting():
         "prompt": "apple",
         "actionCount": 0,
         "available": True,
+        # Nobody has shared it to the Gallery (#1430).
+        "shares": [],
+        "shareWithdrawn": False,
     }]
+    assert payload["isPublic"] is True, "who may share from the recap is the game's rule"
     assert "canvas" not in payload["drawings"][0]
 
     room.state = "playing"

@@ -1,6 +1,6 @@
 /**
- * The Gallery (#524): every kept drawing from a public game, for anyone
- * signed in (R-GAL-01, R-GAL-02).
+ * The Gallery (#524): the drawings players shared (#1430), for anyone signed
+ * in (R-GAL-01, R-GAL-02).
  *
  * The filters live in the URL so an order is a link, and the parsing lives
  * here so it has somewhere to be tested. Pure apart from the two fetchers,
@@ -14,8 +14,8 @@ export type GallerySort = "hot" | "new" | "top";
 export type GalleryWindow = "all" | "month" | "week";
 
 /** One entry of `GET /api/gallery`: what a pin publishes and nothing more
-    (R-GAL-03) - the frozen drawer snapshot, the prompt, the counts, and
-    deliberately no game id. */
+    (R-GAL-03) - the frozen drawer snapshot, the prompt, the counts, who
+    shared it first, and deliberately no game id. */
 export interface GalleryEntry {
   turnId: string;
   roundNumber: number;
@@ -25,13 +25,25 @@ export interface GalleryEntry {
   drawerIsAnonymous: boolean;
   prompt: string;
   strokeCount: number;
-  /** When the game finished, as an ISO timestamp: the New order's key. */
+  /** When the game finished, as an ISO timestamp. */
   finishedAt: string;
+  /** When it first entered the Gallery: the New order's key (#1430). */
+  sharedAt: string | null;
+  /** Who shared it first, as they were in that game; null when its drawer did. */
+  sharedBy: GallerySharer | null;
+  /** Whether one of its shares is the viewer's: theirs to take back. */
+  sharedByMe: boolean;
   /** Every reaction by code, the seatless ones included (R-REACT-05). */
   reactionCounts: Record<string, number>;
   /** The viewer's own pick, and whether the drawing is theirs: what the picker needs. */
   myReaction: string | null;
   drawnByMe: boolean;
+}
+
+export interface GallerySharer {
+  displayName: string;
+  nameColor: string | null;
+  isAnonymous: boolean;
 }
 
 export interface GalleryPage {
@@ -119,6 +131,15 @@ export function fetchThisWeek(): Promise<{ entries: GalleryEntry[] }> {
   return apiRequest("/api/gallery/week");
 }
 
+/**
+ * Take a drawing back out of the Gallery from the Gallery (#1430): its
+ * drawer's whole drawing, or anybody else's own share of it. Every refusal
+ * is the Gallery's 404.
+ */
+export function withdrawFromGallery(turnId: string): Promise<{ turnId: string; inGallery: boolean }> {
+  return apiRequest(`/api/gallery/${encodeURIComponent(turnId)}/share`, { method: "DELETE" });
+}
+
 /** One entry for its own page. Every refusal is the Gallery's 404. */
 export function fetchGalleryEntry(turnId: string): Promise<GalleryEntry> {
   return apiRequest(`/api/gallery/${encodeURIComponent(turnId)}`);
@@ -127,15 +148,15 @@ export function fetchGalleryEntry(turnId: string): Promise<GalleryEntry> {
 export type GalleryAgeUnit = "minute" | "hour" | "day";
 
 /**
- * How long ago a drawing's game finished, in the unit a feed reads in: a
+ * How long ago a drawing entered the Gallery, in the unit a feed reads in: a
  * fresh one in minutes, an old one in days, never a clock time. `null` for
  * under a minute, which the caller words as "just now".
  */
 export function galleryAge(
-  finishedAt: string,
+  sharedAt: string,
   now: Date = new Date(),
 ): { count: number; unit: GalleryAgeUnit } | null {
-  const seconds = Math.max(0, (now.getTime() - new Date(finishedAt).getTime()) / 1000);
+  const seconds = Math.max(0, (now.getTime() - new Date(sharedAt).getTime()) / 1000);
   if (seconds < 60) return null;
   const units: [number, GalleryAgeUnit][] = [
     [60, "minute"],

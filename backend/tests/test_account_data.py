@@ -188,6 +188,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 prompt="owner prompt",
                 duration_seconds=25,
                 prompt_source_kind="custom",
+                stroke_count=6,
                 guesser_count=1,
                 prompt_offers=(
                     PromptOfferInput(0, "owner prompt", True, "custom"),
@@ -215,6 +216,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                 prompt="requester guessed this",
                 duration_seconds=30,
                 prompt_source_kind="custom",
+                stroke_count=6,
                 guesser_count=1,
                 participant_outcomes=(
                     TurnParticipantOutcomeInput(

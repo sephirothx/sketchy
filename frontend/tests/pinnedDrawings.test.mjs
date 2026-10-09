@@ -59,6 +59,23 @@ test("a Pin control is offered only where the write can succeed", () => {
   assert.equal(pinEligibility({ isRegistered: true, isPublicGame: true, open: true }), "offered");
 });
 
+test("a pin is a share: the drawer may pin from any game, nobody pins a withdrawn or blank one", () => {
+  const base = { isRegistered: true, isPublicGame: false, open: true };
+  assert.equal(pinEligibility({ ...base, isDrawer: true }), "offered", "the drawer's own private drawing");
+  assert.equal(pinEligibility({ ...base, isDrawer: false }), "hidden", "somebody else's private drawing");
+  assert.equal(
+    pinEligibility({ ...base, isPublicGame: true, withdrawn: true }),
+    "hidden",
+    "its drawer took it out",
+  );
+  assert.equal(
+    pinEligibility({ ...base, isPublicGame: true, withdrawn: true, isDrawer: true }),
+    "offered",
+    "the drawer may put it back",
+  );
+  assert.equal(pinEligibility({ ...base, isDrawer: true, blank: true }), "hidden", "nothing was drawn");
+});
+
 test("recap entries follow shelf order and carry no seat", () => {
   const entries = pinsAsRecapEntries([
     {
