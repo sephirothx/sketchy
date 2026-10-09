@@ -42,6 +42,7 @@ _UNREAD = "read_at IS NULL"
 _SUBJECT = "subject_id IS NOT NULL"
 _UNANNOUNCED = "reporter_notified_at IS NULL AND status <> 'pending'"
 _WARNING_FK = "fk_user_warnings_user_id_users"
+_BASELINE_FK = "user_warnings_user_id_fkey"
 
 
 def _warning_owner(ondelete: str, nullable: bool) -> None:
@@ -56,12 +57,15 @@ def _warning_owner(ondelete: str, nullable: bool) -> None:
         "user_warnings",
         naming_convention={"fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"},
     ) as batch:
-        if postgres and ondelete == "CASCADE":
-            batch.drop_constraint("user_warnings_user_id_fkey", type_="foreignkey")
-        else:
-            batch.drop_constraint(_WARNING_FK, type_="foreignkey")
+        # Going up names the constraint; going back restores PostgreSQL's own
+        # name, so the next upgrade finds what the baseline left.
+        upgrading = ondelete == "CASCADE"
+        original = _BASELINE_FK if postgres else _WARNING_FK
+        batch.drop_constraint(original if upgrading else _WARNING_FK, type_="foreignkey")
         batch.alter_column("user_id", existing_type=_UUID, nullable=nullable)
-        batch.create_foreign_key(_WARNING_FK, "users", ["user_id"], ["id"], ondelete=ondelete)
+        batch.create_foreign_key(
+            _WARNING_FK if upgrading else original, "users", ["user_id"], ["id"], ondelete=ondelete
+        )
 
 
 def upgrade() -> None:
