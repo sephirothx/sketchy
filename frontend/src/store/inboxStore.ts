@@ -47,7 +47,9 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     const mine = ++issued;
     if (get().owner !== owner) set({ ...EMPTY_INBOX, owner, loaded: false });
     try {
-      const page = await readThrough(fetchInbox, get().entries.length);
+      // Read through the depth the list has when each read lands, not the
+      // one it had when this began.
+      const page = await readThrough(fetchInbox, () => (get().owner === owner ? get().entries.length : 0));
       if (mine < applied || get().owner !== owner) return;
       applied = mine;
       set({ ...page, loaded: true });

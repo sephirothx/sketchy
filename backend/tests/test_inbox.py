@@ -9,10 +9,13 @@ shares in `test_api_shares.py`, warnings and reviewed reports in
 """
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -365,3 +368,43 @@ async def test_a_guests_inbox_becomes_the_accounts_one_entry_per_fact(env):
                 session, user_id=account["id"], kind="drawing_shared", subject_id=turn_id
             )
     assert again is False, "the drawing already has its entry"
+
+
+async def test_a_decision_landing_mid_merge_is_counted_not_overwritten(env):
+    """A moderator's decision holds the account's count open while the guest
+    merges in. The merge waits for it and adds the guest's count to what it
+    finds; it used to read the count unlocked and write back a sum built on
+    the old value, losing the decision. PostgreSQL only: SQLite has one
+    writer, so the two cannot interleave."""
+    new_client, factory = env
+    async with factory() as probe:
+        if probe.get_bind().dialect.name != "postgresql":
+            pytest.skip("row locks interleave only on PostgreSQL")
+    account = await register(new_client(), "RacedMerge")
+    guest_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 5", state="anonymous"))
+    await entry(factory, account["id"], "reports_reviewed", params={"count": 1})
+    await entry(factory, str(guest_id), "reports_reviewed", params={"count": 2})
+
+    async with factory() as deciding:
+        transaction = await deciding.begin()
+        await count_reviewed_reports(deciding, {UUID(account["id"]): 1})
+        merging = asyncio.create_task(
+            SqlAlchemyUserRepository(factory).merge_guest_into_account(
+                str(guest_id), account["id"]
+            )
+        )
+        await asyncio.sleep(0.5)
+        assert not merging.done(), "the merge waits for the decision's lock"
+        await transaction.commit()
+    await asyncio.wait_for(merging, timeout=10)
+
+    async with factory() as session:
+        counts = (
+            await session.scalars(
+                select(InboxEntry.params).where(InboxEntry.kind == "reports_reviewed")
+            )
+        ).all()
+    assert counts == [{"count": 4}]

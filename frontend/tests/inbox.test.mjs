@@ -82,14 +82,26 @@ test("a push reads afresh every page the reader had loaded, and no further", asy
     const more = start + 2 < server.length;
     return { entries, unreadCount: 0, next: more ? entries[1].id : null, mustAcknowledge: null, pendingRole: null };
   };
-  const deep = await readThrough(read, 4);
+  const deep = await readThrough(read, () => 4);
   assert.deepEqual(deep.entries.map((e) => [e.id, e.read]), [["f", true], ["e", true], ["d", true], ["c", true]]);
   assert.equal(deep.next, "c", "the third page is still there to show");
   assert.deepEqual(asked, [null, "e"]);
 
   asked.length = 0;
-  assert.equal((await readThrough(read, 2)).entries.length, 2);
+  assert.equal((await readThrough(read, () => 2)).entries.length, 2);
   assert.deepEqual(asked, [null], "page one only, for a reader who never went further");
+
+  // Show older lands while page one is being read: the list is deeper now,
+  // and the refresh follows it rather than shrinking it back.
+  asked.length = 0;
+  let shown = 2;
+  const racing = await readThrough(async (before) => {
+    const answer = await read(before);
+    if (!before) shown = 4;
+    return answer;
+  }, () => shown);
+  assert.equal(racing.entries.length, 4);
+  assert.deepEqual(asked, [null, "e"]);
 });
 
 test("an invitation is expired only once its own time has passed", () => {

@@ -202,14 +202,17 @@ export function withMore(shown: InboxEntry[], more: InboxEntry[]): InboxEntry[] 
     on screen, so a row read in another tab, or a request withdrawn, changes
     on an older page too (R-INBOX-03, R-INBOX-05); keeping older pages as they
     were left them unread, offering answers to nothing. Only as deep as the
-    reader went with **Show older**, so a push costs one read for most. */
+    reader went with **Show older**, so a push costs one read for most.
+    `depth` is asked again after every read: a **Show older** that landed
+    while this was reading made the list deeper, and answering with the
+    shallower list would take away the page the reader just opened. */
 export async function readThrough(
   read: (before?: string) => Promise<InboxPage>,
-  depth: number,
+  depth: () => number,
 ): Promise<InboxPage> {
   const page = await read();
   let { entries, next } = page;
-  while (next && entries.length < depth) {
+  while (next && entries.length < depth()) {
     const more = await read(next);
     entries = withMore(entries, more.entries);
     next = more.next;

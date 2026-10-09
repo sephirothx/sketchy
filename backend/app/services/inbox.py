@@ -28,6 +28,7 @@ from app.domain_values import AccountState
 __all__ = [
     "INBOX_RETENTION_DAYS",
     "add_entry",
+    "add_reviewed_count",
     "count_reviewed_reports",
     "forget_subjects",
     "mark_read",
@@ -120,30 +121,46 @@ async def count_reviewed_reports(
     for reporter_id, count in sorted(counts.items(), key=lambda item: str(item[0])):
         if count <= 0:
             continue
-        # One unread entry per reporter, held by a unique index: of two
-        # moderators deciding at once, one writes it and the other, finding
-        # it there, counts into it.
-        if not await _count_into_unread(session, reporter_id, count, day):
-            written = await session.execute(
-                _insert(session)(InboxEntry)
-                .values(
-                    id=generate_uuid(),
-                    user_id=reporter_id,
-                    kind="reports_reviewed",
-                    subject_id=None,
-                    params={"count": count},
-                    created_at=day,
-                    read_at=None,
-                )
-                .on_conflict_do_nothing(
-                    index_elements=["user_id"], index_where=text(_UNREAD_REVIEWS)
-                )
-            )
-            if not written.rowcount:
-                # Lost the race to write it: count into the winner's.
-                await _count_into_unread(session, reporter_id, count, day)
+        await add_reviewed_count(session, reporter_id, count, at=day)
         moved.append(reporter_id)
     return moved
+
+
+async def add_reviewed_count(
+    session: AsyncSession,
+    user_id: UUID,
+    count: int,
+    *,
+    at: datetime,
+    redate: bool = True,
+) -> None:
+    """Count `count` reviewed reports into the account's one unread entry,
+    or start it dated `at`. Never a read-then-replace: the row is locked to
+    add to it, and the unique index decides between two writers that both
+    found none - the loser counts into the winner's. `redate` False leaves an
+    existing entry's date alone (a guest's count merged in is no new news).
+
+    Callers that lock more than one account's entry do it in ascending
+    `str(user_id)` order, as `count_reviewed_reports` and the guest merge do,
+    so two of them cannot wait on each other."""
+    if await _count_into_unread(session, user_id, count, at if redate else None):
+        return
+    written = await session.execute(
+        _insert(session)(InboxEntry)
+        .values(
+            id=generate_uuid(),
+            user_id=user_id,
+            kind="reports_reviewed",
+            subject_id=None,
+            params={"count": count},
+            created_at=at,
+            read_at=None,
+        )
+        .on_conflict_do_nothing(index_elements=["user_id"], index_where=text(_UNREAD_REVIEWS))
+    )
+    if not written.rowcount:
+        # Lost the race to write it: count into the winner's.
+        await _count_into_unread(session, user_id, count, at if redate else None)
 
 
 async def _reporters_now(
@@ -182,7 +199,7 @@ async def _reporters_now(
 
 
 async def _count_into_unread(
-    session: AsyncSession, reporter_id: UUID, count: int, day: datetime
+    session: AsyncSession, reporter_id: UUID, count: int, day: datetime | None
 ) -> bool:
     unread = await session.scalar(
         select(InboxEntry)
@@ -196,7 +213,8 @@ async def _count_into_unread(
     if unread is None:
         return False
     unread.params = {"count": int(unread.params.get("count", 0)) + count}
-    unread.created_at = day
+    if day is not None:
+        unread.created_at = day
     return True
 
 

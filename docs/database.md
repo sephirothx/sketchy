@@ -945,7 +945,9 @@ told about and no entry about a fact that rolled back; the account's sockets are
 **Merge.** A guest signing in moves its whole inbox into the account in the merge's
 transaction (`_merge_inbox`), under the account's rules: where both hold an entry about
 the same fact the account's stands, read if either was, and the guest's unread count
-of reviewed reports is added into the account's. Left with the guest, an entry was
+of reviewed reports is added into the account's — under the row locks a decision takes,
+in the same order (`add_reviewed_count`), so a decision landing mid-merge is waited for
+and counted rather than overwritten by a sum read before it. Left with the guest, an entry was
 outside `uq_inbox_entries_subject`, and the account's next share of the same drawing
 wrote a second one.
 

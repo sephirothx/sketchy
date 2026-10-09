@@ -78,7 +78,11 @@ from app.canvas_storage import (
     stored_drawing_checksum,
     stored_drawing_format,
 )
-from app.services.inbox import add_entry as add_inbox_entry, mark_read as mark_inbox_read
+from app.services.inbox import (
+    add_entry as add_inbox_entry,
+    add_reviewed_count,
+    mark_read as mark_inbox_read,
+)
 from app.services.gallery_ranking import (
     HOT_HORIZON,
     MAX_GALLERY_OFFSET,
@@ -807,48 +811,54 @@ async def _merge_inbox(session: AsyncSession, source_id: UUID, target_id: UUID) 
     Left with the guest, an entry was outside the index that keeps a fact to
     one entry, so the account's next write about the same drawing added a
     second. Where both hold one, the account's stands - read if either was."""
-    guest_rows = (
-        await session.scalars(select(InboxEntry).where(InboxEntry.user_id == source_id))
+    # Each account's unread count of reviewed reports, locked in the order
+    # `count_reviewed_reports` locks reporters' entries, so a moderator's
+    # decision landing mid-merge waits rather than being overwritten. The
+    # guest's count is added, never written back from a value read earlier.
+    unread_reviews = (
+        await session.scalars(
+            select(InboxEntry)
+            .where(
+                InboxEntry.user_id.in_([source_id, target_id]),
+                InboxEntry.kind == "reports_reviewed",
+                InboxEntry.read_at.is_(None),
+            )
+            .order_by(InboxEntry.user_id)
+            .with_for_update()
+        )
     ).all()
-    if not guest_rows:
-        return
-    subjects = {row.subject_id for row in guest_rows if row.subject_id is not None}
-    account_rows = (
+    for row in unread_reviews:
+        if row.user_id == source_id:
+            count, created_at = int(row.params.get("count", 0)), row.created_at
+            await session.delete(row)
+            await session.flush()
+            await add_reviewed_count(session, target_id, count, at=created_at, redate=False)
+    guest_rows = (
         await session.scalars(
             select(InboxEntry).where(
-                InboxEntry.user_id == target_id,
-                or_(
-                    InboxEntry.subject_id.in_(subjects),
-                    and_(
-                        InboxEntry.kind == "reports_reviewed",
-                        InboxEntry.read_at.is_(None),
-                    ),
-                ),
+                InboxEntry.user_id == source_id, InboxEntry.subject_id.is_not(None)
             )
         )
     ).all()
-    same_fact = {(row.kind, row.subject_id): row for row in account_rows if row.subject_id}
-    unread_reviews = next(
-        (row for row in account_rows if row.kind == "reports_reviewed" and row.read_at is None),
-        None,
+    subjects = {row.subject_id for row in guest_rows}
+    account_rows = (
+        (
+            await session.scalars(
+                select(InboxEntry).where(
+                    InboxEntry.user_id == target_id, InboxEntry.subject_id.in_(subjects)
+                )
+            )
+        ).all()
+        if subjects
+        else []
     )
+    same_fact = {(row.kind, row.subject_id): row for row in account_rows}
     for row in guest_rows:
-        if row.subject_id is not None:
-            own = same_fact.get((row.kind, row.subject_id))
-            if own is None:
-                continue
-            if own.read_at is None and row.read_at is not None:
-                own.read_at = row.read_at
-        elif row.kind == "reports_reviewed" and row.read_at is None:
-            own = unread_reviews
-            if own is None:
-                continue
-            own.params = {
-                "count": int(own.params.get("count", 0)) + int(row.params.get("count", 0))
-            }
-            own.created_at = max(own.created_at, row.created_at)
-        else:
+        own = same_fact.get((row.kind, row.subject_id))
+        if own is None:
             continue
+        if own.read_at is None and row.read_at is not None:
+            own.read_at = row.read_at
         await session.delete(row)
     await session.flush()
     await session.execute(
