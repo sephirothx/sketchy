@@ -51,6 +51,20 @@ export function shareOffer(situation: ShareSituation): ShareOffer {
   return situation.shareable ? "share" : "hidden";
 }
 
+/**
+ * Which token is the viewer's against a drawing's sharers, in a room: the
+ * one of their own that shares it, else the seat's current token. A player
+ * who left and came back holds a new token, and a share made before that
+ * still names the old one.
+ */
+export function mineAmong(
+  shares: readonly string[],
+  own: readonly string[],
+  current: string | null,
+): string | null {
+  return shares.find((token) => own.includes(token)) ?? current;
+}
+
 /** Who to credit for a drawing's place in the Gallery: its first sharer. */
 export type ShareCredit =
   | { kind: "none" }

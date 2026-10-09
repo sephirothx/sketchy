@@ -406,13 +406,25 @@ async def announce_share(
     *,
     on_share_notice: Callable[[str], Awaitable[None]] | None,
     on_gallery_changed: Callable[[], None] | None,
+    on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> None:
     """What a committed share write owes the rest of the process: the drawer
-    it left a notice for hears it now if connected (R-SHARE-09), and This week
+    it left a notice for hears it now if connected (R-SHARE-09), This week
     is read again, since a drawing may have entered or left the Gallery
-    (R-GAL-07)."""
+    (R-GAL-07), and a room whose recap shows the drawing is told how it
+    stands now (R-SHARE-07)."""
     if on_gallery_changed is not None:
         on_gallery_changed()
+    if on_shares_changed is not None:
+        turn_ids = (
+            (result.turn_id,)
+            if isinstance(result, DrawingShareResult)
+            else tuple(pin.turn_id for pin in result.pins)
+        )
+        try:
+            await on_shares_changed(turn_ids)
+        except Exception:  # noqa: BLE001 - the share stands; the recap is a view
+            logger.exception("Failed to refresh a recap after a share")
     if on_share_notice is None:
         return
     if isinstance(result, DrawingShareResult):
@@ -433,11 +445,13 @@ def create_profile_router(
     is_online: Callable[[str], bool] = lambda user_id: False,
     on_share_notice: Callable[[str], Awaitable[None]] | None = None,
     on_gallery_changed: Callable[[], None] | None = None,
+    on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> APIRouter:
     """`is_online` is the presence registry's answer for an account id; the
     default, for a router built without one, says nobody is.
     `on_share_notice` pushes a drawer's pending share notices to their open
-    sockets, and `on_gallery_changed` expires This week, after a share write
+    sockets, `on_gallery_changed` expires This week, and `on_shares_changed`
+    brings an open recap of the drawing up to date, after a share write
     commits."""
     router = APIRouter(prefix="/api")
 
@@ -678,7 +692,10 @@ def create_profile_router(
         if result is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
-            result, on_share_notice=on_share_notice, on_gallery_changed=on_gallery_changed
+            result,
+            on_share_notice=on_share_notice,
+            on_gallery_changed=on_gallery_changed,
+            on_shares_changed=on_shares_changed,
         )
         return share_payload(result)
 
@@ -725,7 +742,10 @@ def create_profile_router(
         if result is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
-            result, on_share_notice=on_share_notice, on_gallery_changed=on_gallery_changed
+            result,
+            on_share_notice=on_share_notice,
+            on_gallery_changed=on_gallery_changed,
+            on_shares_changed=on_shares_changed,
         )
         return pins_payload(result)
 

@@ -33,9 +33,13 @@ async def env():
     history = SqlAlchemyGameHistoryRepository(session_factory)
     pushed: list[str] = []
     changed: list[bool] = []
+    refreshed: list[tuple[str, ...]] = []
 
     async def on_share_notice(user_id: str) -> None:
         pushed.append(user_id)
+
+    async def on_shares_changed(turn_ids: tuple[str, ...]) -> None:
+        refreshed.append(turn_ids)
 
     app = FastAPI()
     install_refusal_handler(app)
@@ -46,12 +50,18 @@ async def env():
             history,
             on_share_notice=on_share_notice,
             on_gallery_changed=lambda: changed.append(True),
+            on_shares_changed=on_shares_changed,
         )
     )
-    app.include_router(create_gallery_router(history, on_share_notice=on_share_notice))
+    app.include_router(
+        create_gallery_router(
+            history, on_share_notice=on_share_notice, on_shares_changed=on_shares_changed
+        )
+    )
     app.include_router(create_share_notice_router(session_factory))
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
+        http.refreshed = refreshed
         yield http, users, history, session_factory, pushed, changed
     await engine.dispose()
 
@@ -196,3 +206,27 @@ async def test_the_notice_routes_need_a_session(env):
     assert (
         await http.post("/api/share-notices/00000000-0000-0000-0000-000000000000/acknowledge")
     ).status_code == 401
+
+
+async def test_every_share_write_reaches_an_open_recap_of_the_drawing(env):
+    """History, a pin and the Gallery's door each write without the room;
+    each names the drawings it touched so a recap showing one is brought up
+    to date (R-SHARE-07)."""
+    http, users, history, factory, _, _ = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
+    )
+    await sign_in_as(http, factory, bob.id)
+    await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
+    await http.put("/api/me/pins", json={"turnIds": [game.turn_id]})
+    await sign_in_as(http, factory, ann.id)
+    await http.delete(f"/api/gallery/{game.turn_id}/share")
+    assert http.refreshed == [(game.turn_id,)] * 3
+
+    cid = await _registered(users, "Cid")
+    await sign_in_as(http, factory, cid.id)
+    refused = await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
+    assert refused.status_code == 404
+    assert len(http.refreshed) == 3, "a refused write changed nothing to refresh"

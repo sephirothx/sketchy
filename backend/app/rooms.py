@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import random
 import re
 import secrets
@@ -12,7 +12,7 @@ import uuid
 from uuid import UUID
 from collections import deque
 from dataclasses import dataclass, field, replace
-from typing import Literal, Mapping, Optional
+from typing import Iterable, Literal, Mapping, Optional
 
 from app.auth.avatars import avatar_url
 from app.drawing_rules import (
@@ -383,6 +383,17 @@ class DepartedSeat:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordedSeat:
+    """Where one seat token of the last game landed in its history: the
+    participant seat it was written as (two tokens of one account share one)
+    and that seat's account. Server-side only - an account id never goes on a
+    room payload (R-ROOM-07)."""
+
+    seat_id: str
+    user_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DrawingRecapEntry:
     # The durable UUIDv7 of the turn this drawing belongs to. Round and turn
     # numbers identify a drawing inside one live recap; only this survives into
@@ -554,6 +565,11 @@ class Room:
     # (R-HIST-25): the room's own flag can change in the waiting room while
     # the recap is still up, and who may share from it is the game's rule.
     last_game_public: bool = True
+    # Every seat token of the last game -> the history seat it was written as
+    # (#1430). The recap reads shares back from that game's rows, which name
+    # seats, and a player who left and came back holds a new token the game
+    # never saw; this is how the room says which tokens are whose.
+    last_game_seats: dict[str, RecordedSeat] = field(default_factory=dict)
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
@@ -705,6 +721,61 @@ class Room:
         and nobody else may share it again until the drawer does."""
         self.drawing_shares.pop(turn_id, None)
         self.drawing_share_withdrawn.add(turn_id)
+
+    def replace_drawing_shares(
+        self, turn_id: str, tokens: Iterable[str], *, withdrawn: bool
+    ) -> None:
+        """A finished game's share state for one drawing, as its rows hold it
+        after a write (#1430): the sharers, first first, and whether its
+        drawer took it out. A share made from history, a pin or the Gallery
+        never passed through this room, so after a recap write the rows, not
+        the room's own memory, are the answer. The moments only order the
+        tokens: a finished game's shares are never folded into a write again.
+        """
+        start = datetime.now(timezone.utc)
+        ordered = list(dict.fromkeys(tokens))
+        if ordered:
+            self.drawing_shares[turn_id] = {
+                token: start + timedelta(microseconds=index)
+                for index, token in enumerate(ordered)
+            }
+        else:
+            self.drawing_shares.pop(turn_id, None)
+        if withdrawn:
+            self.drawing_share_withdrawn.add(turn_id)
+        else:
+            self.drawing_share_withdrawn.discard(turn_id)
+
+    def tokens_for_seats(self, seat_ids: Iterable[str]) -> list[str]:
+        """The last game's history seats as the room names them: the token of
+        each, a seated one where an account held several, so the recap can
+        name the sharer; the seat id itself for one the room cannot place,
+        which credits nobody by name and is nobody's own."""
+        tokens: list[str] = []
+        for seat_id in seat_ids:
+            held = sorted(
+                token for token, seat in self.last_game_seats.items() if seat.seat_id == seat_id
+            )
+            seated = [token for token in held if token in self.players]
+            tokens.append((seated or held or [seat_id])[0])
+        return tokens
+
+    def own_tokens(self, player: Player) -> list[str]:
+        """Every seat token in this room's current or last game that is this
+        player's account (#1430). Leaving and coming back is a new token, and
+        the drawings, scores and shares of the game still name the old one;
+        the seat is told its own so the client can recognise them, without an
+        account id going on the wire (R-ROOM-07)."""
+        tokens = {player.id}
+        account = player.user_id
+        if account is not None:
+            tokens.update(
+                token for token, seat in self.last_game_seats.items() if seat.user_id == account
+            )
+            tokens.update(
+                token for token, seat in self.departed_seats.items() if seat.user_id == account
+            )
+        return sorted(tokens)
 
     def drawing_shares_for(self, turn_id: str | None) -> list[str]:
         """The seat tokens sharing one drawing, the first sharer first."""

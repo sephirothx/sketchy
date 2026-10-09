@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shareCredit, shareOffer } from "../src/lib/shares.ts";
+import { mineAmong, shareCredit, shareOffer } from "../src/lib/shares.ts";
 import { laterOf, pendingShareNoticesFrom } from "../src/lib/shareNotices.ts";
 
 const situation = {
@@ -74,4 +74,16 @@ test("a pushed notice is read only when it has the right shape, and the newest r
   assert.equal(laterOf(older, newer), newer);
   assert.equal(laterOf(newer, older), newer);
   assert.equal(laterOf(older, { notices: [], total: 0 }), older);
+});
+
+test("a player who came back is still the one who shared under their old seat", () => {
+  const own = ["old-seat", "new-seat"];
+  assert.equal(mineAmong(["someone", "old-seat"], own, "new-seat"), "old-seat");
+  assert.equal(
+    shareOffer({ ...situation, shares: ["someone", "old-seat"], mine: mineAmong(["someone", "old-seat"], own, "new-seat") }),
+    "unshare",
+    "their share before leaving is theirs to take back",
+  );
+  assert.equal(mineAmong(["someone"], own, "new-seat"), "new-seat", "no share of theirs: the seat itself");
+  assert.equal(mineAmong([], [], null), null);
 });

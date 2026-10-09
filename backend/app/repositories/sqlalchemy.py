@@ -3246,6 +3246,23 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     notify_user_id=_public_id(notify) if notify is not None else None,
                 )
 
+    async def get_drawing_share_state(self, turn_id: str) -> DrawingShareResult | None:
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_turn_id is None:
+            return None
+        async with self._session_factory() as session:
+            withdrawn_at = await session.execute(
+                select(TurnDrawing.gallery_withdrawn_at).where(TurnDrawing.turn_id == db_turn_id)
+            )
+            row = withdrawn_at.first()
+            if row is None:
+                return None
+            return DrawingShareResult(
+                turn_id=_public_id(db_turn_id),
+                shares=await _share_seats(session, db_turn_id),
+                withdrawn=row[0] is not None,
+            )
+
     @database_operation_of("gallery_page")
     async def list_gallery(
         self,

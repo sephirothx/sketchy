@@ -90,9 +90,12 @@ def create_gallery_router(
     *,
     shelf: GalleryShelfCache | None = None,
     on_share_notice: Callable[[str], Awaitable[None]] | None = None,
+    on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> APIRouter:
     """`shelf` is the process-wide cache of This week; a router built
-    without one gets a cache of its own over the repository."""
+    without one gets a cache of its own over the repository.
+    `on_shares_changed` brings an open recap of a drawing taken out here up
+    to date."""
     router = APIRouter(prefix="/api/gallery")
     shelf_cache = shelf or GalleryShelfCache(
         lambda: _read_shelf(game_history_repo)
@@ -275,7 +278,10 @@ def create_gallery_router(
         if result is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
-            result, on_share_notice=on_share_notice, on_gallery_changed=shelf_cache.invalidate
+            result,
+            on_share_notice=on_share_notice,
+            on_gallery_changed=shelf_cache.invalidate,
+            on_shares_changed=on_shares_changed,
         )
         return {"turnId": result.turn_id, "inGallery": bool(result.shares)}
 

@@ -69,6 +69,10 @@ def session_payload(room: Room, player: Player) -> dict:
         # The language this seat plays in (#1182): what the client picks from
         # a mixed-language room's `prompts`. The room's own everywhere else.
         "seatLanguage": room.seat_language(player),
+        # Every token of this room's current or last game that is this seat's
+        # account (#1430): one who left and came back holds a new token, and
+        # the game's drawings, standings and shares still name the old one.
+        "ownSeatTokens": room.own_tokens(player),
     }
 
 

@@ -1084,6 +1084,7 @@ class GameFlowService:
         room.drawing_reactions = {}
         room.drawing_shares = {}
         room.drawing_share_withdrawn = set()
+        room.last_game_seats = {}
         room.last_game_id = None
         room.last_game_history = "none"
         # Only this game's leavers matter to its history, and the room may
@@ -1866,6 +1867,7 @@ class GameFlowService:
         """
         room.last_game_id = game.id
         room.last_game_public = room.is_public
+        room.last_game_seats = dict(history.recorded_seats) if history is not None else {}
         room.last_game_history = (
             "pending"
             if history is not None and self._ctx.finished_games is not None

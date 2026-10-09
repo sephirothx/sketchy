@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from functools import partial
 
 from app.handlers.context import HandlerContext
@@ -17,6 +18,7 @@ from app.services.drawing_shares import (
     PRIVATE_ROOM,
     STILL_SAVING,
     WITHDRAWN,
+    apply_recorded_shares,
     drawer_is_watching,
     is_drawer,
     live_share_refusal,
@@ -57,7 +59,8 @@ async def share_drawing(ctx: HandlerContext, sid, data):
     game's history is written. And one from the recap, after the game ended:
     the row exists, so the share goes to the repository first - the same
     method the REST routes use - and only then into the room's memory, which
-    must not promise a share the database refused.
+    must not promise a share the database refused. What goes into the room
+    is what the rows hold after the write, not this press alone.
 
     Guests may share: a share is not a reaction, and a guest who played the
     game saw the drawing as plainly as anyone. A seat with no account at all
@@ -89,9 +92,7 @@ async def share_drawing(ctx: HandlerContext, sid, data):
         assert entry is not None  # the refusal above checked it
         _apply(room, entry, player, payload.shared)
         await ctx.sio.emit(
-            "drawing_shared",
-            share_broadcast(room, player, payload.turn_id, payload.shared),
-            room=room.id,
+            "drawing_shared", share_broadcast(room, payload.turn_id), room=room.id
         )
         return _accepted(room, payload.turn_id)
 
@@ -122,11 +123,11 @@ async def share_drawing(ctx: HandlerContext, sid, data):
         return _refused(NOT_ACCEPTED)
     if result is None:
         return _refused(NOT_ACCEPTED)
-    _apply(room, entry, player, payload.shared)
+    # What the rows hold now, not this one press applied to the room's memory:
+    # shares made from history, a pin or the Gallery never passed through it.
+    apply_recorded_shares(room, result)
     await ctx.sio.emit(
-        "drawing_shared",
-        share_broadcast(room, player, payload.turn_id, payload.shared),
-        room=room.id,
+        "drawing_shared", share_broadcast(room, payload.turn_id), room=room.id
     )
     if ctx.on_gallery_changed is not None:
         ctx.on_gallery_changed()
@@ -139,7 +140,9 @@ async def share_drawing(ctx: HandlerContext, sid, data):
 
 
 def _apply(room, entry, player, shared: bool) -> None:
-    """The room's memory of one accepted share or withdrawal."""
+    """The room's memory of one accepted share or withdrawal in a live game.
+    Taking a share back takes it back from every token of the account: one
+    made before leaving and coming back is still this player's."""
     drawer = is_drawer(room, entry, player)
     if shared:
         if drawer:
@@ -148,7 +151,39 @@ def _apply(room, entry, player, shared: bool) -> None:
     elif drawer:
         room.withdraw_drawing(entry.turn_id)
     else:
-        room.set_drawing_share(entry.turn_id, player.id, False)
+        for token in room.own_tokens(player):
+            room.set_drawing_share(entry.turn_id, token, False)
+
+
+async def refresh_recaps(ctx: HandlerContext, turn_ids: Iterable[str]) -> None:
+    """Carry a share write made outside the room - from history, a pin or
+    the Gallery - into the room whose recap shows that drawing (#1430).
+
+    The recap's share state is a copy of the rows, and only writes through
+    the room kept it current: somebody sharing the same drawing from their
+    profile left the recap saying it was not in the Gallery, and the drawer
+    offered Share where Take out belonged. Read back per drawing, and only for
+    a room still showing that game: one that started another while the read
+    was in the air has nothing of it left to correct.
+    """
+    repo = ctx.game_history_repo
+    wanted = set(turn_ids)
+    if repo is None or not wanted:
+        return
+    for room in list(ctx.room_manager.rooms.values()):
+        if room.game is not None or room.last_game_history != "recorded":
+            continue
+        game_id = room.last_game_id
+        for turn_id in [e.turn_id for e in room.last_game_drawings if e.turn_id in wanted]:
+            try:
+                state = await repo.get_drawing_share_state(turn_id)
+            except Exception:  # noqa: BLE001 - the write stands; the recap is a view
+                logger.exception("Failed to read a share state for room %s", room.id)
+                continue
+            if state is None or room.game is not None or room.last_game_id != game_id:
+                continue
+            apply_recorded_shares(room, state)
+            await ctx.sio.emit("drawing_shared", share_broadcast(room, turn_id), room=room.id)
 
 
 def _accepted(room, turn_id: str) -> dict:

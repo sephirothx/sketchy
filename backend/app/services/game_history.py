@@ -35,7 +35,7 @@ from app.repositories.interfaces import (
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
-from app.rooms import Room
+from app.rooms import RecordedSeat, Room
 
 # A game needs two factual player seats to mean anything: with one, the sole
 # participant is ranked first against nobody and books a win. Accountless seats
@@ -66,6 +66,9 @@ class GameHistoryWrite:
     # hand without them means "nothing was shared".
     shares: list[TurnDrawingShareInput] = field(default_factory=list)
     withdrawn_turn_ids: list[str] = field(default_factory=list)
+    # Every seat token -> the participant seat it was written as, for the
+    # room to read the recap's shares back from the rows (#1430).
+    recorded_seats: dict[str, RecordedSeat] = field(default_factory=dict)
 
 
 @dataclass
@@ -557,6 +560,10 @@ def build_game_history(
         reactions=_reactions(room, seats, turns),
         shares=shares,
         withdrawn_turn_ids=withdrawn_turn_ids,
+        recorded_seats={
+            token: RecordedSeat(seat_id=seat.participant_id, user_id=seat.user_id)
+            for token, seat in seats.items()
+        },
         record=GameRecordInput(
             id=game.id,
             room_name=room.name,

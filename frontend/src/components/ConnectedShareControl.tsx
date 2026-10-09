@@ -1,6 +1,6 @@
 import { ShareControl } from "./ShareControl";
 import { sendDrawingShare } from "../lib/shareRequests";
-import { shareCredit, shareOffer } from "../lib/shares";
+import { mineAmong, shareCredit, shareOffer } from "../lib/shares";
 import { useAuthStore } from "../store/authStore";
 import { selectMe, useGameStore } from "../store/gameStore";
 import { usePinsStore } from "../store/pinsStore";
@@ -37,6 +37,10 @@ export function ConnectedShareControl({
   look = "button",
 }: ConnectedShareControlProps) {
   const playerId = useGameStore((state) => state.playerId);
+  // The seat's tokens in this game, the current one included: a player who
+  // left and came back is still the one who drew, played and shared under
+  // the old one, as the server already counts them (R-SHARE-02).
+  const own = useGameStore((state) => state.ownSeatTokens);
   const isSpectator = useGameStore((state) => selectMe(state)?.isSpectator ?? false);
   const isPublic = useGameStore((state) =>
     recap ? state.lastGamePublic ?? state.isPublic : state.isPublic,
@@ -47,21 +51,25 @@ export function ConnectedShareControl({
   // From the recap, only a seat that played the game: somebody who arrived
   // in the waiting room afterwards is shown it, and has nothing to share.
   const played = useGameStore((s) =>
-    !recap || (s.finalScores ?? []).some((entry) => entry.playerId === s.playerId),
+    !recap
+    || (s.finalScores ?? []).some(
+      (entry) => entry.playerId === s.playerId || s.ownSeatTokens.includes(entry.playerId),
+    ),
   );
   if (!turnId) return null;
-  const isDrawer = Boolean(drawerId) && drawerId === playerId;
+  const isDrawer = Boolean(drawerId) && (drawerId === playerId || own.includes(drawerId ?? ""));
+  const mine = mineAmong(state.shares, own, playerId);
   const offer = shareOffer({
     isDrawer,
     canAct: hasAccount && !isSpectator && playerId !== null && played,
     isPublicGame: isPublic,
     shareable,
     shares: state.shares,
-    mine: playerId,
+    mine,
     withdrawn: state.withdrawn,
   });
   const credit = shareCredit(state.shares, {
-    mine: playerId,
+    mine,
     drawer: drawerId ?? null,
     nameOf: (token) => {
       const player = players.find((candidate) => candidate.playerId === token);
@@ -81,9 +89,6 @@ export function ConnectedShareControl({
         if (answer.shares) {
           useGameStore.getState().applyDrawingShare({
             turnId,
-            playerId: playerId ?? "",
-            nickname: "",
-            shared,
             shares: answer.shares,
             shareWithdrawn: answer.shareWithdrawn ?? false,
           });

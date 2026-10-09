@@ -38,6 +38,9 @@ export function ConnectedPinControl({
   // The recap's: the finished game's visibility, not the room's since.
   const isPublic = useGameStore((state) => state.lastGamePublic ?? state.isPublic);
   const playerId = useGameStore((state) => state.playerId);
+  // The seat's tokens in this game: one who left and came back still sat in
+  // it, and still drew what they drew, under the old one.
+  const own = useGameStore((state) => state.ownSeatTokens);
   const withdrawn = useGameStore((state) =>
     turnId ? state.drawingShares[turnId]?.withdrawn ?? false : false,
   );
@@ -46,7 +49,9 @@ export function ConnectedPinControl({
   const notASeatThatPlayed = useGameStore(
     (state) =>
       (selectMe(state)?.isSpectator ?? false)
-      || !(state.finalScores ?? []).some((entry) => entry.playerId === state.playerId),
+      || !(state.finalScores ?? []).some(
+        (entry) => entry.playerId === state.playerId || state.ownSeatTokens.includes(entry.playerId),
+      ),
   );
   const user = useAuthStore((state) => state.user);
   const pins = useMyPins();
@@ -57,7 +62,7 @@ export function ConnectedPinControl({
     isSpectator: notASeatThatPlayed,
     isPublicGame: isPublic,
     open: visible,
-    isDrawer: Boolean(drawerId) && drawerId === playerId,
+    isDrawer: Boolean(drawerId) && (drawerId === playerId || own.includes(drawerId ?? "")),
     blank,
     withdrawn,
   });
@@ -85,9 +90,6 @@ export function ConnectedPinControl({
             if (answer.shares) {
               useGameStore.getState().applyDrawingShare({
                 turnId,
-                playerId: playerId ?? "",
-                nickname: "",
-                shared: true,
                 shares: answer.shares,
                 shareWithdrawn: answer.shareWithdrawn ?? false,
               });

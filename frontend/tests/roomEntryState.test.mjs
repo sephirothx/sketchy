@@ -68,6 +68,8 @@ test("an existing seat is reconnected without loading a preview", async () => {
     // The seat's language rides the session: which of a mixed room's
     // spellings is this player's (#1182).
     seatLanguage: "de",
+    // An ack without the list still knows one token is the seat's own.
+    ownSeatTokens: ["player-1"],
   }]);
   assert.equal(previewCalls, 0);
 });

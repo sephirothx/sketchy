@@ -95,6 +95,9 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         # Later share writes, and what the next one answers; `None` refuses.
         self.share_writes: list[ShareWrite] = []
         self.share_result: DrawingShareResult | None = None
+        # What a share-state read answers per turn, and the reads made.
+        self.share_state: dict[str, DrawingShareResult] = {}
+        self.share_reads: list[str] = []
         self.accept_pins = True
         self.reaction_seat_id = "seat-1"
 
@@ -159,6 +162,12 @@ class FakeGameHistoryRepository(GameHistoryRepository):
             ShareWrite(game_id, turn_id, requesting_user_id, shared, notify_drawer)
         )
         return self.share_result
+
+    async def get_drawing_share_state(self, turn_id: str) -> DrawingShareResult | None:
+        if self.fail:
+            raise RuntimeError("database unavailable")
+        self.share_reads.append(turn_id)
+        return self.share_state.get(turn_id)
 
     async def set_drawing_reaction(
         self,

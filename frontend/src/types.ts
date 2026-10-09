@@ -398,11 +398,6 @@ export interface DrawingShareState {
 /** The room-wide `drawing_shared` broadcast: who acted, and the state after it. */
 export interface DrawingSharedEvent {
   turnId: string;
-  playerId: string;
-  nickname: string;
-  nameColor?: string;
-  isAnonymous?: boolean;
-  shared: boolean;
   shares: string[];
   shareWithdrawn: boolean;
 }
@@ -830,6 +825,10 @@ export interface AckResponse {
   needsRebind?: boolean;
   /** The language this seat plays in (#1182). */
   seatLanguage?: PromptLanguage;
+  /** Every token of the room's current or last game that is this seat's
+      account (#1430), its own included: one who left and came back holds a
+      new token, and the game still names the old one. */
+  ownSeatTokens?: string[];
 }
 
 export interface ServerShutdownNotice {

@@ -37,6 +37,7 @@ __all__ = [
     "PRIVATE_ROOM",
     "STILL_SAVING",
     "WITHDRAWN",
+    "apply_recorded_shares",
     "drawer_is_watching",
     "is_drawer",
     "live_share_refusal",
@@ -114,8 +115,15 @@ def drawer_is_watching(room: Room, entry: DrawingRecapEntry) -> bool:
     if drawer is not None and drawer.connected:
         return True
     departed = room.departed_seats.get(entry.drawer_id)
-    account = drawer.user_id if drawer is not None else (
-        departed.user_id if departed is not None else None
+    recorded = room.last_game_seats.get(entry.drawer_id)
+    account = (
+        drawer.user_id
+        if drawer is not None
+        else departed.user_id
+        if departed is not None
+        else recorded.user_id
+        if recorded is not None
+        else None
     )
     if account is None:
         return False
@@ -125,16 +133,17 @@ def drawer_is_watching(room: Room, entry: DrawingRecapEntry) -> bool:
     )
 
 
-def share_broadcast(room: Room, player: Player, turn_id: str, shared: bool) -> dict:
-    """The room-wide `drawing_shared` payload: who acted and the drawing's
-    share state after it - seat tokens and presentation only, no account id
-    (R-ROOM-07)."""
-    return {
-        "turnId": turn_id,
-        "playerId": player.id,
-        "nickname": player.nickname,
-        "nameColor": player.name_color,
-        "isAnonymous": player.is_anonymous,
-        "shared": shared,
-        **room.drawing_share_state(turn_id),
-    }
+def share_broadcast(room: Room, turn_id: str) -> dict:
+    """The room-wide `drawing_shared` payload: the drawing's share state as it
+    now stands - seat tokens only, no account id (R-ROOM-07). It names no
+    actor: a change can come from outside the room (history, a pin, the
+    Gallery), and what every seat needs is the state, not who moved it."""
+    return {"turnId": turn_id, **room.drawing_share_state(turn_id)}
+
+
+def apply_recorded_shares(room: Room, result) -> None:
+    """Put a finished game's committed share state for one drawing in the
+    room, its seats named by their tokens (`Room.tokens_for_seats`)."""
+    room.replace_drawing_shares(
+        result.turn_id, room.tokens_for_seats(result.shares), withdrawn=result.withdrawn
+    )

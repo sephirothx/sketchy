@@ -2629,6 +2629,7 @@
   ],
   "presenters:session_payload": [
    "isAnonymous",
+   "ownSeatTokens",
    "playerId",
    "roomId",
    "seatLanguage"
@@ -2755,9 +2756,6 @@
    "turnId"
   ],
   "services.drawing_shares:share_broadcast": [
-   "isAnonymous",
-   "nameColor",
-   "playerId",
    "turnId"
   ],
   "services.drawing_storage:as_json": [

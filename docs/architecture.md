@@ -447,7 +447,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each — a piece never begins an action once its 16 ms are spent, the history's last one included, and the task that delivered the history paints none of its fills, so the longest task is the budget plus one fill wherever a fill outlasts it — reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
-| Shares to the Gallery from the current turn's results and the last game's recap (#1430) | `Room.drawing_shares` and `Room.drawing_share_withdrawn` (memory) — folded into the finished-game write with their moments, then mirrored back on each recap write; `Room.last_game_public` keeps the finished game's visibility for the recap's rule | Live ones no; once written, the row does |
+| Shares to the Gallery from the current turn's results and the last game's recap (#1430) | `Room.drawing_shares` and `Room.drawing_share_withdrawn` (memory) — folded into the finished-game write with their moments, then replaced by what the rows hold after each recap write, and after any share write from history, a pin or the Gallery that touches a drawing the recap shows (`handlers/shares.refresh_recaps`); `Room.last_game_public` keeps the finished game's visibility for the recap's rule, and `Room.last_game_seats` which history seat - and account - each of the game's tokens was written as, so rows naming seats can be named by token again and a player who came back on a new token is told the old one (`ownSeatTokens`) | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
@@ -1711,8 +1711,9 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   drawers' withdrawals and the share notices they leave (#1430), the prompt-usage facts,
   and the daily user-stat projection increments.
 - The room is told which game it just held and whether a row is coming
-  (`Room.last_game_id`, `Room.last_game_history`, and `Room.last_game_public` for who
-  may share from its recap), because a reaction or a share given from the recap
+  (`Room.last_game_id`, `Room.last_game_history`, `Room.last_game_public` for who
+  may share from its recap, and `Room.last_game_seats` for which seat each token was
+  written as), because a reaction or a share given from the recap
   afterwards is a write to that row (`handlers/reactions.py`, `handlers/shares.py`): it
   is refused while the write is pending, and when there was never going to be one. The
   loop reports back through `GameFlowService.note_history_outcome`, which finds the room

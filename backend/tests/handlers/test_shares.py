@@ -6,7 +6,8 @@ from dataclasses import replace
 from unittest.mock import AsyncMock
 
 from app.game import Phase
-from app.handlers.shares import SPECTATORS_CANNOT_SHARE
+from app.handlers.shares import SPECTATORS_CANNOT_SHARE, refresh_recaps
+from app.presenters import session_payload
 from app.repositories.interfaces import DrawingShareResult
 from app.services.drawing_shares import (
     NOT_ACCEPTED,
@@ -95,11 +96,6 @@ async def test_a_guest_shares_from_the_results_and_the_room_hears_it():
     [broadcast] = emitted(ctx, "drawing_shared")
     assert broadcast == {
         "turnId": game.current_turn_id,
-        "playerId": sharer.id,
-        "nickname": sharer.nickname,
-        "nameColor": sharer.name_color,
-        "isAnonymous": True,
-        "shared": True,
         "shares": [sharer.id],
         "shareWithdrawn": False,
     }
@@ -257,7 +253,10 @@ async def test_a_recap_share_is_written_first_then_shown_and_announced():
     ctx.on_share_notice = push
     ctx.on_gallery_changed = lambda: changed.append(True)
     history.share_result = DrawingShareResult(
-        turn_id=entry.turn_id, shares=("seat-x",), withdrawn=False, notify_user_id="user-ann"
+        turn_id=entry.turn_id,
+        shares=(room.last_game_seats[sharer.id].seat_id,),
+        withdrawn=False,
+        notify_user_id="user-ann",
     )
 
     answer = await share(sharer.sid, {"turnId": entry.turn_id, "shared": True})
@@ -274,6 +273,112 @@ async def test_a_recap_share_is_written_first_then_shown_and_announced():
     assert [call.args[0] for call in ctx.sio.emit.await_args_list] == ["drawing_shared"]
     assert pushed == ["user-ann"] and changed == [True]
     assert room.last_game_payload()["drawings"][0]["shares"] == [sharer.id]
+
+
+async def test_the_recap_shows_what_the_rows_hold_not_only_its_own_presses():
+    """A share made from history never passed through the room. Its drawer,
+    Ann, shared it from her profile; Bob's share and take-back from the recap
+    then left the room saying nobody shared it, while Ann's share kept it in
+    the Gallery - and offered her Share where Take out belonged (review of
+    #1431)."""
+    ctx, room, players, history, share = await finished()
+    entry = room.last_game_drawings[0]
+    ann = room.players[entry.drawer_id]
+    bob = next(p for p in players.values() if p.id != ann.id)
+    seat = {player.id: room.last_game_seats[player.id].seat_id for player in (ann, bob)}
+
+    history.share_result = DrawingShareResult(
+        turn_id=entry.turn_id, shares=(seat[ann.id], seat[bob.id]), withdrawn=False
+    )
+    answer = await share(bob.sid, {"turnId": entry.turn_id, "shared": True})
+    assert answer["shares"] == [ann.id, bob.id], "Ann's own share from history, first"
+
+    history.share_result = DrawingShareResult(
+        turn_id=entry.turn_id, shares=(seat[ann.id],), withdrawn=False
+    )
+    answer = await share(bob.sid, {"turnId": entry.turn_id, "shared": False})
+    assert answer["shares"] == [ann.id]
+    assert emitted(ctx, "drawing_shared")[-1] == {
+        "turnId": entry.turn_id,
+        "shares": [ann.id],
+        "shareWithdrawn": False,
+    }
+    assert room.last_game_payload()["drawings"][0]["shares"] == [ann.id], "and on a reconnect"
+
+
+async def test_a_share_made_outside_the_room_reaches_its_open_recap():
+    ctx, room, players, history, share = await finished()
+    entry = room.last_game_drawings[0]
+    sharer = next(p for p in players.values() if p.id != entry.drawer_id)
+    history.share_state[entry.turn_id] = DrawingShareResult(
+        turn_id=entry.turn_id, shares=(room.last_game_seats[sharer.id].seat_id,), withdrawn=False
+    )
+
+    await refresh_recaps(ctx, [entry.turn_id, "a-turn-no-room-shows"])
+
+    assert history.share_reads == [entry.turn_id], "only what a recap shows is read"
+    assert emitted(ctx, "drawing_shared") == [
+        {"turnId": entry.turn_id, "shares": [sharer.id], "shareWithdrawn": False}
+    ]
+
+    # Taken out from the Gallery page: the recap says so too.
+    history.share_state[entry.turn_id] = DrawingShareResult(
+        turn_id=entry.turn_id, shares=(), withdrawn=True
+    )
+    await refresh_recaps(ctx, [entry.turn_id])
+    assert room.drawing_share_state(entry.turn_id) == {"shares": [], "shareWithdrawn": True}
+
+    # A room on to its next game has no recap of this one left to correct.
+    await ctx.game_flow._start_fresh_game(room, list(room.player_list()))
+    await refresh_recaps(ctx, [entry.turn_id])
+    assert history.share_reads == [entry.turn_id, entry.turn_id]
+    await ctx.timers.close()
+
+
+async def test_a_player_who_left_and_came_back_is_told_their_old_seat():
+    """A rejoin is a new token, while the recap's drawings and standings name
+    the old one: the seat is told both, so its client still offers Share and
+    Pin, and Take out on its own drawing (review of #1431)."""
+    ctx, room, players, history, share = await finished()
+    entry = room.last_game_drawings[0]
+    drawer = room.players[entry.drawer_id]
+    ctx.room_manager.remove_player(room, drawer.id)
+    back = ctx.room_manager.add_player(
+        room, drawer.nickname, user_id=drawer.user_id, is_anonymous=drawer.is_anonymous
+    )
+
+    assert session_payload(room, back)["ownSeatTokens"] == sorted([drawer.id, back.id])
+    others = [p for p in room.players.values() if p.id != back.id]
+    assert all(
+        session_payload(room, other)["ownSeatTokens"] == [other.id] for other in others
+    ), "nobody is told another account's tokens"
+    # The drawing's rows name the seat the game wrote; the room names it by
+    # the token the game knew, which the returning drawer now recognises.
+    assert room.tokens_for_seats([room.last_game_seats[drawer.id].seat_id]) == [drawer.id]
+    assert room.tokens_for_seats(["a-seat-the-room-never-held"]) == [
+        "a-seat-the-room-never-held"
+    ]
+
+
+async def test_taking_a_share_back_after_coming_back_takes_the_old_one():
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    share = wire(ctx, room, players)
+    game = await to_results(ctx, room)
+    sharer = guesser(room, players)
+    await share(sharer.sid, {"turnId": game.current_turn_id, "shared": True})
+    room_manager.remove_player(room, sharer.id)
+    back = room_manager.add_player(
+        room, sharer.nickname, user_id=sharer.user_id, is_anonymous=sharer.is_anonymous
+    )
+    back.sid = "sid-back"
+    share = wire(ctx, room, {p.id: p for p in room.players.values()})
+    assert sharer.id in room.own_tokens(back)
+
+    answer = await share(back.sid, {"turnId": game.current_turn_id, "shared": False})
+
+    assert answer["shares"] == []
+    await ctx.timers.close()
 
 
 async def test_a_recap_share_the_database_refuses_leaves_no_trace():

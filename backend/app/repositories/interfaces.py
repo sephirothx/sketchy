@@ -1134,6 +1134,15 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_drawing_share_state(self, turn_id: str) -> DrawingShareResult | None:
+        """A drawing's share state as its rows hold it: the seats sharing it,
+        first first, and whether its drawer took it out (#1430). For a room
+        whose recap shows the drawing, after a write that never passed through
+        the room. No viewer and no rule: the room already shows the drawing to
+        the seats it is telling. ``None`` for a turn with no stored drawing."""
+        ...
+
+    @abstractmethod
     async def set_profile_pins(
         self,
         *,

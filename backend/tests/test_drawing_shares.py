@@ -560,3 +560,31 @@ async def test_a_purged_guest_leaves_their_share_standing(repos):
     assert entry is not None and entry.sharer_display_name == "Reactor"
     async with factory() as session:
         assert (await _drawing_projections_slice(session, None)).mismatches == []
+
+
+async def test_the_share_state_read_is_what_the_writes_left(repos):
+    """What a room's open recap reads back after a write that never passed
+    through it (R-SHARE-07): the seats first first, and the withdrawal."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None
+    )
+    empty = await history.get_drawing_share_state(game.turn_id)
+    assert empty is not None and empty.shares == () and not empty.withdrawn
+
+    await history.set_drawing_share(None, game.turn_id, requesting_user_id=bob.id, shared=False)
+    await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[game.turn_id])
+    await history.set_drawing_share(
+        game.game_id, game.turn_id, requesting_user_id=ann.id, shared=True
+    )
+    state = await history.get_drawing_share_state(game.turn_id)
+    assert state.shares == (game.reactor_seat, game.drawer_seat), "the pin shared first"
+
+    await history.set_drawing_share(None, game.turn_id, requesting_user_id=ann.id, shared=False)
+    state = await history.get_drawing_share_state(game.turn_id)
+    assert state.shares == () and state.withdrawn
+
+    assert await history.get_drawing_share_state("not-a-turn") is None
+    assert await history.get_drawing_share_state("00000000-0000-0000-0000-000000000000") is None

@@ -90,6 +90,7 @@ from app.security_headers import (
     public_origin,
 )
 from app.handlers import register_all_handlers
+from app.handlers.shares import refresh_recaps
 from app.logging_config import configure_logging
 from app.auth.retention import (
     start_retention_loop,
@@ -727,6 +728,12 @@ handler_context.on_share_notice = push_share_notice_to_account
 handler_context.on_gallery_changed = gallery_shelf.invalidate
 
 
+async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
+    """A share written from history, a pin or the Gallery reaches the room
+    whose recap shows that drawing (R-SHARE-07)."""
+    await refresh_recaps(handler_context, turn_ids)
+
+
 async def announce_recorded_game(game_id: str) -> None:
     """A finished game's history is in. Its live shares may have put drawings
     in the Gallery, so This week is read again (R-GAL-07), and the drawers
@@ -1060,6 +1067,7 @@ api.include_router(
         is_online=handler_context.presence.is_online,
         on_share_notice=push_share_notice_to_account,
         on_gallery_changed=gallery_shelf.invalidate,
+        on_shares_changed=refresh_recap_shares,
     )
 )
 api.include_router(
@@ -1067,6 +1075,7 @@ api.include_router(
         game_history_repo,
         shelf=gallery_shelf,
         on_share_notice=push_share_notice_to_account,
+        on_shares_changed=refresh_recap_shares,
     )
 )
 api.include_router(
