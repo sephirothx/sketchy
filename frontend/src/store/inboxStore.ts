@@ -4,7 +4,7 @@ import {
   EMPTY_INBOX,
   fetchInbox,
   markInboxRead,
-  refreshedPage,
+  readThrough,
   withMore,
   type InboxPage,
 } from "../lib/inbox";
@@ -47,10 +47,10 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     const mine = ++issued;
     if (get().owner !== owner) set({ ...EMPTY_INBOX, owner, loaded: false });
     try {
-      const page = await fetchInbox();
+      const page = await readThrough(fetchInbox, get().entries.length);
       if (mine < applied || get().owner !== owner) return;
       applied = mine;
-      set((state) => ({ ...page, ...refreshedPage(page, state.entries, state.next), loaded: true }));
+      set({ ...page, loaded: true });
       // The offer rides the same read, so the account menu's way into
       // enrolment comes and goes with it.
       useAuthStore.getState().applyPendingRole(pendingRoleFromPayload(page));

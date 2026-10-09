@@ -942,6 +942,13 @@ told about and no entry about a fact that rolled back; the account's sockets are
   name a report or a second account, so it has no route to the person it is about
   (R-ROLE-02).
 
+**Merge.** A guest signing in moves its whole inbox into the account in the merge's
+transaction (`_merge_inbox`), under the account's rules: where both hold an entry about
+the same fact the account's stands, read if either was, and the guest's unread count
+of reviewed reports is added into the account's. Left with the guest, an entry was
+outside `uq_inbox_entries_subject`, and the account's next share of the same drawing
+wrote a second one.
+
 **Reads.** `GET /api/inbox` pages the entries of **every identity of the account**,
 newest first, 20 at a time, and counts the unread; `POST /api/inbox/read` sets
 `read_at` on named entries or all of them. Read state is the account's, so reading one
@@ -1403,9 +1410,9 @@ Acknowledging sets `acknowledged_at`, which is what stops it being shown again, 
 that the notice actually landed and lifts the hold on room entry; it marks the entry
 read too. Room entry and the prompt-list publish gate both ask this table for an
 unacknowledged row, so the hold is the server's and no tab can skip it. A guest warned
-and then signed in takes its warnings, and their inbox entries, into the account in the
-merge's transaction (`merge_guest_into_account`): the warning is about the person, so
-it holds the account's seats and is the account's to answer. Issuing one
+and then signed in takes its warnings into the account in the merge's transaction
+(`merge_guest_into_account`): the warning is about the person, so it holds the
+account's seats and is the account's to answer. Issuing one
 writes a `warning.issued` audit event. A warning issued from a report **resolves that
 report in the same transaction**, and a report already decided refuses the warning -
 which is also what stops a retry from warning twice.

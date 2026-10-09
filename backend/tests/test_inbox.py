@@ -82,6 +82,7 @@ async def entry(
                 session.add(
                     InboxEntry(
                         id=generate_uuid(), user_id=UUID(user_id), kind=kind,
+                        subject_id=UUID(str(fields["subject_id"])) if fields.get("subject_id") else None,
                         params=fields.get("params", {}), created_at=at, read_at=at,
                     )
                 )
@@ -325,3 +326,42 @@ async def test_a_guests_warning_follows_it_into_the_account(env):
         assert await session.scalar(select(UserWarning.user_id)) == UUID(account["id"])
         assert await session.scalar(select(InboxEntry.user_id)) == UUID(account["id"])
     assert (await inbox_payload(factory, account["id"]))["mustAcknowledge"]["id"] == str(warning_id)
+
+
+async def test_a_guests_inbox_becomes_the_accounts_one_entry_per_fact(env):
+    """Merged in, the guest's entries obey the account's rules: one entry per
+    drawing, read if either was, and one unread count of reviewed reports.
+    Left with the guest, a drawing's entry was outside the index that keeps a
+    fact to one entry, and a later share added a second (R-INBOX-05)."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "MergedInbox")
+    guest_id, turn_id, other_turn = generate_uuid(), generate_uuid(), generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 4", state="anonymous"))
+    await entry(factory, str(guest_id), "drawing_shared", subject_id=turn_id)
+    await entry(factory, str(guest_id), "drawing_shared", subject_id=other_turn)
+    await entry(factory, str(guest_id), "reports_reviewed", params={"count": 2})
+    await entry(factory, account["id"], "drawing_shared", subject_id=turn_id, read=True)
+    await entry(factory, account["id"], "reports_reviewed", params={"count": 1})
+
+    await SqlAlchemyUserRepository(factory).merge_guest_into_account(str(guest_id), account["id"])
+
+    async with factory() as session:
+        rows = (await session.scalars(select(InboxEntry))).all()
+        assert {row.user_id for row in rows} == {UUID(account["id"])}
+        by_fact = sorted(
+            (row.kind, row.subject_id == turn_id, row.read_at is not None, row.params) for row in rows
+        )
+        assert by_fact == [
+            ("drawing_shared", False, False, {}),
+            ("drawing_shared", True, True, {}),
+            ("reports_reviewed", False, False, {"count": 3}),
+        ]
+    async with factory() as session:
+        async with session.begin():
+            again = await add_entry(
+                session, user_id=account["id"], kind="drawing_shared", subject_id=turn_id
+            )
+    assert again is False, "the drawing already has its entry"

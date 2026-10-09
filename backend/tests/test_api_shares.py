@@ -135,17 +135,25 @@ async def test_the_drawer_takes_a_drawing_out_from_the_gallery(env):
     ann = await _registered(users, "Ann")
     bob = await _registered(users, "Bob")
     game = await record_game(
-        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by="reactor",
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
         finished_at=NOW - timedelta(hours=1),
     )
+    await sign_in_as(http, factory, bob.id)
+    await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
     await sign_in_as(http, factory, ann.id)
     [entry] = (await http.get("/api/gallery")).json()["entries"]
     assert entry["drawnByMe"] and not entry["sharedByMe"]
     assert entry["sharedBy"] == {"displayName": "Reactor", "nameColor": None, "isAnonymous": False}
     assert entry["sharedAt"] is not None
 
+    assert (await http.get("/api/inbox")).json()["unreadCount"] == 1
+    pushed.clear()
     taken = await http.delete(f"/api/gallery/{game.turn_id}/share")
     assert taken.json() == {"turnId": game.turn_id, "inGallery": False}
+    # Taking it out reads the entry about it, and every open tab of the
+    # drawer's hears that the count moved (R-INBOX-03).
+    assert (await http.get("/api/inbox")).json()["unreadCount"] == 0
+    assert pushed == [ann.id]
     assert (await http.get("/api/gallery")).json()["entries"] == []
     assert (await http.get(f"/api/gallery/{game.turn_id}")).status_code == 404
 

@@ -197,29 +197,24 @@ export function withMore(shown: InboxEntry[], more: InboxEntry[]): InboxEntry[] 
   return [...shown, ...more.filter((entry) => !seen.has(entry.id))];
 }
 
-/** Page one read again, with the older pages this tab had already loaded
-    kept under it - a push re-reads only the newest page, and the reader who
-    pressed **Show older** should not see those rows vanish. Kept are the rows
-    older than page one's last, in the server's own order (newest first, id to
-    break a tie); a row page one now holds again - renewed, so re-dated - is
-    page one's. With nothing older kept, the page's own cursor stands. */
-export function refreshedPage(
-  page: InboxPage,
-  shown: InboxEntry[],
-  shownNext: string | null,
-): Pick<InboxPage, "entries" | "next"> {
-  const last = page.entries[page.entries.length - 1];
-  if (!page.next || !last) return { entries: page.entries, next: page.next };
-  const ids = new Set(page.entries.map((entry) => entry.id));
-  const lastAt = Date.parse(last.createdAt);
-  const older = shown.filter((entry) => {
-    if (ids.has(entry.id)) return false;
-    const at = Date.parse(entry.createdAt);
-    return at < lastAt || (at === lastAt && entry.id < last.id);
-  });
-  return older.length > 0
-    ? { entries: [...page.entries, ...older], next: shownNext }
-    : { entries: page.entries, next: page.next };
+/** The inbox read afresh as deep as the reader had it: page one, then the
+    pages after it until `depth` entries are back. A push re-reads every row
+    on screen, so a row read in another tab, or a request withdrawn, changes
+    on an older page too (R-INBOX-03, R-INBOX-05); keeping older pages as they
+    were left them unread, offering answers to nothing. Only as deep as the
+    reader went with **Show older**, so a push costs one read for most. */
+export async function readThrough(
+  read: (before?: string) => Promise<InboxPage>,
+  depth: number,
+): Promise<InboxPage> {
+  const page = await read();
+  let { entries, next } = page;
+  while (next && entries.length < depth) {
+    const more = await read(next);
+    entries = withMore(entries, more.entries);
+    next = more.next;
+  }
+  return { ...page, entries, next };
 }
 
 /** Whether an invitation's time is up, by the entry itself: whatever this

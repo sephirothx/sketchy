@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { invitationExpired, invitationStillOpen, parseInboxPage, refreshedPage, withMore } from "../src/lib/inbox.ts";
+import { invitationExpired, invitationStillOpen, parseInboxPage, readThrough, withMore } from "../src/lib/inbox.ts";
 
 const NOW = "2026-10-09T10:00:00+00:00";
 
@@ -67,22 +67,29 @@ test("an invitation can be answered only while the card's own invitation from th
   assert.equal(invitationStillOpen(later, "eve", null, now), false, "no card: the token is gone");
 });
 
-test("a push's read of page one keeps the older pages already shown", () => {
-  const at = (minute) => `2026-10-09T10:${String(minute).padStart(2, "0")}:00+00:00`;
-  const shown = [
-    { id: "a", createdAt: at(9) },
-    { id: "b", createdAt: at(8) },
-    { id: "c", createdAt: at(5) },
-    { id: "d", createdAt: at(4) },
+test("a push reads afresh every page the reader had loaded, and no further", async () => {
+  // Three pages of two on the server; another tab has read them all.
+  const server = [
+    { id: "f", read: true }, { id: "e", read: true },
+    { id: "d", read: true }, { id: "c", read: true },
+    { id: "b", read: true }, { id: "a", read: true },
   ];
-  // A new row on top; "c" renewed, so on page one now.
-  const page = { entries: [{ id: "n", createdAt: at(10) }, { id: "c", createdAt: at(10) }, { id: "a", createdAt: at(9) }], next: "a" };
-  const kept = refreshedPage(page, shown, "d");
-  assert.deepEqual(kept.entries.map((e) => e.id), ["n", "c", "a", "b", "d"], "c once, where page one has it");
-  assert.equal(kept.next, "d", "the deeper cursor stands");
+  const asked = [];
+  const read = async (before) => {
+    asked.push(before ?? null);
+    const start = before ? server.findIndex((e) => e.id === before) + 1 : 0;
+    const entries = server.slice(start, start + 2);
+    const more = start + 2 < server.length;
+    return { entries, unreadCount: 0, next: more ? entries[1].id : null, mustAcknowledge: null, pendingRole: null };
+  };
+  const deep = await readThrough(read, 4);
+  assert.deepEqual(deep.entries.map((e) => [e.id, e.read]), [["f", true], ["e", true], ["d", true], ["c", true]]);
+  assert.equal(deep.next, "c", "the third page is still there to show");
+  assert.deepEqual(asked, [null, "e"]);
 
-  assert.deepEqual(refreshedPage({ entries: page.entries, next: null }, shown, "d"), { entries: page.entries, next: null }, "all on one page");
-  assert.equal(refreshedPage(page, page.entries, "a").next, "a", "nothing older loaded");
+  asked.length = 0;
+  assert.equal((await readThrough(read, 2)).entries.length, 2);
+  assert.deepEqual(asked, [null], "page one only, for a reader who never went further");
 });
 
 test("an invitation is expired only once its own time has passed", () => {

@@ -801,6 +801,61 @@ async def _share_seats(session: AsyncSession, turn_id: UUID) -> tuple[str, ...]:
     )
 
 
+async def _merge_inbox(session: AsyncSession, source_id: UUID, target_id: UUID) -> None:
+    """A guest's inbox becomes the account's, under the account's own rules:
+    one entry per fact and one unread count of reviewed reports (R-INBOX-05).
+    Left with the guest, an entry was outside the index that keeps a fact to
+    one entry, so the account's next write about the same drawing added a
+    second. Where both hold one, the account's stands - read if either was."""
+    guest_rows = (
+        await session.scalars(select(InboxEntry).where(InboxEntry.user_id == source_id))
+    ).all()
+    if not guest_rows:
+        return
+    subjects = {row.subject_id for row in guest_rows if row.subject_id is not None}
+    account_rows = (
+        await session.scalars(
+            select(InboxEntry).where(
+                InboxEntry.user_id == target_id,
+                or_(
+                    InboxEntry.subject_id.in_(subjects),
+                    and_(
+                        InboxEntry.kind == "reports_reviewed",
+                        InboxEntry.read_at.is_(None),
+                    ),
+                ),
+            )
+        )
+    ).all()
+    same_fact = {(row.kind, row.subject_id): row for row in account_rows if row.subject_id}
+    unread_reviews = next(
+        (row for row in account_rows if row.kind == "reports_reviewed" and row.read_at is None),
+        None,
+    )
+    for row in guest_rows:
+        if row.subject_id is not None:
+            own = same_fact.get((row.kind, row.subject_id))
+            if own is None:
+                continue
+            if own.read_at is None and row.read_at is not None:
+                own.read_at = row.read_at
+        elif row.kind == "reports_reviewed" and row.read_at is None:
+            own = unread_reviews
+            if own is None:
+                continue
+            own.params = {
+                "count": int(own.params.get("count", 0)) + int(row.params.get("count", 0))
+            }
+            own.created_at = max(own.created_at, row.created_at)
+        else:
+            continue
+        await session.delete(row)
+    await session.flush()
+    await session.execute(
+        update(InboxEntry).where(InboxEntry.user_id == source_id).values(user_id=target_id)
+    )
+
+
 async def _leave_share_notice(
     session: AsyncSession, turn: TurnRecord, *, now: datetime
 ) -> UUID | None:
@@ -1664,19 +1719,13 @@ class SqlAlchemyUserRepository(UserRepository):
                 await _merge_friendships(session, source.id, target.id)
                 # A warning is about the person, so it follows them into the
                 # account: it holds the account's seats until answered, and
-                # is the account's to answer (R-INBOX-04). Its entry moves
-                # with it; a warning's subject is its own id, so nothing
-                # already in the account's inbox can collide.
+                # is the account's to answer (R-INBOX-04).
                 await session.execute(
                     update(UserWarning)
                     .where(UserWarning.user_id == source.id)
                     .values(user_id=target.id)
                 )
-                await session.execute(
-                    update(InboxEntry)
-                    .where(InboxEntry.user_id == source.id, InboxEntry.kind == "warning")
-                    .values(user_id=target.id)
-                )
+                await _merge_inbox(session, source.id, target.id)
                 await session.flush()
                 # Only the guest's own days: this runs inside a sign-in, on
                 # the web role's statement budget, and no other day's total
@@ -3217,13 +3266,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             ProfileDrawingPin.turn_id == db_turn_id
                         )
                     )
-                    await mark_inbox_read(
+                    # Read everywhere: the drawer's other tabs hear it, or
+                    # their bells keep counting what they just acted on
+                    # (R-INBOX-03).
+                    if await mark_inbox_read(
                         session,
                         user_ids=list(identity_ids),
                         kind="drawing_shared",
                         subject_id=db_turn_id,
                         now=now,
-                    )
+                    ):
+                        notify = identity_ids[0]
                     drawing_row.gallery_withdrawn_at = now
                 else:
                     # One's own share, and one's own pin of it with it.
