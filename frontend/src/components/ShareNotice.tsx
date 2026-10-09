@@ -52,6 +52,9 @@ export function ShareNotice() {
   const [takenOut, setTakenOut] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The drawing whose take-out is waiting for a yes: in the card itself, as
+  // a dialog over this one would be a second modal on top of the first.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const askedFor = useRef<string | null>(null);
   const primaryRef = useRef<HTMLButtonElement | null>(null);
 
@@ -115,6 +118,7 @@ export function ShareNotice() {
 
   async function takeOut(turnId: string) {
     if (busy) return;
+    setConfirming(null);
     setBusy(true);
     setFailed(false);
     try {
@@ -162,9 +166,29 @@ export function ShareNotice() {
                 prompt: <strong>{notice.prompt}</strong>,
               })}
             </p>
-            <span className="share-notice-actions">
+            <span className={`share-notice-actions${confirming === notice.turnId ? " is-confirming" : ""}`}>
               {takenOut.has(notice.turnId) ? (
                 <span className="share-notice-done">{ui.shareNotice.takenOut}</span>
+              ) : confirming === notice.turnId ? (
+                <span className="share-notice-confirm" role="group" aria-label={ui.shareControl.takeOutTitle}>
+                  <span className="share-notice-confirm-question">{ui.shareControl.takeOutTitle}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => setConfirming(null)}
+                  >
+                    {ui.confirmationDialog.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-compact"
+                    disabled={busy}
+                    data-testid="share-notice-take-out-confirm"
+                    onClick={() => void takeOut(notice.turnId)}
+                  >
+                    {ui.shareControl.takeOutConfirm}
+                  </button>
+                </span>
               ) : (
                 <>
                   <Link
@@ -179,7 +203,7 @@ export function ShareNotice() {
                     className="btn btn-secondary btn-compact"
                     disabled={busy}
                     data-testid="share-notice-take-out"
-                    onClick={() => void takeOut(notice.turnId)}
+                    onClick={() => setConfirming(notice.turnId)}
                   >
                     {ui.shareNotice.takeOut}
                   </button>

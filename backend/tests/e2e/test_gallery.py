@@ -385,6 +385,11 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await theirs.get_by_role("button").first.click()
             await owner.locator('[data-testid="gallery-drawing-page"]').wait_for()
             await owner.locator('[data-testid="share-take-out"]').click()
+            # It ends every other share and pin, so it asks first.
+            confirm = owner.get_by_role(
+                "alertdialog", name="Take this drawing out of the gallery?"
+            )
+            await confirm.get_by_role("button", name="Take it out", exact=True).click()
             await owner.get_by_test_id("gallery-drawing-missing").wait_for()
 
             # No session: no gallery (R-GAL-02).

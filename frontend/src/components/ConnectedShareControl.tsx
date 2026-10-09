@@ -17,6 +17,7 @@ interface ConnectedShareControlProps {
   shareable: boolean;
   /** From the recap: the finished game's own visibility, not the room's. */
   recap?: boolean;
+  look?: "button" | "pill";
 }
 
 /**
@@ -33,6 +34,7 @@ export function ConnectedShareControl({
   drawerId,
   shareable,
   recap = false,
+  look = "button",
 }: ConnectedShareControlProps) {
   const playerId = useGameStore((state) => state.playerId);
   const isSpectator = useGameStore((state) => selectMe(state)?.isSpectator ?? false);
@@ -72,6 +74,7 @@ export function ConnectedShareControl({
     <ShareControl
       offer={offer}
       credit={credit}
+      look={look}
       onShare={async (shared) => {
         const answer = await sendDrawingShare(turnId, shared);
         if (!shared) usePinsStore.getState().forget(turnId);

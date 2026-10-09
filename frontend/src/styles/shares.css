@@ -19,13 +19,29 @@
   font-size: 0.85rem;
 }
 
-.turn-results-share {
-  display: flex;
-  justify-content: center;
-  margin: -4px 0 10px;
+/* The turn results' Share: the reaction toggle's recipe (reactions.css),
+   beside it in the same row, so it takes that control's height, its light
+   face in both themes and its ring for "yours". The icon is the empty
+   heart's grey until pressed. */
+.share-pill {
+  --reaction-height: 26px;
 }
 
-/* Nothing offered and nothing to credit: no gap where the control would be. */
-.turn-results-share:empty {
-  display: none;
+.share-pill-icon {
+  color: #6b6b72;
+  display: inline-flex;
+}
+
+.share-pill.has-mine .share-pill-icon {
+  color: var(--primary);
+}
+
+/* Its drawer took it out: still there, so the tooltip can say why. */
+.share-pill.is-inert {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.share-pill.is-inert:hover {
+  border-color: rgba(0, 0, 0, 0.08);
 }

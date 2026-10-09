@@ -979,6 +979,9 @@ export const EN = {
     inTheGallerySharedByTheDrawer: "In the gallery · shared by its drawer",
     thatDrawingCouldNotBeShared: "That drawing could not be shared.",
     thatCouldNotBeTakenBack: "That could not be taken back. Try again.",
+    takeOutTitle: "Take this drawing out of the gallery?",
+    takeOutDescription: "It leaves the gallery for everyone and comes off every profile it is pinned to. Only you can put it back.",
+    takeOutConfirm: "Take it out",
   },
 
   drawingRecapGallery: {

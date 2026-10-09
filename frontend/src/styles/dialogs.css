@@ -480,6 +480,28 @@
   gap: 6px;
 }
 
+/* Taking one out asks first, in the row: it ends every other share and pin.
+   The question takes the row's whole width, under the sentence. */
+.share-notice-actions.is-confirming {
+  flex: 1 1 100%;
+}
+
+.share-notice-confirm {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  justify-content: flex-end;
+}
+
+.share-notice-confirm-question {
+  color: var(--ink);
+  flex: 1 1 100%;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .share-notice-done {
   color: var(--muted);
   font-size: 0.85rem;

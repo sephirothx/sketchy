@@ -457,6 +457,7 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
               turnId={lastTurnResult.turnId ?? currentTurnId}
               drawerId={lastTurnResult.drawerId}
               shareable={lastTurnResult.shareable ?? false}
+              look="pill"
             />
           }
           drawerId={lastTurnResult.drawerId}

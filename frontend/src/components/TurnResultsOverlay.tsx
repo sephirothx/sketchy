@@ -35,7 +35,8 @@ interface TurnResultsOverlayProps {
   nextTurnDurationSeconds?: number;
   /** The reaction control for the drawing these results are about. */
   reactions?: ReactNode;
-  /** The Share to Gallery control for the same drawing (#1430). */
+  /** The Share to Gallery control for the same drawing (#1430), a second
+      pill in the reaction control's row. */
   share?: ReactNode;
 }
 
@@ -139,8 +140,12 @@ export function TurnResultsOverlay({
         <p className="turn-results-prompt">
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>
-        {reactions && <div className="turn-results-reactions">{reactions}</div>}
-        {share && <div className="turn-results-share">{share}</div>}
+        {(reactions || share) && (
+          <div className="turn-results-reactions">
+            {reactions}
+            {share}
+          </div>
+        )}
         {/* Only when hints were bought, as how the row's points were
             reached (#1278). It was said to every guesser as "Your turn: +N
             points · now #k" - the row directly below, again, under a name

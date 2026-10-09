@@ -963,6 +963,9 @@ export const DE: Catalogue = {
     inTheGallerySharedByTheDrawer: "In der Galerie · von der zeichnenden Person geteilt",
     thatDrawingCouldNotBeShared: "Diese Zeichnung konnte nicht geteilt werden.",
     thatCouldNotBeTakenBack: "Das ließ sich nicht zurücknehmen. Versuch es noch einmal.",
+    takeOutTitle: "Diese Zeichnung aus der Galerie nehmen?",
+    takeOutDescription: "Sie verschwindet für alle aus der Galerie und wird von jedem Profil gelöst, an das sie geheftet ist. Nur du kannst sie zurückholen.",
+    takeOutConfirm: "Herausnehmen",
   },
 
   drawingRecapGallery: {

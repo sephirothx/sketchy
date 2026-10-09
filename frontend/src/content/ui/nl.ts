@@ -963,6 +963,9 @@ export const NL: Catalogue = {
     inTheGallerySharedByTheDrawer: "In de galerij · gedeeld door degene die hem tekende",
     thatDrawingCouldNotBeShared: "Deze tekening kon niet gedeeld worden.",
     thatCouldNotBeTakenBack: "Dat kon niet ongedaan gemaakt worden. Probeer het opnieuw.",
+    takeOutTitle: "Deze tekening uit de galerij halen?",
+    takeOutDescription: "Hij verdwijnt voor iedereen uit de galerij en van elk profiel waarop hij vastgezet is. Alleen jij kunt hem terugzetten.",
+    takeOutConfirm: "Eruit halen",
   },
 
   drawingRecapGallery: {

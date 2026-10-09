@@ -80,9 +80,10 @@ keyboard that takes half the screen, and one thumb.
 - Sharing — a drawing reaches the gallery only when a player who sat in its game shares
   it: the drawer their own from any game, anybody else - guests included - a public
   room's, without asking. **Share to gallery** sits on the turn results, the game-over
-  recap and game history, beside a kept drawing that is not blank. A player takes back
-  their own share, and the drawer takes the drawing out for everybody, which nobody else
-  can undo until the drawer shares it again. The drawer is told once, with a way to take
+  recap and game history, beside a kept drawing that is not blank - on the turn results as
+  a small pill beside the reactions. A player takes back their own share, and the drawer
+  takes the drawing out for everybody, after confirming, which nobody else can undo until
+  the drawer shares it again. The drawer is told once, with a way to take
   it out, when somebody else shares their drawing - not when they watched it happen. A
   drawing keeps the moment it first entered the gallery, so sharing it again does not
   make it new again.
@@ -2570,7 +2571,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    their field says they guess from the next turn.
 5. **Turn results** (5s by default): the prompt is revealed and scores update - each row
    shows the place and total its player came in with, then slides to the new order - reactions
-   stay open on the drawing, and **Share to gallery** puts it in the gallery (the drawer's own
+   stay open on the drawing, and the **Share to gallery** pill beside them puts it in the gallery (the drawer's own
    from any room; anybody else's from a public one), then the next player's turn begins. A guesser who bought hints
    also sees how their points were reached: "This turn: +300 − 12 hints = 288 points".
 
