@@ -4,6 +4,7 @@ import { useToast } from "../lib/toast";
 import { refusalSentence } from "../lib/refusals.ts";
 import { isPinned, pinEligibility, withPin, withoutPin } from "../lib/pinnedDrawings";
 import { sendDrawingShare } from "../lib/shareRequests";
+import { satIn } from "../lib/shares";
 import { selectMe, useGameStore } from "../store/gameStore";
 import { useAuthStore } from "../store/authStore";
 import { useMyPins } from "../store/pinsStore";
@@ -49,9 +50,9 @@ export function ConnectedPinControl({
   const notASeatThatPlayed = useGameStore(
     (state) =>
       (selectMe(state)?.isSpectator ?? false)
-      || !(state.finalScores ?? []).some(
-        (entry) => entry.playerId === state.playerId || state.ownSeatTokens.includes(entry.playerId),
-      ),
+      // By the game's seats, not its standings: a seat that left before the
+      // end sat in it too.
+      || !satIn(state.lastGameSeatTokens, state.ownSeatTokens),
   );
   const user = useAuthStore((state) => state.user);
   const pins = useMyPins();

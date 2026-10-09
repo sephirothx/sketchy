@@ -135,6 +135,9 @@ interface GameStore {
   drawingShares: Record<string, DrawingShareState>;
   /** Whether the last finished game was public, for its recap's controls. */
   lastGamePublic: boolean | null;
+  /** Every seat token that played the last game, seated at its end or not:
+      with `ownSeatTokens`, whether this seat sat in it (#1430). */
+  lastGameSeatTokens: string[];
 
   messages: ChatMessage[];
   lastTurnResult: TurnEndedPayload | null;
@@ -276,6 +279,7 @@ const initialGameFields = {
   lastReactionEvent: null as (DrawingReactionEvent & { seq: number }) | null,
   drawingShares: {} as Record<string, DrawingShareState>,
   lastGamePublic: null as boolean | null,
+  lastGameSeatTokens: [] as string[],
   messages: [] as ChatMessage[],
   lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -541,6 +545,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
     drawingShares: { ...s.drawingShares, ...sharesByTurn(payload.drawings ?? []) },
     lastGamePublic: payload.isPublic ?? null,
+    lastGameSeatTokens: payload.seatTokens ?? [],
     gameHighlights: payload.highlights ?? [],
   })),
   endGame: (payload) => set((s) => ({
@@ -551,6 +556,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
     drawingShares: { ...s.drawingShares, ...sharesByTurn(payload.drawings ?? []) },
     lastGamePublic: payload.isPublic ?? null,
+    lastGameSeatTokens: payload.seatTokens ?? [],
     gameHighlights: payload.highlights ?? [],
     roomState: "waiting",
   })),

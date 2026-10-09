@@ -508,6 +508,9 @@ export interface GameEndedPayload {
   /** Whether the finished game was public: who may share from its recap
       (#1430) is its rule, not the room's as since changed. */
   isPublic?: boolean;
+  /** Every seat token that played the game, including one that left before
+      it ended and is missing from `scores` (#1430). */
+  seatTokens?: string[];
 }
 
 /** The finished game's recap for a socket that arrived after `game_ended`

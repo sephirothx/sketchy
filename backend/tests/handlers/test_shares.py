@@ -360,6 +360,32 @@ async def test_a_player_who_left_and_came_back_is_told_their_old_seat():
     ]
 
 
+async def test_a_drawer_who_left_before_the_end_is_still_a_seat_that_played():
+    """The standings list only who was seated at the end. Ann drew, walked
+    out, and came back after Bob and Cid finished: the recap's seats still
+    name her old token, and her new seat is told it is hers, so her client
+    offers Share, Take out and Pin on the game she sat in (review of #1431)."""
+    room_manager, room, players = build_room(
+        rounds=1, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cid": "user-cid"}
+    )
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    wire(ctx, room, players)
+    game = await to_results(ctx, room)
+    ann = room.players[game.current_drawer]
+    room_manager.remove_player(room, ann.id)
+    await finish(ctx, room)
+    payload = room.last_game_payload()
+    assert ann.id not in [entry["playerId"] for entry in payload["scores"]]
+    assert ann.id in payload["seatTokens"]
+
+    back = room_manager.add_player(
+        room, ann.nickname, user_id=ann.user_id, is_anonymous=ann.is_anonymous
+    )
+    assert ann.id in session_payload(room, back)["ownSeatTokens"]
+    assert back.id not in payload["seatTokens"], "the new seat played nothing"
+
+
 async def test_taking_a_share_back_after_coming_back_takes_the_old_one():
     room_manager, room, players = build_room(rounds=1)
     ctx = build_context(room_manager, FakeGameHistoryRepository())

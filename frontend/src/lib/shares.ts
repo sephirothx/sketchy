@@ -65,6 +65,15 @@ export function mineAmong(
   return shares.find((token) => own.includes(token)) ?? current;
 }
 
+/**
+ * Whether this seat sat in the last game, by any of its tokens: one who left
+ * before it ended is not in its standings, and one who came back holds a
+ * new token, but the game's seats still name the one they played under.
+ */
+export function satIn(gameSeats: readonly string[], own: readonly string[]): boolean {
+  return gameSeats.some((token) => own.includes(token));
+}
+
 /** Who to credit for a drawing's place in the Gallery: its first sharer. */
 export type ShareCredit =
   | { kind: "none" }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mineAmong, shareCredit, shareOffer } from "../src/lib/shares.ts";
+import { mineAmong, satIn, shareCredit, shareOffer } from "../src/lib/shares.ts";
 import { laterOf, pendingShareNoticesFrom } from "../src/lib/shareNotices.ts";
 
 const situation = {
@@ -86,4 +86,11 @@ test("a player who came back is still the one who shared under their old seat", 
   );
   assert.equal(mineAmong(["someone"], own, "new-seat"), "new-seat", "no share of theirs: the seat itself");
   assert.equal(mineAmong([], [], null), null);
+});
+
+test("a seat sat in the game by any of its tokens, not by the standings", () => {
+  const seats = ["ann-old", "bob", "cid"];
+  assert.equal(satIn(seats, ["ann-new", "ann-old"]), true, "left before the end, came back");
+  assert.equal(satIn(seats, ["dan"]), false, "arrived after the game");
+  assert.equal(satIn([], ["bob"]), false, "a game with no recorded seats offers nothing");
 });

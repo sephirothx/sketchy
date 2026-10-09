@@ -1,6 +1,6 @@
 import { ShareControl } from "./ShareControl";
 import { sendDrawingShare } from "../lib/shareRequests";
-import { mineAmong, shareCredit, shareOffer } from "../lib/shares";
+import { mineAmong, satIn, shareCredit, shareOffer } from "../lib/shares";
 import { useAuthStore } from "../store/authStore";
 import { selectMe, useGameStore } from "../store/gameStore";
 import { usePinsStore } from "../store/pinsStore";
@@ -50,12 +50,9 @@ export function ConnectedShareControl({
   const hasAccount = useAuthStore((s) => s.user !== null);
   // From the recap, only a seat that played the game: somebody who arrived
   // in the waiting room afterwards is shown it, and has nothing to share.
-  const played = useGameStore((s) =>
-    !recap
-    || (s.finalScores ?? []).some(
-      (entry) => entry.playerId === s.playerId || s.ownSeatTokens.includes(entry.playerId),
-    ),
-  );
+  // Sat in it, by the game's seats rather than its standings, which leave
+  // out anybody who walked out before the end.
+  const played = useGameStore((s) => !recap || satIn(s.lastGameSeatTokens, s.ownSeatTokens));
   if (!turnId) return null;
   const isDrawer = Boolean(drawerId) && (drawerId === playerId || own.includes(drawerId ?? ""));
   const mine = mineAmong(state.shares, own, playerId);

@@ -662,6 +662,11 @@ class Room:
             "drawings": self.drawing_recap_metadata(),
             # Who may share from the recap is the game's rule (#1430).
             "isPublic": self.last_game_public,
+            # Every seat token that played it, whether or not it was still
+            # seated at the end - the standings list only those who were. With
+            # the seat's own tokens (`ownSeatTokens`) this says whether the
+            # viewer sat in the game: who may share or pin from its recap.
+            "seatTokens": sorted(self.last_game_seats),
         }
 
     def drawing_recap_metadata(self) -> list[dict]:
