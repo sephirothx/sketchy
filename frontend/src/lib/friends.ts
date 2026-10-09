@@ -32,19 +32,12 @@ export interface FriendLists {
   friends: FriendEntry[];
   incoming: FriendEntry[];
   outgoing: FriendEntry[];
-  /** Requests this account sent that were accepted and that nobody has told
-      them about yet. Read off the row rather than derived from the lists
-      moving: a client that was reloading when the answer came has no earlier
-      read to compare against, and being accepted is not something anybody
-      should have to be looking at the right moment to learn (R-FRIEND-14). */
-  announce: FriendEntry[];
 }
 
 export const NO_FRIENDS: FriendLists = {
   friends: [],
   incoming: [],
   outgoing: [],
-  announce: [],
 };
 
 function parseEntry(value: unknown): FriendEntry | null {
@@ -78,7 +71,6 @@ export function parseFriendLists(payload: unknown): FriendLists {
     friends: parseList(body.friends),
     incoming: parseList(body.incoming),
     outgoing: parseList(body.outgoing),
-    announce: parseList(body.announce),
   };
 }
 
@@ -331,49 +323,34 @@ export function addableRecentPlayers(
 `friends_changed` is deliberately contentless — one event covers a request
 arriving and one being answered, and the listing endpoint is the truth either
 way. So what happened is worked out here, by comparing the lists before and
-after the refetch it triggers. No wire change, and it is the only way to tell
-"somebody asked" from "somebody said yes", which was silent before.
+after the refetch it triggers. Only an arrival is worked out here: being
+accepted is an entry in the asker's inbox (#1436, R-FRIEND-14), held by the
+server for a reader who was not there to see the lists move.
 
 **A vanished outgoing request is not reported, and that is the whole point.**
 An outgoing row disappears when it is declined, and naming that would go
 further than R-FRIEND-05 allows: the list not pretending the row is still
-pending is one thing, announcing the refusal is another.
-
-`accepted` requires the entry to have been *outgoing* before. A friendship the
-reader made themselves — by accepting a request, or by asking somebody who had
-already asked them — also appears in `friends` for the first time, and telling
-somebody what they just did is noise. */
+pending is one thing, announcing the refusal is another. */
 export interface FriendListChanges {
   /** Requests that were not waiting a moment ago. */
   arrived: FriendEntry[];
-  /** Requests this account sent that have since been said yes to. */
-  accepted: FriendEntry[];
 }
 
-export const NO_FRIEND_CHANGES: FriendListChanges = { arrived: [], accepted: [] };
+export const NO_FRIEND_CHANGES: FriendListChanges = { arrived: [] };
 
 function idsOf(entries: FriendEntry[]): Set<string> {
   return new Set(entries.map((entry) => entry.userId));
 }
 
-/** What is owed telling, and what the diff can still add.
-
-`accepted` comes from the server: it is a fact on the friendship rather than
-a difference between two reads, so a reader who was not present for the move
-still gets it. `arrived` stays a diff - an incoming request that goes
-unannounced is still sitting in the list with a badge over it, while an
-acceptance leaves no trace at all (R-FRIEND-14). */
+/** The requests that arrived between two reads. A diff, because an incoming
+request that goes unannounced is still sitting in the list with a badge over
+it; the inbox keeps it for good either way (#1436). */
 export function friendListChanges(
   before: FriendLists,
   after: FriendLists,
 ): FriendListChanges {
   const knewIncoming = idsOf(before.incoming);
-  return {
-    arrived: after.incoming.filter((entry) => !knewIncoming.has(entry.userId)),
-    // Defensive: a payload without the field at all is an older server, and
-    // an acceptance told late beats one that throws.
-    accepted: after.announce ?? [],
-  };
+  return { arrived: after.incoming.filter((entry) => !knewIncoming.has(entry.userId)) };
 }
 
 /** Which of the requests a notice named are still waiting for an answer.

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { InboxBell } from "./InboxBell";
 import { AccountMenu } from "./AccountMenu";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { needsIdentity, useAuthStore } from "../store/authStore";
@@ -156,6 +157,7 @@ export function AppHeader({
             <GearIcon size={18} />
           </button>
         )}
+        <InboxBell />
         <AccountMenu />
       </div>
     </header>

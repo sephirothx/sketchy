@@ -1348,9 +1348,6 @@
   "drawing_reaction": {
    "shape": "object"
   },
-  "drawing_share_notice": {
-   "shape": "object"
-  },
   "drawing_shared": {
    "shape": "object"
   },
@@ -1369,6 +1366,9 @@
   "hint_revealed": {
    "shape": "object"
   },
+  "inbox_changed": {
+   "shape": "object"
+  },
   "kicked": {
    "shape": "object"
   },
@@ -1384,18 +1384,12 @@
   "lobby_rooms_changed": {
    "shape": "object"
   },
-  "moderator_warning": {
-   "shape": "object"
-  },
   "request_canvas_actions": {
    "layout": [
     "generation",
     "expectedSequence",
     "receivedSequence"
    ]
-  },
-  "role_changed": {
-   "shape": "object"
   },
   "room_state": {
    "shape": "object"
@@ -1655,6 +1649,34 @@
    "inGallery",
    "turnId"
   ],
+  "api.inbox:_person": [
+   "displayName",
+   "nameColor",
+   "userId"
+  ],
+  "api.inbox:_render": [
+   "createdAt",
+   "inGallery",
+   "sharedBy",
+   "turnId",
+   "uploadAgainAt"
+  ],
+  "api.inbox:_sharers": [
+   "displayName",
+   "isAnonymous",
+   "nameColor"
+  ],
+  "api.inbox:create_inbox_router": [
+   "unreadCount"
+  ],
+  "api.inbox:inbox_payload": [
+   "mustAcknowledge",
+   "pendingRole",
+   "unreadCount"
+  ],
+  "api.inbox:mark_entries_read": [
+   "unreadCount"
+  ],
   "api.moderation:_ban_payload": [
    "bannedByUserId",
    "createdAt",
@@ -1754,7 +1776,6 @@
    "ownerDisplayName",
    "promptCount",
    "publishedAt",
-   "reportIds",
    "turnId",
    "userId"
   ],
@@ -1789,9 +1810,6 @@
   ],
   "api.moderation:report_gallery_drawing": [
    "createdAt"
-  ],
-  "api.moderation:reports_reviewed": [
-   "reportIds"
   ],
   "api.moderation:review_prompt_content_report": [
    "displayName"
@@ -1935,10 +1953,6 @@
    "minRatedGuessers",
    "ratedCount",
    "unratedCount"
-  ],
-  "api.role_notices:pending_role_notice_payload": [
-   "createdAt",
-   "pendingRole"
   ],
   "api.room_presets:_config_payload": [
    "allowedTools",
@@ -2090,13 +2104,6 @@
    "lastLoginAt",
    "nameColor",
    "pendingRole"
-  ],
-  "api.share_notices:pending_share_notice_payload": [
-   "createdAt",
-   "sharerDisplayName",
-   "sharerIsAnonymous",
-   "sharerNameColor",
-   "turnId"
   ],
   "api.user_blocks:_block_payload": [
    "createdAt",
@@ -2300,6 +2307,7 @@
    "promptLanguage",
    "promptListId",
    "promptListName",
+   "readAt",
    "requestedByMe",
    "requesterWasActor",
    "requesterWasTarget",
@@ -2307,6 +2315,7 @@
    "revokedAt",
    "soundEffects",
    "starredAt",
+   "subjectId",
    "timeFormat",
    "updatedAt",
    "userId"
@@ -2428,7 +2437,8 @@
    "steppedUp"
   ],
   "auth.warnings:pending_warning_payload": [
-   "createdAt"
+   "createdAt",
+   "uploadAgainAt"
   ],
   "client_config:payload": [
    "afkInputWindowMs",
@@ -2491,6 +2501,9 @@
   "handlers.friends:_join_friend_room": [
    "errorCode"
   ],
+  "handlers.friends:_remember_invite": [
+   "expiresAt"
+  ],
   "handlers.friends:add_friend": [
    "errorCode"
   ],
@@ -2504,6 +2517,9 @@
    "expiresIn",
    "fromUserId",
    "inviteToken"
+  ],
+  "handlers.friends:write": [
+   "expiresAt"
   ],
   "handlers.game:select_prompt": [
    "errorCode"
@@ -2934,7 +2950,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 61,
+ "protocolVersion": 63,
  "refusal": {
   "codes": [
    "invalid_payload",

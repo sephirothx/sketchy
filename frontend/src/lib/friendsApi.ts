@@ -35,15 +35,6 @@ Sent after the message is shown. Recording first loses the news whenever the
 render does not happen, and recording everything outstanding swallows an
 acceptance that landed in between; the failure this leaves is being told
 twice (R-FRIEND-14). */
-export function announcedFriendships(
-  userIds: string[],
-): Promise<{ ok: boolean; announced: number }> {
-  return apiRequest("/api/users/me/friends/announced", {
-    method: "POST",
-    body: { userIds },
-  });
-}
-
 export function removeFriend(userId: string): Promise<void> {
   return apiRequest(`/api/users/me/friends/${userId}`, { method: "DELETE" });
 }

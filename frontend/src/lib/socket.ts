@@ -714,7 +714,24 @@ export function emitEntry<T = AckResponse>(event: string, data: unknown): Promis
         emitTransient("leave_room", { roomId: answer.roomId });
       }
     },
+  }).then((response) => {
+    const code = (response as { errorCode?: unknown } | null)?.errorCode;
+    if (typeof code === "string") for (const listener of [...entryRefusalListeners]) listener(code);
+    return response;
   });
+}
+
+type EntryRefusalListener = (errorCode: string) => void;
+const entryRefusalListeners = new Set<EntryRefusalListener>();
+
+/** Hear every refused entry's code, whichever page sent it. A warning not
+    yet acknowledged refuses every seat (#1436), and the inbox reads again so
+    the dialog that answers it is on screen, whatever this tab thought. */
+export function onEntryRefused(listener: EntryRefusalListener): () => void {
+  entryRefusalListeners.add(listener);
+  return () => {
+    entryRefusalListeners.delete(listener);
+  };
 }
 
 /** Emit an action that only makes sense right now, dropping it if the socket

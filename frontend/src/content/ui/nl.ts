@@ -17,7 +17,6 @@ import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("nl", {"other":"e"});
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -338,6 +337,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "Voor het publiceren van een lijst moet eerst de waarschuwing van de moderatie gelezen worden.";
       case "star":
         return "Voor het geven van een ster moet eerst de waarschuwing van de moderatie gelezen worden.";
+      case "play":
+        return "Voor het meedoen aan een spel moet eerst de waarschuwing van de moderatie gelezen worden.";
       default:
         return "Eerst moet de waarschuwing van de moderatie gelezen worden.";
     }
@@ -1801,11 +1802,6 @@ export const NL: Catalogue = {
       `${p.nickname} melden`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "melding die je stuurde is", other: "meldingen die je stuurde zijn" })} bekeken. Bedankt.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} stelt voor het spel opnieuw te starten.`,
@@ -1821,28 +1817,6 @@ export const NL: Catalogue = {
     theCurrentGameIsRestarting: "Het spel wordt nu herstart.",
     yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
       `${p.yes} ja · ${p.no} nee · ${p.pending} open · ${p.requiredVotes} nodig`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "Je bent op elk apparaat uitgelogd zodat de wijziging effect heeft.\n            Log opnieuw in om verder te gaan.",
-    setUpNow: "Nu instellen",
-    notNow: "Nu niet",
-    oneMoment: "Even geduld…",
-    signInAgain: "Opnieuw inloggen",
-    understood: "Oké",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }) =>
-      p.count === 1 ? "Je tekening staat in de galerij" : "Je tekeningen staan in de galerij",
-    sharedYourDrawing: "{sharer} heeft je tekening van {prompt} in de galerij gedeeld.",
-    view: "Bekijken",
-    takeOut: "Eruit halen",
-    takenOut: "Eruit gehaald",
-    andMore: (p: { count: number }) =>
-      `En nog ${counted(p.count, { one: "tekening", other: "tekeningen" })}.`,
-    youCanAlways: "Je kunt een tekening altijd uit de galerij halen, via de pagina ervan of via je spelgeschiedenis.",
-    ok: "Oké",
   },
 
   roomChatPanel: {
@@ -2371,9 +2345,6 @@ export const NL: Catalogue = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} wil vrienden worden.`,
-    acceptedYourRequest: (p: { name: string }) => `${p.name} heeft je vriendschapsverzoek geaccepteerd.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "persoon heeft", other: "personen hebben" })} je vriendschapsverzoeken geaccepteerd.`,
     accept: "Accepteren",
     open: "Openen",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2431,7 +2402,43 @@ export const NL: Catalogue = {
     theDrawingThisWasAbout: "De tekening waar het om ging:",
     theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
   },
+  inbox: {
+    inbox: "Inbox",
+    openInboxUnread: (p: { count: number }) => `Inbox, ${counted(p.count, { one: "ongelezen bericht", other: "ongelezen berichten" })}`,
+    markAllRead: "Alles als gelezen markeren",
+    newGroup: "Nieuw",
+    earlierGroup: "Eerder",
+    showOlder: "Oudere tonen",
+    close: "Inbox sluiten",
+    nothingHereYet: "Nog niets",
+    whatArrivesHere: "Hier komen gedeelde tekeningen van je, vriendschapsverzoeken en berichten over je account terecht.",
+    sharedYourDrawing: "{sharer} heeft je tekening van {prompt} in de galerij gedeeld.",
+    yourDrawingWasShared: "Je tekening van {prompt} is in de galerij gedeeld.",
+    noLongerInTheGallery: "Niet meer in de galerij",
+    view: "Bekijken",
+    takeItOut: "Eruit halen",
+    wantsToBeFriends: "{name} wil vrienden worden.",
+    accept: "Accepteren",
+    decline: "Weigeren",
+    friendsNow: "Jullie zijn nu vrienden",
+    noLongerWaiting: "Wacht niet meer",
+    acceptedYourRequest: "{name} heeft je vriendschapsverzoek geaccepteerd.",
+    invitedYouToPlay: "{name} heeft je uitgenodigd om te spelen.",
+    join: "Meedoen",
+    expired: "Verlopen",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "melding die je stuurde is", other: "meldingen die je stuurde zijn" })} bekeken. Bedankt.`,
+    setUpTwoFactor: "Inloggen in twee stappen instellen",
+    offerEnded: "Dit aanbod is afgelopen",
+    acknowledged: "Gelezen",
+    readTheRules: "Regels lezen",
+    chooseAnotherPicture: "Andere afbeelding kiezen",
+    signedOutForRole: "Je rol is veranderd, daarom ben je overal uitgelogd. Log opnieuw in om verder te gaan.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "Je kunt nu een nieuwe uploaden.",
+    uploadAgainOn: (p: { date: string }) => `Je kunt op ${p.date} een nieuwe uploaden.`,
     whatAWarningMeans:
       "Een melding over je gedrag is bekeken, en dit is de uitkomst. Er is niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
     yourPictureWasRemoved: "Je afbeelding is verwijderd",

@@ -17,7 +17,6 @@ import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("it", {"other":"º"});
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -338,6 +337,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "Prima di pubblicare una lista va letto l’avviso della moderazione.";
       case "star":
         return "Prima di dare una stella va letto l’avviso della moderazione.";
+      case "play":
+        return "Prima di unirti a una partita va letto l’avviso della moderazione.";
       default:
         return "Prima va letto l’avviso della moderazione.";
     }
@@ -1802,11 +1803,6 @@ export const IT: Catalogue = {
       `Segnala ${p.nickname}`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "segnalazione che hai inviato è stata esaminata", other: "segnalazioni che hai inviato sono state esaminate" })}. Grazie.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} propone di riavviare la partita.`,
@@ -1822,28 +1818,6 @@ export const IT: Catalogue = {
     theCurrentGameIsRestarting: "La partita sta ricominciando ora.",
     yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
       `${p.yes} sì · ${p.no} no · ${p.pending} in attesa · ${p.requiredVotes} necessari`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "Sei stato disconnesso da ogni dispositivo perché la modifica abbia\n            effetto. Accedi di nuovo per continuare.",
-    setUpNow: "Attivalo adesso",
-    notNow: "Non ora",
-    oneMoment: "Attendi…",
-    signInAgain: "Accedi di nuovo",
-    understood: "OK",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }) =>
-      p.count === 1 ? "Il tuo disegno è nella galleria" : "I tuoi disegni sono nella galleria",
-    sharedYourDrawing: "{sharer} ha condiviso il tuo disegno di {prompt} nella galleria.",
-    view: "Guarda",
-    takeOut: "Toglilo",
-    takenOut: "Tolto",
-    andMore: (p: { count: number }) =>
-      `E ${counted(p.count, { one: "altro disegno", other: "altri disegni" })}.`,
-    youCanAlways: "Puoi togliere un disegno dalla galleria in qualsiasi momento, dalla sua pagina o dalla cronologia delle partite.",
-    ok: "OK",
   },
 
   roomChatPanel: {
@@ -2372,9 +2346,6 @@ export const IT: Catalogue = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} vuole essere tuo amico.`,
-    acceptedYourRequest: (p: { name: string }) => `${p.name} ha accettato la tua richiesta di amicizia.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "persona ha accettato", other: "persone hanno accettato" })} le tue richieste di amicizia.`,
     accept: "Accetta",
     open: "Apri",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2432,7 +2403,43 @@ export const IT: Catalogue = {
     theDrawingThisWasAbout: "Il disegno in questione:",
     theDrawingsThisWasAbout: "I disegni in questione:",
   },
+  inbox: {
+    inbox: "Posta in arrivo",
+    openInboxUnread: (p: { count: number }) => `Posta in arrivo, ${counted(p.count, { one: "messaggio non letto", other: "messaggi non letti" })}`,
+    markAllRead: "Segna tutto come letto",
+    newGroup: "Nuovi",
+    earlierGroup: "Precedenti",
+    showOlder: "Mostra i precedenti",
+    close: "Chiudi la posta in arrivo",
+    nothingHereYet: "Ancora niente",
+    whatArrivesHere: "Qui arrivano le condivisioni dei tuoi disegni, le richieste di amicizia e i messaggi sul tuo account.",
+    sharedYourDrawing: "{sharer} ha condiviso il tuo disegno di {prompt} nella galleria.",
+    yourDrawingWasShared: "Il tuo disegno di {prompt} è stato condiviso nella galleria.",
+    noLongerInTheGallery: "Non è più nella galleria",
+    view: "Guarda",
+    takeItOut: "Toglilo",
+    wantsToBeFriends: "{name} ti ha inviato una richiesta di amicizia.",
+    accept: "Accetta",
+    decline: "Rifiuta",
+    friendsNow: "Ora siete amici",
+    noLongerWaiting: "Non è più in attesa",
+    acceptedYourRequest: "{name} ha accettato la tua richiesta di amicizia.",
+    invitedYouToPlay: "{name} ti invita a giocare.",
+    join: "Unisciti",
+    expired: "Scaduto",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "segnalazione che hai inviato è stata esaminata", other: "segnalazioni che hai inviato sono state esaminate" })}. Grazie.`,
+    setUpTwoFactor: "Configura l’accesso in due passaggi",
+    offerEnded: "Questa offerta è terminata",
+    acknowledged: "Letto",
+    readTheRules: "Leggi le regole",
+    chooseAnotherPicture: "Scegli un’altra immagine",
+    signedOutForRole: "Il tuo ruolo è cambiato, quindi la tua sessione è stata chiusa ovunque. Accedi di nuovo per continuare.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "Puoi caricarne un’altra subito.",
+    uploadAgainOn: (p: { date: string }) => `Potrai caricarne un’altra il ${p.date}.`,
     whatAWarningMeans:
       "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
     yourPictureWasRemoved: "La tua immagine è stata rimossa",

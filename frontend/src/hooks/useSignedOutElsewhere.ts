@@ -21,7 +21,13 @@ export function useSignedOutElsewhere(): void {
       // account (#1056). Re-read here too: the cookie is gone, so the tab
       // becomes whatever the server now says it is.
       const code = data?.code;
-      if ((code === "signed_out" || code === "account_deleted") && !isSigningOut()) {
+      // A promotion signs every session out too, so the new moderator signs
+      // in again with their second factor (R-AUTH-20); `RoleSignOutNotice`
+      // says why.
+      if (
+        (code === "signed_out" || code === "account_deleted" || code === "role_changed")
+        && !isSigningOut()
+      ) {
         void adoptFromServer();
       }
     };

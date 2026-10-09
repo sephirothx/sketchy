@@ -467,6 +467,9 @@ export interface PendingWarning {
   messages: { text: string; at: string | null }[];
   /** The canvases those reports carried, if any did - the player's own work. */
   drawings: (PlayerReportDrawing & { reportId: string })[];
+  /** For a removal: when another picture may go up, said in the reader's
+      language (#1436). Null when it may go up now. */
+  uploadAgainAt: string | null;
 }
 
 /** One drawing behind the caller's own warning. */
@@ -530,8 +533,39 @@ export function acknowledgeReportsReviewed(reportIds: string[]): Promise<{
   });
 }
 
-export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
-  return apiRequest("/api/warnings/pending");
+/** Keep only a payload shaped like a warning; a malformed one is dropped
+rather than rendered as "undefined" in front of the player. */
+export function parsePendingWarning(payload: unknown): PendingWarning | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = (payload as { warning?: unknown }).warning;
+  if (!body || typeof body !== "object") return null;
+  const warning = body as Record<string, unknown>;
+  if (typeof warning.id !== "string" || typeof warning.reason !== "string") {
+    return null;
+  }
+  return {
+    id: warning.id,
+    kind: warning.kind === "avatar_removal" ? "avatar_removal" : "warning",
+    reason: warning.reason,
+    category: asReportReason(warning.category),
+    createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
+    messages: Array.isArray(warning.messages)
+      ? warning.messages.filter(
+          (line): line is { text: string; at: string | null } =>
+            !!line && typeof (line as { text?: unknown }).text === "string",
+        )
+      : [],
+    drawings: Array.isArray(warning.drawings)
+      ? warning.drawings.flatMap((entry) => {
+          const drawing = reportedDrawing(entry);
+          const reportId = (entry as { reportId?: unknown })?.reportId;
+          return drawing && typeof reportId === "string"
+            ? [{ ...drawing, reportId }]
+            : [];
+        })
+      : [],
+    uploadAgainAt: typeof warning.uploadAgainAt === "string" ? warning.uploadAgainAt : null,
+  };
 }
 
 export function acknowledgeWarning(warningId: string): Promise<{ ok: boolean }> {
