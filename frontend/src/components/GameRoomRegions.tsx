@@ -2,6 +2,7 @@ import { memo, useMemo, useState, type RefObject } from "react";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { Canvas, type CanvasRef } from "./Canvas";
+import { ConnectedShareControl } from "./ConnectedShareControl";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { GuessPips } from "./GuessPips";
 import { ChoosingPromptOverlay } from "./ChoosingPromptOverlay";
@@ -449,6 +450,14 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
               turnId={lastTurnResult.turnId ?? currentTurnId}
               drawerId={lastTurnResult.drawerId}
               placement="panel"
+            />
+          }
+          share={
+            <ConnectedShareControl
+              turnId={lastTurnResult.turnId ?? currentTurnId}
+              drawerId={lastTurnResult.drawerId}
+              shareable={lastTurnResult.shareable ?? false}
+              look="pill"
             />
           }
           drawerId={lastTurnResult.drawerId}

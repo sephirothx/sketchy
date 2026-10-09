@@ -33,6 +33,7 @@ from app.repositories.interfaces import (
     PromptUsageConflictError,
     ScoreEventInput,
     TurnDrawingInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -164,6 +165,17 @@ def history_for(game_id: str, winner: str, loser: str, *, drawing: bytes | None 
         ],
         drawings=[TurnDrawingInput(turn_id=turn_id, payload=drawing)],
         reactions=[],
+        # The drawer's own share from the results (#1430), so the envelope
+        # carries one; the drawer may share from any game.
+        shares=[
+            TurnDrawingShareInput(
+                turn_id=turn_id,
+                seat_id=winner_seat,
+                user_id=winner,
+                shared_at=datetime(2026, 9, 8, 11, 59, tzinfo=timezone.utc),
+            )
+        ],
+        withdrawn_turn_ids=[],
     )
 
 

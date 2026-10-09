@@ -6,7 +6,7 @@ input lists `GameHistoryRepository.save_game` expects.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.domain_values import (
@@ -31,10 +31,11 @@ from app.repositories.interfaces import (
     ScoreEventInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
-from app.rooms import Room
+from app.rooms import RecordedSeat, Room
 
 # A game needs two factual player seats to mean anything: with one, the sole
 # participant is ranked first against nobody and books a win. Accountless seats
@@ -60,6 +61,14 @@ class GameHistoryWrite:
     # reason the scores and highlights above are captured.
     drawings: list[TurnDrawingInput]
     reactions: list[TurnDrawingReactionInput]
+    # What was shared to the Gallery from the turn results (#1430), and the
+    # turns whose drawer took theirs back out. Defaults, so a write built by
+    # hand without them means "nothing was shared".
+    shares: list[TurnDrawingShareInput] = field(default_factory=list)
+    withdrawn_turn_ids: list[str] = field(default_factory=list)
+    # Every seat token -> the participant seat it was written as, for the
+    # room to read the recap's shares back from the rows (#1430).
+    recorded_seats: dict[str, RecordedSeat] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,6 +83,8 @@ class _Seat:
     score: int
     present: bool
     turns_played: int = 0
+    # Seated and connected at the end: there to see what happened in the room.
+    connected: bool = False
     participant_id: str = ""
 
 
@@ -93,6 +104,7 @@ def _resolve_seats(room: Room, game: Game) -> dict[str, _Seat]:
                 is_anonymous=player.is_anonymous,
                 score=player.score,
                 present=True,
+                connected=player.connected,
             )
             continue
         departed = room.departed_seats.get(token)
@@ -349,6 +361,53 @@ def _reactions(
     return list(reactions.values())
 
 
+def _shares(
+    room: Room,
+    seats: dict[str, _Seat],
+    turns: list[TurnRecordInput],
+    kept: set[str],
+) -> tuple[list[TurnDrawingShareInput], list[str]]:
+    """Pair the live shares with the turns and seats actually being recorded.
+
+    Filtered as the reactions are, and further: only a drawing that was kept
+    can be in the Gallery (`kept`), and a seat with no account has nothing to
+    hang a share off. Two tokens of one account coalesce onto one seat, the
+    earlier moment kept. The room already refused what the rules refuse
+    (R-SHARE-02); the write checks again against what it is writing. A share
+    the drawer did not see happen - their seat gone or disconnected by the
+    end, the recap's own test (`drawer_is_watching`) - is one they are told
+    about afterwards (R-SHARE-09).
+    """
+    drawer_present = {
+        seat.participant_id for seat in seats.values() if seat.present and seat.connected
+    }
+    shares: dict[tuple[str, str], TurnDrawingShareInput] = {}
+    withdrawn: list[str] = []
+    for turn in turns:
+        if turn.id in room.drawing_share_withdrawn:
+            withdrawn.append(turn.id)
+        if turn.id not in kept or turn.stroke_count <= 0:
+            continue
+        for token, when in room.drawing_shares.get(turn.id, {}).items():
+            seat = seats.get(token)
+            if seat is None or seat.user_id is None:
+                continue
+            key = (turn.id, seat.participant_id)
+            if key in shares and shares[key].shared_at <= when:
+                continue
+            shares[key] = TurnDrawingShareInput(
+                turn_id=turn.id,
+                seat_id=seat.participant_id,
+                user_id=seat.user_id,
+                shared_at=when,
+                notify_drawer=(
+                    seat.participant_id != turn.drawer_seat_id
+                    and turn.drawer_seat_id not in drawer_present
+                ),
+            )
+    return list(shares.values()), withdrawn
+
+
 def build_game_history(
     room: Room,
     game: Game,
@@ -489,9 +548,22 @@ def build_game_history(
                 )
             )
 
+    drawings = _drawings(room, {turn.id for turn in turns})
+    shares, withdrawn_turn_ids = _shares(
+        room,
+        seats,
+        turns,
+        {drawing.turn_id for drawing in drawings if drawing.is_kept},
+    )
     return GameHistoryWrite(
-        drawings=_drawings(room, {turn.id for turn in turns}),
+        drawings=drawings,
         reactions=_reactions(room, seats, turns),
+        shares=shares,
+        withdrawn_turn_ids=withdrawn_turn_ids,
+        recorded_seats={
+            token: RecordedSeat(seat_id=seat.participant_id, user_id=seat.user_id)
+            for token, seat in seats.items()
+        },
         record=GameRecordInput(
             id=game.id,
             room_name=room.name,

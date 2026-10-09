@@ -275,6 +275,11 @@
   margin: 0 0 10px;
 }
 
+/* The drawer with no reactions yet and nothing to share: no gap. */
+.turn-results-reactions:empty {
+  display: none;
+}
+
 .turn-results-reactions .reaction-picker,
 .drawing-recap-reactions .reaction-picker {
   bottom: auto;

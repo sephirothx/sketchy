@@ -39,6 +39,7 @@ from app.repositories.interfaces import (
     GameRecordInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -94,7 +95,16 @@ async def record_game(
     finished_at=FINISHED_AT,
     game_id=None,
     visibility="private",
+    shared_by="public",
+    stroke_count=12,
+    notify_drawer=False,
 ) -> Recorded:
+    """One finished two-seat game with one drawn turn.
+
+    `shared_by` is who shared the drawing to the Gallery while the game was
+    live (#1430): "drawer", "reactor", both as a tuple, nothing (None), or -
+    the default - the drawer when the game is public, which is what every
+    test written before sharing took the Gallery to hold."""
     drawer_seat = str(generate_uuid())
     reactor_seat = str(generate_uuid())
     turn_id = str(generate_uuid())
@@ -115,6 +125,22 @@ async def record_game(
             r(turn_id=turn_id, drawer_seat=drawer_seat, reactor_seat=reactor_seat)
             for r in reactions
         ]
+    if shared_by == "public":
+        shared_by = ("drawer",) if visibility == "public" else ()
+    elif shared_by is None:
+        shared_by = ()
+    elif isinstance(shared_by, str):
+        shared_by = (shared_by,)
+    shares = [
+        TurnDrawingShareInput(
+            turn_id=turn_id,
+            seat_id=drawer_seat if who == "drawer" else reactor_seat,
+            user_id=drawer if who == "drawer" else reactor,
+            shared_at=finished_at - timedelta(seconds=30 - index),
+            notify_drawer=notify_drawer,
+        )
+        for index, who in enumerate(shared_by)
+    ]
     saved_id = await history.save_game(
         GameRecordInput(
             id=game_id,
@@ -156,6 +182,7 @@ async def record_game(
                 prompt="lighthouse",
                 duration_seconds=30,
                 guesser_count=1,
+                stroke_count=stroke_count,
                 participant_outcomes=(
                     TurnParticipantOutcomeInput(
                         seat_id=reactor_seat,
@@ -171,6 +198,7 @@ async def record_game(
         None,
         [TurnDrawingInput(turn_id=turn_id, payload=SKCH)] if drawing else None,
         reactions,
+        shares,
     )
     return Recorded(saved_id, turn_id, drawer_seat, reactor_seat, drawer, reactor)
 

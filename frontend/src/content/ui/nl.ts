@@ -205,6 +205,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   game_still_saving: "Dit spel wordt nog opgeslagen. Probeer het zo nog eens.",
   game_not_recorded: "Dit spel is niet vastgelegd.",
   reaction_not_accepted: "Deze reactie kon niet verstuurd worden.",
+  spectators_cannot_share: "Toeschouwers kunnen geen tekening delen.",
+  share_not_visible: "Deze tekening kan hier niet meer gedeeld worden.",
+  share_not_allowed: "Deze tekening kan niet gedeeld worden.",
+  share_withdrawn: "Degene die hem tekende, heeft hem uit de galerij gehaald.",
+  share_not_accepted: "Deze tekening kon niet gedeeld worden. Probeer het zo opnieuw.",
 
   // Friends
   friends_unavailable: "Vrienden zijn op dit moment niet beschikbaar.",
@@ -939,9 +944,28 @@ export const NL: Catalogue = {
   pinControl: {
     pin: "Vastzetten",
     pinned: "Vastgezet",
-    pinThisDrawing: "Deze tekening op je profiel vastzetten",
+    pinThisDrawing: "Deze tekening op je profiel vastzetten en in de galerij delen",
     unpinThisDrawing: "Deze tekening van je profiel losmaken",
     thatDrawingCouldNotBePinned: "Deze tekening kon niet worden vastgezet.",
+  },
+
+  shareControl: {
+    share: "Delen in de galerij",
+    shared: "Gedeeld",
+    takeOut: "Uit de galerij halen",
+    shareThisDrawing: "Deze tekening in de openbare galerij zetten",
+    takeBackYourShare: "Niet meer delen",
+    takeThisDrawingOut: "Deze tekening voor iedereen uit de galerij halen",
+    theDrawerKeptItOut: "Degene die hem tekende, heeft hem uit de galerij gehaald.",
+    inTheGallery: "In de galerij",
+    inTheGallerySharedBy: "In de galerij · gedeeld door {sharer}",
+    inTheGallerySharedByYou: "In de galerij · gedeeld door jou",
+    inTheGallerySharedByTheDrawer: "In de galerij · gedeeld door degene die hem tekende",
+    thatDrawingCouldNotBeShared: "Deze tekening kon niet gedeeld worden.",
+    thatCouldNotBeTakenBack: "Dat kon niet ongedaan gemaakt worden. Probeer het opnieuw.",
+    takeOutTitle: "Deze tekening uit de galerij halen?",
+    takeOutDescription: "Hij verdwijnt voor iedereen uit de galerij en van elk profiel waarop hij vastgezet is. Alleen jij kunt hem terugzetten.",
+    takeOutConfirm: "Eruit halen",
   },
 
   drawingRecapGallery: {
@@ -1259,7 +1283,7 @@ export const NL: Catalogue = {
   galleryPage: {
     gallery: "Galerij",
     backToLobby: "Terug naar de lobby",
-    drawingsFromPublicGames: "Elke tekening uit een openbaar spel.",
+    drawingsPlayersShared: "Tekeningen die spelers hebben gedeeld.",
     loading: "Laden…",
     sortBy: "Sorteren op",
     hot: "Populair",
@@ -1280,6 +1304,7 @@ export const NL: Catalogue = {
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: { minute: "minuut", hour: "uur", day: "dag" }[p.unit], other: { minute: "minuten", hour: "uur", day: "dagen" }[p.unit] })} geleden`,
     justNow: "zojuist",
     byDrawerPrefix: "van",
+    sharedBy: "gedeeld door {sharer}",
     thatIsAllOfIt: "Dat is alles",
     endOfHot: "Alles van de laatste twee weken, het heetste eerst.",
     endOfTheRest: "Hier is niets meer.",
@@ -1287,7 +1312,7 @@ export const NL: Catalogue = {
     findARoom: "Zoek een kamer",
     backToTop: "Terug naar boven",
     topOfTheWeek: "Top van de week",
-    nothingHereYetBody: "Speel een openbaar spel, en de tekeningen ervan zijn de eerste hier.",
+    nothingHereYetBody: "Deel een tekening vanuit de uitslag of het overzicht van een spel, en hij is de eerste hier.",
     signInBody: "Of kies een naam in de lobby om als gast rond te kijken.",
     backToGallery: "Terug naar de galerij",
     replay: "Afspelen",
@@ -1297,7 +1322,7 @@ export const NL: Catalogue = {
     percentDrawn: (p: { percent: number }) => `${number(p.percent)}% getekend`,
     saveImage: "Afbeelding opslaan",
     notInTheGallery: "Deze tekening staat niet in de galerij",
-    notInTheGalleryBody: "Misschien is hij gewist of verborgen, of hij is er nooit geweest.",
+    notInTheGalleryBody: "Misschien is hij eruit gehaald, gewist of verborgen, of hij is nooit gedeeld.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "In de communitycatalogus",
@@ -1805,6 +1830,19 @@ export const NL: Catalogue = {
     oneMoment: "Even geduld…",
     signInAgain: "Opnieuw inloggen",
     understood: "Oké",
+  },
+
+  shareNotice: {
+    title: (p: { count: number }) =>
+      p.count === 1 ? "Je tekening staat in de galerij" : "Je tekeningen staan in de galerij",
+    sharedYourDrawing: "{sharer} heeft je tekening van {prompt} in de galerij gedeeld.",
+    view: "Bekijken",
+    takeOut: "Eruit halen",
+    takenOut: "Eruit gehaald",
+    andMore: (p: { count: number }) =>
+      `En nog ${counted(p.count, { one: "tekening", other: "tekeningen" })}.`,
+    youCanAlways: "Je kunt een tekening altijd uit de galerij halen, via de pagina ervan of via je spelgeschiedenis.",
+    ok: "Oké",
   },
 
   roomChatPanel: {

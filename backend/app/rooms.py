@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import random
 import re
 import secrets
@@ -11,7 +12,7 @@ import uuid
 from uuid import UUID
 from collections import deque
 from dataclasses import dataclass, field, replace
-from typing import Literal, Mapping, Optional
+from typing import Iterable, Literal, Mapping, Optional
 
 from app.auth.avatars import avatar_url
 from app.drawing_rules import (
@@ -382,6 +383,17 @@ class DepartedSeat:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordedSeat:
+    """Where one seat token of the last game landed in its history: the
+    participant seat it was written as (two tokens of one account share one)
+    and that seat's account. Server-side only - an account id never goes on a
+    room payload (R-ROOM-07)."""
+
+    seat_id: str
+    user_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DrawingRecapEntry:
     # The durable UUIDv7 of the turn this drawing belongs to. Round and turn
     # numbers identify a drawing inside one live recap; only this survives into
@@ -535,6 +547,13 @@ class Room:
     # rather than participant ids because a token is what the room can name
     # and broadcast (R-ROOM-07); the history write maps them to seats.
     drawing_reactions: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Shares of this game's drawings to the Gallery (#1430): turn id -> the
+    # sharer's seat token -> when, in the order they were made. Kept like the
+    # reactions above, for the same reasons, and folded into the same write;
+    # `drawing_share_withdrawn` holds the turns whose drawer took theirs back
+    # out, which nobody else may share again until the drawer does.
+    drawing_shares: dict[str, dict[str, datetime]] = field(default_factory=dict)
+    drawing_share_withdrawn: set[str] = field(default_factory=set)
     # The last game's durable id and where its history write got to. A recap
     # reaction is a write to that game's row, so the handler needs to know
     # the row exists before it tries: `pending` while the write is in the
@@ -542,6 +561,15 @@ class Room:
     # when there was nothing to write (too few seats, or no repository).
     last_game_id: str | None = None
     last_game_history: str = "none"
+    # Whether the last game was played in public, as its history records it
+    # (R-HIST-25): the room's own flag can change in the waiting room while
+    # the recap is still up, and who may share from it is the game's rule.
+    last_game_public: bool = True
+    # Every seat token of the last game -> the history seat it was written as
+    # (#1430). The recap reads shares back from that game's rows, which name
+    # seats, and a player who left and came back holds a new token the game
+    # never saw; this is how the room says which tokens are whose.
+    last_game_seats: dict[str, RecordedSeat] = field(default_factory=dict)
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
@@ -632,6 +660,13 @@ class Room:
             "scoringMode": self.last_game_scoring_mode or self.scoring_mode,
             "highlights": self.last_game_highlights,
             "drawings": self.drawing_recap_metadata(),
+            # Who may share from the recap is the game's rule (#1430).
+            "isPublic": self.last_game_public,
+            # Every seat token that played it, whether or not it was still
+            # seated at the end - the standings list only those who were. With
+            # the seat's own tokens (`ownSeatTokens`) this says whether the
+            # viewer sat in the game: who may share or pin from its recap.
+            "seatTokens": sorted(self.last_game_seats),
         }
 
     def drawing_recap_metadata(self) -> list[dict]:
@@ -639,6 +674,7 @@ class Room:
             {
                 **drawing.metadata(index),
                 "reactions": self.drawing_reactions_for(drawing.turn_id),
+                **self.drawing_share_state(drawing.turn_id),
             }
             for index, drawing in enumerate(self.last_game_drawings)
         ]
@@ -669,6 +705,106 @@ class Room:
             {"playerId": token, "emoji": emoji}
             for token, emoji in self.drawing_reactions.get(turn_id, {}).items()
         ]
+
+    def set_drawing_share(
+        self, turn_id: str, token: str, shared: bool, *, at: datetime | None = None
+    ) -> None:
+        """Record or take back one seat's share of one turn's drawing.
+
+        A share made again keeps its first moment: the order is who shared
+        first, and pressing twice does not move anyone to the back."""
+        shares = self.drawing_shares.setdefault(turn_id, {})
+        if shared:
+            shares.setdefault(token, at or datetime.now(timezone.utc))
+        else:
+            shares.pop(token, None)
+        if not shares:
+            self.drawing_shares.pop(turn_id, None)
+
+    def withdraw_drawing(self, turn_id: str) -> None:
+        """The drawer took the drawing back out (R-SHARE-04): every share goes,
+        and nobody else may share it again until the drawer does."""
+        self.drawing_shares.pop(turn_id, None)
+        self.drawing_share_withdrawn.add(turn_id)
+
+    def replace_drawing_shares(
+        self, turn_id: str, tokens: Iterable[str], *, withdrawn: bool
+    ) -> None:
+        """A finished game's share state for one drawing, as its rows hold it
+        after a write (#1430): the sharers, first first, and whether its
+        drawer took it out. A share made from history, a pin or the Gallery
+        never passed through this room, so after a recap write the rows, not
+        the room's own memory, are the answer. The moments only order the
+        tokens: a finished game's shares are never folded into a write again.
+        """
+        start = datetime.now(timezone.utc)
+        ordered = list(dict.fromkeys(tokens))
+        if ordered:
+            self.drawing_shares[turn_id] = {
+                token: start + timedelta(microseconds=index)
+                for index, token in enumerate(ordered)
+            }
+        else:
+            self.drawing_shares.pop(turn_id, None)
+        if withdrawn:
+            self.drawing_share_withdrawn.add(turn_id)
+        else:
+            self.drawing_share_withdrawn.discard(turn_id)
+
+    def tokens_for_seats(self, seat_ids: Iterable[str]) -> list[str]:
+        """The last game's history seats as the room names them: the token of
+        each, a seated one where an account held several, so the recap can
+        name the sharer; the seat id itself for one the room cannot place,
+        which credits nobody by name and is nobody's own."""
+        tokens: list[str] = []
+        for seat_id in seat_ids:
+            held = sorted(
+                token for token, seat in self.last_game_seats.items() if seat.seat_id == seat_id
+            )
+            seated = [token for token in held if token in self.players]
+            tokens.append((seated or held or [seat_id])[0])
+        return tokens
+
+    def own_tokens(self, player: Player) -> list[str]:
+        """Every seat token in this room's current or last game that is this
+        player's account (#1430). Leaving and coming back is a new token, and
+        the drawings, scores and shares of the game still name the old one;
+        the seat is told its own so the client can recognise them, without an
+        account id going on the wire (R-ROOM-07)."""
+        tokens = {player.id}
+        account = player.user_id
+        if account is not None:
+            tokens.update(
+                token for token, seat in self.last_game_seats.items() if seat.user_id == account
+            )
+            tokens.update(
+                token for token, seat in self.departed_seats.items() if seat.user_id == account
+            )
+        return sorted(tokens)
+
+    def drawing_shares_for(self, turn_id: str | None) -> list[str]:
+        """The seat tokens sharing one drawing, the first sharer first."""
+        if turn_id is None:
+            return []
+        shares = self.drawing_shares.get(turn_id, {})
+        return sorted(shares, key=lambda token: (shares[token], token))
+
+    def drawing_share_state(self, turn_id: str | None) -> dict:
+        """A drawing's share state as room payloads carry it: seat tokens only
+        (R-ROOM-07), and whether its drawer took it out."""
+        return {
+            "shares": self.drawing_shares_for(turn_id),
+            "shareWithdrawn": turn_id is not None
+            and turn_id in self.drawing_share_withdrawn,
+        }
+
+    def drawing_shareable(self, turn_id: str | None) -> bool:
+        """Whether this game's drawing for a turn is there to share at all:
+        kept by the room, and not blank (R-SHARE-03)."""
+        for drawing in self.last_game_drawings:
+            if drawing.turn_id == turn_id:
+                return drawing.is_available and drawing.action_count > 0
+        return False
 
     def allocate_canvas_generation(self) -> int:
         """Return the next room-lifetime canvas protocol identity."""

@@ -68,28 +68,40 @@ keyboard that takes half the screen, and one thumb.
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
 - Pinned drawings — a registered player keeps up to six drawings at the top of their
-  profile, in their own order, chosen from any public-room game they played: their own
-  drawings or another player's, always credited to the drawer's name as it was that day.
-  A private room's game cannot be pinned, so a pin never shows what the game list would
-  not. Pins go with the game, the turn, or an erased drawing, and with the account that
+  profile, in their own order, chosen from games they played: their own drawings or
+  another player's, always credited to the drawer's name as it was that day. A pin is a
+  share: only a drawing the player may share can be pinned, pinning it puts it in the
+  gallery, and its drawer taking it out of the gallery takes it off every shelf. Pins go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
   owner moves a drawing left or right and unpins it there, and anyone opens one in
   the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
-  profile's game history, for a registered player in a public game.
-- Gallery — every kept drawing from a public-room game, shown at `/gallery` to anyone
+  profile's game history, for a registered player who may share it.
+- Sharing — a drawing reaches the gallery only when a player who sat in its game shares
+  it: the drawer their own from any game, anybody else - guests included - a public
+  room's, without asking. **Share to gallery** sits on the turn results, the game-over
+  recap and game history, beside a kept drawing that is not blank - on the turn results as
+  a small pill beside the reactions. A player takes back their own share, and the drawer
+  takes the drawing out for everybody, after confirming, which nobody else can undo until
+  the drawer shares it again. The drawer is told once, with a way to take
+  it out, when somebody else shares their drawing - not when they watched it happen. A
+  drawing keeps the moment it first entered the gallery, so sharing it again does not
+  make it new again.
+- Gallery — the drawings players shared, shown at `/gallery` to anyone
   signed in, guests included, whether or not they were in the game: a feed of framed
   drawings, one to a row, that loads more as you scroll, with the sort and This week in a
   rail beside it on a wide screen and the sort under the title on a phone. Ordered by
-  Hot, New or Top, with Top over all time, a month or a week; the measure is reactions.
+  Hot, New or Top, with Top over all time, a month or a week, by when each drawing first
+  entered the gallery; the measure is reactions.
   Opening a drawing is a page of its own with a link to share, where the drawing is
   replayed stroke by stroke the way the room saw it drawn, over a few seconds whatever
   its size, with a pause and a watch-again; the reaction picker and Report live there. An entry
   shows the drawing, the prompt, the round and turn, the drawer's name as it was that
-  day, and its reaction counts — never the game, the room or who reacted. Any
+  day, who shared it first, and its reaction counts — never the game, the room or who
+  reacted. Any
   registered player can react to an entry from the gallery or from a pinned shelf, one
   reaction per player per drawing; reactions given outside the room count but are not
-  named. "This week" — the six most-reacted drawings of the last seven days — sits in
+  named. "This week" — the six most-reacted drawings shared in the last seven days — sits in
   the gallery's rail. A drawing can be reported from the gallery, a moderator can hide
   one from it without touching the players' own history, and an operator switch can
   hold This week for review while the rest of the gallery publishes freely. A signed-out visitor sees
@@ -449,9 +461,10 @@ cd backend
 .venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
 ```
 
-The gallery's reaction count and Hot score on each drawing are the same kind of
-thing: set by every reaction write, rebuilt from the reaction rows on demand,
-never trusted as counters.
+The gallery's reaction count, share count, first share and Hot score on each
+drawing are the same kind of thing: set by every reaction and share write, rebuilt
+from the reaction and share rows on demand, never trusted as counters (the first
+share is only ever filled in or moved earlier).
 
 ```bash
 cd backend
@@ -1574,7 +1587,7 @@ your players share one address:
 | `AUTH_VERIFY_ACCOUNT_LIMIT` | 5 per day | `PUT /api/auth/email`, per account, charged after the password proof (#1240) |
 | `AUTH_VERIFY_RECIPIENT_LIMIT` | 3 per day | Verification mails to one address, whichever accounts ask; past it nothing is sent and the answer is unchanged |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
-| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
+| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - and the reaction, share and pin writes beside them, per address |
 | `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
@@ -1777,6 +1790,7 @@ backend/
       chat.py        Guessing, chat, and purchasable hint handlers
       moderation.py Vote-kick and AFK handlers
       reactions.py  Reactions to drawings: the live command and the recap write
+      shares.py     Sharing a drawing to the gallery: the live command and the recap write
       restart.py    Majority-vote game restart handlers
       connection.py Socket connect/disconnect and reconnect-grace handling
       payloads.py    Typed boundary models and parsers for every client command
@@ -1785,7 +1799,8 @@ backend/
       game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
-      gallery_ranking.py The Gallery's reaction count and Hot score on each drawing, and their rebuild
+      drawing_shares.py Who may share which drawing from the room, and the room broadcast
+      gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
@@ -2556,7 +2571,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    their field says they guess from the next turn.
 5. **Turn results** (5s by default): the prompt is revealed and scores update - each row
    shows the place and total its player came in with, then slides to the new order - reactions
-   stay open on the drawing, then the next player's turn begins. A guesser who bought hints
+   stay open on the drawing, and the **Share to gallery** pill beside them puts it in the gallery (the drawer's own
+   from any room; anybody else's from a public one), then the next player's turn begins. A guesser who bought hints
    also sees how their points were reached: "This turn: +300 − 12 hints = 288 points".
 
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
@@ -2569,8 +2585,9 @@ into all eight (the Pokémon generations, League of Legends, the video-game icon
 in Any language - never a Local list;
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
-   shows the final standings, the highlights, and the drawing recap — where a registered
-   player in a public room can **Pin** a drawing to their profile. Back in the waiting
+   shows the final standings, the highlights, and the drawing recap — where a player can
+   **Share** a drawing to the gallery, and a registered player can **Pin** one they may share
+   to their profile, which shares it too. Back in the waiting
    room each seat keeps its place and final score until the next game starts: in the
    players panel on a desktop, on the roster's tiles on a phone.
 

@@ -442,3 +442,77 @@
 .btn.afk-check-answer {
   width: 100%;
 }
+
+/* Somebody shared your drawing (#1430): one row per drawing, the sentence on
+   the left and its two ways on - look, or take it out - on the right, stacked
+   under the sentence on a phone. */
+.share-notice-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.share-notice-item {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.share-notice-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.share-notice-line {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.share-notice-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+/* Taking one out asks first, in the row: it ends every other share and pin.
+   The question takes the row's whole width, under the sentence. */
+.share-notice-actions.is-confirming {
+  flex: 1 1 100%;
+}
+
+.share-notice-confirm {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  justify-content: flex-end;
+}
+
+.share-notice-confirm-question {
+  color: var(--ink);
+  flex: 1 1 100%;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.share-notice-done {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.modal-body.share-notice-more,
+.modal-body.share-notice-hint {
+  margin: 12px 0 0;
+}
+
+.share-notice-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

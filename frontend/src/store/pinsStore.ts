@@ -36,6 +36,13 @@ interface PinsStore {
    * itself declined (`null`), `true` once the server has the new list.
    */
   mutate: (change: ShelfMutation) => Promise<boolean>;
+  /**
+   * Drop a turn the server already took off the shelf: a share taken back,
+   * or a drawing its drawer took out of the Gallery, takes the pins of it with
+   * it (R-SHARE-04). Without this the next whole-list write would send it
+   * again - and pin it, and share it, again.
+   */
+  forget: (turnId: string) => void;
   reset: () => void;
 }
 
@@ -128,6 +135,10 @@ export const usePinsStore = create<PinsStore>((set, get) => ({
     const turn = queue.then(run, run);
     queue = turn.catch(() => undefined);
     return turn;
+  },
+  forget: (turnId) => {
+    const { turnIds } = get();
+    if (turnIds.includes(turnId)) set({ turnIds: turnIds.filter((id) => id !== turnId) });
   },
   reset: () => {
     generation += 1;

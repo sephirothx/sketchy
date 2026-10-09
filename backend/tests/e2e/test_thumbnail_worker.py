@@ -10,7 +10,8 @@ silently: the worker's script is fetched, the image appears, and no task on
 the main thread comes near the replay's length.
 
 The drawing is written straight into the server's database, as a finished
-public game - what matters is the history, not how a test could draw it.
+public game its drawer shared (#1430) - what matters is the history, not how a
+test could draw it.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     TurnDrawingInput,
+    TurnDrawingShareInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -68,6 +70,7 @@ async def seed_fill_heavy_game(prompt: str) -> None:
                 TurnRecordInput(
                     id=turn_id, round_number=1, turn_number=1, drawer_user_id=drawer.id,
                     drawer_seat_id=drawer_seat, prompt=prompt, duration_seconds=60, guesser_count=1,
+                    stroke_count=100,
                     participant_outcomes=(
                         TurnParticipantOutcomeInput(
                             seat_id=guesser_seat, user_id=guesser.id, eligible=True,
@@ -78,6 +81,11 @@ async def seed_fill_heavy_game(prompt: str) -> None:
             ],
             None,
             [TurnDrawingInput(turn_id=turn_id, payload=base64.b64decode(json.loads(FIXTURE.read_text())["base64"]))],
+            shares=[
+                TurnDrawingShareInput(
+                    turn_id=turn_id, seat_id=drawer_seat, user_id=drawer.id, shared_at=finished
+                )
+            ],
         )
     finally:
         await engine.dispose()

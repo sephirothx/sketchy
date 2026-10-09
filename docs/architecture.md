@@ -440,13 +440,14 @@ This is the table to consult before adding a feature: *where does this state liv
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
 | Encoding a finished game, folding a prompt-list selection's answers cold (#1237), and the integrity audit's drawing checks (#1251, 16 drawings a job) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `encode_pool.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
-| The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf, an account's erasure and every share write that commits | No: derived from history rows |
 | Which official lists form a family a mixed room can pin (R-PROMPT-13) | `SqlAlchemyPromptListRepository._families` (memory) — worked out on first use, dropped by every `upsert_bundled` (#1374) | No: re-derived from the official working copies |
 | Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by list ids, versions and fold, reused while the members' moderation fingerprint is unchanged (#1237, #1359) | No: re-derived from the working copies on a miss |
 | Drawing thumbnails being drawn | The thumbnail worker (`lib/thumbnailQueue.ts`, `workers/thumbnail.worker.ts`, #1282) — one module worker per page, started on first use and let go after 20 s idle; one job in flight, at most 48 waiting (past that the oldest is dropped and its card asks again when it next comes into view); a card that unmounts or changes drawing cancels its job. Where no worker can be had the same `renderThumbnail` runs on the page. Replay cost follows the history, not its size: the accepted 100-fill turn is 244 ms a thumbnail on desktop Chromium and 972 ms at 4× CPU on the page, no long task on the worker | No: redrawn from the fetched bytes |
 | A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each — a piece never begins an action once its 16 ms are spent, the history's last one included, and the task that delivered the history paints none of its fills, so the longest task is the budget plus one fill wherever a fill outlasts it — reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
+| Shares to the Gallery from the current turn's results and the last game's recap (#1430) | `Room.drawing_shares` and `Room.drawing_share_withdrawn` (memory) — folded into the finished-game write with their moments, then replaced by what the rows hold after each recap write, and after any share write from history, a pin or the Gallery that touches a drawing the recap shows (`handlers/shares.refresh_recaps`); `Room.last_game_public` keeps the finished game's visibility for the recap's rule, and `Room.last_game_seats` which history seat - and account - each of the game's tokens was written as, so rows naming seats can be named by token again and a player who came back on a new token is told the old one (`ownSeatTokens`) | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
@@ -1706,14 +1707,20 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   of duplicating or silently replacing history.
 - In the same transaction: the game record, participants, turns, per-seat outcomes,
   prompt offers and their sources, guesses, the score-event ledger, the turn drawings,
-  the reactions given while the game was live, the prompt-usage facts, and the daily
-  user-stat projection increments.
+  the reactions and the shares to the Gallery given while the game was live, the
+  drawers' withdrawals and the share notices they leave (#1430), the prompt-usage facts,
+  and the daily user-stat projection increments.
 - The room is told which game it just held and whether a row is coming
-  (`Room.last_game_id`, `Room.last_game_history`), because a reaction given from the
-  recap afterwards is a write to that row (`handlers/reactions.py`): it is refused while
-  the write is pending, and when there was never going to be one. The loop reports
-  back through `GameFlowService.note_history_outcome`, which finds the room by the
-  game it last held and ignores an outcome for a game the room has moved on from.
+  (`Room.last_game_id`, `Room.last_game_history`, `Room.last_game_public` for who
+  may share from its recap, and `Room.last_game_seats` for which seat each token was
+  written as), because a reaction or a share given from the recap
+  afterwards is a write to that row (`handlers/reactions.py`, `handlers/shares.py`): it
+  is refused while the write is pending, and when there was never going to be one. The
+  loop reports back through `GameFlowService.note_history_outcome`, which finds the room
+  by the game it last held and ignores an outcome for a game the room has moved on from;
+  and, once the history has landed, through `bind_recorded` to the application, which
+  expires This week and pushes `drawing_share_notice` to the drawers its live shares left
+  a notice for (R-SHARE-09).
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
 - Guesser outcomes and score events, the rows that grow with turns × seats (2,400 and
@@ -1908,7 +1915,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/request_limits.py`](../backend/app/request_limits.py) | The ceiling on request bodies, applied before anything reads one. |
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
-| [`app/api/gallery.py`](../backend/app/api/gallery.py) | The Gallery's REST surface (#524): reactions from outside the game. |
+| [`app/api/gallery.py`](../backend/app/api/gallery.py) | The Gallery's REST surface (#524): its pages, reactions, and taking a drawing out. |
+| [`app/api/share_notices.py`](../backend/app/api/share_notices.py) | Telling a drawer that somebody else shared their drawing (#1430, R-SHARE-09). |
 | [`app/api/profiles.py`](../backend/app/api/profiles.py) | Public profile endpoints: lifetime stats and browsable game history. |
 | [`app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | Prompt list discovery, and the usage statistics the games feed back into it. |
 | [`app/api/room_presets.py`](../backend/app/api/room_presets.py) | Authenticated CRUD API for private reusable room-setting presets. |
@@ -1995,12 +2003,14 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | What the drawing store holds: that it is still readable, and how big it is. |
 | [`app/services/game_flow.py`](../backend/app/services/game_flow.py) | Shared workflows used by the domain-specific Socket.IO handlers. |
 | [`app/services/game_handoff.py`](../backend/app/services/game_handoff.py) | Durable handoff of a finished game into history (#541). |
-| [`app/services/gallery_ranking.py`](../backend/app/services/gallery_ranking.py) | The Gallery's ranking projections (#524): the Hot score, and their rebuild. |
+| [`app/services/gallery_ranking.py`](../backend/app/services/gallery_ranking.py) | The Gallery's projections (#524, #1430): counts, first share, Hot score, rebuild. |
 | [`app/services/gallery_shelf.py`](../backend/app/services/gallery_shelf.py) | The **This week** shelf (#524, R-GAL-07): Top-week's first six, computed at most once a minute. |
 | [`app/services/game_highlights.py`](../backend/app/services/game_highlights.py) | Pick the few moments from a finished game worth putting on the final screen. |
 | [`app/services/game_history.py`](../backend/app/services/game_history.py) | Turn a finished in-memory game into the rows that record it. |
 | [`app/services/drawing_reactions.py`](../backend/app/services/drawing_reactions.py) | Decide whether, and to which drawing, a room seat may react (#520). |
+| [`app/services/drawing_shares.py`](../backend/app/services/drawing_shares.py) | Decide whether a room seat may share a drawing to the Gallery (#1430). |
 | [`app/handlers/reactions.py`](../backend/app/handlers/reactions.py) | Reactions to drawings: one emoji per registered seat per drawing (#520). |
+| [`app/handlers/shares.py`](../backend/app/handlers/shares.py) | Sharing a drawing to the Gallery from the room (#1430). |
 | [`app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py) | The loop that empties the email outbox. |
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled, and reading back what a decision shows the player. |

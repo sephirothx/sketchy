@@ -10,11 +10,20 @@ import { DownloadIcon, FlagIcon, PlayIcon, PauseIcon, UndoIcon } from "../compon
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
-import { fetchGalleryDrawing, fetchGalleryEntry, galleryAge, type GalleryEntry } from "../lib/gallery";
+import {
+  fetchGalleryDrawing,
+  fetchGalleryEntry,
+  galleryAge,
+  withdrawFromGallery,
+  type GalleryEntry,
+} from "../lib/gallery";
+import { GallerySharedBy } from "../components/GalleryDrawings";
+import { ShareControl } from "../components/ShareControl";
 import { setGalleryReaction } from "../lib/profile";
 import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
+import { usePinsStore } from "../store/pinsStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -86,8 +95,24 @@ export function GalleryDrawingPage() {
     setEntry({ reader, entry: { ...shown, reactionCounts: result.reactionCounts, myReaction: result.myReaction } });
   };
 
+  // Out of the Gallery from the Gallery (#1430): its drawer takes it out for
+  // everybody, anybody else their own share - which may leave it in, held by
+  // somebody else's, or take it out with the last one.
+  const takeBack = async () => {
+    if (!shown) return;
+    const result = await withdrawFromGallery(shown.turnId);
+    usePinsStore.getState().forget(shown.turnId);
+    if (!result.inGallery) {
+      setMissing(true);
+      return;
+    }
+    // Still held by somebody else's share: read it again, since who is
+    // credited may have been the viewer.
+    setEntry({ reader, entry: await fetchGalleryEntry(shown.turnId) });
+  };
+
   const atTheEnd = fraction >= 1;
-  const age = shown ? galleryAge(shown.finishedAt) : null;
+  const age = shown ? galleryAge(shown.sharedAt ?? shown.finishedAt) : null;
 
   return (
     <div className="page gallery-page gallery-drawing-page">
@@ -203,6 +228,7 @@ export function GalleryDrawingPage() {
                     >
                       {shown.drawerDisplayName}
                     </strong>
+                    <GallerySharedBy entry={shown} />
                     <span className="gallery-post-dot" aria-hidden="true">·</span>
                     <span className="gallery-post-age">
                       {age ? ui.galleryPage.ago(age) : ui.galleryPage.justNow}
@@ -212,6 +238,11 @@ export function GalleryDrawingPage() {
               </div>
               {shown && (
                 <div className="gallery-post-actions">
+                  <ShareControl
+                    offer={shown.drawnByMe ? "takeOut" : shown.sharedByMe ? "unshare" : "hidden"}
+                    credit={{ kind: "none" }}
+                    onShare={() => takeBack()}
+                  />
                   <DrawingReactionControl
                     reactions={[]}
                     myReactorId={null}

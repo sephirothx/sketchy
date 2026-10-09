@@ -205,6 +205,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   game_still_saving: "Questa partita si sta ancora salvando. Riprova tra un attimo.",
   game_not_recorded: "Questa partita non è stata registrata.",
   reaction_not_accepted: "Non è stato possibile inviare questa reazione.",
+  spectators_cannot_share: "Gli spettatori non possono condividere un disegno.",
+  share_not_visible: "Questo disegno non si può più condividere da qui.",
+  share_not_allowed: "Questo disegno non si può condividere.",
+  share_withdrawn: "Chi l’ha disegnato l’ha tolto dalla galleria.",
+  share_not_accepted: "Non è stato possibile condividere questo disegno. Riprova tra un attimo.",
 
   // Friends
   friends_unavailable: "Gli amici non sono disponibili in questo momento.",
@@ -939,9 +944,28 @@ export const IT: Catalogue = {
   pinControl: {
     pin: "Fissa",
     pinned: "Fissato",
-    pinThisDrawing: "Fissa questo disegno sul tuo profilo",
+    pinThisDrawing: "Fissa questo disegno sul tuo profilo e condividilo nella galleria",
     unpinThisDrawing: "Rimuovi questo disegno dal tuo profilo",
     thatDrawingCouldNotBePinned: "Non è stato possibile fissare questo disegno.",
+  },
+
+  shareControl: {
+    share: "Condividi nella galleria",
+    shared: "Condiviso",
+    takeOut: "Togli dalla galleria",
+    shareThisDrawing: "Metti questo disegno nella galleria pubblica",
+    takeBackYourShare: "Annulla la tua condivisione",
+    takeThisDrawingOut: "Togli questo disegno dalla galleria per tutti",
+    theDrawerKeptItOut: "Chi l’ha disegnato l’ha tolto dalla galleria.",
+    inTheGallery: "Nella galleria",
+    inTheGallerySharedBy: "Nella galleria · condiviso da {sharer}",
+    inTheGallerySharedByYou: "Nella galleria · condiviso da te",
+    inTheGallerySharedByTheDrawer: "Nella galleria · condiviso da chi l’ha disegnato",
+    thatDrawingCouldNotBeShared: "Non è stato possibile condividere questo disegno.",
+    thatCouldNotBeTakenBack: "Non è stato possibile annullarlo. Riprova.",
+    takeOutTitle: "Togliere questo disegno dalla galleria?",
+    takeOutDescription: "Sparisce dalla galleria per tutti e da ogni profilo su cui è fissato. Solo tu puoi rimettercelo.",
+    takeOutConfirm: "Toglilo",
   },
 
   drawingRecapGallery: {
@@ -1259,7 +1283,7 @@ export const IT: Catalogue = {
   galleryPage: {
     gallery: "Galleria",
     backToLobby: "Torna alla lobby",
-    drawingsFromPublicGames: "Tutti i disegni delle partite pubbliche.",
+    drawingsPlayersShared: "I disegni che i giocatori hanno scelto di condividere.",
     loading: "Caricamento…",
     sortBy: "Ordina per",
     hot: "In evidenza",
@@ -1280,6 +1304,7 @@ export const IT: Catalogue = {
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: { minute: "minuto", hour: "ora", day: "giorno" }[p.unit], other: { minute: "minuti", hour: "ore", day: "giorni" }[p.unit] })} fa`,
     justNow: "proprio ora",
     byDrawerPrefix: "di",
+    sharedBy: "condiviso da {sharer}",
     thatIsAllOfIt: "È tutto",
     endOfHot: "Tutto quello delle ultime due settimane, il più caldo per primo.",
     endOfTheRest: "Da questa parte non c’è altro.",
@@ -1287,7 +1312,7 @@ export const IT: Catalogue = {
     findARoom: "Trova una stanza",
     backToTop: "Torna su",
     topOfTheWeek: "Top della settimana",
-    nothingHereYetBody: "Gioca una partita pubblica e i suoi disegni saranno i primi qui.",
+    nothingHereYetBody: "Condividi un disegno dai risultati o dal riepilogo di una partita e sarà il primo qui.",
     signInBody: "Oppure scegli un nome nella lobby per guardare come ospite.",
     backToGallery: "Torna alla galleria",
     replay: "Riproduci",
@@ -1297,7 +1322,7 @@ export const IT: Catalogue = {
     percentDrawn: (p: { percent: number }) => `${number(p.percent)}% disegnato`,
     saveImage: "Salva immagine",
     notInTheGallery: "Questo disegno non è nella galleria",
-    notInTheGalleryBody: "Potrebbe essere stato cancellato o nascosto, oppure non c’è mai stato.",
+    notInTheGalleryBody: "Potrebbe essere stato tolto, cancellato o nascosto, oppure non è mai stato condiviso.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "Nel catalogo della community",
@@ -1806,6 +1831,19 @@ export const IT: Catalogue = {
     oneMoment: "Attendi…",
     signInAgain: "Accedi di nuovo",
     understood: "OK",
+  },
+
+  shareNotice: {
+    title: (p: { count: number }) =>
+      p.count === 1 ? "Il tuo disegno è nella galleria" : "I tuoi disegni sono nella galleria",
+    sharedYourDrawing: "{sharer} ha condiviso il tuo disegno di {prompt} nella galleria.",
+    view: "Guarda",
+    takeOut: "Toglilo",
+    takenOut: "Tolto",
+    andMore: (p: { count: number }) =>
+      `E ${counted(p.count, { one: "altro disegno", other: "altri disegni" })}.`,
+    youCanAlways: "Puoi togliere un disegno dalla galleria in qualsiasi momento, dalla sua pagina o dalla cronologia delle partite.",
+    ok: "OK",
   },
 
   roomChatPanel: {

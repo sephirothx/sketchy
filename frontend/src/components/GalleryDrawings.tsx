@@ -2,7 +2,9 @@ import { DrawingThumbnail } from "./DrawingThumbnail";
 import { ReactionTally } from "./ReactionTally";
 import { FlagIcon } from "./icons";
 import { fetchGalleryDrawing, galleryAge, type GalleryEntry } from "../lib/gallery";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/gallery.css";
 
 /**
@@ -54,6 +56,32 @@ export function GalleryCard({
  * Report on the mat. The picture is the one control that opens the viewer;
  * the tally is read-only here because the picker lives in the viewer.
  */
+/**
+ * Whose share put a drawing in the Gallery (R-SHARE-06), after the byline:
+ * nothing when its drawer shared it first - the byline already names them -
+ * and the first sharer, as they were in that game, otherwise.
+ */
+export function GallerySharedBy({ entry }: { entry: GalleryEntry }) {
+  if (!entry.sharedBy) return null;
+  return (
+    <>
+      <span className="gallery-post-dot" aria-hidden="true">·</span>
+      <span className="gallery-post-sharer">
+        {fill(ui.galleryPage.sharedBy, {
+          sharer: (
+            <strong
+              className={playerNameClass(entry.sharedBy.isAnonymous)}
+              style={playerNameStyle(entry.sharedBy.nameColor ?? undefined, entry.sharedBy.isAnonymous)}
+            >
+              {entry.sharedBy.displayName}
+            </strong>
+          ),
+        })}
+      </span>
+    </>
+  );
+}
+
 export function GalleryPost({
   entry,
   onOpen,
@@ -64,7 +92,7 @@ export function GalleryPost({
   /** Absent when the viewer may not report this drawing (their own, or signed out). */
   onReport?: () => void;
 }) {
-  const age = galleryAge(entry.finishedAt);
+  const age = galleryAge(entry.sharedAt ?? entry.finishedAt);
   return (
     <li className="gallery-post surface-card" data-testid="gallery-card">
       <button
@@ -89,6 +117,7 @@ export function GalleryPost({
             >
               {entry.drawerDisplayName}
             </strong>
+            <GallerySharedBy entry={entry} />
             <span className="gallery-post-dot" aria-hidden="true">·</span>
             <span className="gallery-post-age">
               {age ? ui.galleryPage.ago(age) : ui.galleryPage.justNow}

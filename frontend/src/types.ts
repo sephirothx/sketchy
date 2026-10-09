@@ -388,6 +388,26 @@ export interface DrawingReactionEvent {
   highlight?: GameHighlight | null;
 }
 
+/** A drawing's share state as the room carries it (#1430): the sharers' seat
+    tokens, first first, and whether its drawer took it out of the Gallery. */
+export interface DrawingShareState {
+  shares: string[];
+  withdrawn: boolean;
+}
+
+/** The room-wide `drawing_shared` broadcast: who acted, and the state after it. */
+export interface DrawingSharedEvent {
+  turnId: string;
+  shares: string[];
+  shareWithdrawn: boolean;
+}
+
+export interface ShareDrawingResponse extends AckResponse {
+  turnId?: string;
+  shares?: string[];
+  shareWithdrawn?: boolean;
+}
+
 export interface ReactToDrawingResponse extends AckResponse {
   turnId?: string;
   emoji?: string | null;
@@ -400,6 +420,11 @@ export interface TurnEndedPayload {
   /** The turn's durable id: what a reaction names. */
   turnId?: string;
   reactions?: DrawingReaction[];
+  /** Who shared the drawing to the Gallery from these results (#1430). */
+  shares?: string[];
+  shareWithdrawn?: boolean;
+  /** Kept and not blank: whether there is anything to share at all. */
+  shareable?: boolean;
   drawerId: string;
   drawerBonus: number;
   seconds?: number;
@@ -480,6 +505,12 @@ export interface GameEndedPayload {
   scoringMode: ScoringMode;
   highlights?: GameHighlight[];
   drawings: DrawingRecapMetadata[];
+  /** Whether the finished game was public: who may share from its recap
+      (#1430) is its rule, not the room's as since changed. */
+  isPublic?: boolean;
+  /** Every seat token that played the game, including one that left before
+      it ended and is missing from `scores` (#1430). */
+  seatTokens?: string[];
 }
 
 /** The finished game's recap for a socket that arrived after `game_ended`
@@ -491,6 +522,9 @@ export interface DrawingRecapMetadata {
   /** The durable turn id; absent only for entries a client synthesised itself. */
   turnId?: string;
   reactions?: DrawingReaction[];
+  /** Who shared it to the Gallery, and whether its drawer took it out (#1430). */
+  shares?: string[];
+  shareWithdrawn?: boolean;
   roundNumber: number;
   turnNumber: number;
   drawerId: string;
@@ -660,6 +694,11 @@ export type ErrorCode =
   | "game_still_saving"
   | "game_not_recorded"
   | "reaction_not_accepted"
+  | "spectators_cannot_share"
+  | "share_not_visible"
+  | "share_not_allowed"
+  | "share_withdrawn"
+  | "share_not_accepted"
   | "friends_unavailable"
   | "friend_refused"
   | "friend_not_in_game"
@@ -789,6 +828,10 @@ export interface AckResponse {
   needsRebind?: boolean;
   /** The language this seat plays in (#1182). */
   seatLanguage?: PromptLanguage;
+  /** Every token of the room's current or last game that is this seat's
+      account (#1430), its own included: one who left and came back holds a
+      new token, and the game still names the old one. */
+  ownSeatTokens?: string[];
 }
 
 export interface ServerShutdownNotice {

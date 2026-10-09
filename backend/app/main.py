@@ -46,6 +46,11 @@ from app.api.moderation import create_moderation_router
 from app.api.admin_controls import create_admin_controls_router, read_paused
 from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
+from app.api.share_notices import (
+    create_share_notice_router,
+    drawers_told_about_game,
+    pending_share_notice_payload,
+)
 from app.api.role_notices import (
     create_role_notice_router,
     pending_role_notice_payload,
@@ -85,6 +90,7 @@ from app.security_headers import (
     public_origin,
 )
 from app.handlers import register_all_handlers
+from app.handlers.shares import refresh_recaps
 from app.logging_config import configure_logging
 from app.auth.retention import (
     start_retention_loop,
@@ -708,6 +714,39 @@ async def push_role_change_to_account(user_id: str) -> None:
     await sio.emit("role_changed", payload, to=f"user:{user_id}")
 
 
+async def push_share_notice_to_account(user_id: str) -> None:
+    """Tell a drawer now, if any of their sockets is connected, that somebody
+    else shared their drawing (R-SHARE-09). The card otherwise waits for
+    their next visit's ``GET /api/share-notices/pending``; both build the same
+    payload."""
+    payload = await pending_share_notice_payload(async_session_factory, user_id)
+    if payload["notices"]:
+        await sio.emit("drawing_share_notice", payload, to=f"user:{user_id}")
+
+
+handler_context.on_share_notice = push_share_notice_to_account
+handler_context.on_gallery_changed = gallery_shelf.invalidate
+
+
+async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
+    """A share written from history, a pin or the Gallery reaches the room
+    whose recap shows that drawing (R-SHARE-07)."""
+    await refresh_recaps(handler_context, turn_ids)
+
+
+async def announce_recorded_game(game_id: str) -> None:
+    """A finished game's history is in. Its live shares may have put drawings
+    in the Gallery, so This week is read again (R-GAL-07), and the drawers
+    they left a notice for are told if any of their sockets is connected
+    (R-SHARE-09)."""
+    gallery_shelf.invalidate()
+    for user_id in await drawers_told_about_game(async_session_factory, game_id):
+        await push_share_notice_to_account(user_id)
+
+
+finished_game_worker.bind_recorded(announce_recorded_game)
+
+
 def request_process_exit() -> None:
     """Ask this process to stop, the same way a deployment would.
 
@@ -1023,10 +1062,22 @@ api.include_router(
 )
 api.include_router(
     create_profile_router(
-        user_repo, game_history_repo, is_online=handler_context.presence.is_online
+        user_repo,
+        game_history_repo,
+        is_online=handler_context.presence.is_online,
+        on_share_notice=push_share_notice_to_account,
+        on_gallery_changed=gallery_shelf.invalidate,
+        on_shares_changed=refresh_recap_shares,
     )
 )
-api.include_router(create_gallery_router(game_history_repo, shelf=gallery_shelf))
+api.include_router(
+    create_gallery_router(
+        game_history_repo,
+        shelf=gallery_shelf,
+        on_share_notice=push_share_notice_to_account,
+        on_shares_changed=refresh_recap_shares,
+    )
+)
 api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )
@@ -1042,6 +1093,7 @@ api.include_router(
     create_recent_players_router(async_session_factory, game_history_repo)
 )
 api.include_router(create_role_notice_router(async_session_factory))
+api.include_router(create_share_notice_router(async_session_factory))
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:
     """A changed picture reaches the seats and the lobby that show it.
 

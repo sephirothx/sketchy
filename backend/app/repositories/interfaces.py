@@ -230,6 +230,37 @@ class TurnDrawingReactionInput:
 
 
 @dataclass(frozen=True)
+class TurnDrawingShareInput:
+    """One seat's live share of a turn's drawing, as it will be stored (#1430).
+
+    Given from the turn results while the game was live, so it has a seat and
+    a moment; `user_id` is the seat's account, which the write checks against
+    the seat. `notify_drawer` says whether the drawer should be told about it
+    afterwards: not when they were still in the room to see it happen
+    (R-SHARE-09).
+    """
+
+    turn_id: str
+    seat_id: str
+    user_id: str
+    shared_at: datetime
+    notify_drawer: bool = False
+
+
+@dataclass(frozen=True)
+class DrawingShareResult:
+    """What a share write leaves behind (#1430): the seats that share the
+    drawing now, the first sharer first, and whether the drawer has taken it
+    out. `notify_user_id` is the drawer's account when this write left them a
+    notice to be pushed once it commits (R-SHARE-09)."""
+
+    turn_id: str
+    shares: tuple[str, ...]
+    withdrawn: bool
+    notify_user_id: str | None = None
+
+
+@dataclass(frozen=True)
 class TurnDrawingReactionDetail:
     """One reaction as history names it: the seat that gave it and the code.
 
@@ -380,6 +411,11 @@ class TurnDetail:
     reactions: list[TurnDrawingReactionDetail] = field(default_factory=list)
     # Every reaction, the seatless ones included, by code (R-REACT-05).
     reaction_counts: Mapping[str, int] = field(default_factory=dict)
+    # The seats that put this drawing in the Gallery, the first first, and
+    # whether its drawer took it back out (#1430). Seats, like the reactions:
+    # the participants list names them.
+    shares: list[str] = field(default_factory=list)
+    gallery_withdrawn: bool = False
 
 
 @dataclass(frozen=True)
@@ -420,13 +456,17 @@ class ProfilePinsResult:
     """The pinner's whole shelf after a write: the ordered set, never a page."""
 
     pins: tuple[ProfilePinDetail, ...]
+    # Drawers whose drawing this write shared for the first time by somebody
+    # else, to be told once it commits (R-SHARE-09): pinning shares (R-PIN-03).
+    notify_user_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class GalleryEntry:
     """One drawing as the Gallery shows it (R-GAL-03): what a pin publishes,
-    the game's finish time, and the viewer's own facts - never a game id, a
-    room name or a reactor's name."""
+    the game's finish time, who shared it first and when (R-SHARE-06), and
+    the viewer's own facts - never a game id, a room name or a reactor's
+    name."""
 
     turn_id: str
     round_number: int
@@ -440,6 +480,15 @@ class GalleryEntry:
     reaction_counts: Mapping[str, int]
     my_reaction: str | None
     drawn_by_me: bool
+    shared_at: datetime | None = None
+    # The first sharer's frozen seat presentation; null fields when the drawer
+    # shared it first, which the entry says by `shared_by_drawer` instead.
+    sharer_display_name: str | None = None
+    sharer_name_color: str | None = None
+    sharer_is_anonymous: bool = False
+    shared_by_drawer: bool = False
+    # Whether one of the shares is the viewer's: theirs to take back.
+    shared_by_me: bool = False
 
 
 @dataclass(frozen=True)
@@ -1021,8 +1070,13 @@ class GameHistoryRepository(ABC):
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
+        shares: list[TurnDrawingShareInput] | None = None,
+        withdrawn_turn_ids: list[str] | None = None,
     ) -> str:
-        """Persist a completed game with its participants, turns and outcomes in one transaction."""
+        """Persist a completed game with its participants, turns and outcomes in
+        one transaction. ``shares`` and ``withdrawn_turn_ids`` are what was
+        shared to the Gallery while the game was live, and the turns whose
+        drawer took theirs back out (#1430)."""
         ...
 
     @abstractmethod
@@ -1051,6 +1105,44 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
+    async def set_drawing_share(
+        self,
+        game_id: str | None,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+        shared: bool,
+        notify_drawer: bool = True,
+    ) -> DrawingShareResult | None:
+        """Share the requester's view of a drawing to the Gallery, or take it
+        back (#1430).
+
+        Anyone who sat in the game may share a public game's drawing; the
+        drawer may share their own from any game (R-SHARE-02). Taking it back
+        is the sharer's own share, or - for the drawer - every share, every
+        pin of it, and a bar on anybody else sharing it again until the drawer
+        does (R-SHARE-04). Guests may do all of it: sharing is not reacting.
+        ``game_id`` is ``None`` from the Gallery's door, which names the turn
+        alone; the requester still has to have sat in the game.
+
+        Every refusal - no such game or turn, no seat, a private game for
+        anyone but the drawer, a drawing that was withdrawn, hidden, erased,
+        never kept or blank - answers ``None``, so a caller can turn all of
+        them into the same 404 (R-HIST-16). ``notify_drawer`` is false where
+        the drawer is watching it happen (R-SHARE-09).
+        """
+        ...
+
+    @abstractmethod
+    async def get_drawing_share_state(self, turn_id: str) -> DrawingShareResult | None:
+        """A drawing's share state as its rows hold it: the seats sharing it,
+        first first, and whether its drawer took it out (#1430). For a room
+        whose recap shows the drawing, after a write that never passed through
+        the room. No viewer and no rule: the room already shows the drawing to
+        the seats it is telling. ``None`` for a turn with no stored drawing."""
+        ...
+
+    @abstractmethod
     async def set_profile_pins(
         self,
         *,
@@ -1063,10 +1155,12 @@ class GameHistoryRepository(ABC):
         whole shelf, so the cap and the position uniqueness fall out of its
         length and its order. The caller bounds the length (R-PIN-02); this
         checks the rest and answers ``None`` when any turn fails it - unknown,
-        from a game the requester did not sit in, from a **private** game, or
-        with no ready drawing - or when the requester is not a registered
-        account, so every refusal can be the same 404 (R-HIST-16). Nothing is
-        written on a refusal.
+        from a game the requester did not sit in, one the requester may not
+        share (R-SHARE-02), or with no ready drawing - or when the requester
+        is not a registered account, so every refusal can be the same 404
+        (R-HIST-16). Nothing is written on a refusal. A pin is a share
+        (R-PIN-03): each turn the requester has not shared yet is shared by
+        this write, and the drawers that leaves a notice for are answered.
         """
         ...
 
@@ -1077,8 +1171,8 @@ class GameHistoryRepository(ABC):
         """The shelf of ``profile_user_id``, in the owner's order.
 
         Who may ask is the route's question (any session, R-PIN-06); this
-        answers what is there to show: pins whose game is still public and
-        whose drawing is still ready. A pin the erasure path has not yet
+        answers what is there to show: pins whose drawing is still in the
+        Gallery (R-PIN-06). A pin the erasure path has not yet
         caught up with is left out rather than shown as a hole. With a
         ``viewer_user_id``, each entry also says what that viewer picked and
         whether the drawing is theirs, so the shelf can offer a picker.
@@ -1129,10 +1223,11 @@ class GameHistoryRepository(ABC):
     @abstractmethod
     async def viewer_gallery_facts(
         self, turn_ids: Sequence[str], *, viewer_user_id: str
-    ) -> dict[str, tuple[str | None, bool]]:
-        """For each turn, the viewer's own pick and whether the drawing is
-        theirs: what a cached, viewer-agnostic list (the lobby shelf,
-        R-GAL-07) adds per request. Absent turns are absent from the answer."""
+    ) -> dict[str, tuple[str | None, bool, bool]]:
+        """For each turn, the viewer's own pick, whether the drawing is theirs
+        and whether one of its shares is: what a cached, viewer-agnostic list
+        (the lobby shelf, R-GAL-07) adds per request. Absent turns are absent
+        from the answer."""
         ...
 
     @abstractmethod

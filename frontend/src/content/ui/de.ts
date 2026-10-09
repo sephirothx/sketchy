@@ -205,6 +205,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   game_still_saving: "Diese Runde wird noch gespeichert. Versuch es gleich noch einmal.",
   game_not_recorded: "Diese Runde wurde nicht aufgezeichnet.",
   reaction_not_accepted: "Diese Reaktion konnte nicht gesendet werden.",
+  spectators_cannot_share: "Zuschauer können keine Zeichnung teilen.",
+  share_not_visible: "Diese Zeichnung kann hier nicht mehr geteilt werden.",
+  share_not_allowed: "Diese Zeichnung kann nicht geteilt werden.",
+  share_withdrawn: "Die zeichnende Person hat diese Zeichnung aus der Galerie genommen.",
+  share_not_accepted: "Diese Zeichnung konnte nicht geteilt werden. Versuch es gleich noch einmal.",
 
   // Friends
   friends_unavailable: "Freunde sind gerade nicht verfügbar.",
@@ -939,9 +944,28 @@ export const DE: Catalogue = {
   pinControl: {
     pin: "Anheften",
     pinned: "Angeheftet",
-    pinThisDrawing: "Diese Zeichnung an dein Profil heften",
+    pinThisDrawing: "Diese Zeichnung an dein Profil heften und in der Galerie zeigen",
     unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
     thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",
+  },
+
+  shareControl: {
+    share: "In die Galerie",
+    shared: "Geteilt",
+    takeOut: "Aus der Galerie nehmen",
+    shareThisDrawing: "Diese Zeichnung in der öffentlichen Galerie zeigen",
+    takeBackYourShare: "Nicht mehr teilen",
+    takeThisDrawingOut: "Diese Zeichnung für alle aus der Galerie nehmen",
+    theDrawerKeptItOut: "Die zeichnende Person hat diese Zeichnung aus der Galerie genommen.",
+    inTheGallery: "In der Galerie",
+    inTheGallerySharedBy: "In der Galerie · geteilt von {sharer}",
+    inTheGallerySharedByYou: "In der Galerie · von dir geteilt",
+    inTheGallerySharedByTheDrawer: "In der Galerie · von der zeichnenden Person geteilt",
+    thatDrawingCouldNotBeShared: "Diese Zeichnung konnte nicht geteilt werden.",
+    thatCouldNotBeTakenBack: "Das ließ sich nicht zurücknehmen. Versuch es noch einmal.",
+    takeOutTitle: "Diese Zeichnung aus der Galerie nehmen?",
+    takeOutDescription: "Sie verschwindet für alle aus der Galerie und wird von jedem Profil gelöst, an das sie geheftet ist. Nur du kannst sie zurückholen.",
+    takeOutConfirm: "Herausnehmen",
   },
 
   drawingRecapGallery: {
@@ -1259,7 +1283,7 @@ export const DE: Catalogue = {
   galleryPage: {
     gallery: "Galerie",
     backToLobby: "Zurück zur Lobby",
-    drawingsFromPublicGames: "Jede Zeichnung aus einem öffentlichen Spiel.",
+    drawingsPlayersShared: "Zeichnungen, die Spieler geteilt haben.",
     loading: "Wird geladen …",
     sortBy: "Sortieren nach",
     hot: "Angesagt",
@@ -1280,6 +1304,7 @@ export const DE: Catalogue = {
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `vor ${counted(p.count, { one: { minute: "Minute", hour: "Stunde", day: "Tag" }[p.unit], other: { minute: "Minuten", hour: "Stunden", day: "Tagen" }[p.unit] })}`,
     justNow: "gerade eben",
     byDrawerPrefix: "von",
+    sharedBy: "geteilt von {sharer}",
     thatIsAllOfIt: "Das ist alles",
     endOfHot: "Alles aus den letzten zwei Wochen, das Heißeste zuerst.",
     endOfTheRest: "Hier gibt es nichts mehr.",
@@ -1287,7 +1312,7 @@ export const DE: Catalogue = {
     findARoom: "Raum finden",
     backToTop: "Nach oben",
     topOfTheWeek: "Top der Woche",
-    nothingHereYetBody: "Spiel ein öffentliches Spiel, und seine Zeichnungen sind die ersten hier.",
+    nothingHereYetBody: "Teile eine Zeichnung aus den Ergebnissen oder dem Rückblick eines Spiels, und sie ist die erste hier.",
     signInBody: "Oder wähle in der Lobby einen Namen und sieh dich als Gast um.",
     backToGallery: "Zurück zur Galerie",
     replay: "Abspielen",
@@ -1297,7 +1322,7 @@ export const DE: Catalogue = {
     percentDrawn: (p: { percent: number }) => `${number(p.percent)} % gezeichnet`,
     saveImage: "Bild speichern",
     notInTheGallery: "Diese Zeichnung ist nicht in der Galerie",
-    notInTheGalleryBody: "Sie wurde vielleicht gelöscht oder ausgeblendet, oder sie war nie hier.",
+    notInTheGalleryBody: "Sie wurde vielleicht herausgenommen, gelöscht oder ausgeblendet, oder sie wurde nie geteilt.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "Im Community-Katalog",
@@ -1805,6 +1830,19 @@ export const DE: Catalogue = {
     oneMoment: "Bitte warten …",
     signInAgain: "Erneut anmelden",
     understood: "OK",
+  },
+
+  shareNotice: {
+    title: (p: { count: number }) =>
+      p.count === 1 ? "Deine Zeichnung ist in der Galerie" : "Deine Zeichnungen sind in der Galerie",
+    sharedYourDrawing: "{sharer} hat deine Zeichnung von {prompt} in die Galerie gestellt.",
+    view: "Ansehen",
+    takeOut: "Herausnehmen",
+    takenOut: "Herausgenommen",
+    andMore: (p: { count: number }) =>
+      `Und ${counted(p.count, { one: "weitere Zeichnung", other: "weitere Zeichnungen" })}.`,
+    youCanAlways: "Du kannst eine Zeichnung jederzeit aus der Galerie nehmen, auf ihrer Seite oder in deinem Spielverlauf.",
+    ok: "OK",
   },
 
   roomChatPanel: {
