@@ -31,6 +31,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
+from app.auth.pending_role import pending_offer
 from app.auth.warnings import pending_warning_payload
 from app.db.models import (
     Friendship,
@@ -238,8 +239,10 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             change = entry.params.get("change")
             body["role"] = role
             body["change"] = change
+            # An offer stands for its lifetime only; past it, enrolment
+            # would grant nothing (R-ROLE-02).
             body["offerOpen"] = bool(
-                change == "offered" and owner is not None and owner.pending_role == role
+                change == "offered" and owner is not None and pending_offer(owner) == role
             )
         if entry.kind in ("friend_request", "friend_accepted", "game_invite") and body.get("person") is None:
             continue
@@ -304,7 +307,7 @@ async def inbox_payload(
         page = list(page[:limit])
         entries = await _render(session, page)
         owner = await session.get(User, identity_ids[0])
-        pending_role = owner.pending_role if owner is not None else None
+        pending_role = pending_offer(owner) if owner is not None else None
     warning = (await pending_warning_payload(session_factory, str(identity_ids[0])))["warning"]
     return {
         "entries": entries,

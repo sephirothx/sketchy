@@ -24,6 +24,7 @@ from app.db.models import UserBlock
 from app.domain_values import FriendshipState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.friends import FriendService, friendship_key
+from app.services.inbox import add_entry
 
 from tests.dbfixtures import create_test_db
 
@@ -599,3 +600,26 @@ async def test_a_request_answers_alike_whether_it_landed_was_blocked_or_named_no
 
     answers = [(r.status_code, r.json()) for r in (landed, blocked, nobody)]
     assert answers == [(200, {"status": "pending"})] * 3, answers
+
+
+async def test_an_invitation_goes_with_the_friendship(env):
+    """Unfriended, the invitation's Join would only be refused; the entry goes
+    rather than offering it (R-FRIEND-14)."""
+    new_client, factory, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "AdaInvites")
+    await register(bob_http, "BobInvited")
+    bob_id = (await bob_http.get("/api/auth/me")).json()["id"]
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    async with factory() as session:
+        async with session.begin():
+            await add_entry(
+                session, user_id=bob_id, kind="game_invite", subject_id=ada["id"],
+                params={"expiresAt": "2099-01-01T00:00:00+00:00"},
+            )
+    kinds = lambda page: [entry["kind"] for entry in page["entries"]]  # noqa: E731
+    assert "game_invite" in kinds((await bob_http.get("/api/inbox")).json())
+
+    await bob_http.delete(f"/api/users/me/friends/{ada['id']}")
+    assert "game_invite" not in kinds((await bob_http.get("/api/inbox")).json())

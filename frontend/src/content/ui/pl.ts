@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Przeczytaj ostrzeżenie od moderatora, zanim oznaczysz listę gwiazdką.";
       case "play":
-        return "Przeczytaj ostrzeżenie od moderatora, zanim dołączysz do gry.";
+        return "Przeczytaj ostrzeżenie od moderatora, zanim wejdziesz do pokoju.";
       default:
         return "Najpierw przeczytaj ostrzeżenie od moderatora.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Nie udało się zapisać tego ustawienia.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Nie znaleziono powiadomienia.",
 
   // Reporting, from the reporter's side
@@ -2423,6 +2423,7 @@ export const PL: Catalogue = {
     inbox: "Skrzynka",
     openInboxUnread: (p: { count: number }) => `Skrzynka, ${counted(p.count, { one: "nieprzeczytana wiadomość", few: "nieprzeczytane wiadomości", many: "nieprzeczytanych wiadomości", other: "nieprzeczytanej wiadomości" })}`,
     markAllRead: "Oznacz wszystko jako przeczytane",
+    markRead: "Oznacz jako przeczytane",
     newGroup: "Nowe",
     earlierGroup: "Wcześniejsze",
     showOlder: "Pokaż starsze",
@@ -2457,7 +2458,7 @@ export const PL: Catalogue = {
     uploadAgainNow: "Możesz już wgrać nowe.",
     uploadAgainOn: (p: { date: string }) => `Nowe możesz wgrać ${p.date}.`,
     whatAWarningMeans:
-      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Po naciśnięciu OK nic nie jest ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
+      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Po potwierdzeniu nic nie jest ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
     yourPictureWasRemoved: "Twoje zdjęcie zostało usunięte",
     aModeratorWarning: "Ostrzeżenie od moderatora",
     aReportAboutYourPicture:

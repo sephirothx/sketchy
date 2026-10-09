@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Prima di dare una stella va letto l’avviso della moderazione.";
       case "play":
-        return "Prima di unirti a una partita va letto l’avviso della moderazione.";
+        return "Prima di entrare in una stanza va letto l’avviso della moderazione.";
       default:
         return "Prima va letto l’avviso della moderazione.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Non è stato possibile salvare questa impostazione.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Avviso non trovato.",
 
   // Reporting, from the reporter's side
@@ -2407,6 +2407,7 @@ export const IT: Catalogue = {
     inbox: "Posta in arrivo",
     openInboxUnread: (p: { count: number }) => `Posta in arrivo, ${counted(p.count, { one: "messaggio non letto", other: "messaggi non letti" })}`,
     markAllRead: "Segna tutto come letto",
+    markRead: "Segna come letto",
     newGroup: "Nuovi",
     earlierGroup: "Precedenti",
     showOlder: "Mostra i precedenti",
@@ -2441,7 +2442,7 @@ export const IT: Catalogue = {
     uploadAgainNow: "Puoi caricarne un’altra subito.",
     uploadAgainOn: (p: { date: string }) => `Potrai caricarne un’altra il ${p.date}.`,
     whatAWarningMeans:
-      "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Dopo aver premuto OK non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
+      "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Una volta confermato non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
     yourPictureWasRemoved: "La tua immagine è stata rimossa",
     aModeratorWarning: "Un avvertimento della moderazione",
     aReportAboutYourPicture: "Una segnalazione sulla tua immagine è stata esaminata, e questo è l’esito. Nient’altro nel tuo account è interessato.",

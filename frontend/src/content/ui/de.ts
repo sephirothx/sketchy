@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Vor dem Vergeben eines Sterns muss die Verwarnung der Moderation gelesen werden.";
       case "play":
-        return "Vor dem Beitreten zu einem Spiel muss die Verwarnung der Moderation gelesen werden.";
+        return "Vor dem Betreten eines Raums muss die Verwarnung der Moderation gelesen werden.";
       default:
         return "Zuerst muss die Verwarnung der Moderation gelesen werden.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Diese Einstellung konnte nicht gespeichert werden.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Hinweis nicht gefunden.",
 
   // Reporting, from the reporter's side
@@ -2406,6 +2406,7 @@ export const DE: Catalogue = {
     inbox: "Posteingang",
     openInboxUnread: (p: { count: number }) => `Posteingang, ${counted(p.count, { one: "ungelesene Nachricht", other: "ungelesene Nachrichten" })}`,
     markAllRead: "Alle als gelesen markieren",
+    markRead: "Als gelesen markieren",
     newGroup: "Neu",
     earlierGroup: "Früher",
     showOlder: "Ältere anzeigen",
@@ -2440,7 +2441,7 @@ export const DE: Catalogue = {
     uploadAgainNow: "Du kannst jetzt ein neues hochladen.",
     uploadAgainOn: (p: { date: string }) => `Du kannst am ${p.date} ein neues hochladen.`,
     whatAWarningMeans:
-      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Sobald du OK drückst, ist nichts eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
+      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Sobald du sie bestätigst, ist nichts eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
     yourPictureWasRemoved: "Dein Bild wurde entfernt",
     aModeratorWarning: "Eine Verwarnung der Moderation",
     aReportAboutYourPicture: "Eine Meldung über dein Bild wurde geprüft, und das ist das Ergebnis. Sonst ist an deinem Konto nichts betroffen.",

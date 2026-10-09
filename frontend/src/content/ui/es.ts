@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Antes de dar una estrella hay que leer el aviso de moderación.";
       case "play":
-        return "Antes de unirse a una partida hay que leer el aviso de moderación.";
+        return "Antes de entrar en una sala hay que leer el aviso de moderación.";
       default:
         return "Primero hay que leer el aviso de moderación.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "No se pudo guardar ese ajuste.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Aviso no encontrado.",
 
   // Reporting, from the reporter's side
@@ -2405,8 +2405,9 @@ export const ES: Catalogue = {
     inbox: "Bandeja de entrada",
     openInboxUnread: (p: { count: number }) => `Bandeja de entrada, ${counted(p.count, { one: "mensaje sin leer", other: "mensajes sin leer" })}`,
     markAllRead: "Marcar todo como leído",
-    newGroup: "Nuevo",
-    earlierGroup: "Anterior",
+    markRead: "Marcar como leído",
+    newGroup: "Nuevos",
+    earlierGroup: "Anteriores",
     showOlder: "Ver anteriores",
     close: "Cerrar la bandeja de entrada",
     nothingHereYet: "Aún no hay nada",
@@ -2439,7 +2440,7 @@ export const ES: Catalogue = {
     uploadAgainNow: "Ya puedes subir otra.",
     uploadAgainOn: (p: { date: string }) => `Podrás subir otra el ${p.date}.`,
     whatAWarningMeans:
-      "Se ha revisado una denuncia sobre tu comportamiento, y este es el resultado. Cuando pulses OK no habrá restricciones, pero otra denuncia podría llevar a la suspensión de tu cuenta.",
+      "Se ha revisado una denuncia sobre tu comportamiento, y este es el resultado. Una vez que lo confirmes no habrá restricciones, pero otra denuncia podría llevar a la suspensión de tu cuenta.",
     yourPictureWasRemoved: "Se eliminó tu imagen",
     aModeratorWarning: "Un aviso de moderación",
     aReportAboutYourPicture: "Se revisó una denuncia sobre tu imagen y este es el resultado. No afecta a nada más de tu cuenta.",

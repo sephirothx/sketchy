@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Antes de dar uma estrela é preciso ler o aviso da moderação.";
       case "play":
-        return "Antes de entrar num jogo é preciso ler o aviso da moderação.";
+        return "Antes de entrar numa sala é preciso ler o aviso da moderação.";
       default:
         return "Primeiro é preciso ler o aviso da moderação.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Não foi possível guardar essa definição.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Aviso não encontrado.",
 
   // Reporting, from the reporter's side
@@ -2405,8 +2405,9 @@ export const PT: Catalogue = {
     inbox: "Caixa de entrada",
     openInboxUnread: (p: { count: number }) => `Caixa de entrada, ${counted(p.count, { one: "mensagem por ler", other: "mensagens por ler" })}`,
     markAllRead: "Marcar tudo como lido",
-    newGroup: "Novo",
-    earlierGroup: "Anterior",
+    markRead: "Marcar como lido",
+    newGroup: "Novas",
+    earlierGroup: "Anteriores",
     showOlder: "Ver anteriores",
     close: "Fechar a caixa de entrada",
     nothingHereYet: "Ainda não há nada",
@@ -2439,7 +2440,7 @@ export const PT: Catalogue = {
     uploadAgainNow: "Já podes carregar outra.",
     uploadAgainOn: (p: { date: string }) => `Podes carregar outra a ${p.date}.`,
     whatAWarningMeans:
-      "Uma denúncia sobre o teu comportamento foi analisada, e este é o resultado. Depois de carregares em OK não há nada restringido, mas outra denúncia pode levar à suspensão da tua conta.",
+      "Uma denúncia sobre o teu comportamento foi analisada, e este é o resultado. Depois de confirmares não há nada restringido, mas outra denúncia pode levar à suspensão da tua conta.",
     yourPictureWasRemoved: "A tua imagem foi removida",
     aModeratorWarning: "Um aviso da moderação",
     aReportAboutYourPicture: "Uma denúncia sobre a tua imagem foi analisada, e este é o resultado. Nada mais na tua conta é afetado.",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { invitationStillOpen, parseInboxPage, withMore } from "../src/lib/inbox.ts";
+import { invitationExpired, invitationStillOpen, parseInboxPage, refreshedPage, withMore } from "../src/lib/inbox.ts";
 
 const NOW = "2026-10-09T10:00:00+00:00";
 
@@ -65,4 +65,29 @@ test("an invitation can be answered only while the card's own invitation from th
   assert.equal(invitationStillOpen(earlier, "eve", { fromUserId: "eve" }, now), false, "run out");
   assert.equal(invitationStillOpen(later, "eve", { fromUserId: "bob" }, now), false, "somebody else's card");
   assert.equal(invitationStillOpen(later, "eve", null, now), false, "no card: the token is gone");
+});
+
+test("a push's read of page one keeps the older pages already shown", () => {
+  const at = (minute) => `2026-10-09T10:${String(minute).padStart(2, "0")}:00+00:00`;
+  const shown = [
+    { id: "a", createdAt: at(9) },
+    { id: "b", createdAt: at(8) },
+    { id: "c", createdAt: at(5) },
+    { id: "d", createdAt: at(4) },
+  ];
+  // A new row on top; "c" renewed, so on page one now.
+  const page = { entries: [{ id: "n", createdAt: at(10) }, { id: "c", createdAt: at(10) }, { id: "a", createdAt: at(9) }], next: "a" };
+  const kept = refreshedPage(page, shown, "d");
+  assert.deepEqual(kept.entries.map((e) => e.id), ["n", "c", "a", "b", "d"], "c once, where page one has it");
+  assert.equal(kept.next, "d", "the deeper cursor stands");
+
+  assert.deepEqual(refreshedPage({ entries: page.entries, next: null }, shown, "d"), { entries: page.entries, next: null }, "all on one page");
+  assert.equal(refreshedPage(page, page.entries, "a").next, "a", "nothing older loaded");
+});
+
+test("an invitation is expired only once its own time has passed", () => {
+  const now = new Date("2026-10-09T10:00:00Z");
+  assert.equal(invitationExpired("2026-10-09T10:01:00+00:00", now), false);
+  assert.equal(invitationExpired("2026-10-09T09:59:00+00:00", now), true);
+  assert.equal(invitationExpired(null, now), true);
 });

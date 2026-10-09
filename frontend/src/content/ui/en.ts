@@ -350,7 +350,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Read your moderator warning before starring a list.";
       case "play":
-        return "Read your moderator warning before joining a game.";
+        return "Read your moderator warning before entering a room.";
       default:
         return "Read your moderator warning first.";
     }
@@ -380,7 +380,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "That setting could not be saved.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Notice not found.",
 
   // Reporting, from the reporter's side
@@ -2428,6 +2428,7 @@ export const EN = {
     inbox: "Inbox",
     openInboxUnread: (p: { count: number }): string => `Inbox, ${counted(p.count, { one: "unread message", other: "unread messages" })}`,
     markAllRead: "Mark all as read",
+    markRead: "Mark as read",
     newGroup: "New",
     earlierGroup: "Earlier",
     showOlder: "Show older",
@@ -2462,7 +2463,7 @@ export const EN = {
     uploadAgainNow: "You can upload another one now.",
     uploadAgainOn: (p: { date: string }): string => `You can upload another one on ${p.date}.`,
     whatAWarningMeans:
-      "A report about your behavior was reviewed, and this is the outcome. Once you press OK nothing is restricted, but a further report may lead to your account being suspended.",
+      "A report about your behavior was reviewed, and this is the outcome. After you acknowledge it nothing is restricted, but a further report may lead to your account being suspended.",
     yourPictureWasRemoved: "Your picture was removed",
     aModeratorWarning: "A moderator warning",
     aReportAboutYourPicture:

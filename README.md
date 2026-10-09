@@ -1192,8 +1192,8 @@ nothing to the audit log. The account is told what happened in its inbox:
 immediately, if it is connected anywhere, and on its next visit if it was not. A
 **Moderation** entry that simply appears - or vanishes - is a change nobody can ask
 about. A promotion signs the account out everywhere, so the staff role is only ever
-reached by a sign-in that produces the second factor, and the sign-in screen says
-that was why. A demotion signs nobody out: every staff check reads the role afresh,
+reached by a sign-in that produces the second factor; a tab open at the time says that
+was why, and the inbox entry says so after signing back in. A demotion signs nobody out: every staff check reads the role afresh,
 so the powers end on the next request anyway, and a staff session already lapses
 sooner than a player's.
 

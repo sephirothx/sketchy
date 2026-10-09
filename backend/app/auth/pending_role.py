@@ -156,8 +156,8 @@ async def take_up_offer(
             # year-long player cookie must not stay a year long on a staff
             # account.
             await revoke_sessions(session, user_id=target)
-            # No notice. `role_change_notices` exists for a change made while
-            # the account was elsewhere - an administrator acts, and the
+            # No new entry. The inbox's role entries exist for a change made
+            # while the account was elsewhere - an administrator acts, and the
             # player finds a menu entry that appeared with no explanation.
             # This change is the account's own last action, taken in a dialog
             # that says what just happened, so a pop-up on the next page load

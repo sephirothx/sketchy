@@ -873,7 +873,9 @@ foreign key) · `params` (JSON / `JSONB`) · `created_at` · `read_at`, with
 `ix_inbox_entries_created_at` for the sweep, the partial `ix_inbox_entries_user_unread`
 on `user_id` `WHERE read_at IS NULL` for the bell's count, and the partial unique
 `uq_inbox_entries_subject` on (`user_id`, `kind`, `subject_id`)
-`WHERE subject_id IS NOT NULL`.
+`WHERE subject_id IS NOT NULL`, and the partial unique `uq_inbox_entries_unread_reviews`
+on `user_id` `WHERE kind = 'reports_reviewed' AND read_at IS NULL` — the one unread count
+every decision is counted into.
 
 Everything the app tells a player about their own account, behind the header's bell
 (#1436, R-INBOX-01). It replaced three stores that each did part of this with different
@@ -890,7 +892,7 @@ with `change` ∈ `offered | granted | removed` for a role, `{count}` for review
 from the fact **when it is shown**: who shared a drawing (the earliest share still
 standing by somebody other than its drawer) and whether it is still in the Gallery,
 whether a friend request is still waiting, whether an offer still stands
-(`users.pending_role`). A fact that has gone leaves its entry saying so rather than a
+(`users.pending_role`, within its thirty-day lifetime). A fact that has gone leaves its entry saying so rather than a
 stale line offering to act on it.
 
 `subject_id` names the fact where there is one row or account to name: the warning, the
@@ -912,13 +914,14 @@ told about and no entry about a fact that rolled back; the account's sockets are
   warning marks it read.
 - `drawing_shared` — the first share of a drawing by somebody other than its drawer, in
   the share's write; a live share's in the finished-game write (`save_game`); a pin, since
-  a pin is a share (R-PIN-03). One per drawing, ever (R-SHARE-09). The drawer's withdrawal
+  a pin is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
+(R-SHARE-09). The drawer's withdrawal
   marks it read — they have just acted on it — and the entry stays, naming nobody once no
   share stands.
 - `friend_request` — in the asked account's inbox, renewed if asked before. An acceptance
   marks it read and writes `friend_accepted` in the **asker's** inbox (R-FRIEND-14).
-  Cancelling, unfriending and blocking delete both accounts' friend entries about the
-  pair. A decline writes nothing and deletes nothing: the decliner's own entry is left,
+  Cancelling, unfriending and blocking delete both accounts' friend and invitation
+  entries about the pair. A decline writes nothing and deletes nothing: the decliner's own entry is left,
   reading as answered, and the asker is never told (R-FRIEND-04, R-FRIEND-05).
 - `game_invite` — a friend's invitation (`invite_friend`), renewed per inviter, with
   `expiresAt`. The token is **not** stored: it stays with the live card, and the entry
@@ -926,7 +929,11 @@ told about and no entry about a fact that rolled back; the account's sockets are
   effort, in a transaction of its own, since the invitation was sent either way.
 - `reports_reviewed` — a decision over an incident (a review, or a ban or warning issued
   from a report) counts its reports into each reporter's **unread** entry, or starts one, so a moderator working through a queue
-  leaves one line rather than one per report. The count only (R-MOD-20).
+  leaves one line rather than one per report; `uq_inbox_entries_unread_reviews` makes
+  that hold for two moderators at once, the loser of the insert counting into the
+  winner's. The count only, and dated to the **day** (UTC midnight), never the decision
+  (R-MOD-20). A guest reporter's count goes to the account it merged into; an erased
+  reporter is told nothing.
 - `role` — an offer (`offered`), a grant (`granted`) and a demotion (`removed`) by
   `PATCH /api/admin/players/{id}/role`. Withdrawing an offer writes nothing: the offer's
   entry stays as what happened and stops offering enrolment, its fact being gone. Taking
@@ -1395,7 +1402,10 @@ reason — which the client shows as a dialog that can only be acknowledged.
 Acknowledging sets `acknowledged_at`, which is what stops it being shown again, records
 that the notice actually landed and lifts the hold on room entry; it marks the entry
 read too. Room entry and the prompt-list publish gate both ask this table for an
-unacknowledged row, so the hold is the server's and no tab can skip it. Issuing one
+unacknowledged row, so the hold is the server's and no tab can skip it. A guest warned
+and then signed in takes its warnings, and their inbox entries, into the account in the
+merge's transaction (`merge_guest_into_account`): the warning is about the person, so
+it holds the account's seats and is the account's to answer. Issuing one
 writes a `warning.issued` audit event. A warning issued from a report **resolves that
 report in the same transaction**, and a report already decided refuses the warning -
 which is also what stops a retry from warning twice.

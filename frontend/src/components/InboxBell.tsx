@@ -34,10 +34,13 @@ export function InboxBell({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     if (!open || narrow) return;
     const onPointer = (event: PointerEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Element;
+      // A confirmation the panel opened sits at the document's root.
+      if (target.closest?.(".modal-overlay")) return;
+      if (wrapRef.current && !wrapRef.current.contains(target)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || document.querySelector(".modal-overlay")) return;
       setOpen(false);
       buttonRef.current?.focus();
     };

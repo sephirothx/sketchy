@@ -40,6 +40,7 @@ _KINDS = (
 )
 _UNREAD = "read_at IS NULL"
 _SUBJECT = "subject_id IS NOT NULL"
+_UNREAD_REVIEWS = "kind = 'reports_reviewed' AND read_at IS NULL"
 _UNANNOUNCED = "reporter_notified_at IS NULL AND status <> 'pending'"
 _WARNING_FK = "fk_user_warnings_user_id_users"
 _BASELINE_FK = "user_warnings_user_id_fkey"
@@ -105,6 +106,14 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text(_SUBJECT),
         sqlite_where=sa.text(_SUBJECT),
+    )
+    op.create_index(
+        "uq_inbox_entries_unread_reviews",
+        "inbox_entries",
+        ["user_id"],
+        unique=True,
+        postgresql_where=sa.text(_UNREAD_REVIEWS),
+        sqlite_where=sa.text(_UNREAD_REVIEWS),
     )
 
     op.drop_index(
@@ -196,6 +205,7 @@ def downgrade() -> None:
         ["user_id", "acknowledged_at"],
     )
 
+    op.drop_index("uq_inbox_entries_unread_reviews", table_name="inbox_entries")
     op.drop_index("uq_inbox_entries_subject", table_name="inbox_entries")
     op.drop_index("ix_inbox_entries_user_unread", table_name="inbox_entries")
     op.drop_index("ix_inbox_entries_created_at", table_name="inbox_entries")

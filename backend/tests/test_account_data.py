@@ -550,8 +550,10 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["schemaVersion"] == 17
     # What the account was told, as kinds and values (#1436).
     [told] = artifact["inbox"]
-    assert (told["kind"], told["params"], told["subjectId"], told["readAt"]) == (
-        "reports_reviewed", {"count": 2}, None, None,
+    # A count of reviewed reports carries no dates: they would say when a
+    # decision was made (R-MOD-20).
+    assert (told["kind"], told["params"], told["subjectId"], told["createdAt"], told["readAt"]) == (
+        "reports_reviewed", {"count": 2}, None, None, None,
     )
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id

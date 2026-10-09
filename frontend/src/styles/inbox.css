@@ -78,15 +78,34 @@
   background: var(--primary-soft);
 }
 
-.inbox-item.is-unread::after {
+/* The unread dot is a button: reading a row that has nothing to press, by
+   keyboard as well as by pointer. A larger target than it looks. */
+.inbox-read-dot {
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 24px;
+  padding: 0;
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  width: 24px;
+}
+
+.inbox-read-dot::after {
   background: var(--primary);
   border-radius: 50%;
   content: "";
   height: 8px;
+  left: 8px;
   position: absolute;
-  right: 14px;
-  top: 16px;
+  top: 8px;
   width: 8px;
+}
+
+.inbox-read-dot:hover::after {
+  box-shadow: 0 0 0 4px var(--primary-soft);
 }
 
 .inbox-kind {

@@ -1838,6 +1838,15 @@ class InboxEntry(Base):
             postgresql_where=text("subject_id IS NOT NULL"),
             sqlite_where=text("subject_id IS NOT NULL"),
         ),
+        # One unread count of reviewed reports per account: every decision
+        # is counted into it, so two moderators at once still leave one line.
+        Index(
+            "uq_inbox_entries_unread_reviews",
+            "user_id",
+            unique=True,
+            postgresql_where=text("kind = 'reports_reviewed' AND read_at IS NULL"),
+            sqlite_where=text("kind = 'reports_reviewed' AND read_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1849,8 +1858,9 @@ class InboxEntry(Base):
         nullable=False,
     )
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
-    # The row the entry is about, where there is one: a warning, a turn, a
-    # friendship. No foreign key - the kinds name different tables - so a
+    # The row the entry is about, where there is one: a warning, a turn, or -
+    # for the friend and invitation kinds - the other account's user id, a
+    # friendship having no id of its own. No foreign key - the kinds name different tables - so a
     # fact that goes is noticed when the entry is read.
     subject_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True

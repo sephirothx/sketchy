@@ -1,4 +1,4 @@
-"""The share routes and the share notices (#1430): one 404 for every refusal,
+"""The share routes and the drawer's inbox entry (#1430, #1436): one 404 for every refusal,
 the push after a committed share, and the drawer's catch-up read."""
 from __future__ import annotations
 

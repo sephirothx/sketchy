@@ -20,11 +20,14 @@ from sqlalchemy import func, select
 
 from app.api.inbox import INBOX_PAGE, create_inbox_router, inbox_payload
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.pending_role import OFFER_LIFETIME
 from app.auth.retention import purge_expired_inbox_entries, purge_expired_warnings
 from app.auth.routes import create_auth_router
 from app.db.models import IdentityAlias, InboxEntry, User, UserWarning, generate_uuid
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
-from app.services.inbox import INBOX_RETENTION_DAYS, add_entry
+from app.auth.warnings import has_unacknowledged_warning
+from app.services import inbox as inbox_service
+from app.services.inbox import INBOX_RETENTION_DAYS, add_entry, count_reviewed_reports
 
 from tests.dbfixtures import create_test_db
 
@@ -65,23 +68,28 @@ async def register(client: AsyncClient, username: str) -> dict:
     return response.json()
 
 
-async def entry(factory, user_id: str, kind: str = "role", *, ago=timedelta(), **fields) -> str:
+async def entry(
+    factory, user_id: str, kind: str = "role", *, ago=timedelta(), read: bool = False, **fields
+) -> str:
+    """One entry, its id answered. `read` for a count of reviewed reports
+    beside another: an account holds one unread one."""
     async with factory() as session:
         async with session.begin():
-            await add_entry(
-                session,
-                user_id=user_id,
-                kind=kind,
-                created_at=datetime.now(timezone.utc) - ago,
-                **fields,
-            )
-            newest = await session.scalar(
-                select(InboxEntry.id)
-                .where(InboxEntry.user_id == UUID(user_id))
-                .order_by(InboxEntry.created_at.desc())
-                .limit(1)
-            )
-    return str(newest)
+            owned = select(InboxEntry.id).where(InboxEntry.user_id == UUID(user_id))
+            before = set((await session.scalars(owned)).all())
+            at = datetime.now(timezone.utc) - ago
+            if read:
+                session.add(
+                    InboxEntry(
+                        id=generate_uuid(), user_id=UUID(user_id), kind=kind,
+                        params=fields.get("params", {}), created_at=at, read_at=at,
+                    )
+                )
+            else:
+                await add_entry(session, user_id=user_id, kind=kind, created_at=at, **fields)
+            await session.flush()
+            [added] = set((await session.scalars(owned)).all()) - before
+    return str(added)
 
 
 async def test_an_account_with_nothing_to_be_told_reads_an_empty_inbox(env):
@@ -116,6 +124,14 @@ async def test_an_offer_leads_to_enrolment_only_while_it_stands(env):
         "role", "moderator", "offered", True,
     )
     assert body["pendingRole"] == "moderator"
+
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(account["id"]))
+            user.pending_role_at = datetime.now(timezone.utc) - OFFER_LIFETIME - timedelta(minutes=1)
+    body = (await client.get("/api/inbox")).json()
+    # Lapsed: enrolment would grant nothing now (R-ROLE-02).
+    assert body["entries"][0]["offerOpen"] is False and body["pendingRole"] is None
 
     async with factory() as session:
         async with session.begin():
@@ -155,11 +171,11 @@ async def test_the_inbox_is_read_a_page_at_a_time_newest_first(env):
     for index in range(INBOX_PAGE + 3):
         await entry(
             factory, account["id"], "reports_reviewed",
-            ago=timedelta(minutes=index), params={"count": index + 1},
+            ago=timedelta(minutes=index), params={"count": index + 1}, read=index > 0,
         )
     first = (await client.get("/api/inbox")).json()
     assert [e["count"] for e in first["entries"]] == list(range(1, INBOX_PAGE + 1))
-    assert first["unreadCount"] == INBOX_PAGE + 3
+    assert first["unreadCount"] == 1
     rest = (await client.get("/api/inbox", params={"before": first["next"]})).json()
     assert [e["count"] for e in rest["entries"]] == [INBOX_PAGE + 1, INBOX_PAGE + 2, INBOX_PAGE + 3]
     assert rest["next"] is None
@@ -174,7 +190,7 @@ async def test_an_entry_is_kept_ninety_days_and_a_warning_twelve_months(env):
     client = new_client()
     account = await register(client, "Aging")
     await entry(factory, account["id"], "reports_reviewed", ago=timedelta(days=INBOX_RETENTION_DAYS + 1), params={"count": 1})
-    await entry(factory, account["id"], "reports_reviewed", ago=timedelta(days=INBOX_RETENTION_DAYS - 1), params={"count": 2})
+    await entry(factory, account["id"], "reports_reviewed", ago=timedelta(days=INBOX_RETENTION_DAYS - 1), params={"count": 2}, read=True)
     async with factory() as session:
         async with session.begin():
             for days in (366, 300):
@@ -235,3 +251,77 @@ async def test_a_merged_guests_entries_are_the_accounts(env):
     payload = await inbox_payload(factory, account["id"])
     assert [e["count"] for e in payload["entries"]] == [4]
     assert (await client.post("/api/inbox/read", json={"all": True})).json() == {"unreadCount": 0}
+
+
+async def test_reviewed_reports_are_counted_for_who_the_reporter_is_now(env):
+    """A guest's report counts for the account it became, into the one unread
+    line; an erased reporter is told nothing; and the line is dated to the
+    day, not the decision (R-MOD-20, R-INBOX-06)."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Reporter")
+    guest_id, erased_id = generate_uuid(), generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 2", state="merged"))
+            session.add(User(id=erased_id, display_name="Gone", state="deleted"))
+            await session.flush()
+            session.add(IdentityAlias(source_user_id=guest_id, target_user_id=UUID(account["id"])))
+    decided = datetime(2026, 10, 9, 17, 42, 13, tzinfo=timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            moved = await count_reviewed_reports(
+                session, {UUID(account["id"]): 1, guest_id: 2, erased_id: 1}, now=decided
+            )
+    assert moved == [UUID(account["id"])]
+    async with factory() as session:
+        async with session.begin():
+            await count_reviewed_reports(session, {guest_id: 1}, now=decided)
+        rows = (await session.scalars(select(InboxEntry))).all()
+    assert [(row.user_id, row.params) for row in rows] == [(UUID(account["id"]), {"count": 4})]
+    assert rows[0].created_at.replace(tzinfo=timezone.utc) == datetime(2026, 10, 9, tzinfo=timezone.utc)
+
+
+async def test_an_account_holds_one_unread_count_of_reviewed_reports(env, monkeypatch):
+    """The index two moderators deciding at once meet at: the second insert
+    finds the first's line and counts into it rather than adding another."""
+    new_client, factory = env
+    account = await register(new_client(), "Counted")
+    await entry(factory, account["id"], "reports_reviewed", params={"count": 1})
+    original = inbox_service._count_into_unread
+    looked = 0
+
+    async def found_nothing_first(*args):
+        # As the loser of the race sees it: nothing unread when it looked.
+        nonlocal looked
+        looked += 1
+        return False if looked == 1 else await original(*args)
+
+    monkeypatch.setattr(inbox_service, "_count_into_unread", found_nothing_first)
+    async with factory() as session:
+        async with session.begin():
+            await count_reviewed_reports(session, {UUID(account["id"]): 2})
+        counts = (await session.scalars(select(InboxEntry.params))).all()
+    assert counts == [{"count": 3}]
+
+
+async def test_a_guests_warning_follows_it_into_the_account(env):
+    """Warned as a guest, then signed in: the warning is the account's to
+    answer, and holds the account's seats until it is (R-INBOX-04)."""
+    new_client, factory = env
+    account = await register(new_client(), "WarnedLater")
+    guest_id, warning_id = generate_uuid(), generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 3", state="anonymous"))
+            await session.flush()
+            session.add(UserWarning(id=warning_id, user_id=guest_id, reason="Tone."))
+    await entry(factory, str(guest_id), "warning", subject_id=warning_id)
+
+    await SqlAlchemyUserRepository(factory).merge_guest_into_account(str(guest_id), account["id"])
+
+    assert await has_unacknowledged_warning(factory, account["id"])
+    async with factory() as session:
+        assert await session.scalar(select(UserWarning.user_id)) == UUID(account["id"])
+        assert await session.scalar(select(InboxEntry.user_id)) == UUID(account["id"])
+    assert (await inbox_payload(factory, account["id"]))["mustAcknowledge"]["id"] == str(warning_id)

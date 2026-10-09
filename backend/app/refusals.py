@@ -273,7 +273,7 @@ class ErrorCode(StrEnum):
     # Settings
     SETTING_REFUSED = "setting_refused"
 
-    # Role notices
+    # The inbox: a page asked for from an entry that is not the caller's.
     NO_SUCH_NOTICE = "no_such_notice"
 
     # Reporting, from the reporter's side. The moderator's side of the queue
@@ -294,6 +294,7 @@ class ErrorCode(StrEnum):
     EVIDENCE_NOT_IN_GAME = "evidence_not_in_game"
     EVIDENCE_NOT_IN_TURN = "evidence_not_in_turn"
     NO_SUCH_WARNING = "no_such_warning"
-    # An unacknowledged warning holds publishing and starring back; carries `action`.
+    # An unacknowledged warning holds a new seat, publishing and starring back;
+    # carries `action`.
     WARNING_UNREAD = "warning_unread"
     NO_DRAWING = "no_drawing"

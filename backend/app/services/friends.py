@@ -111,15 +111,17 @@ async def _tell_accepted(session: AsyncSession, *, asker: UUID, answerer: UUID) 
     )
 
 
+_PAIR_KINDS = ("friend_request", "friend_accepted", "game_invite")
+
+
 async def _forget_pair_entries(session: AsyncSession, a: UUID, b: UUID) -> None:
     """A request withdrawn, a friendship ended or blocked: the entries about it
-    are about nothing now, in either inbox."""
-    await forget_subjects(
-        session, kinds=("friend_request", "friend_accepted"), subject_ids=[b], user_ids=[a]
-    )
-    await forget_subjects(
-        session, kinds=("friend_request", "friend_accepted"), subject_ids=[a], user_ids=[b]
-    )
+    are about nothing now, in either inbox - an invitation too, whose Join
+    would only be refused (R-FRIEND-14)."""
+    for owner, subject in ((a, b), (b, a)):
+        await forget_subjects(
+            session, kinds=_PAIR_KINDS, subject_ids=[subject], user_ids=[owner]
+        )
 
 
 def friendship_key(a: UUID, b: UUID) -> tuple[UUID, UUID]:

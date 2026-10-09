@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "L’avertissement de la modération doit être lu avant de donner une étoile.";
       case "play":
-        return "L’avertissement de la modération doit être lu avant de rejoindre une partie.";
+        return "L’avertissement de la modération doit être lu avant d’entrer dans un salon.";
       default:
         return "L’avertissement de la modération doit d’abord être lu.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Ce réglage n’a pas pu être enregistré.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Avis introuvable.",
 
   // Reporting, from the reporter's side
@@ -2408,6 +2408,7 @@ export const FR: Catalogue = {
     inbox: "Boîte de réception",
     openInboxUnread: (p: { count: number }) => `Boîte de réception, ${counted(p.count, { one: "message non lu", other: "messages non lus" })}`,
     markAllRead: "Tout marquer comme lu",
+    markRead: "Marquer comme lu",
     newGroup: "Nouveau",
     earlierGroup: "Plus tôt",
     showOlder: "Voir les plus anciens",
@@ -2442,7 +2443,7 @@ export const FR: Catalogue = {
     uploadAgainNow: "Tu peux en envoyer une autre dès maintenant.",
     uploadAgainOn: (p: { date: string }) => `Tu pourras en envoyer une autre le ${p.date}.`,
     whatAWarningMeans:
-      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Une fois OK pressé, rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
+      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Une fois que tu l’as confirmé, rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
     yourPictureWasRemoved: "Ta photo a été retirée",
     aModeratorWarning: "Un avertissement de la modération",
     aReportAboutYourPicture: "Un signalement concernant ta photo a été examiné, et voici le résultat. Rien d’autre sur ton compte n’est concerné.",

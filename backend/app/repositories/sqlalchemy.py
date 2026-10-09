@@ -38,6 +38,7 @@ from app.db.models import (
     GamePromptSource,
     GameRecord,
     IdentityAlias,
+    InboxEntry,
     Prompt,
     PromptAlias,
     PromptConcept,
@@ -67,6 +68,7 @@ from app.db.models import (
     UserBlock,
     UserSettings,
     UserStatsDaily,
+    UserWarning,
     generate_uuid,
 )
 from app.canvas_history import binary_action_count
@@ -1660,6 +1662,21 @@ class SqlAlchemyUserRepository(UserRepository):
                         block.blocker_user_id = blocker_id
                         block.blocked_user_id = blocked_id
                 await _merge_friendships(session, source.id, target.id)
+                # A warning is about the person, so it follows them into the
+                # account: it holds the account's seats until answered, and
+                # is the account's to answer (R-INBOX-04). Its entry moves
+                # with it; a warning's subject is its own id, so nothing
+                # already in the account's inbox can collide.
+                await session.execute(
+                    update(UserWarning)
+                    .where(UserWarning.user_id == source.id)
+                    .values(user_id=target.id)
+                )
+                await session.execute(
+                    update(InboxEntry)
+                    .where(InboxEntry.user_id == source.id, InboxEntry.kind == "warning")
+                    .values(user_id=target.id)
+                )
                 await session.flush()
                 # Only the guest's own days: this runs inside a sign-in, on
                 # the web role's statement budget, and no other day's total

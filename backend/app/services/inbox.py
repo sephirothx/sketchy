@@ -22,7 +22,8 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import InboxEntry, generate_uuid
+from app.db.models import IdentityAlias, InboxEntry, User, generate_uuid
+from app.domain_values import AccountState
 
 __all__ = [
     "INBOX_RETENTION_DAYS",
@@ -37,6 +38,10 @@ __all__ = [
 #: player session's idle window (R-AUTH-03): an absence longer than that is a
 #: fresh sign-in anyway.
 INBOX_RETENTION_DAYS = 90
+
+#: The one unread `reports_reviewed` entry an account may hold, which every
+#: decision is counted into (`uq_inbox_entries_unread_reviews`).
+_UNREAD_REVIEWS = "kind = 'reports_reviewed' AND read_at IS NULL"
 
 
 def _insert(session: AsyncSession):
@@ -103,37 +108,96 @@ async def count_reviewed_reports(
     Counted into the reporter's unread entry when there is one, so a
     moderator working through a queue leaves one line - "3 reports you sent
     have been reviewed" - rather than three. Only that they were reviewed:
-    what was decided is the reported player's business (R-MOD-20). Answers
+    what was decided is the reported player's business, and so is when -
+    the entry is dated to the day, not the decision (R-MOD-20). A report a
+    guest filed counts for the account it became; an erased reporter is
+    told nothing, having been promised an empty inbox (R-INBOX-06). Answers
     the reporters whose inbox moved."""
     at = now or datetime.now(timezone.utc)
+    day = at.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    counts = await _reporters_now(session, reporter_ids)
     moved: list[UUID] = []
-    for reporter_id, count in sorted(reporter_ids.items(), key=lambda item: str(item[0])):
+    for reporter_id, count in sorted(counts.items(), key=lambda item: str(item[0])):
         if count <= 0:
             continue
-        unread = await session.scalar(
-            select(InboxEntry)
-            .where(
-                InboxEntry.user_id == reporter_id,
-                InboxEntry.kind == "reports_reviewed",
-                InboxEntry.read_at.is_(None),
+        # One unread entry per reporter, held by a unique index: of two
+        # moderators deciding at once, one writes it and the other, finding
+        # it there, counts into it.
+        if not await _count_into_unread(session, reporter_id, count, day):
+            written = await session.execute(
+                _insert(session)(InboxEntry)
+                .values(
+                    id=generate_uuid(),
+                    user_id=reporter_id,
+                    kind="reports_reviewed",
+                    subject_id=None,
+                    params={"count": count},
+                    created_at=day,
+                    read_at=None,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["user_id"], index_where=text(_UNREAD_REVIEWS)
+                )
             )
-            .order_by(InboxEntry.created_at.desc())
-            .limit(1)
-            .with_for_update()
-        )
-        if unread is not None:
-            unread.params = {"count": int(unread.params.get("count", 0)) + count}
-            unread.created_at = at
-        else:
-            await add_entry(
-                session,
-                user_id=reporter_id,
-                kind="reports_reviewed",
-                params={"count": count},
-                created_at=at,
-            )
+            if not written.rowcount:
+                # Lost the race to write it: count into the winner's.
+                await _count_into_unread(session, reporter_id, count, day)
         moved.append(reporter_id)
     return moved
+
+
+async def _reporters_now(
+    session: AsyncSession, reporter_ids: dict[UUID, int]
+) -> dict[UUID, int]:
+    """The reporters as they are now: a merged guest as its account, and an
+    erased account as nobody."""
+    if not reporter_ids:
+        return {}
+    aliases = dict(
+        (
+            await session.execute(
+                select(IdentityAlias.source_user_id, IdentityAlias.target_user_id).where(
+                    IdentityAlias.source_user_id.in_(list(reporter_ids))
+                )
+            )
+        ).all()
+    )
+    counts: dict[UUID, int] = {}
+    for reporter_id, count in reporter_ids.items():
+        owner = aliases.get(reporter_id, reporter_id)
+        counts[owner] = counts.get(owner, 0) + count
+    told = set(
+        (
+            await session.scalars(
+                select(User.id).where(
+                    User.id.in_(list(counts)),
+                    User.state.in_(
+                        (AccountState.ANONYMOUS.value, AccountState.REGISTERED.value)
+                    ),
+                )
+            )
+        ).all()
+    )
+    return {owner: count for owner, count in counts.items() if owner in told}
+
+
+async def _count_into_unread(
+    session: AsyncSession, reporter_id: UUID, count: int, day: datetime
+) -> bool:
+    unread = await session.scalar(
+        select(InboxEntry)
+        .where(
+            InboxEntry.user_id == reporter_id,
+            InboxEntry.kind == "reports_reviewed",
+            InboxEntry.read_at.is_(None),
+        )
+        .with_for_update()
+    )
+    if unread is None:
+        return False
+    unread.params = {"count": int(unread.params.get("count", 0)) + count}
+    unread.created_at = day
+    return True
 
 
 async def forget_subjects(

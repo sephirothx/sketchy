@@ -135,7 +135,7 @@ async def share_drawing(ctx: HandlerContext, sid, data):
         try:
             await ctx.on_inbox_changed(result.notify_user_id)
         except Exception:  # noqa: BLE001 - the share stands; the visit catches up
-            logger.exception("Failed to push a share notice for room %s", room.id)
+            logger.exception("Failed to push an inbox change for room %s", room.id)
     return _accepted(room, payload.turn_id)
 
 

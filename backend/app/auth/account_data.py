@@ -1352,6 +1352,8 @@ async def _write_export_artifact(
     )
     # The inbox (#1436): what the account was told, as kinds and values -
     # the same facts the account sees, never a sentence about anybody else.
+    # A count of reviewed reports goes without its dates, which would say
+    # when a decision was made (R-MOD-20).
     writer.key("inbox")
     await _write_rows(
         writer,
@@ -1363,8 +1365,12 @@ async def _write_export_artifact(
             "kind": entry.kind,
             "subjectId": str(entry.subject_id) if entry.subject_id else None,
             "params": entry.params,
-            "createdAt": _timestamp(entry.created_at),
-            "readAt": _timestamp(entry.read_at) if entry.read_at else None,
+            "createdAt": None
+            if entry.kind == "reports_reviewed"
+            else _timestamp(entry.created_at),
+            "readAt": _timestamp(entry.read_at)
+            if entry.read_at and entry.kind != "reports_reviewed"
+            else None,
         },
     )
     # Audit details and other actor identifiers are deliberately omitted:

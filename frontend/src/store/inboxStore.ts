@@ -4,6 +4,7 @@ import {
   EMPTY_INBOX,
   fetchInbox,
   markInboxRead,
+  refreshedPage,
   withMore,
   type InboxPage,
 } from "../lib/inbox";
@@ -31,7 +32,8 @@ interface InboxStore extends InboxPage {
 }
 
 // Reads in flight may land out of order; an older answer never replaces a
-// newer one.
+// newer one. A mark counts as a read too: it is issued like one, so a read
+// sent before it cannot land after it and put the row back to unread.
 let issued = 0;
 let applied = 0;
 
@@ -48,7 +50,7 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       const page = await fetchInbox();
       if (mine < applied || get().owner !== owner) return;
       applied = mine;
-      set({ ...page, loaded: true });
+      set((state) => ({ ...page, ...refreshedPage(page, state.entries, state.next), loaded: true }));
       // The offer rides the same read, so the account menu's way into
       // enrolment comes and goes with it.
       useAuthStore.getState().applyPendingRole(pendingRoleFromPayload(page));
@@ -75,26 +77,31 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
   markRead: async (ids) => {
     const unread = new Set(get().entries.filter((e) => !e.read && ids.includes(e.id)).map((e) => e.id));
     if (unread.size === 0) return;
+    const owner = get().owner;
+    const mine = ++issued;
+    applied = mine;
     set((state) => ({
       entries: state.entries.map((e) => (unread.has(e.id) ? { ...e, read: true } : e)),
       unreadCount: Math.max(0, state.unreadCount - unread.size),
     }));
     try {
       const left = await markInboxRead({ ids: [...unread] });
-      set({ unreadCount: left });
+      // Only while nothing newer has been read since: a push read after this
+      // mark already counts it, and more besides.
+      if (get().owner === owner && applied === mine) set({ unreadCount: left });
     } catch {
-      const owner = get().owner;
-      if (owner) void get().refresh(owner);
+      if (owner && get().owner === owner) void get().refresh(owner);
     }
   },
 
   markAllRead: async () => {
+    const owner = get().owner;
+    applied = ++issued;
     set((state) => ({ entries: state.entries.map((e) => ({ ...e, read: true })), unreadCount: 0 }));
     try {
       await markInboxRead({ all: true });
     } catch {
-      const owner = get().owner;
-      if (owner) void get().refresh(owner);
+      if (owner && get().owner === owner) void get().refresh(owner);
     }
   },
 

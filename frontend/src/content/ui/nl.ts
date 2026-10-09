@@ -338,7 +338,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       case "star":
         return "Voor het geven van een ster moet eerst de waarschuwing van de moderatie gelezen worden.";
       case "play":
-        return "Voor het meedoen aan een spel moet eerst de waarschuwing van de moderatie gelezen worden.";
+        return "Voor het betreden van een kamer moet eerst de waarschuwing van de moderatie gelezen worden.";
       default:
         return "Eerst moet de waarschuwing van de moderatie gelezen worden.";
     }
@@ -368,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Deze instelling kon niet opgeslagen worden.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Melding niet gevonden.",
 
   // Reporting, from the reporter's side
@@ -2406,6 +2406,7 @@ export const NL: Catalogue = {
     inbox: "Inbox",
     openInboxUnread: (p: { count: number }) => `Inbox, ${counted(p.count, { one: "ongelezen bericht", other: "ongelezen berichten" })}`,
     markAllRead: "Alles als gelezen markeren",
+    markRead: "Als gelezen markeren",
     newGroup: "Nieuw",
     earlierGroup: "Eerder",
     showOlder: "Oudere tonen",
@@ -2440,7 +2441,7 @@ export const NL: Catalogue = {
     uploadAgainNow: "Je kunt nu een nieuwe uploaden.",
     uploadAgainOn: (p: { date: string }) => `Je kunt op ${p.date} een nieuwe uploaden.`,
     whatAWarningMeans:
-      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Zodra je op OK drukt, is er niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
+      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Zodra je het bevestigt, is er niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
     yourPictureWasRemoved: "Je afbeelding is verwijderd",
     aModeratorWarning: "Een waarschuwing van de moderatie",
     aReportAboutYourPicture: "Een melding over je afbeelding is bekeken, en dit is de uitkomst. Verder is er niets aan je account veranderd.",

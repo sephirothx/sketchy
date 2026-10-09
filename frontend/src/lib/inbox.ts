@@ -197,6 +197,37 @@ export function withMore(shown: InboxEntry[], more: InboxEntry[]): InboxEntry[] 
   return [...shown, ...more.filter((entry) => !seen.has(entry.id))];
 }
 
+/** Page one read again, with the older pages this tab had already loaded
+    kept under it - a push re-reads only the newest page, and the reader who
+    pressed **Show older** should not see those rows vanish. Kept are the rows
+    older than page one's last, in the server's own order (newest first, id to
+    break a tie); a row page one now holds again - renewed, so re-dated - is
+    page one's. With nothing older kept, the page's own cursor stands. */
+export function refreshedPage(
+  page: InboxPage,
+  shown: InboxEntry[],
+  shownNext: string | null,
+): Pick<InboxPage, "entries" | "next"> {
+  const last = page.entries[page.entries.length - 1];
+  if (!page.next || !last) return { entries: page.entries, next: page.next };
+  const ids = new Set(page.entries.map((entry) => entry.id));
+  const lastAt = Date.parse(last.createdAt);
+  const older = shown.filter((entry) => {
+    if (ids.has(entry.id)) return false;
+    const at = Date.parse(entry.createdAt);
+    return at < lastAt || (at === lastAt && entry.id < last.id);
+  });
+  return older.length > 0
+    ? { entries: [...page.entries, ...older], next: shownNext }
+    : { entries: page.entries, next: page.next };
+}
+
+/** Whether an invitation's time is up, by the entry itself: whatever this
+    tab holds, a passed `expiresAt` is the only thing that makes it expired. */
+export function invitationExpired(expiresAt: string | null, now: Date = new Date()): boolean {
+  return expiresAt === null || new Date(expiresAt).getTime() <= now.getTime();
+}
+
 /** Whether an invitation in the inbox can still be answered: the card's own
     live invitation from the same friend, not yet run out. The token stays
     with the card; the entry only knows who asked and until when. */

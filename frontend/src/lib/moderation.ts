@@ -510,29 +510,6 @@ export function createUserWarning(input: {
   return apiRequest("/api/moderation/warnings", { method: "POST", body: input });
 }
 
-/** How many of your own reports have been decided since you were last told.
-
-A count and nothing else: what was decided belongs to the reported player
-(R-MOD-20). */
-export function countReportsReviewed(): Promise<{
-  count: number;
-  /** Which reports the count was of, so the acknowledgement can name exactly
-      the ones a message was actually about. */
-  reportIds: string[];
-}> {
-  return apiRequest("/api/reports/reviewed");
-}
-
-export function acknowledgeReportsReviewed(reportIds: string[]): Promise<{
-  ok: boolean;
-  acknowledged: number;
-}> {
-  return apiRequest("/api/reports/reviewed/acknowledge", {
-    method: "POST",
-    body: { reportIds },
-  });
-}
-
 /** Keep only a payload shaped like a warning; a malformed one is dropped
 rather than rendered as "undefined" in front of the player. */
 export function parsePendingWarning(payload: unknown): PendingWarning | null {

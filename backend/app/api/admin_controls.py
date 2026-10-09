@@ -69,8 +69,8 @@ ROLE_CHANGED_EVENT = "admin.role_changed"
 SHUTDOWN_REQUESTED_EVENT = "server.shutdown_requested"
 
 # What an administrator may set a role to, from `domain_values` because the
-# `role_change_notices` check constraint is the same statement: a notice can
-# only ever be about a role this endpoint can set. Promotion to `admin` is
+# inbox's role entries read the same statement: an entry can only ever be
+# about a role this endpoint can set. Promotion to `admin` is
 # deliberately absent: `auth/admin.py` bootstraps the first one from a guarded
 # command that refuses to run once an administrator exists, and its own error
 # message points at "an authorized moderation flow" - this is that flow, for the
