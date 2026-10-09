@@ -947,7 +947,12 @@ transaction (`_merge_inbox`), under the account's rules: where both hold an entr
 the same fact the account's stands, read if either was, and the guest's unread count
 of reviewed reports is added into the account's — under the row locks a decision takes,
 in the same order (`add_reviewed_count`), so a decision landing mid-merge is waited for
-and counted rather than overwritten by a sum read before it. Left with the guest, an entry was
+and counted rather than overwritten by a sum read before it. Both take **accounts before
+inbox rows**: the merge locks its two `users` rows `FOR UPDATE`, and a decision locks every
+reporter's row, and the accounts they merged into, `FOR KEY SHARE` in ascending order
+before counting into any inbox. A decision that locked one reporter's count first and
+then wrote another's entry waited on that user row's foreign-key lock while a merge held
+it — a deadlock that rolled the decision back. Left with the guest, an entry was
 outside `uq_inbox_entries_subject`, and the account's next share of the same drawing
 wrote a second one.
 

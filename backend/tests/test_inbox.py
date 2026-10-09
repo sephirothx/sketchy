@@ -408,3 +408,56 @@ async def test_a_decision_landing_mid_merge_is_counted_not_overwritten(env):
             )
         ).all()
     assert counts == [{"count": 4}]
+
+
+async def test_a_decision_and_a_merge_lock_accounts_before_inboxes(env, monkeypatch):
+    """A decision covering an account and the guest about to merge into it
+    locks the account's count, and then writes the guest's - whose user row
+    the merge holds while it waits for that same count. Both now take the
+    accounts first, so one waits for the other instead of PostgreSQL
+    aborting the decision as a deadlock."""
+    new_client, factory = env
+    async with factory() as probe:
+        if probe.get_bind().dialect.name != "postgresql":
+            pytest.skip("row locks interleave only on PostgreSQL")
+    account = await register(new_client(), "LockOrder")
+    guest_id = generate_uuid()  # after the account's, so it is counted second
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 6", state="anonymous"))
+    await entry(factory, account["id"], "reports_reviewed", params={"count": 1})
+
+    counted_first, carry_on = asyncio.Event(), asyncio.Event()
+    original = inbox_service.add_reviewed_count
+
+    async def pausing_after_the_first(*args, **kwargs):
+        await original(*args, **kwargs)
+        if not counted_first.is_set():
+            counted_first.set()
+            await carry_on.wait()
+
+    monkeypatch.setattr(inbox_service, "add_reviewed_count", pausing_after_the_first)
+
+    async def decide():
+        async with factory() as session:
+            async with session.begin():
+                await count_reviewed_reports(session, {UUID(account["id"]): 1, guest_id: 1})
+
+    deciding = asyncio.create_task(decide())
+    await asyncio.wait_for(counted_first.wait(), timeout=10)
+    merging = asyncio.create_task(
+        SqlAlchemyUserRepository(factory).merge_guest_into_account(str(guest_id), account["id"])
+    )
+    await asyncio.sleep(0.5)
+    carry_on.set()
+    await asyncio.wait_for(asyncio.gather(deciding, merging), timeout=15)
+
+    async with factory() as session:
+        rows = (
+            await session.execute(
+                select(InboxEntry.user_id, InboxEntry.params).where(
+                    InboxEntry.kind == "reports_reviewed"
+                )
+            )
+        ).all()
+    assert rows == [(UUID(account["id"]), {"count": 3})]

@@ -167,18 +167,48 @@ async def _reporters_now(
     session: AsyncSession, reporter_ids: dict[UUID, int]
 ) -> dict[UUID, int]:
     """The reporters as they are now: a merged guest as its account, and an
-    erased account as nobody."""
+    erased account as nobody.
+
+    Every account involved is locked - `FOR KEY SHARE`, ascending - before
+    any inbox row is, which is the order a guest merge takes them in (users
+    `FOR UPDATE`, then their counts). Without it a decision locked one
+    reporter's count and then, writing the next reporter's entry, waited on
+    that user row's foreign-key lock while a merge holding the user row
+    waited on the count: a deadlock that rolled the decision back. Holding
+    the guest's row also means a merge cannot begin under the decision, so
+    the aliases read after it are the ones that stand."""
     if not reporter_ids:
         return {}
-    aliases = dict(
-        (
+    locked: set[UUID] = set()
+
+    async def lock(user_ids) -> None:
+        wanted = sorted(set(user_ids) - locked, key=str)
+        if wanted:
             await session.execute(
-                select(IdentityAlias.source_user_id, IdentityAlias.target_user_id).where(
-                    IdentityAlias.source_user_id.in_(list(reporter_ids))
-                )
+                select(User.id)
+                .where(User.id.in_(wanted))
+                .order_by(User.id)
+                .with_for_update(key_share=True)
             )
-        ).all()
-    )
+            locked.update(wanted)
+
+    async def read_aliases() -> dict[UUID, UUID]:
+        return dict(
+            (
+                await session.execute(
+                    select(IdentityAlias.source_user_id, IdentityAlias.target_user_id).where(
+                        IdentityAlias.source_user_id.in_(list(reporter_ids))
+                    )
+                )
+            ).all()
+        )
+
+    # The accounts guests already merged into are known before locking, so
+    # the whole set is taken in one ordered statement; a merge that commits
+    # in between adds its account after (it is done, so holds nothing).
+    await lock({*reporter_ids, *(await read_aliases()).values()})
+    aliases = await read_aliases()
+    await lock(aliases.values())
     counts: dict[UUID, int] = {}
     for reporter_id, count in reporter_ids.items():
         owner = aliases.get(reporter_id, reporter_id)
