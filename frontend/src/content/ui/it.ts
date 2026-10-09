@@ -2441,7 +2441,7 @@ export const IT: Catalogue = {
     uploadAgainNow: "Puoi caricarne un’altra subito.",
     uploadAgainOn: (p: { date: string }) => `Potrai caricarne un’altra il ${p.date}.`,
     whatAWarningMeans:
-      "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
+      "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Dopo aver premuto OK non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
     yourPictureWasRemoved: "La tua immagine è stata rimossa",
     aModeratorWarning: "Un avvertimento della moderazione",
     aReportAboutYourPicture: "Una segnalazione sulla tua immagine è stata esaminata, e questo è l’esito. Nient’altro nel tuo account è interessato.",

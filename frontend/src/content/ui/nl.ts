@@ -2440,7 +2440,7 @@ export const NL: Catalogue = {
     uploadAgainNow: "Je kunt nu een nieuwe uploaden.",
     uploadAgainOn: (p: { date: string }) => `Je kunt op ${p.date} een nieuwe uploaden.`,
     whatAWarningMeans:
-      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Er is niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
+      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Zodra je op OK drukt, is er niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
     yourPictureWasRemoved: "Je afbeelding is verwijderd",
     aModeratorWarning: "Een waarschuwing van de moderatie",
     aReportAboutYourPicture: "Een melding over je afbeelding is bekeken, en dit is de uitkomst. Verder is er niets aan je account veranderd.",

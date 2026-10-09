@@ -82,19 +82,22 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
             await expect(row.locator(".chip", has_text="moderator pending")).to_be_visible()
 
             # And the player, in a page that has not reloaded since before any
-            # of this existed. The offer asks for something, so it has a way
-            # into it rather than an acknowledgement.
+            # of this existed: the offer is in their inbox (#1436). It asks for
+            # something, so it has a way into it, and nothing was taken away -
+            # this browser is still signed in, which is what makes enrolling
+            # from it possible at all.
             await player_page.bring_to_front()
-            notice = player_page.locator(
-                '[role="dialog"]', has_text="The moderator role is waiting for you"
+            await expect(player_page.get_by_test_id("inbox-count")).to_have_text("1")
+            await player_page.get_by_test_id("inbox-bell").click()
+            offer = player_page.get_by_test_id("inbox-entry").filter(
+                has_text="The moderator role is waiting for you"
             )
-            await expect(notice).to_be_visible()
-            # Nothing has changed yet, so nothing was taken away: this browser
-            # is still signed in, which is what makes enrolling from it
-            # possible at all.
-            await expect(notice).not_to_contain_text("signed out on every device")
-            await notice.locator('button:has-text("Not now")').click()
-            await expect(notice).to_have_count(0)
+            await expect(offer).to_be_visible()
+            await expect(
+                offer.get_by_role("button", name="Set up two-factor sign-in")
+            ).to_be_visible()
+            await player_page.keyboard.press("Escape")
+            await expect(player_page.get_by_test_id("inbox-panel")).to_have_count(0)
 
             # Still an ordinary player until they enrol.
             await player_page.reload()

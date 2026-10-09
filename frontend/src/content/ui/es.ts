@@ -2439,7 +2439,7 @@ export const ES: Catalogue = {
     uploadAgainNow: "Ya puedes subir otra.",
     uploadAgainOn: (p: { date: string }) => `Podrás subir otra el ${p.date}.`,
     whatAWarningMeans:
-      "Se ha revisado una denuncia sobre tu comportamiento, y este es el resultado. No hay restricciones, pero otra denuncia podría llevar a la suspensión de tu cuenta.",
+      "Se ha revisado una denuncia sobre tu comportamiento, y este es el resultado. Cuando pulses OK no habrá restricciones, pero otra denuncia podría llevar a la suspensión de tu cuenta.",
     yourPictureWasRemoved: "Se eliminó tu imagen",
     aModeratorWarning: "Un aviso de moderación",
     aReportAboutYourPicture: "Se revisó una denuncia sobre tu imagen y este es el resultado. No afecta a nada más de tu cuenta.",

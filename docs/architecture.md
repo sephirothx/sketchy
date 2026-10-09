@@ -56,7 +56,7 @@ flowchart LR
 ```
 
 `app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")`
-([`backend/app/main.py:266`](../backend/app/main.py)) is the single ASGI application:
+([`backend/app/main.py:1235`](../backend/app/main.py)) is the single ASGI application:
 Socket.IO owns `/socket.io`, FastAPI owns everything else, and when
 `frontend/dist` exists it is mounted as static files on the same app. That is what
 makes single-port self-hosting and same-origin cookie sessions work without CORS
@@ -408,7 +408,7 @@ Four frontend conventions worth knowing:
    body that scrolls inside a card capped at 90% of the dynamic viewport, and the
    actions in a footer — right-aligned with the primary last, stacked full width on a
    phone. Left without `onDismiss` it is a **blocking notice** (the AFK check, a
-   suspension, a warning, a role change): no close button and no scrim, focus still
+   suspension, a warning): no close button and no scrim, focus still
    trapped, and Escape claimed so it never reaches what is open underneath — swallowed,
    or for the AFK check (`onEscape`) taken as the answer. A form whose submit button sits in the footer reaches it through the
    `form` attribute, so the button stays `type="submit"`. The two route overlays keep
@@ -451,6 +451,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
+| What the account has been told, and what it has read (#1436) | Database (`inbox_entries`); each tab holds only its last read (`store/inboxStore.ts`) and reads again on `inbox_changed` and every connect | Yes |
 | Finished game history, turns, outcomes, score ledger, drawings | Database | Yes |
 | Prompt concepts, versions, aliases, lists, their working copies and published editions, usage facts | Database | Yes |
 | Room-setting presets | Database | Yes |
@@ -523,7 +524,7 @@ no request in flight.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:776`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:803`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
@@ -624,8 +625,10 @@ by an HttpOnly `sketchy_session` cookie. Session cookies carry opaque 256-bit ra
 tokens; only SHA-256 hashes are stored. A session is bounded twice (R-AUTH-03): by an
 absolute life — 365 days for a player, 7 for a moderator or administrator — and by an
 idle window of 90 days (24 hours for staff) measured from its last use. Both are columns on the row,
-fixed at issue, which is safe because a role change revokes every session the account
-holds — so a live session is always one issued under the role its owner has now. Tokens
+fixed at issue, which is safe because a promotion revokes every session the account
+holds — so a staff session is always one issued under the staff role. A demotion
+revokes none (#1436): every staff check reads `users.role`, so the powers end on the
+next request, and the session left carries the stricter staff bounds. Tokens
 rotate weekly (daily for staff), which is per-device — the cookie is swapped on the
 browser making the request, and every other device stays signed in — and each rotation
 links its successor to its predecessor, so a predecessor presented afterwards is a
@@ -1366,10 +1369,10 @@ session make itself company. The account is found by name rather than by a paste
 id: the search behind that box is administrator-only, capped, and returns nothing a
 room does not already show every player seated in it, which is why it writes nothing
 to the ledger where the per-player activity view writes a row on every use. The
-player is then told over the same `user:{id}` broadcast room a suspension and a
-warning use, and from a pending notice on their next visit if nobody was connected —
-a **Moderation** entry that appears, or vanishes, with no explanation is a change
-nobody can ask about.
+player is then told by a `role` entry in their inbox, heard at once over the
+`user:{id}` broadcast room (`inbox_changed`) and read on their next visit if nobody was
+connected — a **Moderation** entry that appears, or vanishes, with no explanation is a
+change nobody can ask about. A promotion also signs every session out (R-INBOX-07).
 
 An administrator can also start a planned shutdown from that page, with a window
 for that shutdown alone. It signals the process rather than draining in the
@@ -1708,7 +1711,8 @@ all-or-nothing and keyed on the game's stable UUIDv7:
 - In the same transaction: the game record, participants, turns, per-seat outcomes,
   prompt offers and their sources, guesses, the score-event ledger, the turn drawings,
   the reactions and the shares to the Gallery given while the game was live, the
-  drawers' withdrawals and the share notices they leave (#1430), the prompt-usage facts,
+  drawers' withdrawals, the inbox entries the shares leave their drawers (#1430, #1436),
+  the prompt-usage facts,
   and the daily user-stat projection increments.
 - The room is told which game it just held and whether a row is coming
   (`Room.last_game_id`, `Room.last_game_history`, `Room.last_game_public` for who
@@ -1719,8 +1723,8 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   loop reports back through `GameFlowService.note_history_outcome`, which finds the room
   by the game it last held and ignores an outcome for a game the room has moved on from;
   and, once the history has landed, through `bind_recorded` to the application, which
-  expires This week and pushes `drawing_share_notice` to the drawers its live shares left
-  a notice for (R-SHARE-09).
+  expires This week and sends `inbox_changed` to the drawers its live shares left an
+  unread entry for (R-SHARE-09).
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
 - Guesser outcomes and score events, the rows that grow with turns × seats (2,400 and
@@ -1916,7 +1920,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
 | [`app/api/gallery.py`](../backend/app/api/gallery.py) | The Gallery's REST surface (#524): its pages, reactions, and taking a drawing out. |
-| [`app/api/share_notices.py`](../backend/app/api/share_notices.py) | Telling a drawer that somebody else shared their drawing (#1430, R-SHARE-09). |
+| [`app/api/inbox.py`](../backend/app/api/inbox.py) | An account's inbox over REST (#1436, R-INBOX-01..07). |
 | [`app/api/profiles.py`](../backend/app/api/profiles.py) | Public profile endpoints: lifetime stats and browsable game history. |
 | [`app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | Prompt list discovery, and the usage statistics the games feed back into it. |
 | [`app/api/room_presets.py`](../backend/app/api/room_presets.py) | Authenticated CRUD API for private reusable room-setting presets. |
@@ -2021,6 +2025,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
+| [`app/services/inbox.py`](../backend/app/services/inbox.py) | Writing to an account's inbox (#1436, R-INBOX-01). |
 | [`app/services/friend_presence.py`](../backend/app/services/friend_presence.py) | Which of an account's friends are online, answered to that account alone — uncapped, and without the lobby channel. |
 | [`app/services/afk.py`](../backend/app/services/afk.py) | When a person stopped answering, and what the room does about it. |
 | [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573), and wearing a doodle (#579). |
@@ -2058,11 +2063,11 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `playLanguagesQuestionStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useLandscapeFeedWidth.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `usePlayLanguages.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `countdownBar.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptListTree.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomLayout.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollHandles.ts`, `sessionRenewal.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `thumbnailAsk.ts`, `thumbnailQueue.ts`, `thumbnailRender.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `visibleText.ts`, `widthKeyframes.ts` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `inboxStore.ts`, `lobbyChatStore.ts`, `playLanguagesQuestionStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useLandscapeFeedWidth.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useInboxSync.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `usePlayLanguages.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `countdownBar.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `inbox.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptListTree.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomLayout.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollHandles.ts`, `sessionRenewal.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `thumbnailAsk.ts`, `thumbnailQueue.ts`, `thumbnailRender.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `visibleText.ts`, `widthKeyframes.ts` |
 | `frontend/src/workers/` | `thumbnail.worker.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LazyReportedDrawing.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayLanguageExtras.tsx`, `PlayLanguageFlags.tsx`, `PlayLanguagesQuestion.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteNotice.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `InboxBell.tsx`, `InboxPanel.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LazyReportedDrawing.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayLanguageExtras.tsx`, `PlayLanguageFlags.tsx`, `PlayLanguagesQuestion.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteNotice.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
 | `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
@@ -2172,7 +2177,9 @@ declared in order in
 [`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css) with the
 reason for each; a bare `z-index` of 0–4 only orders one component's own children.
 Dialogs sit over the route overlays, the room's sheets and the banners, blocking notices
-(suspension, warning, role change, the AFK check) over every other dialog, and toasts
+(suspension, warning, the AFK check) over every other dialog — and only one of the
+account's at a time, the warning held while a suspension stands and while a game is
+being played (R-INBOX-02) — and toasts
 over everything, because a toast is often the only word on what a dialog just did;
 [`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) holds the
 order. What floats bottom-centre — the friend invite and the toasts — stands above a

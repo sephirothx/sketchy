@@ -14,10 +14,13 @@ const InboxPanel = lazy(() => import("./InboxPanel"));
 
 On every page, between the language flag and the account chip, and in a
 game's header too - where the count is all that moves: nothing opens over a
-turn (R-INBOX-02). The count is what this tab last read of the server's, so
+turn (R-INBOX-02). `compact` there, at the size of the Room menu's own
+buttons: a phone's game bar gives way one thing at a time (game-room.css), and
+a full-size bell took the wordmark with it on a narrow phone. The count is
+what this tab last read of the server's, so
 reading an entry in another tab moves it here as well. Opening the inbox reads
 nothing: an entry is read when it is acted on or marked. */
-export function InboxBell() {
+export function InboxBell({ compact = false }: { compact?: boolean }) {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const owner = useInboxStore((state) => state.owner);
   const unread = useInboxStore((state) => state.unreadCount);
@@ -55,7 +58,7 @@ export function InboxBell() {
       <button
         ref={buttonRef}
         type="button"
-        className="btn btn-icon header-settings-button inbox-bell-button"
+        className={`btn btn-icon${compact ? " btn-compact" : ""} inbox-bell-button`}
         aria-label={label}
         title={label}
         aria-expanded={open}

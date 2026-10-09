@@ -130,7 +130,8 @@ SHORT_ROUND_SHOWN = """() => {
 async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar():
     """The phone's round read "R1/1" (C16). It says "Round 1/3" where the bar
     has room and "1/3" where it does not, chosen by measuring the bar, so it
-    never pushes the wordmark or the menu off it."""
+    never pushes the wordmark or the menu off it. Beside the inbox's bell a
+    phone's bar is "1/3" (#1436)."""
     tag = random.randint(1000, 9999)
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -157,11 +158,11 @@ async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar(
                 # The phone's chip is a React render off a media query, and
                 # the label is chosen from a ResizeObserver after it.
                 await guest.wait_for_selector(".game-header-round-short", state="attached")
-                if width >= 390:
-                    # "Round 1/3" needs about 340px of a 370px bar in English.
-                    await guest.wait_for_function(FULL_ROUND_SHOWN)
-                else:
-                    await guest.wait_for_timeout(300)
+                # Whichever label the measure chose: beside the inbox's bell
+                # (#1436) a phone's bar has no room for "Round 1/3", so the
+                # numbers stand alone - and nothing is ever pushed off.
+                await guest.wait_for_function(f"() => ({FULL_ROUND_SHOWN})() || ({SHORT_ROUND_SHOWN})()")
+                await guest.wait_for_timeout(300)
                 bar = await guest.evaluate(ROUND)
                 assert bar["page"] <= bar["inner"], (width, bar)
                 assert bar["mark"] and bar["round"] and bar["menu"], (width, bar)
@@ -170,13 +171,14 @@ async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar(
                 assert bar["round"]["right"] <= bar["menu"]["left"], (width, bar)
                 assert "R1/" not in bar["text"], (width, bar)
 
-            # Too narrow for the word: "Round 1/3" needs about 340px and a
-            # 340px phone's bar has 320. The numbers alone, nothing pushed.
+            # Narrower still, the wordmark gives way next (game-room.css): the
+            # Room menu's Leave is the other way out. Nothing is pushed off.
             await guest.set_viewport_size({"width": 340, "height": 800})
-            await guest.wait_for_function(SHORT_ROUND_SHOWN)
+            await guest.wait_for_function(f"() => ({FULL_ROUND_SHOWN})() || ({SHORT_ROUND_SHOWN})()")
+            await guest.wait_for_timeout(300)
             bar = await guest.evaluate(ROUND)
             assert bar["page"] <= bar["inner"], bar
-            assert bar["mark"]["right"] <= bar["round"]["left"], bar
+            assert bar["mark"] is None or bar["mark"]["right"] <= bar["round"]["left"], bar
             assert bar["round"]["right"] <= bar["menu"]["left"], bar
 
             # A notice beside the round: measured with it, so still nothing

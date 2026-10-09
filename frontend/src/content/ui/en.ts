@@ -2462,7 +2462,7 @@ export const EN = {
     uploadAgainNow: "You can upload another one now.",
     uploadAgainOn: (p: { date: string }): string => `You can upload another one on ${p.date}.`,
     whatAWarningMeans:
-      "A report about your behavior was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
+      "A report about your behavior was reviewed, and this is the outcome. Once you press OK nothing is restricted, but a further report may lead to your account being suspended.",
     yourPictureWasRemoved: "Your picture was removed",
     aModeratorWarning: "A moderator warning",
     aReportAboutYourPicture:

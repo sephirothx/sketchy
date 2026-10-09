@@ -2440,7 +2440,7 @@ export const DE: Catalogue = {
     uploadAgainNow: "Du kannst jetzt ein neues hochladen.",
     uploadAgainOn: (p: { date: string }) => `Du kannst am ${p.date} ein neues hochladen.`,
     whatAWarningMeans:
-      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Nichts ist eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
+      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Sobald du OK drückst, ist nichts eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
     yourPictureWasRemoved: "Dein Bild wurde entfernt",
     aModeratorWarning: "Eine Verwarnung der Moderation",
     aReportAboutYourPicture: "Eine Meldung über dein Bild wurde geprüft, und das ist das Ergebnis. Sonst ist an deinem Konto nichts betroffen.",

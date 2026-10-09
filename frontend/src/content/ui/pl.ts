@@ -2457,7 +2457,7 @@ export const PL: Catalogue = {
     uploadAgainNow: "Możesz już wgrać nowe.",
     uploadAgainOn: (p: { date: string }) => `Nowe możesz wgrać ${p.date}.`,
     whatAWarningMeans:
-      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Nic nie zostało ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
+      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Po naciśnięciu OK nic nie jest ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
     yourPictureWasRemoved: "Twoje zdjęcie zostało usunięte",
     aModeratorWarning: "Ostrzeżenie od moderatora",
     aReportAboutYourPicture:

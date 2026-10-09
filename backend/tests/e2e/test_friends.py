@@ -773,13 +773,10 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             # surface, or leaving the room.
             await popover.get_by_role("button", name="Accept").click()
 
-            # The asker is told, and this is checked first because it is the
-            # only assertion here with a deadline: an acceptance is read
-            # rather than acted on, so its toast keeps the ordinary five
-            # seconds. Everything below is a settled state that waits.
-            await expect(asker.locator(".app-toast").filter(
-                has_text=target_name
-            ).first).to_be_visible(timeout=SETTLE_MS)
+            # The asker is told in their inbox (#1436): the bell counts it.
+            await expect(asker.get_by_test_id("inbox-count")).to_have_text(
+                "1", timeout=SETTLE_MS
+            )
 
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
@@ -927,13 +924,11 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
             await browser.close()
 
 
-async def test_an_acceptance_mid_game_waits_for_the_lobby():
-    """#1200: "X accepted your friend request" was a five-second toast, and in
-    a phone room it stood on the chat feed's newest line. It has nothing to
-    offer, so it is not a chip either: it is held while the room is up and
-    said as the usual toast once the room is left - once, and recorded as told
-    only then (R-FRIEND-14), so a reload in the lobby does not say it again.
-    A reload mid-game is still in the room, though the bar is not drawn yet."""
+async def test_an_acceptance_mid_game_moves_only_the_bell():
+    """#1200, then #1436: being accepted has nothing to answer, so it is an
+    entry in the asker's inbox - never a toast over a phone's chat feed, never
+    a dialog over a turn. Mid-game only the bell's count moves, it survives a
+    reload, and the entry names who said yes (R-FRIEND-14, R-INBOX-02)."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         asker_context = await browser.new_context(
@@ -945,39 +940,8 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
         target = await target_context.new_page()
         other = await other_context.new_page()
         asker_name, target_name, other_name = unique("Asker"), unique("Yes"), unique("Other")
-        accepted = asker.locator(".app-toast").filter(has_text="accepted your friend request")
-
-        # The asker's own reads of its lists, so the test knows the acceptance
-        # reached the room rather than guessing at a delay.
-        reads = []
-        asker.on(
-            "response",
-            lambda response: reads.append(response)
-            if response.url.endswith("/api/users/me/friends")
-            and response.request.method == "GET"
-            else None,
-        )
-
-        # Recorded as told (R-FRIEND-14): a toast that flashed and was taken
-        # down again as the room drew its bar leaves this behind.
-        told: list[str] = []
-        asker.on(
-            "request",
-            lambda request: told.append(asker.url)
-            if request.method == "POST" and request.url.endswith("/friends/announced")
-            else None,
-        )
-
-        async def a_read_names_the_acceptance() -> None:
-            checked = 0
-            for _ in range(SETTLE_MS // 100):
-                while checked < len(reads):
-                    body = await reads[checked].json()
-                    checked += 1
-                    if any(row.get("displayName") == target_name for row in body.get("announce", [])):
-                        return
-                await asker.wait_for_timeout(100)
-            raise AssertionError("the asker never read the acceptance")
+        toast = asker.locator(".app-toast").filter(has_text="accepted your friend request")
+        count = asker.get_by_test_id("inbox-count")
 
         try:
             await sign_up(target, target_name)
@@ -996,7 +960,6 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
             await asker.get_by_role("button", name="Start game").click()
             await asker.wait_for_selector(".game-room-playing")
 
-            reads.clear()
             await open_friends(target)
             accept = target.locator('[data-testid="friends-incoming"]').get_by_role(
                 "button", name="Accept"
@@ -1004,47 +967,21 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
             await expect(accept).to_be_visible(timeout=SETTLE_MS)
             await accept.click()
 
-            # Heard in the room, and not said there: the toast would have been
-            # raised by the render that follows the read. Counted directly
-            # rather than with expect, which would wait out a toast's five
-            # seconds and pass.
-            await a_read_names_the_acceptance()
-            for _ in range(15):
-                assert await accepted.count() == 0, "an acceptance was said mid-game"
-                await asker.wait_for_timeout(100)
+            await expect(count).to_have_text("1", timeout=SETTLE_MS)
+            assert await toast.count() == 0, "an acceptance was said as a toast"
+            assert await asker.get_by_role("alertdialog").count() == 0
 
-            # Nor on a reload mid-game, whose first read can land before the
-            # room has drawn its bar again: still owed, so still named.
-            reads.clear()
+            # Held by the server, so a reload mid-game still counts it.
             await asker.reload()
             await asker.wait_for_selector(".game-room-playing")
-            await a_read_names_the_acceptance()
-            for _ in range(15):
-                assert await accepted.count() == 0, "an acceptance was said on a reload mid-game"
-                await asker.wait_for_timeout(100)
-            assert told == [], told
+            await expect(count).to_have_text("1", timeout=SETTLE_MS)
 
-            await leave_room(asker)
-            question = asker.get_by_role("alertdialog")
-            await question.get_by_role("button", name="Leave game").click()
-            await asker.wait_for_selector('[data-testid="quick-play"]')
-            await expect(accepted).to_have_count(1, timeout=SETTLE_MS)
-            await expect(accepted).to_contain_text(target_name)
-            assert told, "the acceptance was never recorded as told"
-
-            # Told, and recorded as told: the next visit does not say it again.
-            await expect(accepted).to_have_count(0, timeout=SETTLE_MS)
-            reads.clear()
-            await asker.reload()
-            await asker.wait_for_selector('[data-testid="quick-play"]')
-            for _ in range(SETTLE_MS // 100):
-                if reads:
-                    break
-                await asker.wait_for_timeout(100)
-            assert reads, "the reloaded lobby never read its lists"
-            for _ in range(15):
-                assert await accepted.count() == 0, "an acceptance was said twice"
-                await asker.wait_for_timeout(100)
+            await asker.get_by_test_id("inbox-bell").click()
+            entry = asker.get_by_test_id("inbox-entry").filter(has_text="accepted your friend request")
+            await expect(entry).to_contain_text(target_name)
+            await asker.get_by_test_id("inbox-mark-all").click()
+            await expect(count).to_have_count(0)
+            assert await toast.count() == 0
         finally:
             await asker_context.close()
             await target_context.close()

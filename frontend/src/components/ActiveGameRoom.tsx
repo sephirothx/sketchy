@@ -567,7 +567,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           ) : (
             <RoomMenuDropdown actions={roomMenuActions} />
           )}
-          <InboxBell />
+          <InboxBell compact={identityCompact} />
           <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>

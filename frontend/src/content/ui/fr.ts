@@ -2442,7 +2442,7 @@ export const FR: Catalogue = {
     uploadAgainNow: "Tu peux en envoyer une autre dès maintenant.",
     uploadAgainOn: (p: { date: string }) => `Tu pourras en envoyer une autre le ${p.date}.`,
     whatAWarningMeans:
-      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
+      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Une fois OK pressé, rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
     yourPictureWasRemoved: "Ta photo a été retirée",
     aModeratorWarning: "Un avertissement de la modération",
     aReportAboutYourPicture: "Un signalement concernant ta photo a été examiné, et voici le résultat. Rien d’autre sur ton compte n’est concerné.",
