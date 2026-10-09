@@ -171,7 +171,10 @@ async def _reporters_now(
 
     Every account involved is locked - `FOR KEY SHARE`, ascending - before
     any inbox row is, which is the order a guest merge takes them in (users
-    `FOR UPDATE`, then their counts). Without it a decision locked one
+    `FOR UPDATE`, then their counts). Shared, so two decisions telling the
+    same reporter do not wait on each other, and a ban's hold on its target
+    (`FOR NO KEY UPDATE`, `auth/bans.py`) does not shut out a decision that
+    tells that account as a reporter. Without it a decision locked one
     reporter's count and then, writing the next reporter's entry, waited on
     that user row's foreign-key lock while a merge holding the user row
     waited on the count: a deadlock that rolled the decision back. Holding
@@ -188,7 +191,7 @@ async def _reporters_now(
                 select(User.id)
                 .where(User.id.in_(wanted))
                 .order_by(User.id)
-                .with_for_update(key_share=True)
+                .with_for_update(read=True, key_share=True)
             )
             locked.update(wanted)
 

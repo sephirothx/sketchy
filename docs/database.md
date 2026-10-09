@@ -952,7 +952,11 @@ inbox rows**: the merge locks its two `users` rows `FOR UPDATE`, and a decision 
 reporter's row, and the accounts they merged into, `FOR KEY SHARE` in ascending order
 before counting into any inbox. A decision that locked one reporter's count first and
 then wrote another's entry waited on that user row's foreign-key lock while a merge held
-it — a deadlock that rolled the decision back. Left with the guest, an entry was
+it — a deadlock that rolled the decision back. A **ban** holds its target `FOR NO KEY
+UPDATE` (`auth/bans.py`), not `FOR UPDATE`: it still excludes a second ban, an erasure and a
+merge of that account, but not another decision's `FOR KEY SHARE` on it as a reporter. Two
+bans of players who had reported each other each held one and reached for the other, and
+one was rolled back. Left with the guest, an entry was
 outside `uq_inbox_entries_subject`, and the account's next share of the same drawing
 wrote a second one.
 

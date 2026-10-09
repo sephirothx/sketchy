@@ -27,7 +27,7 @@ from app.auth.rate_limit import (
     client_key,
 )
 from app.auth.audit import audit_coordinates
-from app.auth.bans import active_ban_filter, active_ban_for_user
+from app.auth.bans import active_ban_filter, active_ban_for_user, lock_ban_target
 from app.auth.mail import queue_email, recipient_locale
 from app.canvas_storage import (
     CorruptStoredDrawingError,
@@ -2972,9 +2972,7 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                target = await session.scalar(
-                    select(User).where(User.id == body.user_id).with_for_update()
-                )
+                target = await lock_ban_target(session, body.user_id)
                 if target is None or target.state in {
                     AccountState.MERGED.value,
                     AccountState.DELETED.value,

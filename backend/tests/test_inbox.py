@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
 from app.api.inbox import INBOX_PAGE, create_inbox_router, inbox_payload
+from app.auth.bans import lock_ban_target
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.pending_role import OFFER_LIFETIME
 from app.auth.retention import purge_expired_inbox_entries, purge_expired_warnings
@@ -461,3 +462,35 @@ async def test_a_decision_and_a_merge_lock_accounts_before_inboxes(env, monkeypa
             )
         ).all()
     assert rows == [(UUID(account["id"]), {"count": 3})]
+
+
+async def test_two_bans_of_players_who_reported_each_other_both_land(env):
+    """Each ban holds its target, then tells the reporters - here, the other
+    target. The target's lock must not shut out the other decision's lock on
+    it as a reporter, or the two wait on each other and PostgreSQL rolls one
+    ban back as a deadlock."""
+    new_client, factory = env
+    async with factory() as probe:
+        if probe.get_bind().dialect.name != "postgresql":
+            pytest.skip("row locks interleave only on PostgreSQL")
+    alice = UUID((await register(new_client(), "AliceBans"))["id"])
+    bob = UUID((await register(new_client(), "BobBans"))["id"])
+    for who in (alice, bob):
+        await entry(factory, str(who), "reports_reviewed", params={"count": 1})
+
+    both_hold = asyncio.Barrier(2)
+
+    async def ban(target: UUID, reporter: UUID) -> None:
+        async with factory() as session:
+            async with session.begin():
+                await lock_ban_target(session, target)
+                await both_hold.wait()
+                await count_reviewed_reports(session, {reporter: 1})
+
+    await asyncio.wait_for(asyncio.gather(ban(alice, bob), ban(bob, alice)), timeout=15)
+    async with factory() as session:
+        counts = sorted(
+            row.params["count"]
+            for row in (await session.scalars(select(InboxEntry))).all()
+        )
+    assert counts == [2, 2]
