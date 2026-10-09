@@ -132,10 +132,12 @@ class HandlerContext:
     # Gallery doors charge (#1243). None without a database, where reporting
     # is unavailable anyway.
     report_budget: ReportBudget | None = None
-    # What a committed share from the recap owes the rest of the process
-    # (#1430): the drawer it left a notice for is told now if connected, and
-    # This week is read again. Bound by the application once both exist.
-    on_share_notice: Callable[[str], Awaitable[None]] | None = None
+    # What a write from a socket owes the rest of the process: an account
+    # whose inbox it moved is told now in every open tab (#1436) - the drawer
+    # a recap share left an entry for, a friend an invitation went to - and a
+    # share means This week is read again (#1430). Bound by the application
+    # once both exist.
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None
     on_gallery_changed: Callable[[], None] | None = None
     room_quotas: RoomQuotaService = field(init=False)
     room_capacity: RoomCapacityService = field(init=False)

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 16,
+  "schemaVersion": 17,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -114,6 +114,13 @@
     "gameParticipations[].participation.turnsPlayed",
     "gameParticipations[].participation.wasAnonymous",
     "generatedAt",
+    "inbox",
+    "inbox[].createdAt",
+    "inbox[].kind",
+    "inbox[].params",
+    "inbox[].params.count",
+    "inbox[].readAt",
+    "inbox[].subjectId",
     "linkedIdentities",
     "linkedIdentities[].avatarKey",
     "linkedIdentities[].createdAt",

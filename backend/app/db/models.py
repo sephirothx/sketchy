@@ -90,7 +90,7 @@ from app.domain_values import (
     TURN_END_REASONS,
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
-    GRANTABLE_ROLES,
+    INBOX_KINDS,
     OFFERABLE_ROLES,
     USER_ROLES,
     USER_THEMES,
@@ -924,19 +924,6 @@ class PlayerReport(Base):
             name="ck_player_reports_reviewed_identity",
         ),
         Index("ix_player_reports_status_created_at", "status", "created_at"),
-        # One question, asked on every page load by every signed-in reporter:
-        # "any of mine decided and not yet said?" Answered from an index over
-        # exactly that, holding only the rows that can still answer yes.
-        Index(
-            "ix_player_reports_reporter_unannounced",
-            "reporter_user_id",
-            postgresql_where=text(
-                "reporter_notified_at IS NULL AND status <> 'pending'"
-            ),
-            sqlite_where=text(
-                "reporter_notified_at IS NULL AND status <> 'pending'"
-            ),
-        ),
         # Decided rows only, one entry per report that has a decision. The
         # closed-case stream reads its page as distinct decision groups newest
         # first; because the id is time-ordered, that is an ordered scan of
@@ -1059,13 +1046,6 @@ class PlayerReport(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    # When the reporter was told their report had been looked at. Null until
-    # then, which is what stops it being said twice. It records only that the
-    # telling happened - never what was decided, which is the reported
-    # player's business (R-MOD-20).
-    reporter_notified_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
 
     message_evidence: Mapped[list[PlayerReportMessageEvidence]] = relationship(
         back_populates="report",
@@ -1746,12 +1726,15 @@ class UserBan(Base):
 
 
 class UserWarning(Base):
-    """A moderator's formal warning: shown to the player once, then kept.
+    """A moderator's formal warning: acknowledged by the player, then kept.
 
     The step between dismissing a report and suspending the account. It does
     not restrict anything - the player is told what was reported and that a
     moderator looked, and the acknowledgement records that the message
-    actually reached them.
+    actually reached them. Until it does, the player cannot take a seat in a
+    room (#1436). Kept twelve months as moderation history, which a later
+    suspension decision reads, and deleted with the account rather than
+    orphaned (R-PRIV).
     """
 
     __tablename__ = "user_warnings"
@@ -1770,16 +1753,19 @@ class UserWarning(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_user_warnings_user_id_users"),
+        nullable=False,
     )
     issued_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The moderator's words for a formal warning. Empty for a picture's
+    # removal, which the client says in the reader's own language (#1436):
+    # a sentence built here was English on every screen.
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     # The moderator's own finding about what rule this was, when they chose
     # to record one. Optional, so a decision is never blocked on it, which
@@ -1813,58 +1799,67 @@ class UserWarning(Base):
     )
 
 
-class RoleChangeNotice(Base):
-    """What an account still has to be told about its own role.
+class InboxEntry(Base):
+    """One message in an account's inbox (#1436, R-INBOX-01).
 
-    The role itself lives on `users.role`; this is only the message. It exists
-    for the same reason `user_warnings` does: an administrator acts while the
-    player is asleep, and a **Moderation** entry that appears - or vanishes -
-    with no explanation is a change nobody can ask about. A connected account
-    hears it on the socket, everybody else on their next visit, and
-    acknowledging records that the notice actually landed.
-
-    No actor column. Who acted, and the reason they gave, are the audit
-    ledger's job and are written there in the same transaction; the reason in
-    particular is text one administrator wrote for another and can name a
-    report or a second account, so it deliberately has no route to the person
-    it is about.
+    The inbox is where everything the app tells a player about their own
+    account lands: a warning, somebody sharing their drawing, a friend request
+    or acceptance, an invitation, reports reviewed, a role. An entry is the
+    message, not the fact - the warning row, the share, the friendship and the
+    role keep their own records and their own retention - so it is deleted 90
+    days after it arrives, read or not, and with the account. What an entry
+    shows is read when it is shown, from the fact it names: who shared a
+    drawing still standing, whether a request is still pending, whether an
+    offer still stands. `params` holds only values (a role, a count, an
+    account id), never a sentence: the reader's language renders it.
     """
 
-    __tablename__ = "role_change_notices"
+    __tablename__ = "inbox_entries"
     __table_args__ = (
-        # The grantable roles, not every role: `admin` is never set over the
-        # network, so a notice about one is a row that could only arrive by
-        # mistake - and the client drops what it cannot explain rather than
-        # showing a player a pop-up about a role nobody gave them.
-        _values_check("role", GRANTABLE_ROLES, "ck_role_change_notices_role"),
-        Index("ix_role_change_notices_user_pending", "user_id", "acknowledged_at"),
+        _values_check("kind", INBOX_KINDS, "ck_inbox_entries_kind"),
+        # The newest first, a page at a time; and the sweep's range scan.
+        Index("ix_inbox_entries_user_created", "user_id", "created_at"),
+        Index("ix_inbox_entries_created_at", "created_at"),
+        # The bell's count, from the rows that can still answer it.
+        Index(
+            "ix_inbox_entries_user_unread",
+            "user_id",
+            postgresql_where=text("read_at IS NULL"),
+            sqlite_where=text("read_at IS NULL"),
+        ),
+        # One entry per fact: the second share of a drawing, a warning
+        # announced twice, says nothing the first did not.
+        Index(
+            "uq_inbox_entries_subject",
+            "user_id",
+            "kind",
+            "subject_id",
+            unique=True,
+            postgresql_where=text("subject_id IS NOT NULL"),
+            sqlite_where=text("subject_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
-    # The role the account holds now, not the step it took: a notice read late
-    # should describe where the account stands, and `users.role` is the only
-    # thing that can contradict it.
-    role: Mapped[str] = mapped_column(String(16), nullable=False)
-    # Whether this is a role the account *has* or one it has been offered and
-    # has still to take up by enrolling a second factor. Two messages that
-    # would otherwise be indistinguishable - "you are a moderator" and "you
-    # can be one" - and the second asks something of the reader.
-    pending: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=false(), nullable=False
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    # The row the entry is about, where there is one: a warning, a turn, a
+    # friendship. No foreign key - the kinds name different tables - so a
+    # fact that goes is noticed when the entry is read.
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
+    params: Mapped[dict] = mapped_column(PortableJSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
-    acknowledged_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class UserBlock(Base):
@@ -1960,14 +1955,6 @@ class Friendship(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    # When the asker was told their request had been accepted. Null while they
-    # still owe it, which is a state the server holds rather than one the
-    # client derives from watching the lists move: a reader who was not
-    # present for the move cannot see it, and being accepted is not something
-    # anybody should have to be looking at the right moment to learn (#724).
-    acceptance_announced_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
 
 
 class IdentityAlias(Base):
@@ -3575,60 +3562,6 @@ class TurnDrawingShare(Base):
     )
     participant: Mapped[GameParticipant] = relationship(
         primaryjoin="GameParticipant.id == foreign(TurnDrawingShare.participant_id)",
-    )
-
-
-class DrawingShareNotice(Base):
-    """What a drawer still has to be told: somebody else shared their drawing.
-
-    Somebody else may share a drawing from a public game without asking
-    (R-SHARE-02), so the drawer is told once, and can take it back out from
-    the notice (R-SHARE-09). One row per drawing, ever, because the second and
-    the tenth share say nothing the first did not. Who to name is read when
-    the notice is shown, not kept here: the earliest share still standing by
-    somebody other than the drawer, so a sharer who took theirs back or was
-    erased is never the one named, and a notice with no such share left has
-    nothing to say. The `role_change_notices` pattern: a connected account
-    hears it on the socket, everybody else on their next visit, and
-    acknowledging records that it landed.
-    """
-
-    __tablename__ = "drawing_share_notices"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["game_id", "turn_id"],
-            ["turn_records.game_id", "turn_records.id"],
-            name="fk_drawing_share_notices_turn_same_game",
-            ondelete="CASCADE",
-        ),
-        UniqueConstraint("turn_id", name="uq_drawing_share_notices_turn_id"),
-        Index("ix_drawing_share_notices_user_pending", "user_id", "acknowledged_at"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
-    # The drawer's account, canonical when written.
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    game_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
-    turn_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=False
-    )
-    acknowledged_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True
-    )
-
-    turn_record: Mapped[TurnRecord] = relationship(
-        foreign_keys=[game_id, turn_id],
     )
 
 

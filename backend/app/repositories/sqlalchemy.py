@@ -59,7 +59,6 @@ from app.db.models import (
     ProfileDrawingPin,
     TurnDrawingReaction,
     TurnDrawingShare,
-    DrawingShareNotice,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnPromptOfferSource,
@@ -77,6 +76,7 @@ from app.canvas_storage import (
     stored_drawing_checksum,
     stored_drawing_format,
 )
+from app.services.inbox import add_entry as add_inbox_entry, mark_read as mark_inbox_read
 from app.services.gallery_ranking import (
     HOT_HORIZON,
     MAX_GALLERY_OFFSET,
@@ -802,26 +802,18 @@ async def _share_seats(session: AsyncSession, turn_id: UUID) -> tuple[str, ...]:
 async def _leave_share_notice(
     session: AsyncSession, turn: TurnRecord, *, now: datetime
 ) -> UUID | None:
-    """Tell the drawer, once per drawing, that somebody else shared it
-    (R-SHARE-09). Answers the drawer's account when a notice was written, so
-    the caller can push it once the transaction commits; nothing when the
-    drawing already has one, or its drawer has no account to tell."""
+    """Tell the drawer, once per drawing, that somebody else shared it: an
+    entry in their inbox (R-SHARE-09, #1436). Answers the drawer's account
+    when an entry was written, so the caller can tell their open tabs once the
+    transaction commits; nothing when the drawing already has one, or its
+    drawer has no account to tell."""
     if turn.drawer_user_id is None:
         return None
-    if await session.scalar(
-        select(DrawingShareNotice.id).where(DrawingShareNotice.turn_id == turn.id)
-    ) is not None:
-        return None
     drawer = await _canonical_user_id(session, turn.drawer_user_id)
-    session.add(
-        DrawingShareNotice(
-            user_id=drawer,
-            game_id=turn.game_id,
-            turn_id=turn.id,
-            created_at=now,
-        )
+    written = await add_inbox_entry(
+        session, user_id=drawer, kind="drawing_shared", subject_id=turn.id, created_at=now
     )
-    return drawer
+    return drawer if written else None
 
 
 @dataclass(frozen=True)
@@ -2635,15 +2627,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     drawer_user_id = turn_inputs_by_id[notice_turn_id].drawer_user_id
                     if not drawer_user_id:
                         continue
-                    session.add(
-                        DrawingShareNotice(
-                            user_id=await _canonical_user_id(
-                                session, _entity_id(drawer_user_id)
-                            ),
-                            game_id=record_id,
-                            turn_id=notice_turn_id,
-                            created_at=first_shares[notice_turn_id],
-                        )
+                    await add_inbox_entry(
+                        session,
+                        user_id=await _canonical_user_id(session, _entity_id(drawer_user_id)),
+                        kind="drawing_shared",
+                        subject_id=notice_turn_id,
+                        created_at=first_shares[notice_turn_id],
                     )
                 # The Gallery's projections ride in the same transaction as
                 # the rows they count (R-GAL-05).
@@ -3201,8 +3190,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 elif is_drawer:
                     # The drawer's withdrawal (R-SHARE-04): every share, every
                     # pin - a pin is a share (R-PIN-03) - and a bar on the
-                    # rest until the drawer shares it again. A notice about a
-                    # share that no longer exists has nothing left to say.
+                    # rest until the drawer shares it again. Their inbox entry
+                    # about it is read: they have just acted on it.
                     await session.execute(
                         delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == db_turn_id)
                     )
@@ -3211,13 +3200,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             ProfileDrawingPin.turn_id == db_turn_id
                         )
                     )
-                    await session.execute(
-                        update(DrawingShareNotice)
-                        .where(
-                            DrawingShareNotice.turn_id == db_turn_id,
-                            DrawingShareNotice.acknowledged_at.is_(None),
-                        )
-                        .values(acknowledged_at=now)
+                    await mark_inbox_read(
+                        session,
+                        user_ids=list(identity_ids),
+                        kind="drawing_shared",
+                        subject_id=db_turn_id,
+                        now=now,
                     )
                     drawing_row.gallery_withdrawn_at = now
                 else:

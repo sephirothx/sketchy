@@ -9,10 +9,10 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select, update
 
-from app.api.share_notices import pending_share_notice_payload
+from app.api.inbox import inbox_payload
 from app.auth.account_data import anonymize_account
 from app.db.models import (
-    DrawingShareNotice,
+    InboxEntry,
     ProfileDrawingPin,
     TurnDrawing,
     TurnDrawingShare,
@@ -48,15 +48,23 @@ async def _gallery_ids(history) -> list[str]:
 
 
 async def _notices(factory) -> list[tuple[UUID, UUID]]:
+    """The inbox entries that tell a drawer about a share (#1436)."""
     async with factory() as session:
-        rows = (await session.scalars(select(DrawingShareNotice))).all()
-    return [(row.user_id, row.turn_id) for row in rows]
+        rows = (
+            await session.scalars(select(InboxEntry).where(InboxEntry.kind == "drawing_shared"))
+        ).all()
+    return [(row.user_id, row.subject_id) for row in rows]
 
 
-async def _told(factory, user_id: str) -> list[tuple[str, str]]:
-    """What the drawer is shown: each notice's drawing and the name on it."""
-    payload = await pending_share_notice_payload(factory, user_id)
-    return [(notice["turnId"], notice["sharerDisplayName"]) for notice in payload["notices"]]
+async def _told(factory, user_id: str) -> list[tuple[str, str | None]]:
+    """What the drawer's inbox shows: each entry's drawing and the name on it,
+    read now from the shares still standing - nobody once none is left."""
+    payload = await inbox_payload(factory, user_id)
+    return [
+        (entry["drawing"]["turnId"], (entry["drawing"]["sharedBy"] or {}).get("displayName"))
+        for entry in payload["entries"]
+        if entry["kind"] == "drawing_shared"
+    ]
 
 
 async def _drawing(factory, turn_id: str) -> TurnDrawing:
@@ -334,8 +342,10 @@ async def test_the_drawers_withdrawal_settles_the_notice(repos):
     )
     await history.set_drawing_share(None, game.turn_id, requesting_user_id=ann.id, shared=False)
     async with factory() as session:
-        [notice] = (await session.scalars(select(DrawingShareNotice))).all()
-    assert notice.acknowledged_at is not None
+        [notice] = (
+            await session.scalars(select(InboxEntry).where(InboxEntry.kind == "drawing_shared"))
+        ).all()
+    assert notice.read_at is not None, "taking it out is acting on it"
 
 
 async def test_pinning_shares_and_tells_the_drawer(repos):
@@ -385,7 +395,7 @@ async def test_erasing_a_sharer_takes_their_shares_and_their_name_off_the_notice
     assert await _told(factory, ann.id) == [(game.turn_id, "Reactor")]
     await anonymize_account(factory, user_id=bob.id)
     assert await _gallery_ids(history) == []
-    assert await _told(factory, ann.id) == [], "a notice naming nobody says nothing"
+    assert await _told(factory, ann.id) == [(game.turn_id, None)], "an entry naming nobody"
     row = await _drawing(factory, game.turn_id)
     assert row.gallery_share_count == 0 and row.hot_score == 0.0
     assert await history.set_drawing_share(
@@ -534,7 +544,7 @@ async def test_the_notice_names_the_sharer_still_standing(repos):
     await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
     )
-    assert await _told(factory, ann.id) == [], "the drawer's own share names nobody"
+    assert await _told(factory, ann.id) == [(game.turn_id, None)], "the drawer's own share names nobody"
     assert cid  # a third player who never sat in it cannot be named
 
 

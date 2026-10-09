@@ -19,7 +19,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import ConfigDict, Field
 from app.request_text import CONTROL_CHARACTER_MESSAGE, ControlFreeModel, has_control_characters
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
@@ -33,7 +33,6 @@ from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
 from app.db.models import (
     AuditEvent,
-    RoleChangeNotice,
     UserPasskey,
     UserSecondFactor,
     generate_uuid,
@@ -50,6 +49,7 @@ from app.services.gallery_shelf import (
     SHELF_REVIEW_KEY,
     read_shelf_review,
 )
+from app.services.inbox import add_entry
 from app.services.publication_policy import (
     PUBLICATION_REVIEW_EVENT,
     PUBLICATION_REVIEW_KEY,
@@ -710,6 +710,9 @@ def create_admin_controls_router(
                         detail="An administrator's role cannot be changed here.",
                     )
                 previous = target.role
+                # Whether this change ends the account's sessions: only a
+                # promotion does (below).
+                signed_out = False
                 # Set by the withdrawal below, and what tells the rest of this
                 # handler that the role itself is not moving.
                 withdrew = False
@@ -738,19 +741,9 @@ def create_admin_controls_router(
                             created_at=datetime.now(timezone.utc),
                         )
                     )
-                    # And the invitation goes with it. A notice saying a role
-                    # is waiting is a notice about something that no longer
-                    # exists, and it would otherwise surface on the next visit
-                    # and send somebody to enrol for nothing.
-                    await session.execute(
-                        update(RoleChangeNotice)
-                        .where(
-                            RoleChangeNotice.user_id == target_id,
-                            RoleChangeNotice.pending.is_(True),
-                            RoleChangeNotice.acknowledged_at.is_(None),
-                        )
-                        .values(acknowledged_at=datetime.now(timezone.utc))
-                    )
+                    # The invitation in the inbox stays, as what happened; its
+                    # way into enrolment is read from the offer, which is gone,
+                    # so it no longer sends anybody to enrol for nothing.
                     # Not returned from here: the account has to be told, and
                     # the push happens after the commit, so this falls out of
                     # the transaction rather than out of the function.
@@ -838,15 +831,13 @@ def create_admin_controls_router(
                         )
                         # No sessions revoked and no role changed: nothing about
                         # this account has changed yet except that it has
-                        # something to do.
-                        session.add(
-                            RoleChangeNotice(
-                                id=generate_uuid(),
-                                user_id=target_id,
-                                role=body.role,
-                                pending=True,
-                                created_at=now,
-                            )
+                        # something to do, which its inbox says (#1436).
+                        await add_entry(
+                            session,
+                            user_id=target_id,
+                            kind="role",
+                            params={"role": body.role, "change": "offered"},
+                            created_at=now,
                         )
                         offered = body.role
                         target_role = previous
@@ -877,7 +868,7 @@ def create_admin_controls_router(
                                 created_at=datetime.now(timezone.utc),
                             )
                         )
-                        # A role change ends every session the account holds, in
+                        # A promotion ends every session the account holds, in
                         # the same transaction (R-AUTH-20, #468). Two reasons, and
                         # both matter. A staff role must not be reachable from a
                         # session that was issued before the second factor was ever
@@ -887,20 +878,29 @@ def create_admin_controls_router(
                         # otherwise stay a year long on an account that is now
                         # staff - which is exactly what R-AUTH-03 shortens staff
                         # sessions to prevent.
-                        await revoke_sessions(session, user_id=target_id)
+                        #
+                        # A demotion ends none (#1436). Every staff check reads
+                        # `users.role`, so the powers go on the very next request
+                        # either way; and a staff session's bounds are stricter
+                        # than a player's, so keeping it weakens nothing. Signing
+                        # somebody out of the game they are playing to tell them
+                        # they are no longer a moderator was all it did.
+                        signed_out = body.role in STAFF_ROLES
+                        if signed_out:
+                            await revoke_sessions(session, user_id=target_id)
                         # In the same transaction as the change it describes, so
-                        # there can be no role nobody was told about and no notice
+                        # there can be no role nobody was told about and no entry
                         # about a role that was never granted. The reason stays in
                         # the ledger above: it is text one administrator wrote for
                         # another.
-                        session.add(
-                            RoleChangeNotice(
-                                id=generate_uuid(),
-                                user_id=target_id,
-                                role=body.role,
-                                pending=False,
-                                created_at=datetime.now(timezone.utc),
-                            )
+                        await add_entry(
+                            session,
+                            user_id=target_id,
+                            kind="role",
+                            params={
+                                "role": body.role,
+                                "change": "granted" if signed_out else "removed",
+                            },
                         )
         # After the commit, so a socket can never announce a role a rolled-back
         # transaction never granted. The no-op above returns before reaching
@@ -912,12 +912,11 @@ def create_admin_controls_router(
         # perfectly well - would emit to a room nobody is in, and the push would
         # be lost with nothing to show for it.
         if on_role_changed is not None:
-            await on_role_changed(str(target_id))
+            await on_role_changed(str(target_id), signed_out=signed_out)
         if answer is not None:
             return answer
-        # No session revocation on a demotion: the gate loads the role fresh on
-        # every request, so it is in force on the target's very next call. An
-        # offer revokes nothing either, because nothing has changed yet.
+        # An offer revokes nothing, because nothing has changed yet; a
+        # demotion revokes nothing either (above).
         return {
             "id": user_id,
             "role": target_role,

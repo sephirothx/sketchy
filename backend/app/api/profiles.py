@@ -404,12 +404,12 @@ def share_payload(result: DrawingShareResult) -> dict:
 async def announce_share(
     result: DrawingShareResult | ProfilePinsResult,
     *,
-    on_share_notice: Callable[[str], Awaitable[None]] | None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None,
     on_gallery_changed: Callable[[], None] | None,
     on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> None:
     """What a committed share write owes the rest of the process: the drawer
-    it left a notice for hears it now if connected (R-SHARE-09), This week
+    it left an inbox entry for hears it now if connected (R-SHARE-09), This week
     is read again, since a drawing may have entered or left the Gallery
     (R-GAL-07), and a room whose recap shows the drawing is told how it
     stands now (R-SHARE-07)."""
@@ -425,7 +425,7 @@ async def announce_share(
             await on_shares_changed(turn_ids)
         except Exception:  # noqa: BLE001 - the share stands; the recap is a view
             logger.exception("Failed to refresh a recap after a share")
-    if on_share_notice is None:
+    if on_inbox_changed is None:
         return
     if isinstance(result, DrawingShareResult):
         notified = (result.notify_user_id,) if result.notify_user_id else ()
@@ -433,9 +433,9 @@ async def announce_share(
         notified = result.notify_user_ids
     for user_id in notified:
         try:
-            await on_share_notice(user_id)
+            await on_inbox_changed(user_id)
         except Exception:  # noqa: BLE001 - the share stands; the visit catches up
-            logger.exception("Failed to push a share notice")
+            logger.exception("Failed to tell a drawer their inbox moved")
 
 
 def create_profile_router(
@@ -443,14 +443,14 @@ def create_profile_router(
     game_history_repo: GameHistoryRepository,
     *,
     is_online: Callable[[str], bool] = lambda user_id: False,
-    on_share_notice: Callable[[str], Awaitable[None]] | None = None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None,
     on_gallery_changed: Callable[[], None] | None = None,
     on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> APIRouter:
     """`is_online` is the presence registry's answer for an account id; the
     default, for a router built without one, says nobody is.
-    `on_share_notice` pushes a drawer's pending share notices to their open
-    sockets, `on_gallery_changed` expires This week, and `on_shares_changed`
+    `on_inbox_changed` tells a drawer's open tabs that a share left an entry
+    in their inbox, `on_gallery_changed` expires This week, and `on_shares_changed`
     brings an open recap of the drawing up to date, after a share write
     commits."""
     router = APIRouter(prefix="/api")
@@ -693,7 +693,7 @@ def create_profile_router(
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
             result,
-            on_share_notice=on_share_notice,
+            on_inbox_changed=on_inbox_changed,
             on_gallery_changed=on_gallery_changed,
             on_shares_changed=on_shares_changed,
         )
@@ -743,7 +743,7 @@ def create_profile_router(
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
             result,
-            on_share_notice=on_share_notice,
+            on_inbox_changed=on_inbox_changed,
             on_gallery_changed=on_gallery_changed,
             on_shares_changed=on_shares_changed,
         )

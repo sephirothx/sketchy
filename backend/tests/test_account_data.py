@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
+from app.services.inbox import add_entry
 from app.auth.middleware import SessionAuthMiddleware
 from tests.dbfixtures import create_test_db
 import app.auth.account_data as account_data_module
@@ -538,9 +539,20 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                 )
             )
 
+    async with factory() as session:
+        async with session.begin():
+            await add_entry(
+                session, user_id=owner["id"], kind="reports_reviewed", params={"count": 2}
+            )
+
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 16
-    assert artifact["schemaVersion"] == 16
+    assert status["schemaVersion"] == 17
+    assert artifact["schemaVersion"] == 17
+    # What the account was told, as kinds and values (#1436).
+    [told] = artifact["inbox"]
+    assert (told["kind"], told["params"], told["subjectId"], told["readAt"]) == (
+        "reports_reviewed", {"count": 2}, None, None,
+    )
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -631,7 +643,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v16_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v17_fields.json").read_text(
             encoding="utf-8"
         )
     )

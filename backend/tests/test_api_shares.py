@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from app.api.errors import install_refusal_handler
 from app.api.gallery import create_gallery_router, gallery_limiter
 from app.api.profiles import create_profile_router
-from app.api.share_notices import PENDING_SHOWN, create_share_notice_router
+from app.api.inbox import create_inbox_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -35,7 +35,7 @@ async def env():
     changed: list[bool] = []
     refreshed: list[tuple[str, ...]] = []
 
-    async def on_share_notice(user_id: str) -> None:
+    async def on_inbox_changed(user_id: str) -> None:
         pushed.append(user_id)
 
     async def on_shares_changed(turn_ids: tuple[str, ...]) -> None:
@@ -48,17 +48,17 @@ async def env():
         create_profile_router(
             users,
             history,
-            on_share_notice=on_share_notice,
+            on_inbox_changed=on_inbox_changed,
             on_gallery_changed=lambda: changed.append(True),
             on_shares_changed=on_shares_changed,
         )
     )
     app.include_router(
         create_gallery_router(
-            history, on_share_notice=on_share_notice, on_shares_changed=on_shares_changed
+            history, on_inbox_changed=on_inbox_changed, on_shares_changed=on_shares_changed
         )
     )
-    app.include_router(create_share_notice_router(session_factory))
+    app.include_router(create_inbox_router(session_factory))
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
         http.refreshed = refreshed
@@ -84,16 +84,21 @@ async def test_a_participant_shares_from_history_and_the_drawer_is_told(env):
     assert pushed == [ann.id] and changed == [True]
 
     await sign_in_as(http, factory, ann.id)
-    pending = (await http.get("/api/share-notices/pending")).json()
-    assert pending["total"] == 1
-    [notice] = pending["notices"]
-    assert notice["turnId"] == game.turn_id and notice["prompt"] == "lighthouse"
-    assert notice["sharerDisplayName"] == "Reactor"
-    assert "gameId" not in notice
+    inbox = (await http.get("/api/inbox")).json()
+    assert inbox["unreadCount"] == 1
+    [entry] = inbox["entries"]
+    assert entry["kind"] == "drawing_shared" and not entry["read"]
+    assert entry["drawing"] == {
+        "turnId": game.turn_id,
+        "prompt": "lighthouse",
+        "inGallery": True,
+        "sharedBy": {"displayName": "Reactor", "nameColor": None, "isAnonymous": False},
+    }
+    assert "gameId" not in str(entry)
 
-    acknowledged = await http.post(f"/api/share-notices/{notice['id']}/acknowledge")
-    assert acknowledged.status_code == 200
-    assert (await http.get("/api/share-notices/pending")).json() == {"notices": [], "total": 0}
+    assert (await http.post("/api/inbox/read", json={"ids": [entry["id"]]})).json() == {
+        "unreadCount": 0
+    }
 
 
 async def test_every_share_refusal_is_the_same_404(env):
@@ -152,40 +157,25 @@ async def test_the_drawer_takes_a_drawing_out_from_the_gallery(env):
     assert detail["turns"][0]["shares"] == [] and detail["turns"][0]["shareWithdrawn"]
 
 
-async def test_the_pending_read_lists_the_newest_and_counts_the_rest(env):
-    http, users, history, factory, _, _ = env
+async def test_one_entry_per_drawing_however_many_share_it(env):
+    """The second and the tenth share say nothing the first did not; taking a
+    share back leaves the entry, which names nobody once no share is left."""
+    http, users, history, factory, pushed, _ = env
     ann = await _registered(users, "Ann")
     bob = await _registered(users, "Bob")
-    games = [
-        await record_game(
-            history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
-            finished_at=NOW - timedelta(hours=10 - index),
-        )
-        for index in range(PENDING_SHOWN + 2)
-    ]
-    for game in games:
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
+    )
+    for _ in range(2):
         await history.set_drawing_share(
             game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
         )
-    # One taken back says nothing any more, and is not counted.
-    await history.set_drawing_share(
-        games[0].game_id, games[0].turn_id, requesting_user_id=bob.id, shared=False
-    )
+        await history.set_drawing_share(
+            game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
+        )
     await sign_in_as(http, factory, ann.id)
-    pending = (await http.get("/api/share-notices/pending")).json()
-    assert pending["total"] == PENDING_SHOWN + 1
-    assert [notice["turnId"] for notice in pending["notices"]] == [
-        game.turn_id for game in reversed(games[-PENDING_SHOWN:])
-    ]
-
-    await sign_in_as(http, factory, bob.id)
-    assert (
-        await http.post(f"/api/share-notices/{pending['notices'][0]['id']}/acknowledge")
-    ).status_code == 404, "somebody else's notice is not theirs to settle"
-
-    await sign_in_as(http, factory, ann.id)
-    await http.post(f"/api/share-notices/{pending['notices'][0]['id']}/acknowledge")
-    assert (await http.get("/api/share-notices/pending")).json()["total"] == 0
+    [entry] = (await http.get("/api/inbox")).json()["entries"]
+    assert entry["drawing"]["sharedBy"] is None and not entry["drawing"]["inGallery"]
 
 
 async def test_pinning_somebody_elses_drawing_pushes_their_notice(env):
@@ -200,12 +190,10 @@ async def test_pinning_somebody_elses_drawing_pushes_their_notice(env):
     assert pushed == [ann.id] and changed
 
 
-async def test_the_notice_routes_need_a_session(env):
+async def test_the_inbox_routes_need_a_session(env):
     http, *_ = env
-    assert (await http.get("/api/share-notices/pending")).status_code == 401
-    assert (
-        await http.post("/api/share-notices/00000000-0000-0000-0000-000000000000/acknowledge")
-    ).status_code == 401
+    assert (await http.get("/api/inbox")).status_code == 401
+    assert (await http.post("/api/inbox/read", json={"all": True})).status_code == 401
 
 
 async def test_every_share_write_reaches_an_open_recap_of_the_drawing(env):
