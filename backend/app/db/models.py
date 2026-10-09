@@ -1731,8 +1731,8 @@ class UserWarning(Base):
     The step between dismissing a report and suspending the account. It does
     not restrict anything - the player is told what was reported and that a
     moderator looked, and the acknowledgement records that the message
-    actually reached them. Until it does, the player cannot take a seat in a
-    room (#1436). Kept twelve months as moderation history, which a later
+    actually reached them. Until it does, the player cannot take a new seat
+    in a room or publish or star a prompt list (R-INBOX-04, #1436). Kept twelve months as moderation history, which a later
     suspension decision reads, and deleted with the account rather than
     orphaned (R-PRIV).
     """
