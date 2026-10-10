@@ -179,19 +179,36 @@ test("a line a moderator hid is held without its words, and shown again in place
   let held = applyChatLine(EMPTY_LOBBY_CHAT, line(1, { retainedMessageId: "msg-1" }));
   held = applyChatLine(held, line(2, { retainedMessageId: "msg-2" }));
 
-  const hidden = applyLineVisibility(held, { retainedMessageId: "msg-1", hidden: true });
+  const hidden = applyLineVisibility(held, { retainedMessageId: "msg-1", hidden: true, visibility: 1 });
   assert.deepEqual(hidden.lines.map((l) => [l.seq, l.hidden ?? false, l.text]), [[1, true, ""], [2, false, "line 2"]]);
-  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: true }), hidden, "already so");
-  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "nope", hidden: true }), hidden);
-  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false }), hidden, "no words, no change");
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: true, visibility: 1 }), hidden, "already so");
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "nope", hidden: true, visibility: 1 }), hidden);
 
-  const shown = applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false, text: "line 1" });
-  assert.deepEqual(shown.lines[0], held.lines[0], "as it was before it was hidden");
+  const shown = applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false, text: "line 1", visibility: 2 });
+  assert.deepEqual(shown.lines[0], { ...held.lines[0], visibility: 2 }, "as it was before it was hidden");
 
   // From the wire: a hidden line arrives with no words, and cannot be reported.
-  const parsed = parseLine({ ...line(3, { retainedMessageId: "msg-3" }), text: "", hidden: true });
+  const parsed = parseLine({ ...line(3, { retainedMessageId: "msg-3" }), text: "", hidden: true, visibility: 7 });
   assert.equal(parsed.hidden, true);
+  assert.equal(parsed.visibility, 7);
   assert.equal(reportableLine(parsed, { id: "user-bob", isAnonymous: false }), false);
+});
+
+test("a late change to a line cannot undo a newer one, and the muted get only the count", () => {
+  // #1435: the server's block lookup can send a later change first. Per line,
+  // the newer revision stands; a late change to another line still lands.
+  let held = applyChatLine(EMPTY_LOBBY_CHAT, line(1, { retainedMessageId: "m1" }));
+  held = applyChatLine(held, line(2, { retainedMessageId: "m2" }));
+  const restored = applyLineVisibility(held, { retainedMessageId: "m1", hidden: false, text: "line 1", visibility: 2 });
+  const late = applyLineVisibility(restored, { retainedMessageId: "m1", hidden: true, visibility: 1 });
+  assert.equal(late, restored, "the older hide arrives second and changes nothing");
+  const other = applyLineVisibility(late, { retainedMessageId: "m2", hidden: true, visibility: 1 });
+  assert.equal(other.lines[1].hidden, true, "an older count, but news for this line");
+
+  // Shown again to somebody who muted its author: no words, only the count.
+  const muted = applyLineVisibility(other, { retainedMessageId: "m9", hidden: false, visibility: 9 });
+  assert.equal(muted.visibility, 9);
+  assert.equal(muted.lines, other.lines);
 });
 
 test("a lobby that missed a hide replaces what it holds with the backlog it is handed", () => {
@@ -215,6 +232,15 @@ test("a lobby that missed a hide replaces what it holds with the backlog it is h
   }, owner);
   assert.deepEqual(replaced.lines.map((l) => [l.seq, l.hidden ?? false]), [[2, true]]);
   assert.equal(replaced.visibility, 6);
+
+  // A change this tab already applied is newer than the replacing backlog's
+  // copy of that line: it stands (the answer was read before it).
+  const ahead = applyLineVisibility(replaced, { retainedMessageId: "m2", hidden: false, text: "line 2", visibility: 9 });
+  const older = applyChatBacklog(ahead, {
+    chat: [{ ...line(2, { retainedMessageId: "m2" }), text: "", hidden: true, visibility: 6 }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 8, chatReplace: true,
+  }, owner);
+  assert.deepEqual([older.lines[0].hidden ?? false, older.lines[0].text], [false, "line 2"]);
 
   // Level, a resumed backlog still merges.
   const merged = applyChatBacklog(replaced, {

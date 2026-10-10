@@ -30,6 +30,10 @@ export interface LobbyChatLine {
   /** Hidden by a moderator (#1435): shown as "This message was deleted",
       and the server sends no text for it. */
   hidden?: boolean;
+  /** The server's visibility count when this line was last hidden or shown
+      again; absent for one never touched. A change is applied only if it is
+      newer, whichever order changes and backlogs arrive in. */
+  visibility?: number;
 }
 
 export interface LobbyChatState {
@@ -87,6 +91,9 @@ export function parseLine(value: unknown): LobbyChatLine | null {
     line.hidden = true;
     line.text = "";
   }
+  if (typeof row.visibility === "number" && Number.isSafeInteger(row.visibility) && row.visibility > 0) {
+    line.visibility = row.visibility;
+  }
   return line;
 }
 
@@ -102,14 +109,22 @@ export function applyLineVisibility(state: LobbyChatState, payload: unknown): Lo
   const hidden = event.hidden;
   const at = typeof event.visibility === "number" ? event.visibility : 0;
   const text = typeof event.text === "string" ? event.text : null;
-  if (!hidden && text === null) return state;
+  // Shown again with no words: this viewer muted its author and holds no
+  // line of theirs. Only the count moves, so a resync does not take the
+  // change for one it missed.
+  if (!hidden && text === null) {
+    return at > state.visibility ? { ...state, visibility: at } : state;
+  }
   let changed = false;
   const lines = state.lines.map((line) => {
     if (line.retainedMessageId !== event.retainedMessageId) return line;
-    if (Boolean(line.hidden) === hidden && (hidden || line.text === text)) return line;
+    // Per line, not one count for all: an older change to this line arriving
+    // late must not undo a newer one, and a late change to another line must
+    // still land.
+    if ((line.visibility ?? 0) >= at && at > 0) return line;
     changed = true;
-    if (hidden) return { ...line, hidden: true, text: "" };
-    const shown: LobbyChatLine = { ...line, text: text as string };
+    if (hidden) return { ...line, hidden: true, text: "", visibility: at };
+    const shown: LobbyChatLine = { ...line, text: text as string, visibility: at };
     delete shown.hidden;
     return shown;
   });
@@ -195,7 +210,26 @@ export function applyChatBacklog(
   // placeholder since lifted, and only the backlog is known to be right.
   if (replace || !epoch || epoch !== state.epoch || owner !== state.owner) {
     const last = lines.length ? lines[lines.length - 1].seq : 0;
-    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines), epoch, owner, visibility };
+    // A line held with a newer change than the backlog's keeps it: the
+    // change reached this tab after the backlog was read (#1435).
+    const newer = new Map(
+      replace && epoch === state.epoch
+        ? state.lines.filter((line) => line.retainedMessageId).map((line) => [line.retainedMessageId, line])
+        : [],
+    );
+    const kept = lines.map((line) => {
+      const held = line.retainedMessageId ? newer.get(line.retainedMessageId) : undefined;
+      return held && (held.visibility ?? 0) > (line.visibility ?? 0)
+        ? { ...line, hidden: held.hidden, text: held.text, visibility: held.visibility }
+        : line;
+    });
+    return {
+      lastSeq: Math.max(chatSeq, last),
+      lines: capped(kept),
+      epoch,
+      owner,
+      visibility: Math.max(visibility, replace && epoch === state.epoch ? state.visibility : 0),
+    };
   }
   let next = state;
   for (const line of lines) next = append(next, line);

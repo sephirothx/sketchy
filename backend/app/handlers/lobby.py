@@ -111,9 +111,6 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # already holds, so resuming from `chatSince` would never correct it: it
     # is handed the whole backlog, marked to replace what it holds - lines
     # older than the ring included, since nothing here can vouch for them.
-    replace = bool(after) and (payload.chat_visibility or 0) < chat.visibility
-    if replace:
-        after = 0
     # The join comes first, the lookups next, and the baselines are read last,
     # with nothing that can yield between them and the answer. Each order
     # has been wrong once. The baselines used to be read before the lookups
@@ -129,6 +126,14 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # during the lookups reaches the socket before its answer, which the
     # client holds and then drops as older than the baseline.
     await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
+    # Whether the lobby missed a hide or show-again (#1435) is decided only
+    # once it has joined: every change before the join is in the count read
+    # here, and every change after reaches this socket as an event, which the
+    # client holds until this answer and applies line by line by its
+    # revision. Decided before the join, a change in between was in neither.
+    replace = bool(after) and (payload.chat_visibility or 0) < chat.visibility
+    if replace:
+        after = 0
     hidden = await _hidden_authors_for(
         ctx, await _user_of(ctx, sid), chat.authors(after=after)
     )
@@ -222,17 +227,34 @@ async def announce_lobby_line_visibility(
     payload: dict = {
         "retainedMessageId": retained_message_id,
         "hidden": hidden,
-        # Which change this is, so a lobby holding it until its baseline
-        # lands can tell it from one the baseline already includes.
+        # Which change this is: a client applies it to the line only if the
+        # line's own revision is older, so arrival order does not matter -
+        # the block lookup below can make a later change go out first.
         "visibility": ctx.lobby_chat.visibility,
     }
-    if not hidden and text is not None:
-        payload["text"] = text
+    # A hide carries no words, so every lobby is told - which also keeps
+    # every lobby's count in step, so none takes a missed change for a
+    # reason to be handed the whole backlog on its next resync.
+    if hidden or text is None:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, room=LOBBY_CHANNEL)
+        return
+    # Shown again, the words go only where the line itself would; whoever
+    # muted its author is told the count and nothing else.
     recipients = await _lobby_recipients(ctx, author_user_id)
     if recipients is None:
-        await ctx.sio.emit("lobby_chat_line_changed", payload, room=LOBBY_CHANNEL)
-    elif recipients:
-        await ctx.sio.emit("lobby_chat_line_changed", payload, to=recipients)
+        await ctx.sio.emit(
+            "lobby_chat_line_changed", {**payload, "text": text}, room=LOBBY_CHANNEL
+        )
+        return
+    muted = [
+        member
+        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
+        if member not in set(recipients)
+    ]
+    if recipients:
+        await ctx.sio.emit("lobby_chat_line_changed", {**payload, "text": text}, to=recipients)
+    if muted:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, to=muted)
 
 
 async def _emit_lobby_chat(ctx: HandlerContext, line, *, sender_user_id: str) -> None:

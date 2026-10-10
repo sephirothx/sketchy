@@ -1112,7 +1112,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
-| `lobby_chat_line_changed` | `{retainedMessageId, hidden, visibility, text?}` — a moderator hid a lobby line or showed it again (#1435, R-LCHAT-09): a client holding the line replaces it in place by `retainedMessageId`; `text` comes only with `hidden: false`. The server's ring has the change before this is sent, so a backlog asked for meanwhile already agrees | the `lobby` channel, minus the sockets of accounts that blocked the author |
+| `lobby_chat_line_changed` | `{retainedMessageId, hidden, visibility, text?}` — a moderator hid a lobby line or showed it again (#1435, R-LCHAT-09): a client holding the line replaces it in place by `retainedMessageId`; `text` comes only with `hidden: false`, and only to sockets whose account did not mute the author - those are sent the change without it, so every lobby's count keeps step; a hide carries no words and goes to every lobby. The server's ring has the change before this is sent, so a backlog asked for meanwhile already agrees | the `lobby` channel |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it. The client still says a request **arrived**, by comparing the lists across the refetch this triggers (R-FRIEND-12) — so naming it costs no wire surface, and the event does not have to grow a second shape. An acceptance is an inbox entry instead (R-FRIEND-14), told by the `inbox_changed` that goes out beside every one of these | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `email_state_changed` | `{}` — this account's recovery address state moved: an address was offered, one was confirmed, or the weekly reminder was closed. Contentless for the reason `friends_changed` is: `GET /api/auth/email` is the truth, and the address itself is not something to put on a broadcast. The client re-reads it, and re-reads again on reconnecting, which is how a tab hears a change it was offline for | every socket of the account. The confirmation link is presented without a session, usually in a tab of its own, so this is the only way the tabs that were already showing the reminder hear that it is done |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
@@ -1237,7 +1237,8 @@ holds (re-read from the retained rows after a restart):
   "isAnonymous": false, "text": "anyone up for a round?",
   "sentAt": 1788361445,
   "retainedMessageId": "0192…",    // present only when retention took the row
-  "hidden": true }                 // present only when a moderator hid it; text is then ""
+  "hidden": true,                  // present only when a moderator hid it; text is then ""
+  "visibility": 3 }                // present only on a line hidden or shown again since
 ```
 
 A hidden line (#1435, R-LCHAT-09) keeps its `seq` and place and carries no words, to
@@ -1266,8 +1267,15 @@ behind the server's (#1435): a moderator hid or showed again a line while it was
 away, a line it already holds and resuming from `chatSince` would never correct, so
 the backlog replaces what it holds, older lines included. Every answer carries
 `chatVisibility`, the count of hides and show-agains this process has announced, and
-every `lobby_chat_line_changed` its own `visibility`; a change held while the
-baseline was pending is applied after it only if its count is past the answer's. It carries an account id for the reason `LobbyPlayer` does
+every `lobby_chat_line_changed` its own `visibility`, which a line changed since it was
+said carries too. The client applies a change to a line only if its `visibility` is
+past that line's own: changes may arrive out of order (the server looks up blocks
+before sending a show-again), and one count for all lines could not tell a late
+change to one line from news about another. Changes arriving while any subscription
+is in flight are held and replayed after its answer the same way, and a replacing
+answer keeps a held line's change if it is the newer. Whether to replace is decided
+after the socket has joined the channel: a change before the join is in the count it
+reads, and one after reaches the socket as an event. It carries an account id for the reason `LobbyPlayer` does
 — there is no seat to resolve, and a report needs a stable target — and never
 a room. `sentAt` is the server's instant in whole seconds since the epoch, the same
 one written to the retained row, and the client renders it as an age or a

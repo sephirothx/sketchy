@@ -543,9 +543,11 @@ async def test_a_line_a_moderator_hid_changes_in_every_lobby_and_its_words_go_on
     await announce_lobby_line_visibility(
         ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=True, text=None
     )
+    # No words in a hide, so every lobby is told - the one who muted Ada
+    # included, which keeps every lobby's count in step.
     [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
     assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": True, "visibility": 1}
-    assert set(call.kwargs["to"]) == {"sid-a", "sid-c"}
+    assert call.kwargs == {"room": LOBBY_CHANNEL}
     [held] = ctx.lobby_chat.backlog_for()
     assert held.seq == line.seq and held.payload()["text"] == "" and held.payload()["hidden"] is True
 
@@ -553,11 +555,14 @@ async def test_a_line_a_moderator_hid_changes_in_every_lobby_and_its_words_go_on
     await announce_lobby_line_visibility(
         ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=False, text="regrettable"
     )
-    [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
-    assert call.args[1] == {
+    worded, bare = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
+    assert worded.args[1] == {
         "retainedMessageId": "msg-1", "hidden": False, "visibility": 2, "text": "regrettable",
     }
-    assert "sid-b" not in call.kwargs["to"]
+    assert set(worded.kwargs["to"]) == {"sid-a", "sid-c"}
+    # The one who muted her is told the count, and not the words.
+    assert bare.args[1] == {"retainedMessageId": "msg-1", "hidden": False, "visibility": 2}
+    assert bare.kwargs["to"] == ["sid-b"]
     assert ctx.lobby_chat.backlog_for()[0].payload()["text"] == "regrettable"
 
 
@@ -600,3 +605,38 @@ async def test_a_lobby_that_missed_a_hide_is_handed_the_whole_backlog_to_replace
     await arrive(ctx, sio, "sid-a2", "tok-a", watch=False)
     caught_up = await sio.handlers["/"]["watch_lobby"]("sid-a2", {**seen, "chatVisibility": 1})
     assert caught_up["chat"] == [] and "chatReplace" not in caught_up
+
+
+
+async def test_a_hide_while_a_lobby_joins_is_either_in_its_answer_or_sent_to_it(monkeypatch):
+    """#1435: whether a returning lobby missed a change is decided only once
+    it has joined. A hide just before the join is in the count that decides,
+    so the answer replaces its lines; one after the join reaches it as an
+    event. Decided before the join, a hide in between was in neither."""
+    from app.handlers.lobby import announce_lobby_line_visibility
+
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    first = await arrive(ctx, sio, "sid-a", "tok-a")
+    ctx.lobby_chat.append(
+        user_id="user-bob", display_name="Bob", name_color=None, is_anonymous=False,
+        text="regrettable", sent_at=datetime.now(timezone.utc), retained_message_id="msg-1",
+    )
+    await say(sio, "sid-a", "after it")
+    seen = {"chatSince": 2, "chatEpoch": first["chatEpoch"], "chatVisibility": 0}
+
+    joining = sio.enter_room.side_effect
+
+    async def hide_then_join(sid, room, namespace=None):
+        # Only the lobby's own join, and only this subscription's: the
+        # connection enters rooms of its own first.
+        if room == LOBBY_CHANNEL and sid == "sid-a2":
+            await announce_lobby_line_visibility(
+                ctx, retained_message_id="msg-1", author_user_id="user-bob", hidden=True, text=None
+            )
+        await joining(sid, room, namespace)
+
+    await arrive(ctx, sio, "sid-a2", "tok-a", watch=False)
+    sio.enter_room.side_effect = hide_then_join
+    answer = await sio.handlers["/"]["watch_lobby"]("sid-a2", seen)
+    assert answer["chatReplace"] is True
+    assert [(line["seq"], line.get("hidden")) for line in answer["chat"]] == [(1, True), (2, None)]

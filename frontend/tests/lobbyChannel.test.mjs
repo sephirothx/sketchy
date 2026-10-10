@@ -80,12 +80,13 @@ test("past the cap the buffer gives up and asks for a fresh baseline instead", (
   assert.equal(MAX_HELD_DELTAS, 64);
 });
 
-test("a hide held before the baseline survives it only if the baseline does not include it", () => {
-  // #1435: the hide that beat the baseline's continuation used to find no
-  // line and be dropped; held, its count says whether the baseline has it.
+test("every hide held through a subscription replays after it, its line deciding", () => {
+  // #1435: no single count can say which held changes the answer already
+  // includes - a change to one line may arrive after a later one to another.
+  // All replay; each line's own revision keeps only what is newer.
   const pending = createPendingDeltas();
   pending.hold("chatVisibility", { retainedMessageId: "m1", hidden: true, visibility: 4 });
   pending.hold("chatVisibility", { retainedMessageId: "m2", hidden: true, visibility: 5 });
-  const replayed = pending.drain({ presence: 0, rooms: 0, chatSeq: 0, chatVisibility: 4 });
-  assert.deepEqual(replayed.map((d) => [d.feed, d.at]), [["chatVisibility", 5]]);
+  const replayed = pending.drain({ presence: 0, rooms: 0, chatSeq: 0 });
+  assert.deepEqual(replayed.map((d) => [d.feed, d.at]), [["chatVisibility", 4], ["chatVisibility", 5]]);
 });

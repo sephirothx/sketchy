@@ -63,6 +63,11 @@ class LobbyChatLine:
     # no text, to everybody - the author included. Kept here so un-hiding
     # needs nothing but the flag.
     hidden: bool = False
+    # The log's visibility count when this line was last hidden or shown
+    # again; zero for a line never touched. Sent with the line, so a client
+    # holding a later change for it - one that beat this backlog - keeps
+    # that, and an earlier one arriving late cannot undo a later one.
+    visibility: int = 0
 
     def payload(self) -> dict:
         """The wire shape, `LobbyChatMessage` in the wire protocol.
@@ -89,6 +94,8 @@ class LobbyChatLine:
             payload["retainedMessageId"] = self.retained_message_id
         if self.hidden:
             payload["hidden"] = True
+        if self.visibility:
+            payload["visibility"] = self.visibility
         return payload
 
 
@@ -200,7 +207,7 @@ class LobbyChatLog:
         self.visibility += 1
         for index, line in enumerate(self._lines):
             if line.retained_message_id == retained_message_id:
-                self._lines[index] = replace(line, hidden=hidden)
+                self._lines[index] = replace(line, hidden=hidden, visibility=self.visibility)
                 return True
         return False
 

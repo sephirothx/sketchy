@@ -51,8 +51,6 @@ export interface BaselineRevisions {
   presence: number;
   rooms: number;
   chatSeq: number;
-  /** Hides and show-agains the backlog already reflects (#1435). */
-  chatVisibility: number;
 }
 
 export interface PendingDeltas {
@@ -94,7 +92,9 @@ export function createPendingDeltas(limit: number = MAX_HELD_DELTAS): PendingDel
         presence: baseline.presence,
         rooms: baseline.rooms,
         chat: baseline.chatSeq,
-        chatVisibility: baseline.chatVisibility,
+        // Every held change replays: each line's own revision decides
+        // whether it is newer than what the answer showed (#1435).
+        chatVisibility: 0,
       };
       const newer = held
         .filter((delta) => delta.at > floor[delta.feed])

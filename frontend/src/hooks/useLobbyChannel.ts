@@ -133,7 +133,6 @@ export function useLobbyChannel(): void {
           presence: revisionOf(answer.revision),
           rooms: revisionOf(answer.roomsRevision),
           chatSeq: revisionOf(answer.chatSeq),
-          chatVisibility: revisionOf(answer.chatVisibility),
         });
         for (const held of drained) {
           if (held.feed === "presence") usePresenceStore.getState().receiveDelta(held.payload);
@@ -215,13 +214,13 @@ export function useLobbyChannel(): void {
     // A line before the baseline is usually in the backlog the answer carries;
     // one said after the backlog was read is not, so it is held like the rest
     // and the store's sequence numbers drop the duplicates.
-    // Held like a line while the baseline is pending (#1435): applied now, a
-    // hide that beat the baseline's continuation found no line to change and
-    // was lost, and the older baseline then showed the words. Its count says
-    // whether the baseline already included it.
+    // Held while any subscription is in flight (#1435) - the first or a
+    // resync: applied at once, a hide that beat the answer's continuation was
+    // either lost on an empty store or replaced by the older answer. Replayed
+    // after the answer, each against its line's own revision.
     const onChatLineChanged = (payload: unknown) => {
       if (cancelled) return;
-      if (!baseline) {
+      if (!baseline || asking) {
         holdOrResubscribe("chatVisibility", payload);
         return;
       }
