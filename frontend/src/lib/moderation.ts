@@ -49,11 +49,14 @@ export interface PlayerReportMessageEvidence {
   senderNameColor: string | null;
   senderWasAnonymous: boolean;
   messageKind: "chat" | "wrong_guess" | "correct_guess";
-  audience: "room" | "prompt_aware";
+  audience: "room" | "prompt_aware" | "lobby";
   nearMissKind: "close" | "partial" | null;
   /** `cited` is what the report is about; `context` is what was said around
       it, by anyone, chosen by the server. Both in the order they were said. */
   role: "cited" | "context";
+  /** A lobby line a moderator hid (#1435): lobbies show "This message was
+      deleted"; the case still shows what was said. */
+  hidden?: boolean;
   text: string;
   messageCreatedAt: string;
   copiedAt: string;
@@ -732,6 +735,20 @@ export function decideGalleryDrawing(
   return apiRequest(`/api/moderation/gallery/${encodeURIComponent(turnId)}`, {
     method: "PATCH",
     body: { decision, note },
+  });
+}
+
+/** Hide a lobby line from every lobby, or show it again (#1435). Only the
+    reported player's own lines in a case; reversible, with a note for the
+    ledger. */
+export function decideLobbyLine(
+  messageId: string,
+  hidden: boolean,
+  note: string,
+): Promise<{ messageId: string; hidden: boolean }> {
+  return apiRequest(`/api/moderation/lobby-messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    body: { hidden, note },
   });
 }
 

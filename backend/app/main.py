@@ -83,6 +83,7 @@ from app.security_headers import (
     public_origin,
 )
 from app.handlers import register_all_handlers
+from app.handlers.lobby import announce_lobby_line_visibility
 from app.handlers.shares import erase_from_recaps, refresh_recaps
 from app.logging_config import configure_logging
 from app.auth.retention import (
@@ -724,6 +725,20 @@ async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
     await refresh_recaps(handler_context, turn_ids)
 
 
+async def announce_lobby_line_changed(
+    message_id: str, author_user_id: str, hidden: bool, text: str | None
+) -> None:
+    """A moderator hid a lobby line or showed it again; every open lobby
+    replaces it in place (#1435, R-LCHAT-09)."""
+    await announce_lobby_line_visibility(
+        handler_context,
+        retained_message_id=message_id,
+        author_user_id=author_user_id,
+        hidden=hidden,
+        text=text,
+    )
+
+
 async def erase_from_live_recaps(turn_id: str) -> None:
     """A drawing an administrator erased leaves every recap still showing it
     (#1419, R-MOD-22)."""
@@ -1119,6 +1134,7 @@ api.include_router(
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
         on_drawing_erased=erase_from_live_recaps,
+        on_lobby_line_changed=announce_lobby_line_changed,
         flush_retained_messages=(
             handler_context.message_retention.flush
             if handler_context.message_retention is not None

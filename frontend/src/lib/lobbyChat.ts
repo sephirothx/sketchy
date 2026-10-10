@@ -27,6 +27,13 @@ export interface LobbyChatLine {
   sentAt: number;
   /** Present only when retention took the row - the id a report can cite. */
   retainedMessageId?: string;
+  /** Hidden by a moderator (#1435): shown as "This message was deleted",
+      and the server sends no text for it. */
+  hidden?: boolean;
+  /** The server's visibility count when this line was last hidden or shown
+      again; absent for one never touched. A change is applied only if it is
+      newer, whichever order changes and backlogs arrive in. */
+  visibility?: number;
 }
 
 export interface LobbyChatState {
@@ -39,6 +46,14 @@ export interface LobbyChatState {
   /** The account these lines were filtered for. Another account's blocks
   differ, so its lobby asks for everything and replaces them. */
   owner: string | null;
+  /** The hides and show-agains these lines are known to reflect, with no
+  gap below it (#1435): a returning lobby sends it, and one behind is handed
+  the whole backlog to replace them with. Not the highest change received -
+  changes can arrive out of order, and receiving the third proves nothing
+  about the second. */
+  visibility: number;
+  /** Changes received past a gap, waiting for the ones below them. */
+  visibilityAhead: number[];
 }
 
 export const EMPTY_LOBBY_CHAT: LobbyChatState = {
@@ -46,7 +61,34 @@ export const EMPTY_LOBBY_CHAT: LobbyChatState = {
   lines: [],
   epoch: null,
   owner: null,
+  visibility: 0,
+  visibilityAhead: [],
 };
+
+/** Count one change received (#1435): the contiguous count moves only when
+    nothing below the change is still missing; one past a gap waits. */
+function noteChange(
+  counted: { visibility: number; visibilityAhead: number[] },
+  at: number,
+): { visibility: number; visibilityAhead: number[] } {
+  // The two fields only, never the object handed in: spread over a state, a
+  // whole state here would put its old lines back.
+  if (at <= counted.visibility || counted.visibilityAhead.includes(at)) {
+    return { visibility: counted.visibility, visibilityAhead: counted.visibilityAhead };
+  }
+  return settled(counted.visibility, [...counted.visibilityAhead, at]);
+}
+
+/** The count as far as it runs unbroken, and what is still past a gap. */
+function settled(
+  visibility: number,
+  ahead: number[],
+): { visibility: number; visibilityAhead: number[] } {
+  const waiting = new Set(ahead.filter((at) => at > visibility));
+  let next = visibility;
+  while (waiting.delete(next + 1)) next += 1;
+  return { visibility: next, visibilityAhead: [...waiting].sort((a, b) => a - b) };
+}
 
 /** More than the server hands an arrival, so a long-open lobby keeps some of
 what it watched go by; bounded so it never grows with the evening. */
@@ -75,7 +117,54 @@ export function parseLine(value: unknown): LobbyChatLine | null {
   if (typeof row.retainedMessageId === "string" && row.retainedMessageId) {
     line.retainedMessageId = row.retainedMessageId;
   }
+  if (row.hidden === true) {
+    line.hidden = true;
+    line.text = "";
+  }
+  if (typeof row.visibility === "number" && Number.isSafeInteger(row.visibility) && row.visibility > 0) {
+    line.visibility = row.visibility;
+  }
   return line;
+}
+
+/** A moderator hid a line or showed it again (#1435): the line we hold is
+    replaced where it stands, by the id that names it everywhere. Hidden, its
+    words go even from memory; shown again, they come back with the event.
+    The same state back when we do not hold it, or it already says so, so
+    nothing re-renders for it. */
+export function applyLineVisibility(state: LobbyChatState, payload: unknown): LobbyChatState {
+  if (!payload || typeof payload !== "object") return state;
+  const event = payload as Record<string, unknown>;
+  if (typeof event.retainedMessageId !== "string" || typeof event.hidden !== "boolean") return state;
+  const hidden = event.hidden;
+  const at = typeof event.visibility === "number" ? event.visibility : 0;
+  const text = typeof event.text === "string" ? event.text : null;
+  // Shown again with no words: this viewer muted its author and holds no
+  // line of theirs. Only the count moves, so a resync does not take the
+  // change for one it missed.
+  if (!hidden && text === null) {
+    const counted = noteChange(state, at);
+    return counted.visibility === state.visibility && counted.visibilityAhead === state.visibilityAhead
+      ? state
+      : { ...state, ...counted };
+  }
+  let changed = false;
+  const lines = state.lines.map((line) => {
+    if (line.retainedMessageId !== event.retainedMessageId) return line;
+    // Per line, not one count for all: an older change to this line arriving
+    // late must not undo a newer one, and a late change to another line must
+    // still land.
+    if ((line.visibility ?? 0) >= at && at > 0) return line;
+    changed = true;
+    if (hidden) return { ...line, hidden: true, text: "", visibility: at };
+    const shown: LobbyChatLine = { ...line, text: text as string, visibility: at };
+    delete shown.hidden;
+    return shown;
+  });
+  const counted = noteChange(state, at);
+  const countMoved = counted.visibility !== state.visibility || counted.visibilityAhead !== state.visibilityAhead;
+  if (!changed) return countMoved ? { ...state, ...counted } : state;
+  return { ...state, lines, ...counted };
 }
 
 function capped(lines: LobbyChatLine[]): LobbyChatLine[] {
@@ -99,8 +188,12 @@ function parseBacklog(payload: unknown): {
   lines: LobbyChatLine[];
   chatSeq: number;
   epoch: string | null;
+  visibility: number;
+  replace: boolean;
 } {
-  if (!payload || typeof payload !== "object") return { lines: [], chatSeq: 0, epoch: null };
+  if (!payload || typeof payload !== "object") {
+    return { lines: [], chatSeq: 0, epoch: null, visibility: 0, replace: false };
+  }
   const answer = payload as Record<string, unknown>;
   const lines = Array.isArray(answer.chat)
     ? answer.chat.map(parseLine).filter((line): line is LobbyChatLine => line !== null)
@@ -111,7 +204,11 @@ function parseBacklog(payload: unknown): {
       ? answer.chatSeq
       : 0;
   const epoch = typeof answer.chatEpoch === "string" && answer.chatEpoch ? answer.chatEpoch : null;
-  return { lines, chatSeq, epoch };
+  const visibility =
+    typeof answer.chatVisibility === "number" && Number.isSafeInteger(answer.chatVisibility) && answer.chatVisibility >= 0
+      ? answer.chatVisibility
+      : 0;
+  return { lines, chatSeq, epoch, visibility, replace: answer.chatReplace === true };
 }
 
 /** What a `watch_lobby` sends about the chat it already holds (#885).
@@ -123,9 +220,9 @@ nothing to resume, or when the lines were filtered for another account. */
 export function chatResumeRequest(
   state: LobbyChatState,
   owner: string | null,
-): { chatSince: number; chatEpoch: string } | Record<string, never> {
+): { chatSince: number; chatEpoch: string; chatVisibility: number } | Record<string, never> {
   if (!state.epoch || state.lastSeq === 0 || state.owner !== owner) return {};
-  return { chatSince: state.lastSeq, chatEpoch: state.epoch };
+  return { chatSince: state.lastSeq, chatEpoch: state.epoch, chatVisibility: state.visibility };
 }
 
 /** Take the backlog a `watch_lobby` acknowledgement carries, for *owner*.
@@ -141,14 +238,48 @@ export function applyChatBacklog(
   payload: unknown,
   owner: string | null,
 ): LobbyChatState {
-  const { lines, chatSeq, epoch } = parseBacklog(payload);
-  if (!epoch || epoch !== state.epoch || owner !== state.owner) {
+  const { lines, chatSeq, epoch, visibility, replace } = parseBacklog(payload);
+  // Replaced, too, when the server says a hide or show-again was missed
+  // (#1435): the lines held may be showing words since hidden, or a
+  // placeholder since lifted, and only the backlog is known to be right.
+  if (replace || !epoch || epoch !== state.epoch || owner !== state.owner) {
     const last = lines.length ? lines[lines.length - 1].seq : 0;
-    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines), epoch, owner };
+    // A line held with a newer change than the backlog's keeps it: the
+    // change reached this tab after the backlog was read (#1435).
+    const newer = new Map(
+      replace && epoch === state.epoch
+        ? state.lines.filter((line) => line.retainedMessageId).map((line) => [line.retainedMessageId, line])
+        : [],
+    );
+    const kept = lines.map((line) => {
+      const held = line.retainedMessageId ? newer.get(line.retainedMessageId) : undefined;
+      return held && (held.visibility ?? 0) > (line.visibility ?? 0)
+        ? { ...line, hidden: held.hidden, text: held.text, visibility: held.visibility }
+        : line;
+    });
+    // An answer reflects every change up to its count - in its lines, or as
+    // an event this socket is sent after joining, held and replayed.
+    const counted =
+      replace && epoch === state.epoch
+        ? settled(Math.max(visibility, state.visibility), state.visibilityAhead)
+        : settled(visibility, []);
+    return {
+      lastSeq: Math.max(chatSeq, last),
+      lines: capped(kept),
+      epoch,
+      owner,
+      ...counted,
+    };
   }
   let next = state;
   for (const line of lines) next = append(next, line);
   if (chatSeq > next.lastSeq) next = { ...next, lastSeq: chatSeq };
+  // The count is not moved by a merged answer (#1435): it carries only the
+  // lines newer than those held, so its count says nothing about a change to
+  // a held line whose event is still on its way - it was merged because this
+  // tab's count matched the server's at the join, and every change since
+  // reaches it as an event, which is what counts. Only a whole backlog, the
+  // branch above, sets the count outright.
   return next;
 }
 
@@ -166,6 +297,8 @@ export function reportableLine(
 ): boolean {
   if (!viewer || viewer.isAnonymous) return false;
   if (line.userId === viewer.id) return false;
+  // Already hidden by a moderator: there is nothing left to show them (#1435).
+  if (line.hidden) return false;
   return Boolean(line.retainedMessageId);
 }
 

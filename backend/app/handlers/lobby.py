@@ -107,6 +107,10 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         and payload.chat_since <= chat.last_seq
         else 0
     )
+    # A line hidden or shown again while this lobby was away (#1435) is one it
+    # already holds, so resuming from `chatSince` would never correct it: it
+    # is handed the whole backlog, marked to replace what it holds - lines
+    # older than the ring included, since nothing here can vouch for them.
     # The join comes first, the lookups next, and the baselines are read last,
     # with nothing that can yield between them and the answer. Each order
     # has been wrong once. The baselines used to be read before the lookups
@@ -122,6 +126,14 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # during the lookups reaches the socket before its answer, which the
     # client holds and then drops as older than the baseline.
     await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
+    # Whether the lobby missed a hide or show-again (#1435) is decided only
+    # once it has joined: every change before the join is in the count read
+    # here, and every change after reaches this socket as an event, which the
+    # client holds until this answer and applies line by line by its
+    # revision. Decided before the join, a change in between was in neither.
+    replace = bool(after) and (payload.chat_visibility or 0) < chat.visibility
+    if replace:
+        after = 0
     hidden = await _hidden_authors_for(
         ctx, await _user_of(ctx, sid), chat.authors(after=after)
     )
@@ -145,6 +157,8 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         ],
         "chatSeq": chat.last_seq,
         "chatEpoch": chat.epoch,
+        "chatVisibility": chat.visibility,
+        **({"chatReplace": True} if replace else {}),
     }
     # Every baseline in one acknowledgement is the lobby's largest message and
     # is paid again on every resync (#882, #885): sized here, where it is built.
@@ -177,6 +191,72 @@ async def _identity_of(ctx: HandlerContext, user_id: str) -> PresenceIdentity | 
     return cached.get(user_id)
 
 
+async def _lobby_recipients(ctx: HandlerContext, author_user_id: str) -> list[str] | None:
+    """Who in the open lobbies may be sent something of this author's: `None`
+    for everybody - one broadcast - when nobody muted them, else the sockets
+    whose account did not. The callers emit by name, so the wire contract
+    (`tests/test_wire_contract.py`) can read every event name."""
+    blockers = (
+        await ctx.block_service.blockers_of(author_user_id)
+        if ctx.block_service is not None
+        else frozenset()
+    )
+    if not blockers:
+        return None
+    return [
+        member
+        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
+        if (ctx.presence.user_for_sid(member) or "") not in blockers
+    ]
+
+
+async def announce_lobby_line_visibility(
+    ctx: HandlerContext,
+    *,
+    retained_message_id: str,
+    author_user_id: str,
+    hidden: bool,
+    text: str | None,
+) -> None:
+    """A moderator hid a lobby line, or showed it again (#1435): the ring
+    keeps the change for the next arrival, and every open lobby holding the
+    line replaces it in place. Un-hidden carries the words back, so it goes
+    only where the line itself would - not to whoever muted its author
+    (R-LCHAT-03); hidden carries none, and the same rule keeps it simple."""
+    ctx.lobby_chat.set_hidden(retained_message_id, hidden)
+    payload: dict = {
+        "retainedMessageId": retained_message_id,
+        "hidden": hidden,
+        # Which change this is: a client applies it to the line only if the
+        # line's own revision is older, so arrival order does not matter -
+        # the block lookup below can make a later change go out first.
+        "visibility": ctx.lobby_chat.visibility,
+    }
+    # A hide carries no words, so every lobby is told - which also keeps
+    # every lobby's count in step, so none takes a missed change for a
+    # reason to be handed the whole backlog on its next resync.
+    if hidden or text is None:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, room=LOBBY_CHANNEL)
+        return
+    # Shown again, the words go only where the line itself would; whoever
+    # muted its author is told the count and nothing else.
+    recipients = await _lobby_recipients(ctx, author_user_id)
+    if recipients is None:
+        await ctx.sio.emit(
+            "lobby_chat_line_changed", {**payload, "text": text}, room=LOBBY_CHANNEL
+        )
+        return
+    muted = [
+        member
+        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
+        if member not in set(recipients)
+    ]
+    if recipients:
+        await ctx.sio.emit("lobby_chat_line_changed", {**payload, "text": text}, to=recipients)
+    if muted:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, to=muted)
+
+
 async def _emit_lobby_chat(ctx: HandlerContext, line, *, sender_user_id: str) -> None:
     """One broadcast, or a recipient list when somebody has muted the author.
 
@@ -185,21 +265,11 @@ async def _emit_lobby_chat(ctx: HandlerContext, line, *, sender_user_id: str) ->
     block list and always receives; the sender is never in their own
     blockers, so they always see their line.
     """
-    blockers = (
-        await ctx.block_service.blockers_of(sender_user_id)
-        if ctx.block_service is not None
-        else frozenset()
-    )
     payload = line.payload()
-    if not blockers:
+    recipients = await _lobby_recipients(ctx, sender_user_id)
+    if recipients is None:
         await ctx.sio.emit("lobby_chat_message", payload, room=LOBBY_CHANNEL)
-        return
-    recipients = [
-        member
-        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
-        if (ctx.presence.user_for_sid(member) or "") not in blockers
-    ]
-    if recipients:
+    elif recipients:
         await ctx.sio.emit("lobby_chat_message", payload, to=recipients)
 
 

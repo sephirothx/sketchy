@@ -6,6 +6,7 @@ import {
   MAX_HELD_LINES,
   applyChatBacklog,
   applyChatLine,
+  applyLineVisibility,
   chatResumeRequest,
   chatTimeLabel,
   parseLine,
@@ -129,7 +130,7 @@ test("only lines from a known process and the same account are resumed (#885)", 
     { chat: [line(1), line(2)], chatSeq: 5, chatEpoch: "e" },
     "u",
   );
-  assert.deepEqual(chatResumeRequest(held, "u"), { chatSince: 5, chatEpoch: "e" });
+  assert.deepEqual(chatResumeRequest(held, "u"), { chatSince: 5, chatEpoch: "e", chatVisibility: 0 });
   assert.deepEqual(chatResumeRequest(held, "someone-else"), {});
   assert.deepEqual(chatResumeRequest(held, null), {});
 });
@@ -169,4 +170,134 @@ test("a line is reportable only by a registered viewer, only when retained, and 
   // A socket with no account yet reads the lobby, and reports nothing.
   assert.equal(reportableLine(retained, null), false);
   assert.equal(reportableLine(retained, undefined), false);
+});
+
+
+test("a line a moderator hid is held without its words, and shown again in place", () => {
+  // #1435: matched by the id that names it everywhere, replaced where it
+  // stands; an unknown or malformed change leaves the state as it was.
+  let held = applyChatLine(EMPTY_LOBBY_CHAT, line(1, { retainedMessageId: "msg-1" }));
+  held = applyChatLine(held, line(2, { retainedMessageId: "msg-2" }));
+
+  const hidden = applyLineVisibility(held, { retainedMessageId: "msg-1", hidden: true, visibility: 1 });
+  assert.deepEqual(hidden.lines.map((l) => [l.seq, l.hidden ?? false, l.text]), [[1, true, ""], [2, false, "line 2"]]);
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: true, visibility: 1 }), hidden, "already so");
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "nope", hidden: true, visibility: 1 }), hidden);
+
+  const shown = applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false, text: "line 1", visibility: 2 });
+  assert.deepEqual(shown.lines[0], { ...held.lines[0], visibility: 2 }, "as it was before it was hidden");
+
+  // From the wire: a hidden line arrives with no words, and cannot be reported.
+  const parsed = parseLine({ ...line(3, { retainedMessageId: "msg-3" }), text: "", hidden: true, visibility: 7 });
+  assert.equal(parsed.hidden, true);
+  assert.equal(parsed.visibility, 7);
+  assert.equal(reportableLine(parsed, { id: "user-bob", isAnonymous: false }), false);
+});
+
+test("a late change to a line cannot undo a newer one, and the muted get only the count", () => {
+  // #1435: the server's block lookup can send a later change first. Per line,
+  // the newer revision stands; a late change to another line still lands.
+  let held = applyChatLine(EMPTY_LOBBY_CHAT, line(1, { retainedMessageId: "m1" }));
+  held = applyChatLine(held, line(2, { retainedMessageId: "m2" }));
+  const restored = applyLineVisibility(held, { retainedMessageId: "m1", hidden: false, text: "line 1", visibility: 2 });
+  const late = applyLineVisibility(restored, { retainedMessageId: "m1", hidden: true, visibility: 1 });
+  assert.equal(late.lines[0], restored.lines[0], "the older hide arrives second and leaves the line");
+  assert.deepEqual([late.visibility, late.visibilityAhead], [2, []], "but it closes the gap below change 2");
+  const other = applyLineVisibility(late, { retainedMessageId: "m2", hidden: true, visibility: 1 });
+  assert.equal(other.lines[1].hidden, true, "an older count, but news for this line");
+
+  // Shown again to somebody who muted its author: no words, only the count.
+  const muted = applyLineVisibility(other, { retainedMessageId: "m9", hidden: false, visibility: 9 });
+  assert.deepEqual([muted.visibility, muted.visibilityAhead], [2, [9]], "counted, past a gap");
+  assert.equal(muted.lines, other.lines);
+});
+
+test("a change received early does not hide that an earlier one never came", () => {
+  // The review's case (#1435): line A is restored as change 2, but the block
+  // lookup holds that broadcast; hiding B goes out at once as change 3; the
+  // tab disconnects before change 2 arrives. Counting the highest received
+  // resumed as caught up, and A stayed a placeholder for good.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [
+      { ...line(1, { retainedMessageId: "A" }), text: "", hidden: true, visibility: 1 },
+      line(2, { retainedMessageId: "B" }),
+    ],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 1,
+  }, owner);
+  held = applyLineVisibility(held, { retainedMessageId: "B", hidden: true, visibility: 3 });
+  assert.equal(held.lines[1].hidden, true);
+  assert.deepEqual([held.visibility, held.visibilityAhead], [1, [3]]);
+  assert.equal(chatResumeRequest(held, owner).chatVisibility, 1, "resumes from below the gap");
+
+  // Had change 2 arrived after all, the count would have closed up to 3.
+  const closed = applyLineVisibility(held, { retainedMessageId: "A", hidden: false, text: "line 1", visibility: 2 });
+  assert.deepEqual([closed.visibility, closed.visibilityAhead], [3, []]);
+  assert.equal(closed.lines[0].text, "line 1");
+});
+
+test("a lobby that missed a hide replaces what it holds with the backlog it is handed", () => {
+  // #1435: the count rides the resume request; behind, the server marks the
+  // backlog `chatReplace`, and lines held older than it go too - nothing
+  // vouches for them now.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [line(1, { retainedMessageId: "m1" }), line(2, { retainedMessageId: "m2" })],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 3,
+  }, owner);
+  assert.deepEqual(chatResumeRequest(held, owner), { chatSince: 2, chatEpoch: "e1", chatVisibility: 3 });
+
+  // A change this tab did see moves its count, held line or not.
+  held = applyLineVisibility(held, { retainedMessageId: "elsewhere", hidden: true, visibility: 4 });
+  assert.equal(held.visibility, 4);
+
+  const replaced = applyChatBacklog(held, {
+    chat: [{ ...line(2, { retainedMessageId: "m2" }), text: "", hidden: true }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 6, chatReplace: true,
+  }, owner);
+  assert.deepEqual(replaced.lines.map((l) => [l.seq, l.hidden ?? false]), [[2, true]]);
+  assert.equal(replaced.visibility, 6);
+
+  // A change this tab already applied is newer than the replacing backlog's
+  // copy of that line: it stands (the answer was read before it).
+  const ahead = applyLineVisibility(replaced, { retainedMessageId: "m2", hidden: false, text: "line 2", visibility: 9 });
+  const older = applyChatBacklog(ahead, {
+    chat: [{ ...line(2, { retainedMessageId: "m2" }), text: "", hidden: true, visibility: 6 }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 8, chatReplace: true,
+  }, owner);
+  assert.deepEqual([older.lines[0].hidden ?? false, older.lines[0].text], [false, "line 2"]);
+
+  // Level, a resumed backlog still merges.
+  const merged = applyChatBacklog(replaced, {
+    chat: [line(3)], chatSeq: 3, chatEpoch: "e1", chatVisibility: 6,
+  }, owner);
+  assert.deepEqual(merged.lines.map((l) => l.seq), [2, 3]);
+});
+
+
+test("a merged answer does not count changes it does not carry", () => {
+  // The review's case (#1435): the tab resumes level at count 1, and during
+  // the subscription A is restored (change 2, held up by its block lookup) and
+  // B hidden (change 3, delivered). The answer merges with chatVisibility 3,
+  // but it carries no held line - counting it would resume past change 2.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [
+      { ...line(1, { retainedMessageId: "A" }), text: "", hidden: true, visibility: 1 },
+      line(2, { retainedMessageId: "B" }),
+    ],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 1,
+  }, owner);
+  held = applyLineVisibility(held, { retainedMessageId: "B", hidden: true, visibility: 3 });
+  const merged = applyChatBacklog(held, { chat: [], chatSeq: 2, chatEpoch: "e1", chatVisibility: 3 }, owner);
+  assert.deepEqual([merged.visibility, merged.visibilityAhead], [1, [3]]);
+  assert.equal(chatResumeRequest(merged, owner).chatVisibility, 1);
+
+  // A whole backlog is everything as it stands: that one sets the count.
+  const replaced = applyChatBacklog(merged, {
+    chat: [line(1, { retainedMessageId: "A", visibility: 2 }), { ...line(2, { retainedMessageId: "B" }), text: "", hidden: true, visibility: 3 }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 3, chatReplace: true,
+  }, owner);
+  assert.deepEqual([replaced.visibility, replaced.visibilityAhead], [3, []]);
+  assert.equal(replaced.lines[0].text, "line 1");
 });

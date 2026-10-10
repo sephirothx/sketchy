@@ -1288,6 +1288,19 @@
       ],
       "default": null,
       "title": "Chatsince"
+     },
+     "chatVisibility": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Chatvisibility"
      }
     },
     "type": "object"
@@ -1376,6 +1389,9 @@
    "shape": "object"
   },
   "last_game": {
+   "shape": "object"
+  },
+  "lobby_chat_line_changed": {
    "shape": "object"
   },
   "lobby_chat_message": {
@@ -1776,6 +1792,7 @@
    "displayName",
    "expiresAt",
    "hasMore",
+   "messageId",
    "moderationState",
    "ownerDisplayName",
    "promptCount",
@@ -1789,6 +1806,9 @@
   ],
   "api.moderation:decide_gallery_drawing": [
    "turnId"
+  ],
+  "api.moderation:decide_lobby_line": [
+   "messageId"
   ],
   "api.moderation:erase_drawing": [
    "turnId"
@@ -2534,12 +2554,17 @@
   "handlers.game:start_game": [
    "errorCode"
   ],
+  "handlers.lobby:announce_lobby_line_visibility": [
+   "retainedMessageId"
+  ],
   "handlers.lobby:send_lobby_chat": [
    "errorCode"
   ],
   "handlers.lobby:watch_lobby": [
    "chatEpoch",
-   "chatSeq"
+   "chatReplace",
+   "chatSeq",
+   "chatVisibility"
   ],
   "handlers.moderation:_file_player_report": [
    "drawingAttached",
@@ -2963,7 +2988,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 65,
+ "protocolVersion": 66,
  "refusal": {
   "codes": [
    "invalid_payload",

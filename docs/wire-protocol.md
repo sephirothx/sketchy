@@ -843,7 +843,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `client_health` | `ClientHealthPayload` `{tailRejected?, syncExhausted?, droppedEmits?, stallFallbacks?, playbackCompressions?, joinToDrawingMs?}` — what only the client can see about its connection, counted since its last report (`droppedEmits` is every in-the-moment action the client chose not to send because the socket was not connected, its ping had expired or its transport was not writable, #966): each count 0–1000, and up to 8 join-to-drawing times of 0–60,000 ms. Sent **only when something happened** and at most once a minute, so a healthy session sends none — and not volatile, because socket.io discards a volatile packet whenever the transport is not writable, which on long-polling is every in-flight POST, and polling is the transport this most needs to hear from; no identifier, no content, no free text (R-OBS-20, #876) | — (fire-and-forget: a refusal answers nothing, and a malformed report is refused whole and counted by its code) | [`connection.py`](../backend/app/handlers/connection.py) |
-| `watch_lobby` | `WatchLobbyPayload` `{chatSince?, chatEpoch?}` — the last chat line held and the process that numbered it, so only newer lines are sent (#885) | ✓ — joins the channel first, so a `send_lobby_chat` queued behind it is from a watcher; the acknowledgement carries every baseline (presence, rooms, chat), read after the handler's lookups with nothing yielding before the answer. Presence and rooms are the **last completed broadcast**, built once per tick and shared by every asker (#885), so the next delta follows them exactly; a delta already on its way when the answer is built reaches the socket first, and the client holds it and replays it (#600) | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `watch_lobby` | `WatchLobbyPayload` `{chatSince?, chatEpoch?, chatVisibility?}` — the last chat line held and the process that numbered it, so only newer lines are sent (#885), and how many hides it has seen (#1435) | ✓ — joins the channel first, so a `send_lobby_chat` queued behind it is from a watcher; the acknowledgement carries every baseline (presence, rooms, chat), read after the handler's lookups with nothing yielding before the answer. Presence and rooms are the **last completed broadcast**, built once per tick and shared by every asker (#885), so the next delta follows them exactly; a delta already on its way when the answer is built reaches the socket first, and the client holds it and replays it (#600) | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `unwatch_lobby` | `EmptyPayload` | ✓ — sent when the lobby is navigated away from, and when the tab has been hidden for 30 s (#886): a background tab was taking every tick, room change and chat line for as long as it stayed open. Coming back re-subscribes, which costs one baseline and only the chat the tab does not already hold | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
@@ -1112,6 +1112,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
+| `lobby_chat_line_changed` | `{retainedMessageId, hidden, visibility, text?}` — a moderator hid a lobby line or showed it again (#1435, R-LCHAT-09): a client holding the line replaces it in place by `retainedMessageId`; `text` comes only with `hidden: false`, and only to sockets whose account did not mute the author - those are sent the change without it, so every lobby's count keeps step; a hide carries no words and goes to every lobby. The server's ring has the change before this is sent, so a backlog asked for meanwhile already agrees | the `lobby` channel |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it. The client still says a request **arrived**, by comparing the lists across the refetch this triggers (R-FRIEND-12) — so naming it costs no wire surface, and the event does not have to grow a second shape. An acceptance is an inbox entry instead (R-FRIEND-14), told by the `inbox_changed` that goes out beside every one of these | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `email_state_changed` | `{}` — this account's recovery address state moved: an address was offered, one was confirmed, or the weekly reminder was closed. Contentless for the reason `friends_changed` is: `GET /api/auth/email` is the truth, and the address itself is not something to put on a broadcast. The client re-reads it, and re-reads again on reconnecting, which is how a tab hears a change it was offline for | every socket of the account. The confirmation link is presented without a session, usually in a tab of its own, so this is the only way the tabs that were already showing the reminder hear that it is done |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
@@ -1235,8 +1236,13 @@ holds (re-read from the retained rows after a restart):
 { "seq": 1208, "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
   "isAnonymous": false, "text": "anyone up for a round?",
   "sentAt": 1788361445,
-  "retainedMessageId": "0192…" }   // present only when retention took the row
+  "retainedMessageId": "0192…",    // present only when retention took the row
+  "hidden": true,                  // present only when a moderator hid it; text is then ""
+  "visibility": 3 }                // present only on a line hidden or shown again since
 ```
+
+A hidden line (#1435, R-LCHAT-09) keeps its `seq` and place and carries no words, to
+anybody, its author included; the client shows *This message was deleted* in its place.
 
 Chat rides the channel but is **not a third feed** of it. Presence and the
 room list are state, rebuilt on the tick and numbered so a client can resync
@@ -1256,7 +1262,25 @@ backlog was most of what was resent. The answer is *merged* into what it
 holds, so a lobby left open all evening keeps what it watched go by. From any
 other epoch, or for another account (whose blocks differ), the whole backlog
 is sent and *replaces* what the client holds, since the numbers mean nothing
-here. It carries an account id for the reason `LobbyPlayer` does
+here. So is it, marked `chatReplace: true`, for a client whose `chatVisibility` is
+behind the server's (#1435). The client sends the count it has **without a gap below
+it**, not the highest it received: changes can arrive out of order, and a client that
+received change 3 but not change 2, then disconnected, must not resume as caught up.
+Only a replacing answer sets the client's count outright; a merged one carries only
+newer lines, so it says nothing about a held line's change still on its way, and the
+count moves only by the events the client receives. a moderator hid or showed again a line while it was
+away, a line it already holds and resuming from `chatSince` would never correct, so
+the backlog replaces what it holds, older lines included. Every answer carries
+`chatVisibility`, the count of hides and show-agains this process has announced, and
+every `lobby_chat_line_changed` its own `visibility`, which a line changed since it was
+said carries too. The client applies a change to a line only if its `visibility` is
+past that line's own: changes may arrive out of order (the server looks up blocks
+before sending a show-again), and one count for all lines could not tell a late
+change to one line from news about another. Changes arriving while any subscription
+is in flight are held and replayed after its answer the same way, and a replacing
+answer keeps a held line's change if it is the newer. Whether to replace is decided
+after the socket has joined the channel: a change before the join is in the count it
+reads, and one after reaches the socket as an event. It carries an account id for the reason `LobbyPlayer` does
 — there is no seat to resolve, and a report needs a stable target — and never
 a room. `sentAt` is the server's instant in whole seconds since the epoch, the same
 one written to the retained row, and the client renders it as an age or a
@@ -2419,6 +2443,7 @@ per-event id, and a `correction` names its target as `correctsEventOrder`.
 | `GET` | `/api/moderation/prompt-lists/{prompt_list_id}` | Every prompt in a held list's pending edition — text, aliases, and each version's own `moderationState` — with the edition's number as `version`. An edition never changes, so what is read is what a release puts live, whatever the owner saves meanwhile. The queue carries a name and a count, and no other route can show a held list's words: the owner's route is the owner's, and the catalogue and room resolution exclude anything not active. **404** for a list that is not held, so this stays a reading surface for the queue rather than a staff window into private lists |
 | `PATCH` | `/api/moderation/prompt-lists/{prompt_list_id}` | `{state: active \| hidden, note, expectedVersion}`. `403` for a moderator's own list (R-MOD-07, #1063). Releases the pending edition (it goes live and the one it replaces is deleted) or takes the list down (hidden, the pending edition dropped). **409** for a list nobody held (or one its owner withdrew), and **409** when the pending edition's number is no longer `expectedVersion`: an owner can publish again while an edition waits, which replaces it, and without the check a moderator could read one edition and release the next. Hiding tells the owner, as a takedown from a report does. Writes `prompt_list.review_active` / `prompt_list.review_hidden`, with the edition decided on |
 | `GET` | `/api/moderation/gallery` | moderator+ | `{review, waiting, candidates}` — This week's review queue (R-GAL-10), leaving out a moderator's own drawings (R-MOD-07, #1063): whether `gallery.shelf_review` is set, and while it is, the current Top-week drawings nobody has decided (the six This week would take and six behind them; a moderator's own are left out and the queue filled from further down), each in the Gallery entry's shape. With the switch off nothing waits: the shelf is Top-week directly |
+| `PATCH` | `/api/moderation/lobby-messages/{message_id}` | moderator+, step-up | `{hidden, note}` → `{messageId, hidden}`. Hides a lobby line from every lobby, or shows it again (#1435, R-LCHAT-09). Only a line a report about its author copied — cited or context — and only that author's; `404` otherwise, and for an expired or unknown line; `403` for a moderator's own line (R-MOD-07). Audited as `lobby_message.hidden` / `.unhidden` with the note, the author as target; asking for the state it is already in records nothing. Every open lobby is sent `lobby_chat_line_changed`. The case's evidence lines carry `hidden` |
 | `PATCH` | `/api/moderation/gallery/{turn_id}` | moderator+, step-up | `{decision: released \| hidden, note}` → `{turnId, decision, hidden}`. `403` for a moderator's own drawing (R-MOD-07, #1063). **Hidden** takes the drawing out of the Gallery, the shelf, its bytes route and its reaction door in one act and leaves the players' own history alone (R-GAL-09); **released** puts it back, and onto the shelf under the switch. One row per turn in `gallery_shelf_reviews`; audited as `gallery.review_{decision}` against the drawing with the drawer as the target account. The cached This week shelf is recomputed at once. Any kept drawing may be decided, held or not; `404` otherwise |
 | `GET` | `/api/moderation/gallery/{turn_id}/drawing` | moderator+ | A kept drawing somebody shares (#1430), hidden from the Gallery or not and whatever its game's visibility, with the participant route's conditional handling: the queue has to show what it asks a decision about. Never one nobody shares — those are the players' own (R-HIST-16), the queue lists none, and a turn id is not a permission; `404` like every other refusal |
 | `GET` | `/api/moderation/prompt-content-reports` | moderator+ | The queue as **incidents** keyed on the target, which already names one, leaving out a moderator's **pending** reports about their own lists (R-MOD-07, #1063): `{ incidents, total, hasMore }`, `limit`/`offset` paging incidents. Each carries the target once (`targetType`, `listName`, `prompt`, `promptListId`, `promptVersionId`), `reporterCount`, the distinct `reasons`, `openedAt`/`latestReportedAt`, `reports` — each complaint's own reason, words and reporter — and the decision (`outcome`, `reviewedBy`, `resolutionNote`, `moderationState`, `reviewedAt`, `decisionGroupId`) |
@@ -2604,7 +2629,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (65) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (66) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

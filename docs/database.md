@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a9b0c1d2e3f6_moderation_erased_drawings.py` (#1419). Both this line and the table
+`b0c1d2e3f4a7_hidden_lobby_messages.py` (#1435). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -998,7 +998,8 @@ The subject is named **twice, on purpose**:
 - `target_user_id` is a real foreign key, so deleting an account leaves the entry
   standing with its subject blanked rather than taking it along.
 - `target_type` + `target_id` names whatever row the action touched — a prompt list, a
-  single prompt version, a room, a configuration key. `ck_audit_events_target_pair`
+  single prompt version, a room, a configuration key, a drawing, a lobby line
+  (`lobby_message`, #1435). `ck_audit_events_target_pair`
   requires both or neither, so an action on no single row (a bulk retention purge)
   records neither and **says so by leaving both empty rather than inventing a subject**.
 
@@ -1081,6 +1082,13 @@ in an audience-aware store — and, since #533, the lobby's chat too. A room lin
 reached **nobody but its author** — said alone in a room, or with every other seat
 blocking them — is not written (#1243): a report cites only a line its reporter
 received, so such a row could never be evidence, and it was storage anybody could fill.
+
+**Hidden lobby lines** (#1435, R-LCHAT-09). `hidden_at`, set by a moderator through
+`PATCH /api/moderation/lobby-messages/{id}` and cleared by showing the line again, with
+`ck_room_messages_hidden_lobby_only`: only a lobby line can carry it, room chat ending
+with its room. A stamp rather than a deletion, because a hide can be undone; the row
+keeps its text and its thirty days for the report that cited it. The lobby's restart
+re-seed reads it, so a hidden line comes back hidden, in its place.
 
 **Written in batches, never on the delivery path.** A queued writer inserts what
 arrived within `WRITE_LINGER_SECONDS` (0.25 s) of a batch's first line, up to 100,

@@ -893,6 +893,39 @@
   font-weight: 600;
 }
 
+/* A lobby line hidden from every lobby (#1435): still read here, struck
+   through so the case says at a glance what the lobbies no longer show. */
+.mod-evidence-text.is-hidden {
+  text-decoration: line-through;
+  text-decoration-color: var(--faint);
+}
+
+.mod-evidence-hidden {
+  color: var(--faint);
+}
+
+.mod-line-toggle {
+  background: none;
+  border: 0;
+  color: var(--primary-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-left: 8px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.mod-line-toggle:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.mod-line-note {
+  margin-bottom: 8px;
+}
+
 .mod-evidence-caption {
   color: var(--faint);
   font-size: 12.5px;

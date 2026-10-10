@@ -216,6 +216,24 @@ class GalleryReportBody(ControlFreeModel):
         return value.strip()
 
 
+class LobbyLineDecisionBody(ControlFreeModel):
+    """Hide a lobby line, or show it again (#1435), with a note for the
+    ledger that nobody else reads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hidden: bool
+    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A decision needs a note.")
+        return cleaned
+
+
 class EraseDrawingBody(ControlFreeModel):
     """Why an administrator erased a drawing: for the ledger, never shown to
     the drawer or anybody else."""
@@ -628,7 +646,10 @@ _REPORT_PAYLOAD_LOADS = (
 
 
 def _evidence_line_payload(
-    evidence: PlayerReportMessageEvidence, *, cited_by: tuple[UUID, ...] | None = None
+    evidence: PlayerReportMessageEvidence,
+    *,
+    cited_by: tuple[UUID, ...] | None = None,
+    hidden: bool = False,
 ) -> dict:
     """One copied line. `citedBy` names the reports that complained about it.
 
@@ -661,6 +682,9 @@ def _evidence_line_payload(
             if cited_by is None
             else ("cited" if cited_by else "context")
         ),
+        # A lobby line a moderator hid (#1435): the lobbies show "This
+        # message was deleted"; the case still shows what was said.
+        "hidden": hidden,
         "text": evidence.text_snapshot,
         "messageCreatedAt": evidence.message_created_at.isoformat(),
         "copiedAt": evidence.copied_at.isoformat(),
@@ -809,10 +833,55 @@ def _incident_picture(
     }
 
 
+async def _reported_with(session: AsyncSession, message_id: UUID, author: UUID) -> bool:
+    """Whether a report about this line's author copied the line - cited, or
+    as context around what was cited. Compared through aliases on both sides:
+    a guest who has since claimed an account is that account."""
+    reported = (
+        await session.scalars(
+            select(PlayerReport.reported_user_id)
+            .join(
+                PlayerReportMessageEvidence,
+                PlayerReportMessageEvidence.report_id == PlayerReport.id,
+            )
+            .where(
+                PlayerReportMessageEvidence.source_message_id == message_id,
+                PlayerReport.reported_user_id.is_not(None),
+            )
+        )
+    ).all()
+    for user_id in set(reported):
+        if await canonical_user_id(session, user_id) == author:
+            return True
+    return False
+
+
 def _evidence_turn(report: PlayerReport) -> UUID | None:
     """The turn a report's attached canvas was copied from, if it has one."""
     evidence = report.drawing_evidence
     return evidence.turn_id_snapshot if evidence is not None else None
+
+
+async def _hidden_lines_of(session: AsyncSession, reports) -> set[UUID]:
+    """Which lobby lines a page of reports copied a moderator has hidden
+    (#1435), so the case says so beside each."""
+    ids = {
+        evidence.source_message_id
+        for report in reports
+        for evidence in report.message_evidence
+        if evidence.audience == "lobby" and evidence.source_message_id is not None
+    }
+    if not ids:
+        return set()
+    return set(
+        (
+            await session.scalars(
+                select(RoomMessage.id).where(
+                    RoomMessage.id.in_(ids), RoomMessage.hidden_at.is_not(None)
+                )
+            )
+        ).all()
+    )
 
 
 async def _erased_turns_of(session: AsyncSession, reports) -> set[UUID]:
@@ -831,6 +900,7 @@ def _incident_payload(
     prior: dict[UUID, dict] | None = None,
     removals: dict[UUID, dict] | None = None,
     erased_turns: set[UUID] | None = None,
+    hidden_lines: set[UUID] | None = None,
 ) -> dict:
     """One incident as a queue entry: who it is about, who complained, and
     the whole of what they complained about, read once.
@@ -843,6 +913,7 @@ def _incident_payload(
     """
     first = incident.reports[0]
     erased = erased_turns or set()
+    hidden = hidden_lines or set()
     context = (
         (player_context or {}).get(first.reported_user_id)
         if first.reported_user_id
@@ -913,7 +984,11 @@ def _incident_payload(
             for report in incident.reports
         ],
         "evidence": [
-            _evidence_line_payload(line.evidence, cited_by=line.cited_by)
+            _evidence_line_payload(
+                line.evidence,
+                cited_by=line.cited_by,
+                hidden=line.evidence.source_message_id in hidden,
+            )
             for line in incident.evidence
         ],
         "drawings": [
@@ -1353,6 +1428,12 @@ def create_moderation_router(
     # Called with a turn an administrator erased once the erasure commits, so
     # a room still showing the game's recap stops showing it (#1419).
     on_drawing_erased: Callable[[str], Awaitable[None]] | None = None,
+    # Called once a lobby line's hide or un-hide commits, with the line, its
+    # author, whether it is hidden now and - un-hidden - its text, so every
+    # open lobby shows the change at once (#1435).
+    on_lobby_line_changed: (
+        Callable[[str, str, bool, str | None], Awaitable[None]] | None
+    ) = None,
     # Writes the chat lines still waiting in the retention queue, so a report
     # citing one a moment after it was said finds it (#972).
     flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
@@ -1914,10 +1995,17 @@ def create_moderation_router(
                 session, _accounts_with_no_picture(on_page, player_context)
             )
             erased_turns = await _erased_turns_of(session, on_page)
+            hidden_lines = await _hidden_lines_of(session, on_page)
             return {
                 "incidents": [
                     _incident_payload(
-                        incident, player_context, decisions, prior, removals, erased_turns
+                        incident,
+                        player_context,
+                        decisions,
+                        prior,
+                        removals,
+                        erased_turns,
+                        hidden_lines,
                     )
                     for incident in page
                 ],
@@ -2132,6 +2220,7 @@ def create_moderation_router(
                 session, _accounts_with_no_picture(list(players), player_context)
             )
             erased_turns = await _erased_turns_of(session, list(players))
+            hidden_lines = await _hidden_lines_of(session, list(players))
             by_player_group = group_by_decision(list(players))
             by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
@@ -2147,6 +2236,7 @@ def create_moderation_router(
                         decisions,
                         removals=removals,
                         erased_turns=erased_turns,
+                        hidden_lines=hidden_lines,
                     )
                     for kind, group in page
                     if kind == "player"
@@ -2432,8 +2522,12 @@ def create_moderation_router(
                     )
                 decisions = await _decisions(session, list(incident.reports))
                 erased_turns = await _erased_turns_of(session, list(incident.reports))
+                hidden_lines = await _hidden_lines_of(session, list(incident.reports))
             payload = _incident_payload(
-                incident, decisions=decisions, erased_turns=erased_turns
+                incident,
+                decisions=decisions,
+                erased_turns=erased_turns,
+                hidden_lines=hidden_lines,
             )
         await _tell(*told)
         return payload
@@ -3630,6 +3724,78 @@ def create_moderation_router(
             "waiting": len(candidates),
             "candidates": [gallery_entry_payload(entry) for entry in candidates],
         }
+
+    @router.patch("/moderation/lobby-messages/{message_id}")
+    async def decide_lobby_line(message_id: UUID, body: LobbyLineDecisionBody, request: Request):
+        """Hide a lobby line, or show it again (#1435, R-LCHAT-09).
+
+        Only a line a report about its author copied - cited, or context the
+        server added - so a report about one player is not a way to hide
+        somebody else's words. Every open lobby is told at once, and a hidden
+        line's text is sent to nobody, its author included. Reversible, and
+        audited each way against the line with its author as the target."""
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        now = datetime.now(timezone.utc)
+        changed = False
+        async with session_factory() as session:
+            async with session.begin():
+                reviewer = await _reviewer(session, request)
+                require_step_up(request)
+                line = await session.scalar(
+                    select(RoomMessage)
+                    .where(
+                        RoomMessage.id == message_id,
+                        RoomMessage.audience == "lobby",
+                        RoomMessage.expires_at > now,
+                    )
+                    .with_for_update()
+                )
+                author = (
+                    await canonical_user_id(session, line.sender_user_id)
+                    if line is not None and line.sender_user_id is not None
+                    else None
+                )
+                if line is None or author is None or not await _reported_with(
+                    session, message_id, author
+                ):
+                    raise HTTPException(status_code=404, detail="No such line.")
+                if _is_about_themselves(reviewer, author):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Your own line is for another moderator to decide.",
+                    )
+                hidden_now = line.hidden_at is not None
+                if body.hidden != hidden_now:
+                    changed = True
+                    line.hidden_at = now if body.hidden else None
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=(
+                                "lobby_message.hidden" if body.hidden else "lobby_message.unhidden"
+                            ),
+                            actor_user_id=reviewer.id,
+                            target_user_id=author,
+                            target_type=AuditTargetType.LOBBY_MESSAGE.value,
+                            target_id=str(message_id),
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                            details={"note": body.note},
+                            created_at=now,
+                        )
+                    )
+                # The account, not the id the line was said under: a guest
+                # who has since claimed one has its blocks there (R-LCHAT-03).
+                sender = str(author)
+                text = line.text
+        if changed and on_lobby_line_changed is not None:
+            try:
+                await on_lobby_line_changed(
+                    str(message_id), sender, body.hidden, None if body.hidden else text
+                )
+            except Exception:  # noqa: BLE001 - decided either way; the lobbies are a view
+                logger.exception("Failed to tell the lobbies about a hidden line")
+        return {"messageId": str(message_id), "hidden": body.hidden}
 
     @router.post("/moderation/drawings/{turn_id}/erase")
     async def erase_drawing(turn_id: str, body: EraseDrawingBody, request: Request):
