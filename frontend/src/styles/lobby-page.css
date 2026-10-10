@@ -2023,17 +2023,25 @@ a.online-player-name:focus-visible {
 }
 
 /* The privacy notice and the terms (#1417): the rules' layout, with plain
-   paragraphs and lists inside each section and a link across to the other
-   document under the title. */
-.legal-switch {
+   paragraphs and lists inside each section, and under the title when they
+   last changed. */
+/* The way across to the other two documents (#1417): small, muted and last,
+   under the final section. */
+.document-links {
   color: var(--muted);
-  margin: 6px 0 0;
+  font-size: 13px;
+  margin: 4px 0 0;
+  text-align: center;
 }
 
-.legal-switch a {
-  color: var(--primary-ink);
-  font-weight: 700;
+.document-links a {
+  color: inherit;
+  text-decoration: none;
   text-underline-offset: 2px;
+}
+
+.document-links a:hover {
+  text-decoration: underline;
 }
 
 .legal-updated {

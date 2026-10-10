@@ -77,8 +77,8 @@ keyboard that takes half the screen, and one thumb.
   owner moves a drawing left or right and unpins it there, and anyone opens one in
   the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
   profile's game history, for a registered player who may share it.
-- **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, one page with a switch
-  between them, in all eight interface languages: what is kept, why and for how long, who
+- **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, in all eight interface
+  languages: what is kept, why and for how long, who
   else handles it, what the Gallery publishes, every right and how to use it, and the
   agreement a player accepts — the minimum age (16), the licence for what they draw and
   publish, moderation, and Swiss law. A new identity sees what it accepts wherever it
@@ -86,7 +86,8 @@ keyboard that takes half the screen, and one thumb.
   under the lobby's name tag, an invite link's name field and Settings for a visitor with
   no name, and a sentence on account creation; and a suspended player can still read both, and the
   Rules, under a bar rather than behind a dialog. Each page says when it last changed
-  and links its public history. The account menu has a *Privacy and
+  and links its public history; the Rules, the terms and the notice link each other in
+  a small row at the foot of each. The account menu has a *Privacy and
   terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`,
   which production refuses to start without.
 - Sharing — a drawing reaches the gallery only when a player who sat in its game shares

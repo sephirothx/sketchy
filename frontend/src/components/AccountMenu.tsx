@@ -350,7 +350,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
               >
                 {ui.accountMenu.rules}
               </MenuItem>
-              {/* One entry for both: the page switches between them (#1417). */}
+              {/* One entry for both: each page links the other at its foot (#1417). */}
               <MenuItem
                 icon={<LockIcon size={16} />}
                 onClick={() => {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
+import { DocumentLinks } from "../components/DocumentLinks";
 import { Card, SectionLabel } from "../components/ui/Card";
 import { LEGAL_REVISION, legalFor, legalHistoryUrl } from "../content/legal/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -79,7 +80,6 @@ export function LegalPage({ document: which }: { document: Which }) {
       ui.legalPage.contactPending
     );
   const text = (paragraph: string) => fill(paragraph, { contact: contactNode, age: MINIMUM_AGE });
-  const other: Which = which === "privacy" ? "terms" : "privacy";
 
   return (
     <main className="ops-page rules-page legal-page">
@@ -87,11 +87,6 @@ export function LegalPage({ document: which }: { document: Which }) {
 
       <header className="rules-masthead">
         <h1>{shown.title}</h1>
-        <p className="legal-switch">
-          <Link to={`/${other}`}>{documents[other].title}</Link>
-          {" · "}
-          <Link to="/rules">{ui.accountMenu.rules}</Link>
-        </p>
         {/* When it last changed, and every change before it (#1417): what
             "Changes to this notice" and "Changes to these terms" point to. */}
         <p className="legal-updated">
@@ -140,6 +135,7 @@ export function LegalPage({ document: which }: { document: Which }) {
               )}
             </Card>
           ))}
+          <DocumentLinks current={which} />
         </div>
       </div>
     </main>
