@@ -536,7 +536,8 @@ export const FR: Catalogue = {
     friends: "Amis",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Termine ton rôle d’${p.role === "admin" ? "administrateur" : "modérateur"}`,
-    agreeToRules: "En créant un compte, tu acceptes de suivre les {rules}.",
+    agreeToRules:
+      "En créant un compte, tu acceptes les {terms} et les {rules} et tu confirmes avoir au moins {age} ans. Voir la {privacy}.",
     reportBug: "Signaler un bug",
     account: "Compte",
     settings: "Paramètres",
@@ -556,8 +557,12 @@ export const FR: Catalogue = {
     codeFromYourAuthenticatorApp: "Code de ton application d’authentification",
     email: "E-mail",
     optional: "(facultatif)",
-    letsYouResetYourPasswordLater: "Te permet de réinitialiser ton mot de passe plus tard. Sert uniquement à cela.",
+    letsYouResetYourPasswordLater:
+      "Ne sert qu'à ton compte : le confirmer, réinitialiser ton mot de passe et te prévenir des changements qui le concernent.",
     rules2: "règles",
+    terms2: "conditions d'utilisation",
+    privacy2: "politique de confidentialité",
+    privacyAndTerms: "Confidentialité et conditions",
     forgotYourPassword: "Mot de passe oublié ?",
     notNow: "Pas maintenant",
     createYourAccount: "Crée ton compte",
@@ -998,6 +1003,10 @@ export const FR: Catalogue = {
   },
 
   firstRunIdentity: {
+    terms: "Conditions",
+    privacy: "Confidentialité",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy est réservé aux personnes de ${p.age} ans ou plus`,
     nameTooShort: (p: { min: number }) => `Un nom doit faire au moins ${p.min} caractères.`,
     nameInUse: (p: { name: string }) =>
       `Quelqu’un en ligne joue déjà sous le nom « ${p.name} ». Choisis-en un autre pour continuer à jouer.`,
@@ -1959,7 +1968,7 @@ export const FR: Catalogue = {
     buyLettersAndWheelNeedScoring: "Acheter des lettres et Roue de la fortune ont besoin du score.",
     allColors: "Toutes les couleurs",
     noScoring: "Sans score",
-    listedInTheLobbyAnyone: "Affiché dans le hall : tout le monde peut entrer.",
+    listedInTheLobbyAnyone: "Affiché dans le hall : tout le monde peut entrer, et les personnes qui y jouent peuvent partager ses dessins dans la Galerie.",
     joinableOnlyWithTheCode: "Accessible uniquement avec le code ou le lien d’invitation.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "personnalisé", other: "personnalisés" }),
@@ -1993,6 +2002,16 @@ export const FR: Catalogue = {
     thisPage: "Sur cette page",
     forExample: "Par exemple",
     backToLobby: "Retour au hall",
+  },
+
+  legalPage: {
+    contactPending: "[aucune adresse configurée sur ce serveur]",
+    contactLoading: "…",
+    contactUnavailable: "[l'adresse n'a pas pu être chargée ; réessaie plus tard]",
+    terms: "Conditions d'utilisation",
+    privacy: "Politique de confidentialité",
+    lastUpdated: (p: { date: string }): string => `Dernière mise à jour : ${p.date}`,
+    history: "historique",
   },
 
   sessionManagerDialog: {
@@ -2211,6 +2230,8 @@ export const FR: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "Les {terms} et la {privacy} expliquent comment tu peux encore télécharger ou supprimer tes données.",
     yourAccountSuspended: "Ton compte est suspendu",
     signingOut: "Déconnexion…",
     signOut: "Se déconnecter",

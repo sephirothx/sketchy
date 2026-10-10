@@ -12,6 +12,7 @@ from app.deployment import (
     history_encode_workers,
     shutdown_drain_seconds,
     validate_database_configuration,
+    validate_contact_address,
     validate_mail_configuration,
     validate_public_base_url,
     validate_python_runtime,
@@ -312,3 +313,69 @@ def test_a_history_encode_width_it_cannot_use_is_refused(value):
     silently as the default (#976 third review)."""
     with pytest.raises(ValueError, match="HISTORY_ENCODE_WORKERS"):
         history_encode_workers({"HISTORY_ENCODE_WORKERS": value})
+
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"SKETCHY_ENV": "development"},
+        {"SKETCHY_ENV": "test", "CONTACT_ADDRESS": "privacy@localhost"},
+    ],
+)
+def test_a_deployment_without_a_contact_address_runs_outside_production(environ):
+    validate_contact_address(environ)
+
+
+def test_production_with_a_contact_address_starts():
+    validate_contact_address({"SKETCHY_ENV": "production", "CONTACT_ADDRESS": "privacy@sketchy.ch"})
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        None,
+        "",
+        "   ",
+        "privacy@localhost",
+        "me@sketchy.local",
+        "me@sketchy.test",
+        "me@sketchy.example",
+        "privacy@example.com",
+        "privacy@example.org",
+        "privacy@mail.example.net",
+        "me@nas.internal",
+        "me@nas.home.arpa",
+        "me@nas.lan",
+    ],
+)
+def test_production_without_a_reachable_contact_address_refuses_to_start(address):
+    """The privacy notice and the terms tell a player to write to it (#1417)."""
+    environ = {"SKETCHY_ENV": "production"}
+    if address is not None:
+        environ["CONTACT_ADDRESS"] = address
+    with pytest.raises(RuntimeError, match="no player can write to|is required"):
+        validate_contact_address(environ)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "privacy",
+        "@sketchy.org",
+        "a@b@sketchy.org",
+        "a b@sketchy.org",
+        "me@example",
+        "me@127.0.0.1",
+        "me@localhost.",
+        "me@.org",
+        "me@x..org",
+        "mailto:me@x.org",
+        "<me@x.org>",
+        "Privacy <me@x.org>",
+    ],
+)
+def test_a_malformed_contact_address_is_refused_everywhere(address):
+    with pytest.raises(RuntimeError, match="one email address, written plainly"):
+        validate_contact_address({"CONTACT_ADDRESS": address})

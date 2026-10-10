@@ -1,5 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
@@ -9,6 +10,7 @@ import { ModalShell } from "./ui/ModalShell";
 import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import {
   onSuspended,
+  readableWhileSuspended,
   reportedDrawings,
   reportedMessages,
   reportSuspended,
@@ -30,6 +32,9 @@ export function SuspensionNotice() {
   const [suspension, setSuspension] = useState<Suspension | null>(null);
   const [busy, setBusy] = useState(false);
   const signOutRef = useRef<HTMLButtonElement | null>(null);
+  // Inside the router, so Back and Forward move it between the bar and the
+  // dialog: read off the address alone, it kept whichever it had first.
+  const { pathname } = useLocation();
 
   useEffect(() => onSuspended(setSuspension), []);
 
@@ -53,6 +58,9 @@ export function SuspensionNotice() {
   }, []);
 
   if (!suspension) return null;
+  // On the pages a suspended player may still read the notice is a bar, not
+  // a dialog over the page (#1417).
+  const reading = readableWhileSuspended(pathname);
 
   async function signOut() {
     if (busy) return;
@@ -70,6 +78,17 @@ export function SuspensionNotice() {
     // Hard reload rather than a route change: every store in memory belongs to
     // the account that just went away.
     window.location.href = "/";
+  }
+
+  if (reading) {
+    return (
+      <div className="suspension-reading-bar" role="status">
+        <span>{ui.suspensionNotice.yourAccountSuspended}</span>
+        <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void signOut()}>
+          {busy ? ui.suspensionNotice.signingOut : ui.suspensionNotice.signOut}
+        </button>
+      </div>
+    );
   }
 
   // No way to set it aside - there is nothing behind it to go back to - so no
@@ -111,6 +130,12 @@ export function SuspensionNotice() {
         <p className="modal-body suspension-reason">{suspension.reason}</p>
       )}
       <p className="modal-body">{suspensionDuration(suspension, new Date(), timeFormat)}</p>
+      <p className="modal-body suspension-rights">
+        {fill(ui.suspensionNotice.yourDataStillYours, {
+          terms: <a href="/terms">{ui.accountMenu.terms2}</a>,
+          privacy: <a href="/privacy">{ui.accountMenu.privacy2}</a>,
+        })}
+      </p>
       {suspension.messages.length > 0 && (
         <>
           <p className="modal-body suspension-evidence-label">

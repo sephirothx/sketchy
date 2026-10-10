@@ -17,6 +17,7 @@ const load = {
   createRoom: () => import("./pages/CreateRoomPage"),
   gameRoom: () => import("./pages/GameRoomPage"),
   rules: () => import("./pages/RulesPage"),
+  legal: () => import("./pages/LegalPage"),
   promptStats: () => import("./pages/PromptStatsPage"),
   communityCatalogue: () => import("./pages/CommunityCataloguePage"),
   gallery: () => import("./pages/GalleryPage"),
@@ -35,6 +36,7 @@ const load = {
 export const CreateRoomPage = lazy(() => load.createRoom().then((m) => ({ default: m.CreateRoomPage })));
 export const GameRoomPage = lazy(() => load.gameRoom().then((m) => ({ default: m.GameRoomPage })));
 export const RulesPage = lazy(() => load.rules().then((m) => ({ default: m.RulesPage })));
+export const LegalPage = lazy(() => load.legal().then((m) => ({ default: m.LegalPage })));
 export const PromptStatsPage = lazy(() => load.promptStats().then((m) => ({ default: m.PromptStatsPage })));
 export const CommunityCataloguePage = lazy(() =>
   load.communityCatalogue().then((m) => ({ default: m.CommunityCataloguePage })),
@@ -71,6 +73,8 @@ export function prefetchRouteFor(pathname: string): void {
     create: load.createRoom,
     room: load.gameRoom,
     rules: load.rules,
+    privacy: load.legal,
+    terms: load.legal,
     "prompt-lists": load.promptStats,
     "community-lists": load.communityCatalogue,
     gallery: pathname.split("/").length > 2 ? load.galleryDrawing : load.gallery,

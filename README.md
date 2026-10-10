@@ -77,6 +77,19 @@ keyboard that takes half the screen, and one thumb.
   owner moves a drawing left or right and unpins it there, and anyone opens one in
   the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
   profile's game history, for a registered player who may share it.
+- **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, in all eight interface
+  languages: what is kept, why and for how long, who
+  else handles it, what the Gallery publishes, every right and how to use it, and the
+  agreement a player accepts — the minimum age (16), the licence for what they draw and
+  publish, moderation, and Swiss law. A new identity sees what it accepts wherever it
+  starts, as unobtrusively as possible: one row of fine print — *Terms · Privacy · 16+* —
+  under the lobby's name tag, an invite link's name field and Settings for a visitor with
+  no name, and a sentence on account creation; and a suspended player can still read both, and the
+  Rules, under a bar rather than behind a dialog. Each page says when it last changed
+  and links its public history; the Rules, the terms and the notice link each other in
+  a small row at the foot of each. The account menu has a *Privacy and
+  terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`,
+  which production refuses to start without.
 - Sharing — a drawing reaches the gallery only when a player who sat in its game shares
   it: the drawer their own from any game, anybody else - guests included - a public
   room's, without asking. **Share to gallery** sits on the turn results, the game-over
@@ -833,6 +846,7 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_SECURITY` | `starttls` | `starttls` upgrades the connection before anything is sent (port 587), `tls` encrypts from the first byte (port 465), `none` sends in the clear. Both encrypted modes verify the relay's certificate against the system trust store, so any public mail provider works with no further setup and a relay that fails verification fails the send. A relay signed by a private authority is trusted by pointing `SSL_CERT_FILE` (or `SSL_CERT_DIR`) at a bundle that includes it. Production refuses `none` together with `SMTP_PASSWORD`; an unknown value, or the retired `SMTP_STARTTLS`, fails startup |
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
+| `CONTACT_ADDRESS` | unset | The operator's address, which the privacy notice and the terms give for privacy requests, a parent asking for an under-age player's data to go, and anything Settings cannot do (`GET /api/legal`). Any environment refuses a malformed address; production refuses to start without one, or with one on a domain nobody can write to (`localhost`, `.local`, `.test`, `.example`, `.invalid`) (#1417) |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | The fallback interval for emptying the outbox: a queued message wakes the sender when its transaction commits, and a full batch is followed by another at once, so this only paces retries and anything queued by another process |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
@@ -1846,11 +1860,13 @@ frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, LegalPage (privacy notice and terms), BugReportsPage (admin triage)
     routeModules.ts Every page but the lobby, fetched as its own chunk when first needed
     styles/lazy/  Stylesheets fetched with the pages that draw them, kept in the components layer
     content/rules/ The published rules, one typed module per language (all eight);
                   anchors.ts is the link notices use, kept apart from the documents
+    content/legal/ The privacy notice and the terms of use, one typed module per language
+                  (en.ts is the reference); lib/minimumAge.ts holds the age they state
     content/ui/   Every word the interface says, one typed module per language
                   (en.ts is the reference and ships in the entry chunk; every other
                   language is its own chunk, fetched by whoever reads it;

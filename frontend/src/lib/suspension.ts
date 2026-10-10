@@ -40,6 +40,17 @@ type Listener = (suspension: Suspension) => void;
 const listeners = new Set<Listener>();
 let latest: Suspension | null = null;
 
+const READABLE_WHILE_SUSPENDED = new Set(["/privacy", "/terms", "/rules"]);
+
+/** Whether *pathname* is one of the pages a suspended player may still read
+(#1417, R-RULES-04): the terms and the privacy notice say how to download or
+delete their data, and the rules say what a decision's category means. Read
+as the router and the server read it - any case, trailing slashes or not -
+so `/privacy/` is the same page as `/privacy`. */
+export function readableWhileSuspended(pathname: string): boolean {
+  return READABLE_WHILE_SUSPENDED.has(pathname.toLowerCase().replace(/\/+$/, ""));
+}
+
 export function onSuspended(listener: Listener): () => void {
   listeners.add(listener);
   // A refusal that arrived before anything was listening still counts - the

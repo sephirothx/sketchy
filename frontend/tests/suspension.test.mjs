@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  readableWhileSuspended,
   reportedMessages,
   suspensionDuration,
   suspensionFromPayload,
@@ -130,4 +131,14 @@ test("a malformed drawing on a refusal is dropped rather than rendered", () => {
     ],
   });
   assert.deepEqual(suspension?.drawings.map((entry) => entry.prompt), ["kept"]);
+});
+
+
+test("a suspended player can read the documents however the address is written", () => {
+  for (const path of ["/privacy", "/terms", "/rules", "/privacy/", "/Terms//", "/RULES"]) {
+    assert.equal(readableWhileSuspended(path), true, path);
+  }
+  for (const path of ["/", "/lobby", "/privacy/extra", "/rulesx", "/gallery"]) {
+    assert.equal(readableWhileSuspended(path), false, path);
+  }
 });

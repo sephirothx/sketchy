@@ -546,7 +546,8 @@ export const EN = {
     friends: "Friends",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Finish your ${p.role === "admin" ? "administrator" : "moderator"} role`,
-    agreeToRules: "By creating an account you agree to follow the {rules}.",
+    agreeToRules:
+      "By creating an account you accept the {terms} and {rules} and confirm you are {age} or older. See the {privacy}.",
     reportBug: "Report a bug",
     account: "Account",
     settings: "Settings",
@@ -566,8 +567,12 @@ export const EN = {
     codeFromYourAuthenticatorApp: "Code from your authenticator app",
     email: "Email",
     optional: "(optional)",
-    letsYouResetYourPasswordLater: "Lets you reset your password later. Used for nothing else.",
+    letsYouResetYourPasswordLater:
+      "Used only for your account: confirming it, resetting your password, and telling you about changes to it.",
     rules2: "rules",
+    terms2: "terms of use",
+    privacy2: "privacy notice",
+    privacyAndTerms: "Privacy and terms",
     forgotYourPassword: "Forgot your password?",
     notNow: "Not now",
     createYourAccount: "Create your account",
@@ -1015,6 +1020,12 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    // The row under every form that starts an identity (#1417): links, and
+    // the age as a fact, rather than a sentence to read before playing.
+    terms: "Terms",
+    privacy: "Privacy",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy is for players ${p.age} or older`,
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
@@ -1972,7 +1983,7 @@ export const EN = {
     buyLettersAndWheelNeedScoring: "Buy letters and Wheel of Fortune need scoring.",
     allColors: "All colors",
     noScoring: "No scoring",
-    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
+    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in, and players can share its drawings to the Gallery.",
     joinableOnlyWithTheCode: "Joinable only with the code or invite link.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} custom`,
@@ -2006,6 +2017,16 @@ export const EN = {
     thisPage: "On this page",
     forExample: "For example",
     backToLobby: "Back to lobby",
+  },
+
+  legalPage: {
+    contactPending: "[no address set on this server]",
+    contactLoading: "…",
+    contactUnavailable: "[the address could not be loaded — try again later]",
+    terms: "Terms of use",
+    privacy: "Privacy notice",
+    lastUpdated: (p: { date: string }): string => `Last updated ${p.date}`,
+    history: "history",
   },
 
   sessionManagerDialog: {
@@ -2230,6 +2251,8 @@ export const EN = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "The {terms} and the {privacy} say how you can still download or delete your data.",
     yourAccountSuspended: "Your account is suspended",
     signingOut: "Signing out…",
     signOut: "Sign out",

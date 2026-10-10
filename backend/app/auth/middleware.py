@@ -222,6 +222,10 @@ class SessionAuthMiddleware:
             # One per report the decision covered (#620), so the path names
             # which; the route checks it against that decision group.
             or path.startswith("/api/suspension/drawings/")
+            # Where to write: the privacy notice and the terms give a
+            # suspended player the operator's address for what the app no
+            # longer lets them do (#1417), so it must answer them too.
+            or path == "/api/legal"
         )
         if (
             resolution.banned_user_id is not None

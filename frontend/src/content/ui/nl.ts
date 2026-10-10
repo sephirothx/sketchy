@@ -536,7 +536,8 @@ export const NL: Catalogue = {
     friends: "Vrienden",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Maak je rol als ${p.role === "admin" ? "beheerder" : "moderator"} af`,
-    agreeToRules: "Door een account te maken ga je ermee akkoord de {rules} te volgen.",
+    agreeToRules:
+      "Door een account te maken accepteer je de {terms} en {rules} en bevestig je dat je minstens {age} jaar oud bent. Zie de {privacy}.",
     reportBug: "Een bug melden",
     account: "Account",
     settings: "Instellingen",
@@ -556,8 +557,12 @@ export const NL: Catalogue = {
     codeFromYourAuthenticatorApp: "Code uit je authenticatie-app",
     email: "E-mail",
     optional: "(optioneel)",
-    letsYouResetYourPasswordLater: "Hiermee kun je later je wachtwoord herstellen. Verder wordt het nergens voor gebruikt.",
+    letsYouResetYourPasswordLater:
+      "Alleen gebruikt voor je account: om het te bevestigen, je wachtwoord te herstellen en je te laten weten wat er aan je account verandert.",
     rules2: "regels",
+    terms2: "gebruiksvoorwaarden",
+    privacy2: "privacyverklaring",
+    privacyAndTerms: "Privacy en voorwaarden",
     forgotYourPassword: "Wachtwoord vergeten?",
     notNow: "Nu niet",
     createYourAccount: "Maak je account",
@@ -998,6 +1003,10 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    terms: "Voorwaarden",
+    privacy: "Privacy",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy is voor iedereen van ${p.age} jaar of ouder`,
     nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
@@ -1957,7 +1966,7 @@ export const NL: Catalogue = {
     buyLettersAndWheelNeedScoring: "Letters kopen en Rad van fortuin hebben puntentelling nodig.",
     allColors: "Alle kleuren",
     noScoring: "Zonder punten",
-    listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen.",
+    listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen, en wie meespeelt kan de tekeningen in de Galerij delen.",
     joinableOnlyWithTheCode: "Alleen toegankelijk met de code of de uitnodigingslink.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} eigen`,
@@ -1991,6 +2000,16 @@ export const NL: Catalogue = {
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",
     backToLobby: "Terug naar de lobby",
+  },
+
+  legalPage: {
+    contactPending: "[geen adres ingesteld op deze server]",
+    contactLoading: "…",
+    contactUnavailable: "[het adres kon niet worden geladen; probeer het later opnieuw]",
+    terms: "Gebruiksvoorwaarden",
+    privacy: "Privacyverklaring",
+    lastUpdated: (p: { date: string }): string => `Laatst bijgewerkt op ${p.date}`,
+    history: "geschiedenis",
   },
 
   sessionManagerDialog: {
@@ -2209,6 +2228,8 @@ export const NL: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "In de {terms} en de {privacy} staat hoe je je gegevens nog kunt downloaden of verwijderen.",
     yourAccountSuspended: "Je account is geschorst",
     signingOut: "Uitloggen…",
     signOut: "Uitloggen",

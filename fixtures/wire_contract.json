@@ -2621,6 +2621,9 @@
   "handlers.shares:share_drawing": [
    "errorCode"
   ],
+  "main:legal": [
+   "contactAddress"
+  ],
   "presenters:correct_guess_payload": [
    "playerId"
   ],
@@ -2950,7 +2953,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 63,
+ "protocolVersion": 64,
  "refusal": {
   "codes": [
    "invalid_payload",

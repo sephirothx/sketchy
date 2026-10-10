@@ -536,7 +536,8 @@ export const PT: Catalogue = {
     friends: "Amigos",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Conclui o teu papel de ${p.role === "admin" ? "administrador" : "moderador"}`,
-    agreeToRules: "Ao criares uma conta aceitas seguir as {rules}.",
+    agreeToRules:
+      "Ao criares uma conta aceitas os {terms} e as {rules} e confirmas que tens pelo menos {age} anos. Consulta a {privacy}.",
     reportBug: "Comunicar um erro",
     account: "Conta",
     settings: "Definições",
@@ -556,8 +557,12 @@ export const PT: Catalogue = {
     codeFromYourAuthenticatorApp: "Código da tua aplicação de autenticação",
     email: "E-mail",
     optional: "(opcional)",
-    letsYouResetYourPasswordLater: "Permite-te repor a palavra-passe mais tarde. Não serve para mais nada.",
+    letsYouResetYourPasswordLater:
+      "Só serve a tua conta: para a confirmar, repor a palavra-passe e avisar-te de alterações.",
     rules2: "regras",
+    terms2: "termos de utilização",
+    privacy2: "política de privacidade",
+    privacyAndTerms: "Privacidade e termos",
     forgotYourPassword: "Esqueceste-te da palavra-passe?",
     notNow: "Agora não",
     createYourAccount: "Cria a tua conta",
@@ -998,6 +1003,10 @@ export const PT: Catalogue = {
   },
 
   firstRunIdentity: {
+    terms: "Termos",
+    privacy: "Privacidade",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `O Sketchy é para pessoas com ${p.age} anos ou mais`,
     nameTooShort: (p: { min: number }) => `Um nome precisa de pelo menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguém online já está a jogar como «${p.name}». Escolhe outro nome para continuar a jogar.`,
@@ -1956,7 +1965,7 @@ export const PT: Catalogue = {
     buyLettersAndWheelNeedScoring: "Comprar letras e Roda da sorte precisam de pontuação.",
     allColors: "Todas as cores",
     noScoring: "Sem pontuação",
-    listedInTheLobbyAnyone: "Aparece no átrio — qualquer pessoa pode entrar.",
+    listedInTheLobbyAnyone: "Aparece no átrio — qualquer pessoa pode entrar, e quem joga pode partilhar os seus desenhos na Galeria.",
     joinableOnlyWithTheCode: "Só se entra com o código ou a ligação de convite.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "própria", other: "próprias" }),
@@ -1990,6 +1999,16 @@ export const PT: Catalogue = {
     thisPage: "Nesta página",
     forExample: "Por exemplo",
     backToLobby: "Voltar ao átrio",
+  },
+
+  legalPage: {
+    contactPending: "[este servidor não tem nenhum endereço definido]",
+    contactLoading: "…",
+    contactUnavailable: "[não foi possível carregar o endereço; tenta mais tarde]",
+    terms: "Termos de utilização",
+    privacy: "Política de privacidade",
+    lastUpdated: (p: { date: string }): string => `Última atualização: ${p.date}`,
+    history: "histórico",
   },
 
   sessionManagerDialog: {
@@ -2208,6 +2227,8 @@ export const PT: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "Os {terms} e a {privacy} explicam como ainda podes descarregar ou eliminar os teus dados.",
     yourAccountSuspended: "A tua conta está suspensa",
     signingOut: "A terminar sessão…",
     signOut: "Terminar sessão",

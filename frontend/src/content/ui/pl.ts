@@ -536,7 +536,8 @@ export const PL: Catalogue = {
     friends: "Znajomi",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Dokończ konfigurację roli ${p.role === "admin" ? "administratora" : "moderatora"}`,
-    agreeToRules: "Tworząc konto, zgadzasz się przestrzegać {rules}.",
+    agreeToRules:
+      "Tworząc konto, akceptujesz {terms} i {rules} oraz potwierdzasz, że masz co najmniej {age} lat. Zobacz: {privacy}.",
     reportBug: "Zgłoś błąd",
     account: "Konto",
     settings: "Ustawienia",
@@ -556,8 +557,12 @@ export const PL: Catalogue = {
     codeFromYourAuthenticatorApp: "Kod z aplikacji uwierzytelniającej",
     email: "E-mail",
     optional: "(opcjonalnie)",
-    letsYouResetYourPasswordLater: "Pozwala później zresetować hasło do konta. Do niczego więcej nie służy.",
-    rules2: "zasad",
+    letsYouResetYourPasswordLater:
+      "Służy wyłącznie kontu: do jego potwierdzenia, resetowania hasła do konta i powiadomień o zmianach.",
+    rules2: "zasady",
+    terms2: "warunki korzystania",
+    privacy2: "polityka prywatności",
+    privacyAndTerms: "Prywatność i warunki",
     forgotYourPassword: "Nie pamiętasz hasła?",
     notNow: "Nie teraz",
     createYourAccount: "Utwórz konto",
@@ -1007,6 +1012,10 @@ export const PL: Catalogue = {
   },
 
   firstRunIdentity: {
+    terms: "Warunki",
+    privacy: "Prywatność",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy jest dla osób, które mają co najmniej ${p.age} lat`,
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) =>
       `Nazwa musi mieć co najmniej ${counted(p.min, { one: "znak", few: "znaki", many: "znaków", other: "znaku" })}.`,
@@ -1965,7 +1974,7 @@ export const PL: Catalogue = {
     buyLettersAndWheelNeedScoring: "Kupowanie liter i Koło fortuny wymagają punktacji.",
     allColors: "Wszystkie kolory",
     noScoring: "Bez punktacji",
-    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść.",
+    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść, a osoby, które w nim grają, mogą udostępniać jego rysunki w Galerii.",
     joinableOnlyWithTheCode: "Dołączyć można tylko przez kod lub link z zaproszeniem.",
     customCount: (p: { count: number }) =>
       `własne: ${number(p.count)}`,
@@ -1999,6 +2008,16 @@ export const PL: Catalogue = {
     thisPage: "Na tej stronie",
     forExample: "Na przykład",
     backToLobby: "Wróć do lobby",
+  },
+
+  legalPage: {
+    contactPending: "[na tym serwerze nie ustawiono adresu]",
+    contactLoading: "…",
+    contactUnavailable: "[nie udało się wczytać adresu; spróbuj później]",
+    terms: "Warunki korzystania",
+    privacy: "Polityka prywatności",
+    lastUpdated: (p: { date: string }): string => `Ostatnia aktualizacja: ${p.date}`,
+    history: "historia zmian",
   },
 
   sessionManagerDialog: {
@@ -2223,6 +2242,8 @@ export const PL: Catalogue = {
   },
 
   suspensionNotice: {
+    yourDataStillYours:
+      "Jak nadal pobrać lub usunąć swoje dane, wyjaśniają {terms} i {privacy}.",
     yourAccountSuspended: "Twoje konto jest zawieszone",
     signingOut: "Wylogowywanie…",
     signOut: "Wyloguj się",

@@ -177,7 +177,7 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
             await expect(visitor_nav.get_by_role("link", name="Gallery", exact=True)).to_have_count(0)
             # Before a name there is no chip and its menu, so the name tag
             # itself links the Rules - the way there on a phone.
-            await expect(visitor.locator(".first-run-rules")).to_have_attribute("href", "/rules")
+            await expect(visitor.locator(".identity-rules")).to_have_attribute("href", "/rules")
         finally:
             await named.close()
             await nameless.close()

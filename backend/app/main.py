@@ -61,11 +61,13 @@ from app.db import async_engine, async_session_factory, init_db, verify_least_pr
 from app.db.models import AuthSession
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
+    contact_address,
     history_encode_workers,
     is_production,
     public_base_url,
     reconnect_spread_seconds,
     shutdown_drain_seconds,
+    validate_contact_address,
     validate_database_configuration,
     validate_mail_configuration,
     validate_public_base_url,
@@ -850,6 +852,8 @@ async def lifespan(_app: FastAPI):
         # Beside it, because the two describe the same message: production
         # sends its links to a relay, never to the log (#466).
         validate_mail_configuration()
+        # The privacy notice and the terms send players here (#1417).
+        validate_contact_address()
         await init_db()
         if is_production():
             # Beside the revision check: the process answering anonymous
@@ -1140,6 +1144,15 @@ async def health():
         "paused": shutdown_coordinator.is_paused,
         "loops": readiness_probe.loop_snapshot(),
     }
+
+
+@api.get("/api/legal")
+async def legal():
+    """What the privacy notice and the terms need from this deployment
+    (#1417): the operator's contact address, or null where none is set -
+    only outside production, which refuses to start without one. The text
+    itself ships in the client, in every interface language."""
+    return {"contactAddress": contact_address()}
 
 
 @api.get("/api/ready")

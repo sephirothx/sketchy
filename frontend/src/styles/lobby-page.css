@@ -604,6 +604,31 @@
   font-weight: 600;
 }
 
+/* What starting to play is held to (#1417), under the invite's Join and
+   Spectate and the Settings name form: one row of fine print, never a third
+   button; its links underline only on hover. */
+.identity-agreement {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.identity-agreement a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.identity-agreement a:hover {
+  text-decoration: underline;
+}
+
+.invite-agreement {
+  text-align: center;
+}
+
 .invite-account-line {
   margin: 16px 0 0;
   color: var(--muted);
@@ -1995,4 +2020,67 @@ a.online-player-name:focus-visible {
 .rules-enforcement p {
   line-height: 1.65;
   margin: 8px 0 0;
+}
+
+/* The privacy notice and the terms (#1417): the rules' layout, with plain
+   paragraphs and lists inside each section, and under the title when they
+   last changed. */
+/* The way across to the other two documents (#1417): small, muted and last,
+   under the final section. */
+.document-links {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+.document-links a {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.document-links a:hover {
+  text-decoration: underline;
+}
+
+.legal-updated {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.legal-updated a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+.legal-page .rules-section {
+  scroll-margin-top: 16px;
+}
+
+.legal-page .rules-section:not(.rules-intro) p {
+  line-height: 1.65;
+  margin: 8px 0 0;
+}
+
+.legal-page .rules-section a {
+  color: var(--primary-ink);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-underline-offset: 2px;
+}
+
+.legal-items {
+  line-height: 1.6;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.legal-items li {
+  margin-bottom: 4px;
+}
+
+.legal-items li:last-child {
+  margin-bottom: 0;
 }

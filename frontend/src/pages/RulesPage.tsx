@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
+import { DocumentLinks } from "../components/DocumentLinks";
 import { Card, SectionLabel } from "../components/ui/Card";
 import { rulesFor } from "../content/rules";
 import { ui } from "../content/ui/index.ts";
@@ -159,6 +160,7 @@ export function RulesPage() {
               <p key={paragraph}>{paragraph}</p>
             ))}
           </Card>
+          <DocumentLinks current="rules" />
         </div>
       </div>
     </main>
