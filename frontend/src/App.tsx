@@ -185,13 +185,16 @@ function App() {
       <CrashProbe scope="app" />
       <AppBanners />
       <SettingsSyncNotices />
-      {/* One blocking dialog at a time: the warning stands aside for a
-          suspension, which says more and ends the session (#1436). Every
-          other notice is an entry in the inbox, behind the header's bell. */}
-      <SuspensionNotice />
-      <WarningNotice />
-      <RoleSignOutNotice />
       <BrowserRouter>
+        {/* One blocking dialog at a time: the warning stands aside for a
+            suspension, which says more and ends the session (#1436). Every
+            other notice is an entry in the inbox, behind the header's bell.
+            Inside the router: the suspension is a bar rather than a dialog on
+            the pages a suspended player may read, and Back changes the page
+            without a load (#1417). */}
+        <SuspensionNotice />
+        <WarningNotice />
+        <RoleSignOutNotice />
         <ScrollToTop />
         {/* Inside the router: answering an invitation navigates. */}
         <FriendInviteNotice />

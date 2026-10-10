@@ -1,5 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
@@ -9,6 +10,7 @@ import { ModalShell } from "./ui/ModalShell";
 import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import {
   onSuspended,
+  readableWhileSuspended,
   reportedDrawings,
   reportedMessages,
   reportSuspended,
@@ -17,8 +19,6 @@ import {
 } from "../lib/suspension";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
-
-const READABLE_WHILE_SUSPENDED = new Set(["/privacy", "/terms", "/rules"]);
 
 /** Tell a suspended player what happened, before they are simply signed out.
 
@@ -32,6 +32,9 @@ export function SuspensionNotice() {
   const [suspension, setSuspension] = useState<Suspension | null>(null);
   const [busy, setBusy] = useState(false);
   const signOutRef = useRef<HTMLButtonElement | null>(null);
+  // Inside the router, so Back and Forward move it between the bar and the
+  // dialog: read off the address alone, it kept whichever it had first.
+  const { pathname } = useLocation();
 
   useEffect(() => onSuspended(setSuspension), []);
 
@@ -55,12 +58,9 @@ export function SuspensionNotice() {
   }, []);
 
   if (!suspension) return null;
-  // The pages a suspended player may still read (#1417): the terms and the
-  // privacy notice say how to download or delete their data, and the rules
-  // say what a decision's category means. On those the notice is a bar, not
-  // a dialog over the page. Read off the address rather than the router,
-  // which this sits outside: every way here from the dialog is a full load.
-  const reading = READABLE_WHILE_SUSPENDED.has(window.location.pathname.toLowerCase());
+  // On the pages a suspended player may still read the notice is a bar, not
+  // a dialog over the page (#1417).
+  const reading = readableWhileSuspended(pathname);
 
   async function signOut() {
     if (busy) return;

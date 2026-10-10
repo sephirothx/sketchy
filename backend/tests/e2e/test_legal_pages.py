@@ -62,6 +62,21 @@ async def test_a_suspended_player_can_read_the_privacy_notice_and_the_terms():
             await target.get_by_role("link", name="Terms of use").click()
             await expect(target.get_by_role("heading", level=1, name="Terms of use")).to_be_visible()
             await expect(target.get_by_role("alertdialog")).to_have_count(0)
+
+            # Leaving for another page in the app brings the dialog back, and
+            # Back - a route change, not a load - takes it away again. The
+            # notice sat outside the router and kept whichever it had first.
+            await target.locator("nav a.site-nav-link:not([href='/rules'])").first.click()
+            await expect(target.get_by_role("alertdialog")).to_be_visible()
+            await target.go_back()
+            await expect(target.get_by_role("heading", level=1, name="Terms of use")).to_be_visible()
+            await expect(target.locator(".suspension-reading-bar")).to_be_visible()
+            await expect(target.get_by_role("alertdialog")).to_have_count(0)
+
+            # The same page with a trailing slash is the same page.
+            await target.goto(BASE_URL + "/privacy/")
+            await expect(target.locator(".suspension-reading-bar")).to_be_visible()
+            await expect(target.get_by_role("alertdialog")).to_have_count(0)
         finally:
             await browser.close()
 
