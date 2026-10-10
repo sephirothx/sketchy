@@ -914,7 +914,9 @@ production database.
 
 The lobby's first landing asks for one thing: a name, on a name tag — *Hello, my
 name is …*, and a button that sticks it on. The field takes only what a name can
-hold — letters, digits, `_` and `-` — so a space or a "!" is simply not entered, and
+hold — letters A–Z, digits, `_` and `-` — so a space or a "!" is simply not entered, a
+letter with an accent goes in as its plain letter (*Łukasz* → *Lukasz*, *Straße* →
+*Strasse*), and
 a name the form refuses is said in a toast, with the field's line turned red and, on a
 desktop, the cursor back in it (a phone lets its keyboard close instead, so the toast
 is not hidden under it). The invite page's name field works the same way, and says any

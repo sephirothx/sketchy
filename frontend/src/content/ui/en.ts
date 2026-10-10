@@ -1883,7 +1883,7 @@ export const EN = {
     theLastPlayerSeatWasTaken: "The last player seat was just taken, but you can still spectate.",
     joinAsASpectator: "join as a spectator",
     joinThisRoom: "join this room",
-    nicknameRule: "Use 3–16 characters: letters, numbers, hyphens or underscores. No spaces.",
+    nicknameRule: "Use 3–16 characters: letters A–Z, numbers, hyphens or underscores. No spaces.",
   },
 
   roomFacts: {

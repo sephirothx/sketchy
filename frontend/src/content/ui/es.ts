@@ -1865,7 +1865,7 @@ export const ES: Catalogue = {
     theLastPlayerSeatWasTaken: "Acaban de ocupar la última plaza de jugador, pero aún puedes mirar.",
     joinAsASpectator: "unirte como espectador",
     joinThisRoom: "unirte a esta sala",
-    nicknameRule: "Usa de 3 a 16 caracteres: letras, números, guiones o guiones bajos. Sin espacios.",
+    nicknameRule: "Usa de 3 a 16 caracteres: letras de la A a la Z, números, guiones o guiones bajos. Sin espacios.",
   },
 
   roomFacts: {

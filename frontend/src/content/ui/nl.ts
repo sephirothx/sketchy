@@ -1866,7 +1866,7 @@ export const NL: Catalogue = {
     theLastPlayerSeatWasTaken: "De laatste spelersplek is net bezet, maar je kunt nog kijken.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinThisRoom: "deze kamer in gaan",
-    nicknameRule: "Gebruik 3–16 tekens: letters, cijfers, streepjes of lage streepjes. Geen spaties.",
+    nicknameRule: "Gebruik 3–16 tekens: letters A–Z, cijfers, streepjes of lage streepjes. Geen spaties.",
   },
 
   roomFacts: {

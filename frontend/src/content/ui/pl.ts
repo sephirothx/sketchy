@@ -1874,7 +1874,7 @@ export const PL: Catalogue = {
     theLastPlayerSeatWasTaken: "Ostatnie miejsce dla gracza właśnie zostało zajęte, ale nadal możesz oglądać.",
     joinAsASpectator: "dołączenie jako widz",
     joinThisRoom: "dołączenie do tego pokoju",
-    nicknameRule: "Od 3 do 16 znaków: litery, cyfry, łączniki lub podkreślenia. Bez spacji.",
+    nicknameRule: "Od 3 do 16 znaków: litery A–Z, cyfry, łączniki lub podkreślenia. Bez spacji.",
   },
 
   roomFacts: {
