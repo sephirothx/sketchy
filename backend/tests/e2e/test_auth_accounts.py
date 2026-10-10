@@ -121,6 +121,21 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await page.keyboard.insert_text("Jo Jo")
             assert await field.input_value() == "JoJo"
 
+            # A name in the player's own letters keeps them, plainly (#1420):
+            # "Łukasz" was "ukasz", with nothing said. Typed a key at a time,
+            # pasted whole, and with the accent composed after its letter.
+            await field.fill("")
+            await field.press_sequentially("Łukasz")
+            assert await field.input_value() == "Lukasz"
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Straße")
+            assert await field.input_value() == "Strasse"
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Zoe\u0308")
+            assert await field.input_value() == "Zoe"
+
             # Guest play is one field and one click. Too short is refused in
             # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")

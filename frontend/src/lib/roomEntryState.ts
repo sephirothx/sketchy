@@ -32,9 +32,9 @@ export function keepNameCharacters(raw: string, caret: number = raw.length): { v
   let kept = "";
   let keptBeforeCaret = 0;
   for (let index = 0; index < raw.length; index += 1) {
-    const character = raw[index];
-    if (!NICKNAME_CHARACTER.test(character)) continue;
-    kept += character;
+    const folded = foldNameCharacter(raw[index]);
+    if (!folded) continue;
+    kept += folded;
     if (index < caret) keptBeforeCaret = kept.length;
   }
   const excess = kept.length - MAX_NICKNAME_LENGTH;
@@ -59,10 +59,44 @@ export function keepNameCharacters(raw: string, caret: number = raw.length): { v
 export function nameCharactersToInsert(data: string, room: number): string {
   let kept = "";
   for (const character of data) {
-    if (kept.length >= room) break;
-    if (NICKNAME_CHARACTER.test(character)) kept += character;
+    const folded = foldNameCharacter(character);
+    // Whole or not at all: "ß" is "ss", and half of it is not the letter.
+    if (kept.length + folded.length > room) break;
+    kept += folded;
   }
   return kept;
+}
+
+/** Letters the decomposition below cannot reach: they are letters of their
+    own, not a base letter with a mark on it, so each is written the way its
+    language writes it in plain letters. */
+const FOLDED_LETTERS: Record<string, string> = {
+  "ł": "l", "Ł": "L",
+  "ß": "ss", "ẞ": "SS",
+  "ø": "o", "Ø": "O",
+  "æ": "ae", "Æ": "AE",
+  "œ": "oe", "Œ": "OE",
+  "đ": "d", "Đ": "D",
+  "ı": "i",
+};
+
+/**
+ * One character of a name, as the name rule's letters (#1420): itself if it
+ * is one already; a letter with an accent as its letter ("é" → "e", "Ł" →
+ * "L"); "ß" as "ss" and the like; anything else as nothing. The rule stays
+ * plain ASCII - presence, mentions and the reserved names all compare on it -
+ * but "Łukasz" typed on a Polish keyboard was "ukasz", with nothing said.
+ * A combining mark typed on its own, after its letter, is the nothing.
+ */
+export function foldNameCharacter(character: string): string {
+  if (NICKNAME_CHARACTER.test(character)) return character;
+  const named = FOLDED_LETTERS[character];
+  if (named) return named;
+  let folded = "";
+  for (const part of character.normalize("NFD")) {
+    if (NICKNAME_CHARACTER.test(part)) folded += part;
+  }
+  return folded;
 }
 
 /** Mirrors the server rule so the form can object before a round trip. */
