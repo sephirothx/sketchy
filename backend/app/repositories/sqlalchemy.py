@@ -38,6 +38,7 @@ from app.db.models import (
     GamePromptSource,
     GameRecord,
     IdentityAlias,
+    InboxEntry,
     Prompt,
     PromptAlias,
     PromptConcept,
@@ -59,7 +60,6 @@ from app.db.models import (
     ProfileDrawingPin,
     TurnDrawingReaction,
     TurnDrawingShare,
-    DrawingShareNotice,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnPromptOfferSource,
@@ -68,6 +68,7 @@ from app.db.models import (
     UserBlock,
     UserSettings,
     UserStatsDaily,
+    UserWarning,
     generate_uuid,
 )
 from app.canvas_history import binary_action_count
@@ -76,6 +77,11 @@ from app.canvas_storage import (
     prepare_stored_drawing,
     stored_drawing_checksum,
     stored_drawing_format,
+)
+from app.services.inbox import (
+    add_entry as add_inbox_entry,
+    add_reviewed_count,
+    mark_read as mark_inbox_read,
 )
 from app.services.gallery_ranking import (
     HOT_HORIZON,
@@ -799,29 +805,82 @@ async def _share_seats(session: AsyncSession, turn_id: UUID) -> tuple[str, ...]:
     )
 
 
+async def _merge_inbox(session: AsyncSession, source_id: UUID, target_id: UUID) -> None:
+    """A guest's inbox becomes the account's, under the account's own rules:
+    one entry per fact and one unread count of reviewed reports (R-INBOX-05).
+    Left with the guest, an entry was outside the index that keeps a fact to
+    one entry, so the account's next write about the same drawing added a
+    second. Where both hold one, the account's stands - read if either was."""
+    # Each account's unread count of reviewed reports, locked in the order
+    # `count_reviewed_reports` locks reporters' entries, so a moderator's
+    # decision landing mid-merge waits rather than being overwritten. The
+    # guest's count is added, never written back from a value read earlier.
+    unread_reviews = (
+        await session.scalars(
+            select(InboxEntry)
+            .where(
+                InboxEntry.user_id.in_([source_id, target_id]),
+                InboxEntry.kind == "reports_reviewed",
+                InboxEntry.read_at.is_(None),
+            )
+            .order_by(InboxEntry.user_id)
+            .with_for_update()
+        )
+    ).all()
+    for row in unread_reviews:
+        if row.user_id == source_id:
+            count, created_at = int(row.params.get("count", 0)), row.created_at
+            await session.delete(row)
+            await session.flush()
+            await add_reviewed_count(session, target_id, count, at=created_at, redate=False)
+    guest_rows = (
+        await session.scalars(
+            select(InboxEntry).where(
+                InboxEntry.user_id == source_id, InboxEntry.subject_id.is_not(None)
+            )
+        )
+    ).all()
+    subjects = {row.subject_id for row in guest_rows}
+    account_rows = (
+        (
+            await session.scalars(
+                select(InboxEntry).where(
+                    InboxEntry.user_id == target_id, InboxEntry.subject_id.in_(subjects)
+                )
+            )
+        ).all()
+        if subjects
+        else []
+    )
+    same_fact = {(row.kind, row.subject_id): row for row in account_rows}
+    for row in guest_rows:
+        own = same_fact.get((row.kind, row.subject_id))
+        if own is None:
+            continue
+        if own.read_at is None and row.read_at is not None:
+            own.read_at = row.read_at
+        await session.delete(row)
+    await session.flush()
+    await session.execute(
+        update(InboxEntry).where(InboxEntry.user_id == source_id).values(user_id=target_id)
+    )
+
+
 async def _leave_share_notice(
     session: AsyncSession, turn: TurnRecord, *, now: datetime
 ) -> UUID | None:
-    """Tell the drawer, once per drawing, that somebody else shared it
-    (R-SHARE-09). Answers the drawer's account when a notice was written, so
-    the caller can push it once the transaction commits; nothing when the
-    drawing already has one, or its drawer has no account to tell."""
+    """Tell the drawer, once per drawing, that somebody else shared it: an
+    entry in their inbox (R-SHARE-09, #1436). Answers the drawer's account
+    when an entry was written, so the caller can tell their open tabs once the
+    transaction commits; nothing when the drawing already has one, or its
+    drawer has no account to tell."""
     if turn.drawer_user_id is None:
         return None
-    if await session.scalar(
-        select(DrawingShareNotice.id).where(DrawingShareNotice.turn_id == turn.id)
-    ) is not None:
-        return None
     drawer = await _canonical_user_id(session, turn.drawer_user_id)
-    session.add(
-        DrawingShareNotice(
-            user_id=drawer,
-            game_id=turn.game_id,
-            turn_id=turn.id,
-            created_at=now,
-        )
+    written = await add_inbox_entry(
+        session, user_id=drawer, kind="drawing_shared", subject_id=turn.id, created_at=now
     )
-    return drawer
+    return drawer if written else None
 
 
 @dataclass(frozen=True)
@@ -1668,6 +1727,15 @@ class SqlAlchemyUserRepository(UserRepository):
                         block.blocker_user_id = blocker_id
                         block.blocked_user_id = blocked_id
                 await _merge_friendships(session, source.id, target.id)
+                # A warning is about the person, so it follows them into the
+                # account: it holds the account's seats until answered, and
+                # is the account's to answer (R-INBOX-04).
+                await session.execute(
+                    update(UserWarning)
+                    .where(UserWarning.user_id == source.id)
+                    .values(user_id=target.id)
+                )
+                await _merge_inbox(session, source.id, target.id)
                 await session.flush()
                 # Only the guest's own days: this runs inside a sign-in, on
                 # the web role's statement budget, and no other day's total
@@ -2635,15 +2703,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     drawer_user_id = turn_inputs_by_id[notice_turn_id].drawer_user_id
                     if not drawer_user_id:
                         continue
-                    session.add(
-                        DrawingShareNotice(
-                            user_id=await _canonical_user_id(
-                                session, _entity_id(drawer_user_id)
-                            ),
-                            game_id=record_id,
-                            turn_id=notice_turn_id,
-                            created_at=first_shares[notice_turn_id],
-                        )
+                    await add_inbox_entry(
+                        session,
+                        user_id=await _canonical_user_id(session, _entity_id(drawer_user_id)),
+                        kind="drawing_shared",
+                        subject_id=notice_turn_id,
+                        created_at=first_shares[notice_turn_id],
                     )
                 # The Gallery's projections ride in the same transaction as
                 # the rows they count (R-GAL-05).
@@ -3201,8 +3266,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 elif is_drawer:
                     # The drawer's withdrawal (R-SHARE-04): every share, every
                     # pin - a pin is a share (R-PIN-03) - and a bar on the
-                    # rest until the drawer shares it again. A notice about a
-                    # share that no longer exists has nothing left to say.
+                    # rest until the drawer shares it again. Their inbox entry
+                    # about it is read: they have just acted on it.
                     await session.execute(
                         delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == db_turn_id)
                     )
@@ -3211,14 +3276,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             ProfileDrawingPin.turn_id == db_turn_id
                         )
                     )
-                    await session.execute(
-                        update(DrawingShareNotice)
-                        .where(
-                            DrawingShareNotice.turn_id == db_turn_id,
-                            DrawingShareNotice.acknowledged_at.is_(None),
-                        )
-                        .values(acknowledged_at=now)
-                    )
+                    # Read everywhere: the drawer's other tabs hear it, or
+                    # their bells keep counting what they just acted on
+                    # (R-INBOX-03).
+                    if await mark_inbox_read(
+                        session,
+                        user_ids=list(identity_ids),
+                        kind="drawing_shared",
+                        subject_id=db_turn_id,
+                        now=now,
+                    ):
+                        notify = identity_ids[0]
                     drawing_row.gallery_withdrawn_at = now
                 else:
                     # One's own share, and one's own pin of it with it.

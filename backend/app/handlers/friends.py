@@ -25,6 +25,7 @@ licence, and a block placed in between has to win.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from functools import partial
 import logging
 from uuid import UUID
@@ -47,6 +48,7 @@ from app.handlers.rooms import (
     _seat_in_room,
 )
 from app.domain_values import FriendshipState
+from app.services.inbox import add_entry
 from app.services.friends import (
     REGISTER_FIRST,
     FriendshipOutcome,
@@ -180,7 +182,43 @@ async def invite_friend(ctx: HandlerContext, sid, data):
         },
         room=f"user:{payload.friend_user_id}",
     )
+    await _remember_invite(ctx, friend=theirs, inviter=mine)
     return {"ok": True}
+
+
+async def _remember_invite(ctx: HandlerContext, *, friend, inviter) -> None:
+    """The invitation is in the friend's inbox too (#1436), so one sent while
+    they were away is still there to read. The card is the live half and the
+    token stays with it: the entry only says who asked and until when, and
+    offers to join while the card's invitation is still good. One entry per
+    inviter, renewed by each new invitation. Best effort: the invitation has
+    been sent either way."""
+    if ctx.session_factory is None:
+        return
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ctx.friend_invites.ttl_seconds)
+
+    async def write() -> None:
+        async with ctx.session_factory() as session:
+            async with session.begin():
+                await add_entry(
+                    session,
+                    user_id=friend,
+                    kind="game_invite",
+                    subject_id=inviter,
+                    params={"expiresAt": expires_at.isoformat()},
+                    renew=True,
+                )
+
+    try:
+        await _bounded(write(), "remembering an invitation")
+    except Exception:  # noqa: BLE001 - the invitation was sent; the inbox is a record of it
+        logger.exception("Could not put an invitation in %s's inbox", friend)
+        return
+    if ctx.on_inbox_changed is not None:
+        try:
+            await ctx.on_inbox_changed(str(friend))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not tell %s their inbox moved", friend)
 
 
 async def join_friend_room(ctx: HandlerContext, sid, data):

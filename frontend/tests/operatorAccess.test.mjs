@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { noticeAfterAcknowledgement } from "../src/lib/roleNotices.ts";
+import { parseInboxEntry } from "../src/lib/inbox.ts";
 import {
   canAdminister,
   canModerate,
   operatorEntries,
   pendingRoleFromPayload,
-  roleNoticeFromPayload,
   roleNoticeText,
 } from "../src/lib/operatorAccess.ts";
 
@@ -48,28 +47,13 @@ test("a guest is never staff, whatever the payload claims", () => {
   assert.deepEqual(operatorEntries("admin", { isAnonymous: true }), []);
 });
 
-test("a pushed role notice is read out of the payload the server sends", () => {
-  const notice = roleNoticeFromPayload({
-    notice: { id: "n-1", role: "moderator", createdAt: "2026-08-29T00:00:00+00:00" },
-  });
-  assert.deepEqual(notice, {
-    id: "n-1",
-    role: "moderator",
-    // Absent means granted: what the payload carried before an offer was a
-    // thing the server could send.
-    pending: false,
-    createdAt: "2026-08-29T00:00:00+00:00",
-  });
-  assert.equal(roleNoticeFromPayload({ notice: { id: "n-2", role: "user" } }).role, "user");
-});
-
 test("an offered role is read as an offer, and says so in its own words", () => {
   // The difference is the whole point: one reports, the other asks. A role
   // that is waiting on a second factor has not happened yet.
-  const offered = roleNoticeFromPayload({
-    notice: { id: "n-6", role: "moderator", pending: true },
+  const offered = parseInboxEntry({
+    id: "n-6", kind: "role", createdAt: "2026-10-09T00:00:00+00:00", role: "moderator", change: "offered", offerOpen: true,
   });
-  assert.equal(offered.pending, true);
+  assert.equal(offered.change, "offered");
   const { title, body } = roleNoticeText("moderator", { pending: true });
   assert.match(title, /waiting for you/);
   assert.match(body, /two-factor/);
@@ -88,31 +72,6 @@ test("the push says what is outstanding, even when it says nothing else", () => 
   }
 });
 
-test("a malformed notice is dropped rather than shown to a player", () => {
-  // The alternative is a pop-up reading "undefined", in front of somebody who
-  // did nothing but be online at the wrong moment.
-  for (const payload of [null, undefined, {}, "moderator", { notice: null }, { notice: {} }]) {
-    assert.equal(roleNoticeFromPayload(payload), null);
-  }
-  assert.equal(roleNoticeFromPayload({ notice: { id: 42, role: "moderator" } }), null);
-  assert.equal(roleNoticeFromPayload({ notice: { id: "n-3", role: "wizard" } }), null);
-});
-
-test("a notice cannot announce an administrator", () => {
-  // `admin` is never granted over the network, so a push claiming it is a
-  // payload that should not exist - and the menu must not act on one.
-  assert.equal(roleNoticeFromPayload({ notice: { id: "n-4", role: "admin" } }), null);
-});
-
-test("the two halves of a promotion agree: told, then offered Moderation", () => {
-  const notice = roleNoticeFromPayload({ notice: { id: "n-5", role: "moderator" } });
-  assert.deepEqual(
-    operatorEntries(notice.role).map((entry) => entry.path),
-    ["/moderation"],
-  );
-  assert.deepEqual(operatorEntries(roleNoticeFromPayload({ notice: { id: "n-6", role: "user" } }).role), []);
-});
-
 test("the notice explains the change without quoting the ledger", () => {
   // The reason an administrator recorded was written for other administrators
   // and can name a report or a second account; it never reaches this text.
@@ -124,14 +83,25 @@ test("the notice explains the change without quoting the ledger", () => {
   assert.ok(!/reason/i.test(promoted.body + removed.body));
 });
 
-test("acknowledging one notice does not close a newer one that just arrived", () => {
-  // An administrator can act twice, and the second push lands on the socket
-  // while the receipt for the first is still in flight. Clearing whatever is
-  // on screen would take the newer notice down unread; the server settles by
-  // age for the same reason.
-  const promoted = { id: "n-1", role: "moderator", createdAt: "" };
-  const demoted = { id: "n-2", role: "user", createdAt: "" };
-  assert.equal(noticeAfterAcknowledgement(promoted, "n-1"), null);
-  assert.deepEqual(noticeAfterAcknowledgement(demoted, "n-1"), demoted);
-  assert.equal(noticeAfterAcknowledgement(null, "n-1"), null);
+test("a role entry is read out of the inbox, and anything else is dropped", () => {
+  // The alternative is a row reading "undefined", in front of somebody who
+  // did nothing but be online at the wrong moment (#1436).
+  const granted = parseInboxEntry({
+    id: "n-1", kind: "role", createdAt: "2026-10-09T00:00:00+00:00", role: "moderator", change: "granted",
+  });
+  assert.deepEqual(granted, {
+    id: "n-1", createdAt: "2026-10-09T00:00:00+00:00", read: false,
+    kind: "role", role: "moderator", change: "granted", offerOpen: false,
+  });
+  assert.deepEqual(operatorEntries(granted.role).map((entry) => entry.path), ["/moderation"]);
+  // `admin` is never granted over the network, so an entry claiming it is a
+  // payload that should not exist.
+  for (const bad of [
+    { id: "n-2", kind: "role", createdAt: "", role: "admin", change: "granted" },
+    { id: "n-3", kind: "role", createdAt: "", role: "moderator", change: "promoted" },
+    { id: 42, kind: "role", createdAt: "", role: "moderator", change: "granted" },
+    null,
+  ]) {
+    assert.equal(parseInboxEntry(bad), null);
+  }
 });

@@ -17,7 +17,6 @@ import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("pl", {"other":"."});
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -338,6 +337,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "Przeczytaj ostrzeżenie od moderatora, zanim opublikujesz listę.";
       case "star":
         return "Przeczytaj ostrzeżenie od moderatora, zanim oznaczysz listę gwiazdką.";
+      case "play":
+        return "Przeczytaj ostrzeżenie od moderatora, zanim wejdziesz do pokoju.";
       default:
         return "Najpierw przeczytaj ostrzeżenie od moderatora.";
     }
@@ -367,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Nie udało się zapisać tego ustawienia.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Nie znaleziono powiadomienia.",
 
   // Reporting, from the reporter's side
@@ -1816,11 +1817,6 @@ export const PL: Catalogue = {
     reportNickname: (p: { nickname: string }) => `Zgłoś: ${p.nickname}`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "wysłane przez ciebie zgłoszenie zostało rozpatrzone", few: "wysłane przez ciebie zgłoszenia zostały rozpatrzone", many: "wysłanych przez ciebie zgłoszeń zostało rozpatrzonych", other: "wysłanego przez ciebie zgłoszenia zostało rozpatrzone" })}. Dziękujemy.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} proponuje restart gry.`,
@@ -1836,28 +1832,6 @@ export const PL: Catalogue = {
     theCurrentGameIsRestarting: "Gra właśnie zaczyna się od nowa.",
     yesYesNoNoPending:
       (p: { yes: number; no: number; pending: number; requiredVotes: number }) => `za: ${p.yes} · przeciw: ${p.no} · bez głosu: ${p.pending} · potrzeba: ${p.requiredVotes}`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "Wylogowano cię na wszystkich urządzeniach, aby zmiana zaczęła\n            obowiązywać. Zaloguj się ponownie, aby kontynuować.",
-    setUpNow: "Skonfiguruj teraz",
-    notNow: "Nie teraz",
-    oneMoment: "Proszę czekać…",
-    signInAgain: "Zaloguj się ponownie",
-    understood: "OK",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }) =>
-      p.count === 1 ? "Twój rysunek jest w galerii" : "Twoje rysunki są w galerii",
-    sharedYourDrawing: "Twój rysunek {prompt} trafił do galerii. Udostępnienie: {sharer}.",
-    view: "Zobacz",
-    takeOut: "Zdejmij",
-    takenOut: "Zdjęty",
-    andMore: (p: { count: number }) =>
-      `I jeszcze ${counted(p.count, { one: "rysunek", few: "rysunki", many: "rysunków", other: "rysunku" })}.`,
-    youCanAlways: "Rysunek możesz zdjąć z galerii w każdej chwili: na jego stronie albo w historii gier.",
-    ok: "OK",
   },
 
   roomChatPanel: {
@@ -2404,9 +2378,6 @@ export const PL: Catalogue = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} chce dodać cię do znajomych.`,
-    acceptedYourRequest: (p: { name: string }) => `Zaproszenie do znajomych przyjęte: ${p.name}.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "osoba przyjęła", few: "osoby przyjęły", many: "osób przyjęło", other: "osoby przyjęło" })} twoje zaproszenia do znajomych.`,
     accept: "Przyjmij",
     open: "Otwórz",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2465,9 +2436,46 @@ export const PL: Catalogue = {
     theDrawingThisWasAbout: "Rysunek, którego to dotyczyło:",
     theDrawingsThisWasAbout: "Rysunki, których to dotyczyło:",
   },
+  inbox: {
+    inbox: "Skrzynka",
+    openInboxUnread: (p: { count: number }) => `Skrzynka, ${counted(p.count, { one: "nieprzeczytana wiadomość", few: "nieprzeczytane wiadomości", many: "nieprzeczytanych wiadomości", other: "nieprzeczytanej wiadomości" })}`,
+    markAllRead: "Oznacz wszystko jako przeczytane",
+    markRead: "Oznacz jako przeczytane",
+    newGroup: "Nowe",
+    earlierGroup: "Wcześniejsze",
+    showOlder: "Pokaż starsze",
+    close: "Zamknij skrzynkę",
+    nothingHereYet: "Jeszcze nic tu nie ma",
+    whatArrivesHere: "Tu trafiają udostępnienia twoich rysunków, zaproszenia do znajomych i wiadomości o twoim koncie.",
+    sharedYourDrawing: "Twój rysunek {prompt} trafił do galerii. Udostępnienie: {sharer}.",
+    yourDrawingWasShared: "Twój rysunek hasła {prompt} został udostępniony w galerii.",
+    noLongerInTheGallery: "Nie ma go już w galerii",
+    view: "Zobacz",
+    takeItOut: "Zdejmij",
+    wantsToBeFriends: "{name}: zaproszenie do znajomych.",
+    accept: "Przyjmij",
+    decline: "Odrzuć",
+    friendsNow: "Jesteście teraz znajomymi",
+    noLongerWaiting: "Już nie czeka",
+    acceptedYourRequest: "Zaproszenie do znajomych przyjęte: {name}.",
+    invitedYouToPlay: "{name}: zaproszenie do gry.",
+    join: "Dołącz",
+    expired: "Wygasło",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "wysłane przez ciebie zgłoszenie zostało rozpatrzone", few: "wysłane przez ciebie zgłoszenia zostały rozpatrzone", many: "wysłanych przez ciebie zgłoszeń zostało rozpatrzonych", other: "wysłanego przez ciebie zgłoszenia zostało rozpatrzone" })}. Dziękujemy.`,
+    setUpTwoFactor: "Skonfiguruj logowanie dwuetapowe",
+    offerEnded: "Ta propozycja wygasła",
+    acknowledged: "Przeczytane",
+    readTheRules: "Przeczytaj zasady",
+    chooseAnotherPicture: "Wybierz inne zdjęcie",
+    signedOutForRole: "Twoja rola się zmieniła, więc wylogowano cię wszędzie. Zaloguj się ponownie, aby kontynuować.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "Możesz już wgrać nowe.",
+    uploadAgainOn: (p: { date: string }) => `Nowe możesz wgrać ${p.date}.`,
     whatAWarningMeans:
-      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Nic nie zostało ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
+      "Zgłoszenie dotyczące twojego zachowania zostało rozpatrzone, a to jest jego wynik. Po potwierdzeniu nic nie jest ograniczone, ale kolejne zgłoszenie może skończyć się zawieszeniem konta.",
     yourPictureWasRemoved: "Twoje zdjęcie zostało usunięte",
     aModeratorWarning: "Ostrzeżenie od moderatora",
     aReportAboutYourPicture:

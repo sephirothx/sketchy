@@ -17,7 +17,6 @@ import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("de", {"other":"."});
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -338,6 +337,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "Vor dem Veröffentlichen muss die Verwarnung der Moderation gelesen werden.";
       case "star":
         return "Vor dem Vergeben eines Sterns muss die Verwarnung der Moderation gelesen werden.";
+      case "play":
+        return "Vor dem Betreten eines Raums muss die Verwarnung der Moderation gelesen werden.";
       default:
         return "Zuerst muss die Verwarnung der Moderation gelesen werden.";
     }
@@ -367,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Diese Einstellung konnte nicht gespeichert werden.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Hinweis nicht gefunden.",
 
   // Reporting, from the reporter's side
@@ -1808,11 +1809,6 @@ export const DE: Catalogue = {
       `${p.nickname} melden`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "von dir gesendete Meldung wurde", other: "von dir gesendete Meldungen wurden" })} geprüft. Danke.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} schlägt einen Neustart vor.`,
@@ -1828,28 +1824,6 @@ export const DE: Catalogue = {
     theCurrentGameIsRestarting: "Das Spiel startet jetzt neu.",
     yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
       `${p.yes} Ja · ${p.no} Nein · ${p.pending} ausstehend · ${p.requiredVotes} nötig`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "Du wurdest auf allen Geräten abgemeldet, damit die Änderung greift.\n            Melde dich wieder an, um weiterzumachen.",
-    setUpNow: "Jetzt einrichten",
-    notNow: "Jetzt nicht",
-    oneMoment: "Bitte warten …",
-    signInAgain: "Erneut anmelden",
-    understood: "OK",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }) =>
-      p.count === 1 ? "Deine Zeichnung ist in der Galerie" : "Deine Zeichnungen sind in der Galerie",
-    sharedYourDrawing: "{sharer} hat deine Zeichnung von {prompt} in die Galerie gestellt.",
-    view: "Ansehen",
-    takeOut: "Herausnehmen",
-    takenOut: "Herausgenommen",
-    andMore: (p: { count: number }) =>
-      `Und ${counted(p.count, { one: "weitere Zeichnung", other: "weitere Zeichnungen" })}.`,
-    youCanAlways: "Du kannst eine Zeichnung jederzeit aus der Galerie nehmen, auf ihrer Seite oder in deinem Spielverlauf.",
-    ok: "OK",
   },
 
   roomChatPanel: {
@@ -2388,9 +2362,6 @@ export const DE: Catalogue = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} möchte mit dir befreundet sein.`,
-    acceptedYourRequest: (p: { name: string }) => `${p.name} hat deine Freundschaftsanfrage angenommen.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "Person hat", other: "Personen haben" })} deine Freundschaftsanfragen angenommen.`,
     accept: "Annehmen",
     open: "Öffnen",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2448,9 +2419,46 @@ export const DE: Catalogue = {
     theDrawingThisWasAbout: "Die Zeichnung, um die es ging:",
     theDrawingsThisWasAbout: "Die Zeichnungen, um die es ging:",
   },
+  inbox: {
+    inbox: "Posteingang",
+    openInboxUnread: (p: { count: number }) => `Posteingang, ${counted(p.count, { one: "ungelesene Nachricht", other: "ungelesene Nachrichten" })}`,
+    markAllRead: "Alle als gelesen markieren",
+    markRead: "Als gelesen markieren",
+    newGroup: "Neu",
+    earlierGroup: "Früher",
+    showOlder: "Ältere anzeigen",
+    close: "Posteingang schließen",
+    nothingHereYet: "Noch nichts da",
+    whatArrivesHere: "Hier landen geteilte Zeichnungen, Freundschaftsanfragen und Nachrichten zu deinem Konto.",
+    sharedYourDrawing: "{sharer} hat deine Zeichnung von {prompt} in die Galerie gestellt.",
+    yourDrawingWasShared: "Deine Zeichnung von {prompt} wurde in die Galerie gestellt.",
+    noLongerInTheGallery: "Nicht mehr in der Galerie",
+    view: "Ansehen",
+    takeItOut: "Herausnehmen",
+    wantsToBeFriends: "{name} möchte mit dir befreundet sein.",
+    accept: "Annehmen",
+    decline: "Ablehnen",
+    friendsNow: "Ihr seid jetzt befreundet",
+    noLongerWaiting: "Wartet nicht mehr",
+    acceptedYourRequest: "{name} hat deine Freundschaftsanfrage angenommen.",
+    invitedYouToPlay: "{name} hat dich zum Spielen eingeladen.",
+    join: "Beitreten",
+    expired: "Abgelaufen",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "von dir gesendete Meldung wurde", other: "von dir gesendete Meldungen wurden" })} geprüft. Danke.`,
+    setUpTwoFactor: "Zwei-Faktor-Anmeldung einrichten",
+    offerEnded: "Dieses Angebot ist beendet",
+    acknowledged: "Bestätigt",
+    readTheRules: "Regeln lesen",
+    chooseAnotherPicture: "Anderes Bild wählen",
+    signedOutForRole: "Deine Rolle hat sich geändert, deshalb wurdest du überall abgemeldet. Melde dich wieder an, um weiterzumachen.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "Du kannst jetzt ein neues hochladen.",
+    uploadAgainOn: (p: { date: string }) => `Du kannst am ${p.date} ein neues hochladen.`,
     whatAWarningMeans:
-      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Nichts ist eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
+      "Eine Meldung über dein Verhalten wurde geprüft, und das ist das Ergebnis. Sobald du sie bestätigst, ist nichts eingeschränkt, aber eine weitere Meldung kann zur Sperrung deines Kontos führen.",
     yourPictureWasRemoved: "Dein Bild wurde entfernt",
     aModeratorWarning: "Eine Verwarnung der Moderation",
     aReportAboutYourPicture: "Eine Meldung über dein Bild wurde geprüft, und das ist das Ergebnis. Sonst ist an deinem Konto nichts betroffen.",

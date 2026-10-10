@@ -93,8 +93,8 @@ keyboard that takes half the screen, and one thumb.
   recap and game history, beside a kept drawing that is not blank - on the turn results as
   a small pill beside the reactions. A player takes back their own share, and the drawer
   takes the drawing out for everybody, after confirming, which nobody else can undo until
-  the drawer shares it again. The drawer is told once, with a way to take
-  it out, when somebody else shares their drawing - not when they watched it happen. A
+  the drawer shares it again. The drawer is told once, in their inbox, with a way to
+  take it out, when somebody else shares their drawing - not when they watched it happen. A
   drawing keeps the moment it first entered the gallery, so sharing it again does not
   make it new again.
 - Gallery — the drawings players shared, shown at `/gallery` to anyone
@@ -158,11 +158,23 @@ keyboard that takes half the screen, and one thumb.
   around you in a game. It is the same disc that shows a ring for you and a gold crown
   for the room's host, and like those it is drawn for whoever is reading: two players
   looking at the same roster see different marks.
-  A request arriving, and one you sent being accepted, are both announced wherever
-  you are — a live game included, where an acceptance waits until you are back in the
-  lobby and is said then, as one notice however many came in, so it never stands over
-  the game — and the number waiting for an answer sits on your account chip. A
-  request that was declined is not announced: your list simply stops showing it.
+  A request arriving is announced wherever you are, a live game included, with
+  **Accept** on the notice, and the number waiting for an answer sits on your account
+  chip; it is in your inbox too. One you sent being accepted is told by your inbox
+  alone, so it never stands over a game. A request that was declined is not
+  announced: your list simply stops showing it.
+- Inbox — everything the app tells you about your own account, behind a bell in the
+  header on every page, a game's included: a moderator's warning or a picture removed,
+  somebody else sharing your drawing, friend requests and acceptances, a friend's
+  invitation (with **Join** while it lasts), your reports being reviewed, and a role
+  offered, granted or removed. The bell counts what is unread, and in a game that count
+  is all that moves - nothing opens over a turn. An entry is read when you act on it or
+  press **Mark all as read**, and read on one device is read on all of them. A
+  moderator's warning is the one entry that must be answered: its dialog waits until
+  you are out of the game, has no way past it but **OK**, and until then the server
+  will not give you a new seat in a room. Entries are deleted 90 days after they
+  arrive, read or not; the warnings themselves are kept 12 months as moderation
+  history, and all of it goes with your account.
 - *Hide letter tiles*: a room option that hides the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -839,7 +851,7 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
-| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, unlisted prompt wordings, guests |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, inbox entries, warnings, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, unlisted prompt wordings, guests |
 | `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
 | `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
 | `INTEGRITY_AUDIT_SECONDS` | `300` | How often the integrity audit runs a pass over its checks (#894) |
@@ -955,8 +967,8 @@ could only cost them something.
 
 It appears when a role does. An administrator granting the moderator role to an
 account that has not enrolled does not promote it - the role is **offered**, and
-the account is told: over its socket if it is online, and on its next visit
-otherwise. Nothing about the account changes yet, so the offer can be set aside
+the account is told in its inbox, which offers **Set up two-factor sign-in** for as
+long as the offer stands. Nothing about the account changes yet, so the offer can be set aside
 and picked up later from **Settings → Account**, where the entry now is. Setting
 up a second factor is what makes the role take effect.
 
@@ -977,8 +989,8 @@ after thirty days, and the operator's role panel shows it as pending until then,
 so a promotion waiting on somebody is visible rather than looking like one that
 never happened. An administrator who changes their mind withdraws it by setting
 the account back, which takes nothing away from the player: they were never a
-moderator, so they stay signed in and are told nothing about a role they never
-had.
+moderator, so they stay signed in and are told nothing new about a role they never
+had; the offer's entry stays in the inbox and stops offering the setup.
 
 The password and the code are both asked for because they answer different
 questions: the password says the account's owner is the one setting this up, the
@@ -1098,7 +1110,8 @@ game after 30 inactive days and guests with history after 365 inactive days;
 history rows survive through frozen presentation snapshots. Cleanup is bounded
 to 500 accounts per run, previews by default, and records aggregate audit
 evidence when applied. Every sweep in that loop — messages, outbox mail,
-one-shot tokens, sessions, exports, shutdown abandonments, rate-limit
+one-shot tokens, sessions, exports, inbox entries (90 days), moderator warnings
+(12 months), shutdown abandonments, rate-limit
 buckets, retired room codes, raw runtime events, unreviewed bug-report
 screenshots, unlisted prompt wordings and guests — deletes in
 committed batches within a per-run row and time budget, reports what it
@@ -1186,10 +1199,14 @@ behind that box finds a registered account by part of its display name (or by a
 full id, for an administrator arriving from the ledger with one), shows it in the
 colour its owner chose, and returns nothing a room does not already show every
 player seated in it - which is why, unlike the per-player activity view, it writes
-nothing to the audit log. The account is told what happened: immediately over its
-own socket if it is connected anywhere, and from a pending notice on its next visit
-if it was not. A **Moderation** entry that simply appears - or vanishes - is a
-change nobody can ask about.
+nothing to the audit log. The account is told what happened in its inbox:
+immediately, if it is connected anywhere, and on its next visit if it was not. A
+**Moderation** entry that simply appears - or vanishes - is a change nobody can ask
+about. A promotion signs the account out everywhere, so the staff role is only ever
+reached by a sign-in that produces the second factor; a tab open at the time says that
+was why, and the inbox entry says so after signing back in. A demotion signs nobody out: every staff check reads the role afresh,
+so the powers end on the next request anyway, and a staff session already lapses
+sooner than a player's.
 
 A player is reported from the same menu on their row that carries the kick and
 AFK votes. The report names their **seat**, never their account: room payloads
@@ -1340,7 +1357,8 @@ suspension — and a notice that does not say so informs without deterring. It
 names no ladder, because nothing enforces one.
 
 Whoever sent a report is told it was **reviewed** — a count of their own
-reports and nothing else, once, as a notice rather than an interruption.
+reports and nothing else, once, as an entry in their inbox rather than an
+interruption; a moderator deciding several leaves one entry saying how many.
 Reporting into silence is what teaches people not to report; what was decided
 is the reported player's business, and an outcome told back to whoever asked
 about them would turn a report into a way of finding things out about
@@ -1813,6 +1831,7 @@ backend/
       drawing_shares.py Who may share which drawing from the room, and the room broadcast
       gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
+      inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
@@ -2934,7 +2953,7 @@ A seated client checks with the server every five seconds that it still holds th
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
   home, and in a room the room's name, with a globe after it for a public room and a lock
   for a private one), what is going on (the round and the clock, a
-  server notice, a friend's invitation or friend request, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
+  server notice, a friend's invitation or friend request, and an *AFK* chip while you are AFK), and you (the inbox's bell, and your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go AFK, save the image, start over, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the

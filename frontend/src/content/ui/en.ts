@@ -29,7 +29,6 @@ const { counted, number, ordinal, plural } = formattersFor("en", {
   other: "th",
 });
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -350,6 +349,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "Read your moderator warning before publishing a list.";
       case "star":
         return "Read your moderator warning before starring a list.";
+      case "play":
+        return "Read your moderator warning before entering a room.";
       default:
         return "Read your moderator warning first.";
     }
@@ -379,7 +380,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "That setting could not be saved.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Notice not found.",
 
   // Reporting, from the reporter's side
@@ -1823,11 +1824,6 @@ export const EN = {
     reportNickname: (p: { nickname: string }) => `Report ${p.nickname}`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "report you sent has", other: "reports you sent have" })} been reviewed. Thank you.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} proposed restarting the game.`,
@@ -1843,28 +1839,6 @@ export const EN = {
     theCurrentGameIsRestarting: "The current game is restarting now.",
     yesYesNoNoPending:
       (p: { yes: number; no: number; pending: number; requiredVotes: number }) => `${p.yes} yes · ${p.no} no · ${p.pending} pending · ${p.requiredVotes} needed`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "You have been signed out on every device so the change can take\n            effect. Sign in again to carry on.",
-    setUpNow: "Set it up now",
-    notNow: "Not now",
-    oneMoment: "Please wait…",
-    signInAgain: "Sign in again",
-    understood: "OK",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }): string =>
-      p.count === 1 ? "Your drawing is in the gallery" : "Your drawings are in the gallery",
-    sharedYourDrawing: "{sharer} shared your drawing of {prompt} to the gallery.",
-    view: "View",
-    takeOut: "Take it out",
-    takenOut: "Taken out",
-    andMore: (p: { count: number }) =>
-      `And ${counted(p.count, { one: "more drawing", other: "more drawings" })}.`,
-    youCanAlways: "You can take a drawing out of the gallery at any time, from its page or from your game history.",
-    ok: "OK",
   },
 
   roomChatPanel: {
@@ -2409,9 +2383,6 @@ export const EN = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} wants to be friends.`,
-    acceptedYourRequest: (p: { name: string }) => `${p.name} accepted your friend request.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "person", other: "people" })} accepted your friend requests.`,
     accept: "Accept",
     open: "Open",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2470,9 +2441,46 @@ export const EN = {
     theDrawingThisWasAbout: "The drawing this was about:",
     theDrawingsThisWasAbout: "The drawings this was about:",
   },
+  inbox: {
+    inbox: "Inbox",
+    openInboxUnread: (p: { count: number }): string => `Inbox, ${counted(p.count, { one: "unread message", other: "unread messages" })}`,
+    markAllRead: "Mark all as read",
+    markRead: "Mark as read",
+    newGroup: "New",
+    earlierGroup: "Earlier",
+    showOlder: "Show older",
+    close: "Close the inbox",
+    nothingHereYet: "Nothing here yet",
+    whatArrivesHere: "Shares of your drawings, friend requests and messages about your account land here.",
+    sharedYourDrawing: "{sharer} shared your drawing of {prompt} to the gallery.",
+    yourDrawingWasShared: "Your drawing of {prompt} was shared to the gallery.",
+    noLongerInTheGallery: "No longer in the gallery",
+    view: "View",
+    takeItOut: "Take it out",
+    wantsToBeFriends: "{name} wants to be friends.",
+    accept: "Accept",
+    decline: "Decline",
+    friendsNow: "You're friends now",
+    noLongerWaiting: "No longer waiting",
+    acceptedYourRequest: "{name} accepted your friend request.",
+    invitedYouToPlay: "{name} invited you to play.",
+    join: "Join",
+    expired: "Expired",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "report you sent has", other: "reports you sent have" })} been reviewed. Thank you.`,
+    setUpTwoFactor: "Set up two-factor sign-in",
+    offerEnded: "This offer has ended",
+    acknowledged: "Acknowledged",
+    readTheRules: "Read the rules",
+    chooseAnotherPicture: "Choose another picture",
+    signedOutForRole: "Your role changed, so you were signed out everywhere. Sign in again to carry on.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "You can upload another one now.",
+    uploadAgainOn: (p: { date: string }): string => `You can upload another one on ${p.date}.`,
     whatAWarningMeans:
-      "A report about your behavior was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
+      "A report about your behavior was reviewed, and this is the outcome. After you acknowledge it nothing is restricted, but a further report may lead to your account being suspended.",
     yourPictureWasRemoved: "Your picture was removed",
     aModeratorWarning: "A moderator warning",
     aReportAboutYourPicture:

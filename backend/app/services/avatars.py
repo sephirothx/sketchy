@@ -15,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.inbox import add_entry
 from app.auth.avatar_doodles import DOODLES, doodle_key
 from app.auth.avatars import (
     avatar_reupload_block,
@@ -190,20 +191,6 @@ async def choose_doodle(
                 ip_hash=ip_hash,
             )
     return key
-
-
-def _removal_notice(wait: timedelta, until: datetime | None) -> str:
-    """What the player is told when a moderator takes their picture down.
-
-    The wait is the part they can act on, so it is what the sentence ends
-    with. A first removal has none: they may put another picture up straight
-    away, and saying so is what keeps the notice from reading as a punishment
-    it is not.
-    """
-    head = "A moderator removed the picture on your account."
-    if wait == timedelta(0) or until is None:
-        return f"{head} You can upload another one now."
-    return f"{head} You can upload another one on {until.strftime('%d %b %Y')}."
 
 
 @dataclass(frozen=True)
@@ -387,10 +374,21 @@ async def remove_avatar(
                         kind="avatar_removal",
                         user_id=db_user_id,
                         issued_by_user_id=UUID(str(actor_id)) if actor_id else None,
-                        reason=_removal_notice(wait, blocked_until),
+                        # Said by the client in the reader's language, with
+                        # the wait read from the account (#1436): a sentence
+                        # built here was English on every screen.
+                        reason="",
                         source_report_id=UUID(str(report_id)) if report_id else None,
                         created_at=at,
                     )
+                )
+                await session.flush()
+                await add_entry(
+                    session,
+                    user_id=db_user_id,
+                    kind="warning",
+                    subject_id=warning_id,
+                    created_at=at,
                 )
     return AvatarRemoval(
         had_one=had_one,

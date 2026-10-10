@@ -56,41 +56,11 @@ export function operatorEntries(
 }
 
 
-/** Keep only a payload shaped like a role notice.
+/** The role the account has been offered, from the inbox's read (#1436).
 
-Anything else is dropped rather than rendered as "undefined" in front of a
-player, the way `WarningNotice` drops a malformed warning. `admin` is
-deliberately not accepted: it can never be granted over the network, so a push
-claiming it is a payload that should never have existed. */
-export function roleNoticeFromPayload(payload: unknown): {
-  id: string;
-  role: "user" | "moderator";
-  pending: boolean;
-  createdAt: string;
-} | null {
-  if (!payload || typeof payload !== "object") return null;
-  const body = (payload as { notice?: unknown }).notice;
-  if (!body || typeof body !== "object") return null;
-  const notice = body as Record<string, unknown>;
-  if (typeof notice.id !== "string") return null;
-  if (notice.role !== "user" && notice.role !== "moderator") return null;
-  return {
-    id: notice.id,
-    role: notice.role,
-    // Absent means granted: a payload from before the offer existed is a
-    // role the account already holds.
-    pending: notice.pending === true,
-    createdAt: typeof notice.createdAt === "string" ? notice.createdAt : "",
-  };
-}
-
-/** What the push says is still outstanding on the account.
-
-Separate from the notice, and present even when there is none: a withdrawn
-offer settles its notice and ends the offer in one act, so the only thing that
-payload has to say is that nothing is waiting any more. Anything but a
-grantable role reads as nothing, the way a malformed notice is dropped rather
-than rendered. */
+Present on every read, so an offer withdrawn or taken up is the read saying
+nothing is waiting any more. Anything but a grantable role reads as nothing,
+the way a malformed entry is dropped rather than rendered. */
 export function pendingRoleFromPayload(payload: unknown): "moderator" | null {
   if (!payload || typeof payload !== "object") return null;
   const offered = (payload as { pendingRole?: unknown }).pendingRole;
@@ -103,7 +73,8 @@ export function roleName(role: string): string {
   return role === "moderator" ? ui.operatorAccess.moderator : role;
 }
 
-/** What the account is told, in its own words rather than the ledger's.
+/** What an inbox entry about a role says, in the account's own words rather
+than the ledger's.
 
 The reason an administrator recorded is never shown here - it was written for
 other administrators and can name a report or somebody else. What the player

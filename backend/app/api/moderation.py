@@ -27,7 +27,7 @@ from app.auth.rate_limit import (
     client_key,
 )
 from app.auth.audit import audit_coordinates
-from app.auth.bans import active_ban_filter, active_ban_for_user
+from app.auth.bans import active_ban_filter, active_ban_for_user, lock_ban_target
 from app.auth.mail import queue_email, recipient_locale
 from app.canvas_storage import (
     CorruptStoredDrawingError,
@@ -60,7 +60,7 @@ from app.services.player_reports import (
 )
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
-from app.auth.warnings import pending_warning_payload
+from app.services.inbox import add_entry, count_reviewed_reports, mark_read
 from app.auth.erasure import (
     AccountErasedError,
     erased_identity_ids,
@@ -119,11 +119,6 @@ logger = logging.getLogger(__name__)
 MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
-# How many decided reports one message names at once. A reporter with more
-# than this waiting hears about the rest on the next visit; the message is a
-# count, so the number is what matters and the list is only there to say which
-# ones it counted.
-MAX_REVIEWED_ANNOUNCED = 100
 # A backstop on the open queue's whole read, not a page: grouping needs every
 # report of an incident in hand at once, and a queue this long means something
 # is wrong upstream rather than that a moderator wants page two.
@@ -134,7 +129,7 @@ MAX_OPEN_QUEUE_REPORTS = 5_000
 # case is looked for, and past that the ledger is the record.
 MAX_CLOSED_CASES_OFFSET = 1_000
 OnUserBanned = Callable[[str], Awaitable[None]]
-OnUserWarned = Callable[[str], Awaitable[None]]
+OnInboxChanged = Callable[[str], Awaitable[None]]
 
 
 class ReportBody(ControlFreeModel):
@@ -994,14 +989,6 @@ def _content_incident_payload(
     }
 
 
-class ReviewedAcknowledgeBody(ControlFreeModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    report_ids: list[UUID] = Field(
-        default_factory=list, alias="reportIds", max_length=MAX_REVIEWED_ANNOUNCED
-    )
-
-
 class WarningBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -1306,7 +1293,7 @@ def create_moderation_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     on_user_banned: OnUserBanned | None = None,
-    on_user_warned: OnUserWarned | None = None,
+    on_inbox_changed: OnInboxChanged | None = None,
     # Called with the account whose picture a moderator took down, so live
     # seats and the lobby's identity cache stop showing it.
     on_avatar_changed: Callable[[str, str | None], Awaitable[None]] | None = None,
@@ -1967,8 +1954,8 @@ def create_moderation_router(
         # After the commit, so a socket can never announce a notice a
         # rolled-back transaction never wrote - the rule the warning route
         # above follows for the same reason.
-        if outcome.warning_id is not None and on_user_warned is not None:
-            await on_user_warned(str(target.id))
+        if outcome.warning_id is not None and on_inbox_changed is not None:
+            await on_inbox_changed(str(target.id))
         return {
             "ok": True,
             "removed": outcome.had_one,
@@ -2369,6 +2356,7 @@ def create_moderation_router(
                             },
                         )
                     )
+                told = await _tell_reporters(session, incident.reports, now=now)
                 await session.flush()
                 for report in incident.reports:
                     # The relationships by name as well: a bare refresh
@@ -2380,7 +2368,9 @@ def create_moderation_router(
                         attribute_names=["message_evidence", "drawing_evidence"],
                     )
                 decisions = await _decisions(session, list(incident.reports))
-            return _incident_payload(incident, decisions=decisions)
+            payload = _incident_payload(incident, decisions=decisions)
+        await _tell(*told)
+        return payload
 
     @router.patch("/moderation/prompt-content-reports/{report_id}")
     async def review_prompt_content_report(
@@ -2611,12 +2601,34 @@ def create_moderation_router(
             return _content_incident_payload(incident, decisions)
 
 
+    async def _tell_reporters(
+        session: AsyncSession, reports, *, now: datetime
+    ) -> list[str]:
+        """Count a decision into each reporter's inbox: that their report was
+        reviewed, never what was decided (R-MOD-20, #1436)."""
+        counts: dict[UUID, int] = {}
+        for report in reports:
+            if report.reporter_user_id is not None:
+                counts[report.reporter_user_id] = counts.get(report.reporter_user_id, 0) + 1
+        return [str(user_id) for user_id in await count_reviewed_reports(session, counts, now=now)]
+
+    async def _tell(*user_ids: str) -> None:
+        """After a commit: the accounts whose inbox it moved hear it now."""
+        if on_inbox_changed is None:
+            return
+        for user_id in dict.fromkeys(user_ids):
+            try:
+                await on_inbox_changed(user_id)
+            except Exception:  # noqa: BLE001 - the decision stands; the visit catches up
+                logging.getLogger(__name__).exception("Could not tell %s their inbox moved", user_id)
+
     async def _attach_and_resolve_report(
         session: AsyncSession,
         *,
         report_id: UUID,
         target_id: UUID,
         reviewer: User,
+        told: list[str],
         note: str,
         now: datetime,
         request_id,
@@ -2675,6 +2687,7 @@ def create_moderation_router(
                     },
                 )
             )
+        told.extend(await _tell_reporters(session, incident.reports, now=now))
         return named
 
     def _held():
@@ -2952,15 +2965,14 @@ def create_moderation_router(
         if body.expires_at is not None and body.expires_at <= now:
             raise HTTPException(status_code=422, detail="expiresAt must be in the future.")
 
+        told: list[str] = []
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                target = await session.scalar(
-                    select(User).where(User.id == body.user_id).with_for_update()
-                )
+                target = await lock_ban_target(session, body.user_id)
                 if target is None or target.state in {
                     AccountState.MERGED.value,
                     AccountState.DELETED.value,
@@ -2990,6 +3002,7 @@ def create_moderation_router(
                         report_id=body.report_id,
                         target_id=target.id,
                         reviewer=reviewer,
+                        told=told,
                         note=body.reason,
                         now=now,
                         request_id=request_id,
@@ -3066,6 +3079,7 @@ def create_moderation_router(
         await revoke_all_sessions(session_factory, user_id=str(body.user_id), now=now)
         if on_user_banned is not None:
             await on_user_banned(str(body.user_id))
+        await _tell(*told)
         return payload
 
     @router.get("/moderation/bans")
@@ -3195,6 +3209,7 @@ def create_moderation_router(
         because it is the same kind of judgement about a person.
         """
         request_id, ip_hash = await audit_coordinates(request, session_factory)
+        told: list[str] = []
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
@@ -3232,6 +3247,7 @@ def create_moderation_router(
                         report_id=body.report_id,
                         target_id=target.id,
                         reviewer=reviewer,
+                        told=told,
                         note=body.reason,
                         now=datetime.now(timezone.utc),
                         request_id=request_id,
@@ -3247,6 +3263,16 @@ def create_moderation_router(
                     created_at=datetime.now(timezone.utc),
                 )
                 session.add(warning)
+                await session.flush()
+                # In the same transaction, so there is no warning the player
+                # was never told about (#1436).
+                await add_entry(
+                    session,
+                    user_id=target.id,
+                    kind="warning",
+                    subject_id=warning.id,
+                    created_at=warning.created_at,
+                )
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
@@ -3274,98 +3300,8 @@ def create_moderation_router(
                 }
         # After the commit, so a socket can never announce a warning a
         # rolled-back transaction never created.
-        if on_user_warned is not None:
-            await on_user_warned(str(body.user_id))
+        await _tell(str(body.user_id), *told)
         return payload
-
-    @router.get("/reports/reviewed")
-    async def reports_reviewed(request: Request):
-        """Whether any of the caller's own reports have been decided since
-        they were last told.
-
-        A count and nothing else. What was decided is the reported player's
-        business, and an outcome handed back to whoever asked about them would
-        make a report a way of learning things about somebody (R-MOD-20). A
-        number about your own reports discloses nothing about anyone else.
-
-        Read-only, and asked on every page load, so the usual answer - nothing
-        to say - costs no write.
-
-        It names the reports it counted. The acknowledgement takes that list
-        back and stamps exactly those, which is what keeps the two halves
-        honest: a report decided in between is not swept up by an
-        acknowledgement of a message that never mentioned it, and a message
-        that was never shown stamps nothing at all. They are the caller's own
-        reports, so naming them discloses nothing they did not already know.
-        """
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
-            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        async with session_factory() as session:
-            waiting = (
-                await session.scalars(
-                    select(PlayerReport.id)
-                    .where(
-                        PlayerReport.reporter_user_id == UUID(user_id),
-                        PlayerReport.status != ReportStatus.PENDING.value,
-                        PlayerReport.reporter_notified_at.is_(None),
-                    )
-                    .order_by(PlayerReport.id)
-                    .limit(MAX_REVIEWED_ANNOUNCED)
-                )
-            ).all()
-        return {"count": len(waiting), "reportIds": [str(row) for row in waiting]}
-
-    @router.post("/reports/reviewed/acknowledge")
-    async def acknowledge_reports_reviewed(
-        request: Request, body: ReviewedAcknowledgeBody
-    ):
-        """Stamp the reports a message actually named, and only those.
-
-        The client shows the message and then says which reports it was
-        about, rather than claiming them first and hoping the message gets
-        rendered. Claiming first loses one whenever the render does not
-        happen - the account signs out mid-request, the effect is torn down -
-        and a report stamped as told that nobody was told about is never
-        announced again.
-
-        Bounded to the list it is given, so a report decided between the read
-        and this call keeps its turn. The failure that is left is being
-        thanked twice, which is the right one to be left with.
-        """
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
-            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        if not body.report_ids:
-            return {"ok": True, "acknowledged": 0}
-        now = datetime.now(timezone.utc)
-        async with session_factory() as session:
-            async with session.begin():
-                stamped = await session.execute(
-                    update(PlayerReport)
-                    .where(
-                        PlayerReport.id.in_(body.report_ids),
-                        # Still the caller's own, still decided, still
-                        # unannounced: the list is a client's claim about
-                        # what it showed, not authority over any row.
-                        PlayerReport.reporter_user_id == UUID(user_id),
-                        PlayerReport.status != ReportStatus.PENDING.value,
-                        PlayerReport.reporter_notified_at.is_(None),
-                    )
-                    .values(reporter_notified_at=now)
-                )
-        return {"ok": True, "acknowledged": stamped.rowcount or 0}
-
-    @router.get("/warnings/pending")
-    async def pending_warning(request: Request):
-        """The caller's own oldest unacknowledged warning - the catch-up
-        route for a player who was offline when it was issued, or whose tab had
-        no socket to carry the push (#1336). The payload is
-        shared with the live socket push (`app/auth/warnings.py`)."""
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
-            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        return await pending_warning_payload(session_factory, user_id)
 
     async def _notice_drawing(
         session: AsyncSession, source_report_id: UUID | None, report_id: UUID
@@ -3425,7 +3361,8 @@ def create_moderation_router(
 
     @router.post("/warnings/{warning_id}/acknowledge")
     async def acknowledge_warning(warning_id: UUID, request: Request):
-        """Recorded so a moderator can see the message actually landed."""
+        """Recorded so a moderator can see the message actually landed, and
+        what lets the player take a seat again (R-INBOX-04)."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
@@ -3442,7 +3379,17 @@ def create_moderation_router(
                     raise Refusal(404, ErrorCode.NO_SUCH_WARNING, "No such warning.")
                 if warning.acknowledged_at is None:
                     warning.acknowledged_at = datetime.now(timezone.utc)
-            return {"ok": True}
+                # Answered, so read: the entry stays in the inbox as what
+                # happened, and the room doors it held shut open (R-INBOX-04).
+                await mark_read(
+                    session,
+                    user_ids=[warning.user_id],
+                    kind="warning",
+                    subject_id=warning.id,
+                )
+        # Every other tab of the account closes the same dialog.
+        await _tell(user_id)
+        return {"ok": True}
 
     # ------------------------------------------------------------ the Gallery
 

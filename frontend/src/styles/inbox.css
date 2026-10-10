@@ -1,0 +1,211 @@
+/* The inbox (#1436): a panel under the bell on a wide screen, a sheet on a
+   phone. One list, newest first: unread rows tinted with a dot, each saying
+   what happened and leading to where it can be acted on. */
+.inbox-panel {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  max-height: min(620px, calc(var(--app-height) - 90px));
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  text-align: left;
+  top: calc(100% + 8px);
+  width: min(400px, calc(100vw - 32px));
+  z-index: var(--z-popover);
+}
+
+.inbox-head {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+
+.inbox-head h2 {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.inbox-link {
+  background: none;
+  border: 0;
+  color: var(--primary-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: none;
+}
+
+.inbox-link:hover {
+  text-decoration: underline;
+}
+
+.inbox-list {
+  margin: 0;
+  overflow-y: auto;
+  padding: 0 0 6px;
+}
+
+.inbox-group {
+  padding: 10px 16px 4px;
+}
+
+.inbox-item {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  list-style: none;
+  padding: 10px 30px 10px 16px;
+  position: relative;
+}
+
+.inbox-item + .inbox-item {
+  border-top: 1px solid var(--line);
+}
+
+.inbox-item.is-unread {
+  background: var(--primary-soft);
+}
+
+/* The unread dot is a button: reading a row that has nothing to press, by
+   keyboard as well as by pointer. A larger target than it looks. */
+.inbox-read-dot {
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 24px;
+  padding: 0;
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  width: 24px;
+}
+
+.inbox-read-dot::after {
+  background: var(--primary);
+  border-radius: 50%;
+  content: "";
+  height: 8px;
+  left: 8px;
+  position: absolute;
+  top: 8px;
+  width: 8px;
+}
+
+.inbox-read-dot:hover::after {
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.inbox-kind {
+  align-items: center;
+  background: var(--well);
+  border-radius: 50%;
+  color: var(--muted);
+  display: grid;
+  height: 34px;
+  justify-items: center;
+  width: 34px;
+}
+
+.inbox-item.is-unread .inbox-kind {
+  background: var(--card);
+}
+
+.inbox-kind.is-primary { color: var(--primary); }
+.inbox-kind.is-success { color: var(--success-ink); }
+.inbox-kind.is-danger { color: var(--danger); }
+.inbox-kind.is-warm { color: var(--warm-ink); }
+
+.inbox-text {
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inbox-quote {
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+  display: block;
+  font-style: italic;
+  margin-top: 4px;
+  padding-left: 8px;
+}
+
+.inbox-detail {
+  color: var(--muted);
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.inbox-meta {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.inbox-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.inbox-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px 4px;
+}
+
+.inbox-empty {
+  color: var(--muted);
+  padding: 34px 24px 38px;
+  text-align: center;
+}
+
+.inbox-empty .inbox-kind {
+  height: 48px;
+  margin: 0 auto 12px;
+  width: 48px;
+}
+
+.inbox-empty p {
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.inbox-empty strong {
+  color: var(--ink);
+  display: block;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* On a phone the list is the sheet's body and fills it. */
+.inbox-sheet .inbox-list {
+  margin-inline: -16px;
+}
+
+.inbox-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

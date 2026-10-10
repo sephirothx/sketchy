@@ -9,6 +9,7 @@ import {
 import { OverlayOpenContext } from "./hooks/useOverlayRoute";
 import "./App.css";
 import { useEmailStateSync } from "./hooks/useEmailStateSync";
+import { useInboxSync } from "./hooks/useInboxSync";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { useServerNotices } from "./hooks/useServerNotices";
@@ -39,9 +40,7 @@ import { AppBanners } from "./components/AppBanners";
 import { SettingsSyncNotices } from "./components/SettingsSyncNotices";
 import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { SuspensionNotice } from "./components/SuspensionNotice";
-import { ShareNotice } from "./components/ShareNotice";
-import { RoleChangeNotice } from "./components/RoleChangeNotice";
-import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
+import { RoleSignOutNotice } from "./components/RoleSignOutNotice";
 import { WarningNotice } from "./components/WarningNotice";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
@@ -157,6 +156,7 @@ function App() {
     void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
   useEmailStateSync();
+  useInboxSync();
   useServerNotices();
   useSignedOutElsewhere();
 
@@ -185,16 +185,16 @@ function App() {
       <CrashProbe scope="app" />
       <AppBanners />
       <SettingsSyncNotices />
+      {/* One blocking dialog at a time: the warning stands aside for a
+          suspension, which says more and ends the session (#1436). Every
+          other notice is an entry in the inbox, behind the header's bell. */}
       <SuspensionNotice />
       <WarningNotice />
-      <ReportsReviewedNotice />
-      <RoleChangeNotice />
+      <RoleSignOutNotice />
       <BrowserRouter>
         <ScrollToTop />
         {/* Inside the router: answering an invitation navigates. */}
         <FriendInviteNotice />
-        {/* Inside the router too: a notice links to the drawing. */}
-        <ShareNotice />
         <AppRoutes />
         <ConfettiCanvas />
       </BrowserRouter>

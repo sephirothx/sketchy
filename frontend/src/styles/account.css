@@ -1100,3 +1100,40 @@
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* The inbox's bell (#1436): a header button beside the account chip, its
+   unread count a small badge on its corner, in the destructive button's red:
+   the one fill white text reads on at this size in both themes. The panel's own styles
+   load with the panel (styles/inbox.css). */
+.inbox-bell {
+  position: relative;
+  display: inline-flex;
+}
+
+.inbox-bell-button {
+  position: relative;
+}
+
+.inbox-bell-button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.inbox-badge {
+  background: var(--danger-button);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 2px var(--paper);
+  color: var(--on-danger);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  height: 18px;
+  line-height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  pointer-events: none;
+  position: absolute;
+  right: -5px;
+  text-align: center;
+  top: -4px;
+}

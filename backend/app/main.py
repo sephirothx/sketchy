@@ -46,20 +46,11 @@ from app.api.moderation import create_moderation_router
 from app.api.admin_controls import create_admin_controls_router, read_paused
 from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
-from app.api.share_notices import (
-    create_share_notice_router,
-    drawers_told_about_game,
-    pending_share_notice_payload,
-)
-from app.api.role_notices import (
-    create_role_notice_router,
-    pending_role_notice_payload,
-)
+from app.api.inbox import create_inbox_router, drawers_told_about_game
 from app.api.user_settings import create_user_settings_router
 from app.api.friends import create_friends_router, create_recent_players_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
-from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket_origins
@@ -282,6 +273,9 @@ async def push_friends_changed(user_id: str) -> None:
     # Its friends are read again the next time its presence moves or it asks.
     handler_context.friend_presence.forget(user_id)
     await sio.emit("friends_changed", {}, room=f"user:{user_id}")
+    # A request or an acceptance is an inbox entry too (#1436), and every
+    # change a friend list hears may have written or removed one.
+    await sio.emit("inbox_changed", {}, room=f"user:{user_id}")
 
 
 async def push_email_state_changed(user_id: str) -> None:
@@ -501,11 +495,21 @@ SAME_BROWSER_GRACE_SECONDS = 3.0
 _regrant_closes: set[asyncio.Task] = set()
 
 
+# What a closed socket is told, by why its session ended. The client keys on
+# the code and says it in the reader's language; the sentence is for logs.
+SIGNED_OUT_REASONS = {
+    "signed_out": "You were signed out on this device.",
+    "role_changed": "Your role changed. Sign in again.",
+}
+
+
 async def close_sockets_of_revoked_sessions(
     user_id: str,
     session_ids: list[str] | None,
     keep: str | None = None,
     keep_socket: str | None = None,
+    *,
+    code: str = "signed_out",
 ) -> None:
     """Close the sockets a revocation just signed out (#1007).
 
@@ -575,7 +579,7 @@ async def close_sockets_of_revoked_sessions(
     for sid in closing:
         await sio.emit(
             "session_superseded",
-            {"code": "signed_out", "reason": "You were signed out on this device."},
+            {"code": code, "reason": SIGNED_OUT_REASONS.get(code, SIGNED_OUT_REASONS["signed_out"])},
             to=sid,
         )
         await sio.disconnect(sid)
@@ -687,46 +691,30 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
         )
 
 
-async def push_warning_to_account(user_id: str) -> None:
-    """Tell a warned player now if any of their sockets is connected.
+async def push_inbox_changed(user_id: str) -> None:
+    """Tell an account its inbox moved, in every open tab (#1436).
 
-    The pop-up otherwise waits for their next visit's
-    ``GET /api/warnings/pending``; both routes share one payload builder so
-    they cannot say different things.
+    Contentless for the reason `friends_changed` is: `GET /api/inbox` is the
+    truth and is built in one place, so the bell, the panel and the warning
+    that must be answered all come from the read this makes the client do.
+    The account's broadcast room is what makes "wherever they are" true - a
+    player idling in the lobby learns now, and one seated in a game sees the
+    count move without a dialog in front of their turn (R-INBOX-02).
     """
-    payload = await pending_warning_payload(async_session_factory, user_id)
-    if payload.get("warning") is not None:
-        await sio.emit("moderator_warning", payload, to=f"user:{user_id}")
+    await sio.emit("inbox_changed", {}, room=f"user:{user_id}")
 
 
-async def push_role_change_to_account(user_id: str) -> None:
-    """Tell an account its role changed, if any of its sockets is connected.
-
-    The pop-up otherwise waits for their next visit's
-    ``GET /api/role-notices/pending``; both routes share one payload builder so
-    they cannot say different things. The account's broadcast room is what makes
-    "wherever they are" true - a player idling in the lobby learns now rather
-    than on some later page load, and so does one seated in a game.
-    """
-    # Emitted whether or not there is anything to *say*: the payload also
-    # carries what is still outstanding on the account, and a withdrawn offer
-    # is precisely the case with no message and a change worth hearing - the
-    # browser would otherwise go on offering the enrolment it asked for.
-    payload = await pending_role_notice_payload(async_session_factory, user_id)
-    await sio.emit("role_changed", payload, to=f"user:{user_id}")
+async def announce_role_change(user_id: str, *, signed_out: bool = False) -> None:
+    """A role moved: the inbox says what, and a promotion - which ended every
+    session the account held (R-AUTH-20) - closes its sockets with a reason
+    the sign-in screen can give, rather than leaving open tabs acting on
+    sessions that are gone."""
+    await push_inbox_changed(user_id)
+    if signed_out:
+        await close_sockets_of_revoked_sessions(user_id, None, code="role_changed")
 
 
-async def push_share_notice_to_account(user_id: str) -> None:
-    """Tell a drawer now, if any of their sockets is connected, that somebody
-    else shared their drawing (R-SHARE-09). The card otherwise waits for
-    their next visit's ``GET /api/share-notices/pending``; both build the same
-    payload."""
-    payload = await pending_share_notice_payload(async_session_factory, user_id)
-    if payload["notices"]:
-        await sio.emit("drawing_share_notice", payload, to=f"user:{user_id}")
-
-
-handler_context.on_share_notice = push_share_notice_to_account
+handler_context.on_inbox_changed = push_inbox_changed
 handler_context.on_gallery_changed = gallery_shelf.invalidate
 
 
@@ -739,11 +727,11 @@ async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
 async def announce_recorded_game(game_id: str) -> None:
     """A finished game's history is in. Its live shares may have put drawings
     in the Gallery, so This week is read again (R-GAL-07), and the drawers
-    they left a notice for are told if any of their sockets is connected
+    they left an inbox entry for are told if any of their sockets is connected
     (R-SHARE-09)."""
     gallery_shelf.invalidate()
     for user_id in await drawers_told_about_game(async_session_factory, game_id):
-        await push_share_notice_to_account(user_id)
+        await push_inbox_changed(user_id)
 
 
 finished_game_worker.bind_recorded(announce_recorded_game)
@@ -1056,7 +1044,7 @@ api.include_router(
         room_manager,
         handler_context,
         on_change=announce_pause,
-        on_role_changed=push_role_change_to_account,
+        on_role_changed=announce_role_change,
         request_process_exit=request_process_exit,
         on_gallery_review_changed=gallery_shelf.invalidate,
     )
@@ -1069,7 +1057,7 @@ api.include_router(
         user_repo,
         game_history_repo,
         is_online=handler_context.presence.is_online,
-        on_share_notice=push_share_notice_to_account,
+        on_inbox_changed=push_inbox_changed,
         on_gallery_changed=gallery_shelf.invalidate,
         on_shares_changed=refresh_recap_shares,
     )
@@ -1078,7 +1066,7 @@ api.include_router(
     create_gallery_router(
         game_history_repo,
         shelf=gallery_shelf,
-        on_share_notice=push_share_notice_to_account,
+        on_inbox_changed=push_inbox_changed,
         on_shares_changed=refresh_recap_shares,
     )
 )
@@ -1096,8 +1084,9 @@ api.include_router(
 api.include_router(
     create_recent_players_router(async_session_factory, game_history_repo)
 )
-api.include_router(create_role_notice_router(async_session_factory))
-api.include_router(create_share_notice_router(async_session_factory))
+api.include_router(
+    create_inbox_router(async_session_factory, on_inbox_changed=push_inbox_changed)
+)
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:
     """A changed picture reaches the seats and the lobby that show it.
 
@@ -1119,7 +1108,7 @@ api.include_router(
     create_moderation_router(
         async_session_factory,
         on_user_banned=remove_banned_account_from_live_rooms,
-        on_user_warned=push_warning_to_account,
+        on_inbox_changed=push_inbox_changed,
         on_avatar_changed=refresh_avatar_on_live_surfaces,
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,

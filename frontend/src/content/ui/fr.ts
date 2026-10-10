@@ -17,7 +17,6 @@ import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("fr", {"one":"er","other":"e"});
 
-
 /** Values a refusal or an announcement carries. Plain data, never words. */
 export type MessageParams = Record<string, unknown>;
 
@@ -338,6 +337,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "L’avertissement de la modération doit être lu avant de publier une liste.";
       case "star":
         return "L’avertissement de la modération doit être lu avant de donner une étoile.";
+      case "play":
+        return "L’avertissement de la modération doit être lu avant d’entrer dans un salon.";
       default:
         return "L’avertissement de la modération doit d’abord être lu.";
     }
@@ -367,7 +368,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Settings
   setting_refused: "Ce réglage n’a pas pu être enregistré.",
 
-  // Role notices
+  // The inbox
   no_such_notice: "Avis introuvable.",
 
   // Reporting, from the reporter's side
@@ -1810,11 +1811,6 @@ export const FR: Catalogue = {
       `Signaler ${p.nickname}`,
   },
 
-  reportsReviewedNotice: {
-    reportsReviewed: (p: { count: number }) =>
-      `${counted(p.count, { one: "signalement que tu as envoyé a été examiné", other: "signalements que tu as envoyés ont été examinés" })}. Merci.`,
-  },
-
   restartVoteBanner: {
     proposerProposedRestarting: (p: { proposerNickname: string }) =>
       `${p.proposerNickname} propose de redémarrer la partie.`,
@@ -1830,28 +1826,6 @@ export const FR: Catalogue = {
     theCurrentGameIsRestarting: "La partie redémarre maintenant.",
     yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
       `${p.yes} oui · ${p.no} non · ${p.pending} en attente · ${p.requiredVotes} nécessaires`,
-  },
-
-  roleChangeNotice: {
-    youHaveBeenSignedOutEvery: "Tu as été déconnecté de tous tes appareils pour que le changement\n            prenne effet. Reconnecte-toi pour continuer.",
-    setUpNow: "Le configurer maintenant",
-    notNow: "Pas maintenant",
-    oneMoment: "Patiente…",
-    signInAgain: "Se reconnecter",
-    understood: "OK",
-  },
-
-  shareNotice: {
-    title: (p: { count: number }) =>
-      p.count === 1 ? "Ton dessin est dans la galerie" : "Tes dessins sont dans la galerie",
-    sharedYourDrawing: "{sharer} a partagé ton dessin de {prompt} dans la galerie.",
-    view: "Voir",
-    takeOut: "Le retirer",
-    takenOut: "Retiré",
-    andMore: (p: { count: number }) =>
-      `Et ${counted(p.count, { one: "autre dessin", other: "autres dessins" })}.`,
-    youCanAlways: "Tu peux retirer un dessin de la galerie à tout moment, depuis sa page ou depuis ton historique de parties.",
-    ok: "OK",
   },
 
   roomChatPanel: {
@@ -2390,9 +2364,6 @@ export const FR: Catalogue = {
 
   useFriendArrivalNotices: {
     wantsToBeFriends: (p: { name: string }) => `${p.name} veut être ton ami.`,
-    acceptedYourRequest: (p: { name: string }) => `${p.name} a accepté ta demande d’ami.`,
-    severalAccepted: (p: { count: number }) =>
-      `${counted(p.count, { one: "personne a accepté", other: "personnes ont accepté" })} tes demandes d’ami.`,
     accept: "Accepter",
     open: "Ouvrir",
     manyArrived: (p: { name: string; others: number }) =>
@@ -2450,9 +2421,46 @@ export const FR: Catalogue = {
     theDrawingThisWasAbout: "Le dessin concerné :",
     theDrawingsThisWasAbout: "Les dessins concernés :",
   },
+  inbox: {
+    inbox: "Boîte de réception",
+    openInboxUnread: (p: { count: number }) => `Boîte de réception, ${counted(p.count, { one: "message non lu", other: "messages non lus" })}`,
+    markAllRead: "Tout marquer comme lu",
+    markRead: "Marquer comme lu",
+    newGroup: "Nouveau",
+    earlierGroup: "Plus tôt",
+    showOlder: "Voir les plus anciens",
+    close: "Fermer la boîte de réception",
+    nothingHereYet: "Rien pour l’instant",
+    whatArrivesHere: "Ici arrivent les partages de tes dessins, les demandes d’ami et les messages au sujet de ton compte.",
+    sharedYourDrawing: "{sharer} a partagé ton dessin de {prompt} dans la galerie.",
+    yourDrawingWasShared: "Ton dessin de {prompt} a été partagé dans la galerie.",
+    noLongerInTheGallery: "N’est plus dans la galerie",
+    view: "Voir",
+    takeItOut: "Le retirer",
+    wantsToBeFriends: "{name} t’a envoyé une demande d’ami.",
+    accept: "Accepter",
+    decline: "Refuser",
+    friendsNow: "Vous êtes maintenant amis",
+    noLongerWaiting: "N’attend plus de réponse",
+    acceptedYourRequest: "{name} a accepté ta demande d’ami.",
+    invitedYouToPlay: "{name} t’invite à jouer.",
+    join: "Rejoindre",
+    expired: "Expirée",
+    reportsReviewed: (p: { count: number }) =>
+      `${counted(p.count, { one: "signalement que tu as envoyé a été examiné", other: "signalements que tu as envoyés ont été examinés" })}. Merci.`,
+    setUpTwoFactor: "Configurer la connexion en deux étapes",
+    offerEnded: "Cette proposition a pris fin",
+    acknowledged: "Lu",
+    readTheRules: "Lire les règles",
+    chooseAnotherPicture: "Choisir une autre image",
+    signedOutForRole: "Ton rôle a changé : ta session a été fermée partout. Reconnecte-toi pour continuer.",
+  },
+
   warningNotice: {
+    uploadAgainNow: "Tu peux en envoyer une autre dès maintenant.",
+    uploadAgainOn: (p: { date: string }) => `Tu pourras en envoyer une autre le ${p.date}.`,
     whatAWarningMeans:
-      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
+      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Une fois que tu l’as confirmé, rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
     yourPictureWasRemoved: "Ta photo a été retirée",
     aModeratorWarning: "Un avertissement de la modération",
     aReportAboutYourPicture: "Un signalement concernant ta photo a été examiné, et voici le résultat. Rien d’autre sur ton compte n’est concerné.",

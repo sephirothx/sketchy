@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.friends import ACCOUNT_REQUIRED_HEADER, create_friends_router
+from app.api.inbox import create_inbox_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
@@ -23,6 +24,7 @@ from app.db.models import UserBlock
 from app.domain_values import FriendshipState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.friends import FriendService, friendship_key
+from app.services.inbox import add_entry
 
 from tests.dbfixtures import create_test_db
 
@@ -41,6 +43,7 @@ async def env(monkeypatch):
     app.include_router(create_auth_router(users, factory))
     app.include_router(create_friends_router(factory, friends))
     app.include_router(create_user_blocks_router(factory, blocks, friends))
+    app.include_router(create_inbox_router(factory))
     clients: list[AsyncClient] = []
 
     def new_client() -> AsyncClient:
@@ -507,86 +510,73 @@ async def test_the_guest_refusal_names_itself_so_a_403_is_not_guessed_at(env):
     assert ACCOUNT_REQUIRED_HEADER not in anonymous.headers
 
 
-async def test_an_acceptance_is_owed_to_the_asker_however_late_they_read(env):
-    """The news survives the asker not being there for it.
+async def _inbox(client) -> list[tuple[str, str, str]]:
+    """Each friend entry: its kind, whom it names, and where it stands now."""
+    return [
+        (entry["kind"], entry["person"]["displayName"], entry["state"])
+        for entry in (await client.get("/api/inbox")).json()["entries"]
+        if entry["kind"] in ("friend_request", "friend_accepted")
+    ]
 
-    It used to be derived on the client, by watching a name move from
-    `outgoing` to `friends`. A client that never saw the `outgoing` state
-    cannot see that move: reload while the answer is in flight and the first
-    lists it ever reads already contain the friendship, so nothing is noticed
-    and the asker is never told - on that visit or any later one (#724).
-    """
+
+async def test_an_acceptance_is_owed_to_the_asker_however_late_they_read(env):
+    """The news survives the asker not being there for it: it is an entry in
+    their inbox (#1436, R-FRIEND-14), not a difference between two reads of
+    the lists, which a reload during the answer could never see (#724)."""
     new_client, _, _ = env
     ada_http, bob_http = new_client(), new_client()
     ada = await register(ada_http, "AdaOwed")
-    bob = await register(bob_http, "BobOwed")
+    await register(bob_http, "BobOwed")
+    bob_id = (await bob_http.get("/api/auth/me")).json()["id"]
 
-    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    # Nothing owed while it is still waiting.
-    assert (await ada_http.get("/api/users/me/friends")).json()["announce"] == []
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    # The asked account hears of the request; the asker is owed nothing yet.
+    assert await _inbox(bob_http) == [("friend_request", "AdaOwed", "pending")]
+    assert await _inbox(ada_http) == []
 
     await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
-
-    # Ada reads for the first time *after* the answer. There is no earlier
-    # read to compare against, and she is told anyway.
-    owed = (await ada_http.get("/api/users/me/friends")).json()["announce"]
-    assert [entry["userId"] for entry in owed] == [bob["id"]]
-    assert owed[0]["displayName"] == "BobOwed"
-
-    # It stays owed until it has actually been said: reading is not telling.
-    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
-
-    told = await ada_http.post(
-        "/api/users/me/friends/announced", json={"userIds": [bob["id"]]}
-    )
-    assert told.json() == {"ok": True, "announced": 1}
-    assert (await ada_http.get("/api/users/me/friends")).json()["announce"] == []
-
-    # Said once: a second acknowledgement takes nothing.
-    again = await ada_http.post(
-        "/api/users/me/friends/announced", json={"userIds": [bob["id"]]}
-    )
-    assert again.json() == {"ok": True, "announced": 0}
+    assert await _inbox(ada_http) == [("friend_accepted", "BobOwed", "friends")]
+    # Answering the request is reading it.
+    [request] = (await bob_http.get("/api/inbox")).json()["entries"]
+    assert request["read"] and request["state"] == "friends"
 
 
-async def test_only_the_asker_is_owed_the_news_of_an_acceptance(env):
-    """The one who accepted already knows: they did it."""
+async def test_a_declined_request_is_never_told_to_the_one_who_asked(env):
+    """R-FRIEND-04: the asker's inbox says nothing about a refusal - not a
+    line, not a count - while the one who declined keeps their own entry,
+    which says the request is no longer waiting."""
     new_client, _, _ = env
     ada_http, bob_http = new_client(), new_client()
-    ada = await register(ada_http, "AdaSide")
-    bob = await register(bob_http, "BobSide")
+    ada = await register(ada_http, "AdaAsks")
+    await register(bob_http, "BobDeclines")
+    bob_id = (await bob_http.get("/api/auth/me")).json()["id"]
 
-    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
-
-    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
-    assert (await bob_http.get("/api/users/me/friends")).json()["announce"] == []
-
-    # And the accepter cannot mark the asker's news as told for them.
-    taken = await bob_http.post(
-        "/api/users/me/friends/announced", json={"userIds": [ada["id"]]}
-    )
-    assert taken.json() == {"ok": True, "announced": 0}
-    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    await bob_http.delete(f"/api/users/me/friends/{ada['id']}")
+    assert (await ada_http.get("/api/inbox")).json() == {
+        "entries": [], "unreadCount": 0, "next": None, "mustAcknowledge": None, "pendingRole": None,
+    }
+    assert await _inbox(bob_http) == [("friend_request", "AdaAsks", "gone")]
 
 
-async def test_an_acknowledgement_naming_nothing_records_nothing(env):
-    """What a torn-down render sends, if it sends anything at all: the
-    message was never shown, so nothing is owed less than it was."""
+async def test_a_withdrawn_request_leaves_nothing_to_answer(env):
+    """Cancelled before it was answered, the request is about nothing: its
+    entry goes rather than offering Accept on something nobody is asking. A
+    second request brings it back to the top, unread."""
     new_client, _, _ = env
     ada_http, bob_http = new_client(), new_client()
-    ada = await register(ada_http, "AdaEmpty")
-    bob = await register(bob_http, "BobEmpty")
+    await register(ada_http, "AdaWithdraws")
+    await register(bob_http, "BobWaits")
+    bob_id = (await bob_http.get("/api/auth/me")).json()["id"]
 
-    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    await bob_http.post("/api/inbox/read", json={"all": True})
+    await ada_http.delete(f"/api/users/me/friends/{bob_id}")
+    assert await _inbox(bob_http) == []
 
-    empty = await ada_http.post(
-        "/api/users/me/friends/announced", json={"userIds": []}
-    )
-    assert empty.json() == {"ok": True, "announced": 0}
-    # Still owed, because nobody was told.
-    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    [entry] = (await bob_http.get("/api/inbox")).json()["entries"]
+    assert entry["state"] == "pending" and not entry["read"]
 
 
 async def test_a_request_answers_alike_whether_it_landed_was_blocked_or_named_nobody(env):
@@ -610,3 +600,26 @@ async def test_a_request_answers_alike_whether_it_landed_was_blocked_or_named_no
 
     answers = [(r.status_code, r.json()) for r in (landed, blocked, nobody)]
     assert answers == [(200, {"status": "pending"})] * 3, answers
+
+
+async def test_an_invitation_goes_with_the_friendship(env):
+    """Unfriended, the invitation's Join would only be refused; the entry goes
+    rather than offering it (R-FRIEND-14)."""
+    new_client, factory, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "AdaInvites")
+    await register(bob_http, "BobInvited")
+    bob_id = (await bob_http.get("/api/auth/me")).json()["id"]
+    await ada_http.post("/api/users/me/friends", json={"userId": bob_id})
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+    async with factory() as session:
+        async with session.begin():
+            await add_entry(
+                session, user_id=bob_id, kind="game_invite", subject_id=ada["id"],
+                params={"expiresAt": "2099-01-01T00:00:00+00:00"},
+            )
+    kinds = lambda page: [entry["kind"] for entry in page["entries"]]  # noqa: E731
+    assert "game_invite" in kinds((await bob_http.get("/api/inbox")).json())
+
+    await bob_http.delete(f"/api/users/me/friends/{ada['id']}")
+    assert "game_invite" not in kinds((await bob_http.get("/api/inbox")).json())

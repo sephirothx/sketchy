@@ -196,6 +196,8 @@ language" beside the lobby filter's globe, which means "every language". */
 export function AnyLanguageIcon(p: IconProps) { return <IconBase {...p}><path d="M4 3.5h9a2 2 0 0 1 2 2V11a2 2 0 0 1-2 2H8.5L5.5 16v-3H4a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" /><path d="M18 8.5h2a2 2 0 0 1 2 2V16a2 2 0 0 1-2 2h-1.5v3l-3-3H11a2 2 0 0 1-2-2v-1" /></IconBase>; }
 export function LockIcon(p: IconProps) { return <IconBase {...p}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></IconBase>; }
 export function InfoIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.5h.01" /></IconBase>; }
+export function BellIcon(p: IconProps) { return <IconBase {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></IconBase>; }
+export function InboxIcon(p: IconProps) { return <IconBase {...p}><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" /></IconBase>; }
 export function MailIcon(p: IconProps) { return <IconBase {...p}><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="m3 7 9 6.5L21 7" /></IconBase>; }
 export function DevicesIcon(p: IconProps) { return <IconBase {...p}><rect x="2" y="4" width="15" height="10" rx="2" /><path d="M6 18h7" /><path d="M9.5 14v4" /><rect x="17.5" y="9" width="5" height="9" rx="1.5" /></IconBase>; }
 export function ShieldIcon(p: IconProps) { return <IconBase {...p}><path d="M12 2.5 4.5 5.5v6c0 4.7 3.2 8.3 7.5 10 4.3-1.7 7.5-5.3 7.5-10v-6L12 2.5Z" /></IconBase>; }

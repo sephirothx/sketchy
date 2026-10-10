@@ -89,7 +89,7 @@ def create_gallery_router(
     game_history_repo: GameHistoryRepository,
     *,
     shelf: GalleryShelfCache | None = None,
-    on_share_notice: Callable[[str], Awaitable[None]] | None = None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None,
     on_shares_changed: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
 ) -> APIRouter:
     """`shelf` is the process-wide cache of This week; a router built
@@ -279,7 +279,7 @@ def create_gallery_router(
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         await announce_share(
             result,
-            on_share_notice=on_share_notice,
+            on_inbox_changed=on_inbox_changed,
             on_gallery_changed=shelf_cache.invalidate,
             on_shares_changed=on_shares_changed,
         )

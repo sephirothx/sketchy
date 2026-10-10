@@ -1,9 +1,10 @@
 """A moderator's warning reaches a player who is online when it is issued
-(R-MOD-12), whatever the page's own read of the pending warning is doing. The
-notice hears of a warning twice - a read of `GET /api/warnings/pending` and the
-`moderator_warning` push - and each test widens the window between them that
-CI hit by chance (#1336): a read already on its way when the push lands, and a
-push sent while the tab has no socket to carry it."""
+(R-MOD-12), whatever the page's own reads of the inbox are doing, and must be
+answered before they can go on (R-INBOX-04) - but never over a game
+(R-INBOX-02). The warning comes from `GET /api/inbox`, read on load, on every
+connection and on every `inbox_changed` push; each test widens a window CI hit
+by chance (#1336): a read already on its way when the push lands, and a push
+sent while the tab has no socket to carry it."""
 from __future__ import annotations
 
 import asyncio
@@ -11,10 +12,18 @@ import asyncio
 from playwright.async_api import Browser, Page, async_playwright, expect
 
 from app.domain_values import UserRole
-from tests.e2e.lobby_helpers import BASE_URL, register_account, use_guest_name
+from tests.e2e.lobby_helpers import (
+    BASE_URL,
+    join_by_code,
+    leave_room,
+    open_new_room,
+    register_account,
+    room_code,
+    use_guest_name,
+)
 from tests.e2e.staff_helpers import set_role
 
-PENDING = "**/api/warnings/pending"
+PENDING = "**/api/inbox"
 SOCKET = "**/socket.io/**"
 
 
@@ -65,6 +74,11 @@ async def test_a_read_already_on_its_way_does_not_take_a_pushed_warning_back():
             delivered: list[asyncio.Event] = []
 
             async def hold(route):
+                # Only the load's read: the push's own read, after the
+                # warning, goes straight through.
+                if held.is_set():
+                    await route.continue_()
+                    return
                 # The server answers now, before the warning exists; only the
                 # answer is late. Holding the request itself would let it
                 # reach the server after the warning and find it.
@@ -112,7 +126,7 @@ async def test_a_read_already_on_its_way_does_not_take_a_pushed_warning_back():
             # connects, and that read can land either side of the warning: one
             # that found it says what the push said. Requiring every answer to
             # be empty failed whenever the socket connected late (#1341, #1356).
-            assert answers and answers[0]["warning"] is None, answers
+            assert answers and answers[0]["mustAcknowledge"] is None, answers
             # A delivered answer is applied on the page's next task.
             await target.wait_for_timeout(300)
             assert not await target.evaluate("window.__warningTakenBack")
@@ -148,7 +162,7 @@ async def test_a_warning_pushed_while_the_tab_had_no_socket_shows_once_it_connec
             await target.route(SOCKET, polling)
             async with target.expect_response(PENDING) as first_read:
                 await target.reload()
-            assert (await (await first_read.value).json())["warning"] is None
+            assert (await (await first_read.value).json())["mustAcknowledge"] is None
 
             await _warn(admin, user_id, "No socket check")
             notice = _notice(target)
@@ -179,5 +193,52 @@ async def test_a_second_warning_issued_while_the_first_is_up_follows_it():
             await _warn(admin, user_id, "Second warning check")
             await notice.get_by_role("button", name="OK", exact=True).click()
             await expect(notice).to_contain_text("Second warning check")
+        finally:
+            await browser.close()
+
+
+async def test_a_warning_issued_mid_game_waits_for_the_game_and_then_holds_the_door():
+    """Nothing opens over a turn (R-INBOX-02): mid-game the bell counts it and
+    the dialog waits. Out of the game it is up and cannot be set aside, and
+    until it is answered the server refuses a new seat (R-INBOX-04)."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        try:
+            admin, target, user_id = await _admin_and_target(browser, "MidGame")
+            other = await (await browser.new_context()).new_page()
+            await open_new_room(target)
+            code = await room_code(target)
+            await other.goto(BASE_URL)
+            await use_guest_name(other, "MidGameOther")
+            await join_by_code(other, code)
+            await other.wait_for_selector('[data-testid="waiting-room"]')
+            await target.get_by_role("button", name="Start game").click()
+            await target.wait_for_selector(".game-room-playing")
+
+            await _warn(admin, user_id, "Mid game check")
+            await expect(target.get_by_test_id("inbox-count")).to_have_text("1", timeout=15_000)
+            await target.wait_for_timeout(500)
+            await expect(_notice(target)).to_have_count(0)
+
+            await leave_room(target)
+            await target.get_by_role("alertdialog").get_by_role("button", name="Leave game").click()
+            notice = _notice(target)
+            await expect(notice).to_be_visible(timeout=15_000)
+            await expect(notice).to_contain_text("Mid game check")
+            # Answered, never dismissed.
+            await target.keyboard.press("Escape")
+            await expect(notice).to_be_visible()
+
+            # And the server refuses a seat while it is unanswered, whatever
+            # a client shows.
+            refused = await target.evaluate(
+                """(code) => new Promise((resolve) => window.__SKETCHY_SOCKET__.emit(
+                    'join_room', {code, nickname: 'x'}, resolve))""",
+                code,
+            )
+            assert refused["errorCode"] == "warning_unread", refused
+
+            await notice.get_by_role("button", name="OK", exact=True).click()
+            await expect(notice).to_have_count(0)
         finally:
             await browser.close()
