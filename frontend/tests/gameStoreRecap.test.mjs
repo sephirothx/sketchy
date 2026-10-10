@@ -73,3 +73,30 @@ test("last_game moves a tab that missed the game's end into the waiting room", (
   store.applyLastGame(recap);
   assert.equal(useGameStore.getState().phase, "game_end", "a game-over screen already up stays up");
 });
+
+test("a drawing an administrator erased leaves the recap, and what was about it goes with it", () => {
+  // #1419: the entry stays, saying why; its reactions and shares go, and the
+  // most-reacted card is the one the server recomputed without it.
+  const store = useGameStore.getState();
+  store.reset();
+  store.setRoomState(roomState("room", "waiting"));
+  store.applyLastGame({
+    ...recap,
+    drawings: [
+      { ...recap.drawings[0], shares: ["p2"], shareWithdrawn: false, available: true },
+      { index: 1, turnId: "t2", reactions: [], roundNumber: 1, turnNumber: 2, available: true },
+    ],
+  });
+  assert.ok(useGameStore.getState().drawingReactions.t1);
+
+  store.removeRecapDrawing({ turnId: "t1", highlight: null });
+
+  const after = useGameStore.getState();
+  assert.deepEqual(
+    after.drawingRecap.map((entry) => [entry.turnId, entry.available, entry.removed ?? false]),
+    [["t1", false, true], ["t2", true, false]],
+  );
+  assert.equal(after.drawingReactions.t1, undefined);
+  assert.equal(after.drawingShares.t1, undefined);
+  assert.deepEqual(after.gameHighlights, [], "the most-reacted card went with its drawing");
+});

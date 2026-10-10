@@ -80,6 +80,7 @@ from app.canvas_storage import (
 )
 from app.services.inbox import (
     add_entry as add_inbox_entry,
+    forget_subjects as forget_inbox_subjects,
     add_reviewed_count,
     mark_read as mark_inbox_read,
 )
@@ -1105,6 +1106,87 @@ async def apply_gallery_decision(
     await session.flush()
     drawer = turn.drawer_user_id if turn is not None else None
     return turn_id, drawer
+
+
+async def erase_drawing_for_moderation(
+    session: AsyncSession,
+    turn_id: UUID,
+    *,
+    erased_by_user_id: UUID,
+    now: datetime,
+) -> tuple[UUID, UUID | None] | None:
+    """Erase one drawing for illegal content, in the caller's transaction
+    (#1419, R-MOD-22), so the audit event that records it commits with it.
+
+    Everywhere a player could meet it: the bytes go as an account erasure
+    takes them (`status` `deleted`, `ck_turn_drawings_erased`), and with them
+    every reaction, share and pin of it and the drawer's inbox entries about
+    it - erasure is a status on the row, so no cascade reaches those. What
+    stays is the row saying so (`moderation_erased_at`), and the report's
+    evidence copy, which the read routes hold back from all but
+    administrators.
+
+    The accounts first - the drawer's and the administrator's, shared, in one
+    ordered statement - and the drawing row after: the order an account's
+    erasure takes them in, whose own drawing writes this could otherwise
+    meet in a cycle. Answers the turn and the drawer's account, or ``None``
+    when there is no stored drawing with that id to erase."""
+    turn = await session.get(TurnRecord, turn_id)
+    if turn is None:
+        return None
+    accounts = {erased_by_user_id}
+    if turn.drawer_user_id is not None:
+        accounts.add(turn.drawer_user_id)
+    await erased_identity_ids(session, accounts)
+    drawing = await session.scalar(
+        select(TurnDrawing)
+        .where(
+            TurnDrawing.turn_id == turn_id,
+            TurnDrawing.status == TurnDrawingStatus.READY.value,
+        )
+        .options(defer(TurnDrawing.payload))
+        .with_for_update()
+    )
+    if drawing is None:
+        return None
+    await session.execute(
+        update(TurnDrawing)
+        .where(TurnDrawing.turn_id == turn_id)
+        .values(
+            status=TurnDrawingStatus.DELETED.value,
+            payload=None,
+            object_key=None,
+            checksum_sha256=None,
+            byte_size=None,
+            format_magic=None,
+            format_version=None,
+            deleted_at=now,
+            updated_at=now,
+            reaction_count=0,
+            hot_score=0.0,
+            gallery_share_count=0,
+            gallery_shared_at=None,
+            gallery_withdrawn_at=None,
+            moderation_erased_at=now,
+        )
+    )
+    await session.execute(
+        delete(TurnDrawingReaction).where(TurnDrawingReaction.turn_id == turn_id)
+    )
+    await session.execute(
+        delete(ProfileDrawingPin).where(ProfileDrawingPin.turn_id == turn_id)
+    )
+    await session.execute(
+        delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == turn_id)
+    )
+    # The drawer's "somebody shared your drawing" is about nothing they can
+    # see any more; an entry offering View on an erased drawing is worse
+    # than none.
+    await forget_inbox_subjects(
+        session, kinds=("drawing_shared",), subject_ids=[turn_id]
+    )
+    await session.flush()
+    return turn_id, turn.drawer_user_id
 
 
 def _prompt_usage_hash(list_ids: Sequence[UUID], usage: PromptUsage) -> str:
@@ -4110,7 +4192,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     # game detail never carries megabytes of canvas.
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.drawing
-                    ).load_only(TurnDrawing.status, TurnDrawing.gallery_withdrawn_at),
+                    ).load_only(
+                        TurnDrawing.status,
+                        TurnDrawing.gallery_withdrawn_at,
+                        TurnDrawing.moderation_erased_at,
+                    ),
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.participant_outcomes
                     ),
@@ -4180,8 +4266,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     TurnDetail(
                         id=_public_id(r.id),
                         stroke_count=r.stroke_count,
+                        # "removed" is how an administrator's erasure reads
+                        # (#1419): the row is `deleted` like any erasure, and
+                        # the players who were there are told why it went.
                         drawing_status=(
-                            r.drawing.status if r.drawing is not None else None
+                            None
+                            if r.drawing is None
+                            else "removed"
+                            if r.drawing.moderation_erased_at is not None
+                            else r.drawing.status
                         ),
                         round_number=r.round_number,
                         turn_number=r.turn_number,

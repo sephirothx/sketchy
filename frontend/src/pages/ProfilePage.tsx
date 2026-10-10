@@ -164,7 +164,8 @@ function PlayerName({
 /** Why a turn has no drawing to show, in the words the state actually means. */
 function drawingNote(turn: GameTurn): string {
   if (turn.drawingStatus === "unavailable") return ui.profilePage.notKept;
-  if (turn.drawingStatus === "deleted") return "erased";
+  if (turn.drawingStatus === "removed") return ui.profilePage.removedByModeration;
+  if (turn.drawingStatus === "deleted") return ui.profilePage.erased;
   if (turn.strokeCount === 0) return ui.profilePage.nothingDrawn;
   return "—";
 }

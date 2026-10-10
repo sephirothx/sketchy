@@ -279,6 +279,8 @@ def test_the_recap_is_metadata_only_and_offered_only_while_waiting():
         "prompt": "apple",
         "actionCount": 0,
         "available": True,
+        # Not erased by an administrator since (#1419).
+        "removed": False,
         # Nobody has shared it to the Gallery (#1430).
         "shares": [],
         "shareWithdrawn": False,

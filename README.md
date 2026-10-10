@@ -116,7 +116,9 @@ keyboard that takes half the screen, and one thumb.
   reaction per player per drawing; reactions given outside the room count but are not
   named. "This week" — the six most-reacted drawings shared in the last seven days — sits in
   the gallery's rail. A drawing can be reported from the gallery, a moderator can hide
-  one from it without touching the players' own history, and an operator switch can
+  one from it without touching the players' own history, an administrator can erase an
+  illegal one from everywhere — history included, where it then reads *Removed by
+  moderation* — and an operator switch can
   hold This week for review while the rest of the gallery publishes freely. A signed-out visitor sees
   neither the page nor the shelf.
 - Friends — registered players add each other from a player's profile or from a
@@ -1708,7 +1710,13 @@ cross-room, wrong-author, or mismatched game/turn evidence.
 
 Only moderators and administrators can list and resolve or dismiss reports via
 `/api/moderation/reports`. Review is one-way: a pending report receives one
-resolution and cannot later be silently rewritten. Protected report evidence
+resolution and cannot later be silently rewritten. An administrator can also
+**erase a drawing** for illegal content (`POST /api/moderation/drawings/{turn_id}/erase`,
+step-up, audited): it leaves every history, the gallery, pins and an open recap,
+and only the copy kept with the report remains, for administrators alone. What to do
+with a report beyond the buttons — the order of work, danger to life, sexual content
+involving minors, reporting to the police — is the
+[moderation runbook](docs/moderation-runbook.md). Protected report evidence
 survives account anonymization. A player's data export includes their own
 report text and submitted evidence, but excludes the reported account ID,
 reviewer identity, and internal resolution note.
@@ -1901,6 +1909,7 @@ docs/
   wire-protocol.md  Every Socket.IO event, the binary drawing formats, and the REST surface
   database.md       Every table, its columns and constraints, and the flows that write them
   requirements.md   Numbered MUST/MUST NOT requirements, non-goals, and traceability
+  moderation-runbook.md  What moderators and administrators do with a report, beyond the buttons
 scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite

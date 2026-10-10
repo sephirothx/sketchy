@@ -108,7 +108,9 @@ export interface GameTurn {
   promptSourceKind: "curated" | "custom" | "builtin_fallback";
   strokeCount: number;
   /** Absent for turns played before drawings were kept. */
-  drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;
+  /** `removed`: erased by an administrator (#1419); `deleted`: erased with
+      its drawer's account. */
+  drawingStatus: "ready" | "unavailable" | "deleted" | "removed" | "pending" | "failed" | null;
   participantOutcomes: TurnParticipantOutcome[];
   /** The reactions given by a seat, named; the ones from outside the room are only in the counts. */
   reactions: HistoryReaction[];

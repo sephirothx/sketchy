@@ -9,6 +9,7 @@ import type {
   ColorMode,
   DrawingReaction,
   DrawingReactionEvent,
+  DrawingRemovedEvent,
   DrawingSharedEvent,
   DrawingShareState,
   DrawingToolGroup,
@@ -214,6 +215,7 @@ interface GameStore {
   applyLastGame: (payload: LastGamePayload) => void;
   applyDrawingReaction: (event: DrawingReactionEvent) => void;
   applyDrawingShare: (event: DrawingSharedEvent) => void;
+  removeRecapDrawing: (event: DrawingRemovedEvent) => void;
   clearDrawingReactions: () => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
@@ -578,6 +580,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         [event.turnId]: { shares: event.shares, withdrawn: event.shareWithdrawn },
       },
     })),
+  // An administrator erased it (#1419): the entry stays, saying so, and
+  // everything that was about it goes.
+  removeRecapDrawing: (event) =>
+    set((s) => {
+      const drawingReactions = { ...s.drawingReactions };
+      delete drawingReactions[event.turnId];
+      const drawingShares = { ...s.drawingShares };
+      delete drawingShares[event.turnId];
+      return {
+        drawingRecap: s.drawingRecap.map((entry) =>
+          entry.turnId === event.turnId ? { ...entry, available: false, removed: true } : entry,
+        ),
+        drawingReactions,
+        drawingShares,
+        gameHighlights: withMostReacted(s.gameHighlights, event.highlight),
+      };
+    }),
   clearDrawingReactions: () =>
     set({ drawingReactions: {}, drawingShares: {}, currentTurnId: null, lastReactionEvent: null }),
   dismissGameEnd: () => set({ phase: "idle" }),

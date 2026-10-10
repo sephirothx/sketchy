@@ -417,6 +417,10 @@ class DrawingRecapEntry:
     # A guest drawer, so the recap credits them in the guest style every other
     # name wears rather than upright in a colour a guest never chose (#1279).
     drawer_is_anonymous: bool = False
+    # Erased by an administrator after the game (#1419): the canvas is gone
+    # from the recap as from history, and the recap says why rather than
+    # calling it a drawing the room's budget could not keep.
+    removed: bool = False
 
     @property
     def is_available(self) -> bool:
@@ -437,6 +441,7 @@ class DrawingRecapEntry:
             **({"prompts": dict(self.prompts)} if self.prompts else {}),
             "actionCount": self.action_count,
             "available": self.is_available,
+            "removed": self.removed,
         }
 
     def payload(self, index: int) -> dict:
@@ -720,6 +725,22 @@ class Room:
             shares.pop(token, None)
         if not shares:
             self.drawing_shares.pop(turn_id, None)
+
+    def erase_recap_drawing(self, turn_id: str) -> bool:
+        """Take an erased drawing out of this room's recap (#1419): its canvas,
+        and the reactions and shares that were about it. The entry stays,
+        saying it was removed, so the recap still lists every turn played.
+        Answers whether this recap showed it."""
+        for index, drawing in enumerate(self.last_game_drawings):
+            if drawing.turn_id == turn_id:
+                self.last_game_drawings[index] = replace(
+                    drawing, canvas_history=None, removed=True
+                )
+                self.drawing_reactions.pop(turn_id, None)
+                self.drawing_shares.pop(turn_id, None)
+                self.drawing_share_withdrawn.discard(turn_id)
+                return True
+        return False
 
     def withdraw_drawing(self, turn_id: str) -> None:
         """The drawer took the drawing back out (R-SHARE-04): every share goes,

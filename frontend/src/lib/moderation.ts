@@ -63,6 +63,9 @@ export interface PlayerReportMessageEvidence {
     bytes come from `fetchReportDrawing`, in the wire format a live canvas uses. */
 export interface PlayerReportDrawing {
   turnId: string;
+  /** An administrator erased this drawing everywhere (#1419). The copy kept
+      with the report opens for administrators only. */
+  erased?: boolean;
   roundNumber: number;
   /** What the drawer was asked to draw - server-held, so it may be read as fact. */
   prompt: string;
@@ -103,6 +106,8 @@ export interface IncidentReport {
   contextSnapshot: Record<string, unknown>;
   gameId: string | null;
   turnId: string | null;
+  /** The reported turn's drawing was erased by an administrator (#1419). */
+  turnErased?: boolean;
   createdAt: string;
   /** The canvas as this reporter saw it, if they attached one. */
   drawing: PlayerReportDrawing | null;
@@ -727,6 +732,16 @@ export function decideGalleryDrawing(
   return apiRequest(`/api/moderation/gallery/${encodeURIComponent(turnId)}`, {
     method: "PATCH",
     body: { decision, note },
+  });
+}
+
+/** Erase one drawing for illegal content, everywhere a player could meet it
+    (#1419, R-MOD-22). Administrators only, behind a step-up; it cannot be
+    undone. The report's evidence copy stays, for administrators alone. */
+export function eraseDrawing(turnId: string, note: string): Promise<{ turnId: string; erased: boolean }> {
+  return apiRequest(`/api/moderation/drawings/${encodeURIComponent(turnId)}/erase`, {
+    method: "POST",
+    body: { note },
   });
 }
 

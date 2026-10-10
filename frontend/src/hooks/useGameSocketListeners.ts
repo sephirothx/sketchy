@@ -18,6 +18,7 @@ import type {
   CorrectGuessPayload,
   DrawingReaction,
   DrawingReactionEvent,
+  DrawingRemovedEvent,
   DrawingSharedEvent,
   GameEndedPayload,
   GuessBreakdown,
@@ -250,6 +251,11 @@ export function useGameSocketListeners() {
       if (payload.shareWithdrawn) usePinsStore.getState().forget(payload.turnId);
     };
 
+    const onDrawingRemoved = (payload: DrawingRemovedEvent) => {
+      store.getState().removeRecapDrawing(payload);
+      usePinsStore.getState().forget(payload.turnId);
+    };
+
     const onSyncGame = (payload: {
       phase: string;
       turnId?: string;
@@ -313,6 +319,7 @@ export function useGameSocketListeners() {
     socket.on("sync_game", onSyncGame);
     socket.on("drawing_reaction", onDrawingReaction);
     socket.on("drawing_shared", onDrawingShared);
+    socket.on("drawing_removed", onDrawingRemoved);
 
     return () => {
       socket.off("room_state", onRoomState);
@@ -331,6 +338,7 @@ export function useGameSocketListeners() {
       socket.off("sync_game", onSyncGame);
       socket.off("drawing_reaction", onDrawingReaction);
       socket.off("drawing_shared", onDrawingShared);
+      socket.off("drawing_removed", onDrawingRemoved);
     };
   }, []);
 }
