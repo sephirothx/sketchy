@@ -177,6 +177,49 @@ async def _identity_of(ctx: HandlerContext, user_id: str) -> PresenceIdentity | 
     return cached.get(user_id)
 
 
+async def _lobby_recipients(ctx: HandlerContext, author_user_id: str) -> list[str] | None:
+    """Who in the open lobbies may be sent something of this author's: `None`
+    for everybody - one broadcast - when nobody muted them, else the sockets
+    whose account did not. The callers emit by name, so the wire contract
+    (`tests/test_wire_contract.py`) can read every event name."""
+    blockers = (
+        await ctx.block_service.blockers_of(author_user_id)
+        if ctx.block_service is not None
+        else frozenset()
+    )
+    if not blockers:
+        return None
+    return [
+        member
+        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
+        if (ctx.presence.user_for_sid(member) or "") not in blockers
+    ]
+
+
+async def announce_lobby_line_visibility(
+    ctx: HandlerContext,
+    *,
+    retained_message_id: str,
+    author_user_id: str,
+    hidden: bool,
+    text: str | None,
+) -> None:
+    """A moderator hid a lobby line, or showed it again (#1435): the ring
+    keeps the change for the next arrival, and every open lobby holding the
+    line replaces it in place. Un-hidden carries the words back, so it goes
+    only where the line itself would - not to whoever muted its author
+    (R-LCHAT-03); hidden carries none, and the same rule keeps it simple."""
+    ctx.lobby_chat.set_hidden(retained_message_id, hidden)
+    payload: dict = {"retainedMessageId": retained_message_id, "hidden": hidden}
+    if not hidden and text is not None:
+        payload["text"] = text
+    recipients = await _lobby_recipients(ctx, author_user_id)
+    if recipients is None:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, room=LOBBY_CHANNEL)
+    elif recipients:
+        await ctx.sio.emit("lobby_chat_line_changed", payload, to=recipients)
+
+
 async def _emit_lobby_chat(ctx: HandlerContext, line, *, sender_user_id: str) -> None:
     """One broadcast, or a recipient list when somebody has muted the author.
 
@@ -185,21 +228,11 @@ async def _emit_lobby_chat(ctx: HandlerContext, line, *, sender_user_id: str) ->
     block list and always receives; the sender is never in their own
     blockers, so they always see their line.
     """
-    blockers = (
-        await ctx.block_service.blockers_of(sender_user_id)
-        if ctx.block_service is not None
-        else frozenset()
-    )
     payload = line.payload()
-    if not blockers:
+    recipients = await _lobby_recipients(ctx, sender_user_id)
+    if recipients is None:
         await ctx.sio.emit("lobby_chat_message", payload, room=LOBBY_CHANNEL)
-        return
-    recipients = [
-        member
-        for member, _ in ctx.sio.manager.get_participants("/", LOBBY_CHANNEL)
-        if (ctx.presence.user_for_sid(member) or "") not in blockers
-    ]
-    if recipients:
+    elif recipients:
         await ctx.sio.emit("lobby_chat_message", payload, to=recipients)
 
 

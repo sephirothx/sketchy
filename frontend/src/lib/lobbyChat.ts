@@ -27,6 +27,9 @@ export interface LobbyChatLine {
   sentAt: number;
   /** Present only when retention took the row - the id a report can cite. */
   retainedMessageId?: string;
+  /** Hidden by a moderator (#1435): shown as "This message was deleted",
+      and the server sends no text for it. */
+  hidden?: boolean;
 }
 
 export interface LobbyChatState {
@@ -75,7 +78,36 @@ export function parseLine(value: unknown): LobbyChatLine | null {
   if (typeof row.retainedMessageId === "string" && row.retainedMessageId) {
     line.retainedMessageId = row.retainedMessageId;
   }
+  if (row.hidden === true) {
+    line.hidden = true;
+    line.text = "";
+  }
   return line;
+}
+
+/** A moderator hid a line or showed it again (#1435): the line we hold is
+    replaced where it stands, by the id that names it everywhere. Hidden, its
+    words go even from memory; shown again, they come back with the event.
+    The same state back when we do not hold it, or it already says so, so
+    nothing re-renders for it. */
+export function applyLineVisibility(state: LobbyChatState, payload: unknown): LobbyChatState {
+  if (!payload || typeof payload !== "object") return state;
+  const event = payload as Record<string, unknown>;
+  if (typeof event.retainedMessageId !== "string" || typeof event.hidden !== "boolean") return state;
+  const hidden = event.hidden;
+  const text = typeof event.text === "string" ? event.text : null;
+  if (!hidden && text === null) return state;
+  let changed = false;
+  const lines = state.lines.map((line) => {
+    if (line.retainedMessageId !== event.retainedMessageId) return line;
+    if (Boolean(line.hidden) === hidden && (hidden || line.text === text)) return line;
+    changed = true;
+    if (hidden) return { ...line, hidden: true, text: "" };
+    const shown: LobbyChatLine = { ...line, text: text as string };
+    delete shown.hidden;
+    return shown;
+  });
+  return changed ? { ...state, lines } : state;
 }
 
 function capped(lines: LobbyChatLine[]): LobbyChatLine[] {
@@ -166,6 +198,8 @@ export function reportableLine(
 ): boolean {
   if (!viewer || viewer.isAnonymous) return false;
   if (line.userId === viewer.id) return false;
+  // Already hidden by a moderator: there is nothing left to show them (#1435).
+  if (line.hidden) return false;
   return Boolean(line.retainedMessageId);
 }
 

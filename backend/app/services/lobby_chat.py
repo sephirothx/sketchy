@@ -32,7 +32,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import logging
 from typing import Iterable
@@ -59,6 +59,10 @@ class LobbyChatLine:
     text: str
     sent_at: datetime
     retained_message_id: str | None = None
+    # Hidden by a moderator (#1435): sent as "This message was deleted", with
+    # no text, to everybody - the author included. Kept here so un-hiding
+    # needs nothing but the flag.
+    hidden: bool = False
 
     def payload(self) -> dict:
         """The wire shape, `LobbyChatMessage` in the wire protocol.
@@ -74,7 +78,8 @@ class LobbyChatLine:
             "displayName": self.display_name,
             "nameColor": self.name_color,
             "isAnonymous": self.is_anonymous,
-            "text": self.text,
+            # Never the words of a hidden line, to anybody (#1435).
+            "text": "" if self.hidden else self.text,
             # Whole seconds since the epoch: the clock beside a line shows
             # minutes, and an ISO string with microseconds was a fifth of a
             # line's weight on the wire (#885).
@@ -82,6 +87,8 @@ class LobbyChatLine:
         }
         if self.retained_message_id is not None:
             payload["retainedMessageId"] = self.retained_message_id
+        if self.hidden:
+            payload["hidden"] = True
         return payload
 
 
@@ -110,6 +117,7 @@ class LobbyChatLog:
         text: str,
         sent_at: datetime,
         retained_message_id: str | None = None,
+        hidden: bool = False,
     ) -> LobbyChatLine:
         """Number one accepted line and keep it.
 
@@ -128,6 +136,7 @@ class LobbyChatLog:
             text=text,
             sent_at=sent_at,
             retained_message_id=retained_message_id,
+            hidden=hidden,
         )
         self._lines.append(line)
         return line
@@ -154,6 +163,8 @@ class LobbyChatLog:
                 text=row.text,
                 sent_at=row.created_at,
                 retained_message_id=str(row.id),
+                # Still hidden after a restart, in its place (#1435).
+                hidden=row.hidden_at is not None,
             )
             count += 1
         return count
@@ -174,6 +185,16 @@ class LobbyChatLog:
         """Who wrote what is held past `after`, for the block lookups an
         arrival needs - only for the lines it will actually be sent."""
         return {line.user_id for line in self._lines if line.seq > after}
+
+    def set_hidden(self, retained_message_id: str, hidden: bool) -> bool:
+        """Hide one line, or show it again (#1435), keeping its place and its
+        number. Answers whether the ring still held it - a line older than
+        the backlog is only in the clients that kept it."""
+        for index, line in enumerate(self._lines):
+            if line.retained_message_id == retained_message_id:
+                self._lines[index] = replace(line, hidden=hidden)
+                return True
+        return False
 
     def drop_author(self, user_id: str) -> None:
         """Forget every line by one account.

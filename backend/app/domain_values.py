@@ -541,6 +541,8 @@ class AuditTargetType(StrEnum):
     DRAWING = "drawing"
     APP_CONFIG = "app_config"
     BUG_REPORT = "bug_report"
+    # A lobby line a moderator hid or un-hid (#1435).
+    LOBBY_MESSAGE = "lobby_message"
 
 
 SCORING_MODES = tuple(mode.value for mode in ScoringMode)

@@ -9,6 +9,7 @@ recipients without anybody resyncing over the gap.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -518,3 +519,41 @@ async def test_the_baseline_has_a_budget_of_its_own(monkeypatch):
     assert refused["retryAfterMs"] > 0
     # Lobby chat is not spent by it.
     assert (await say(sio, "sid-a", "still here"))["ok"] is True
+
+
+async def test_a_line_a_moderator_hid_changes_in_every_lobby_and_its_words_go_only_where_it_may(
+    monkeypatch,
+):
+    """#1435: hiding tells every open lobby to show the placeholder in its
+    place, and the next arrival is handed it hidden. Showing it again carries
+    the words back, so it goes only where the line itself would - not to the
+    one who muted its author (R-LCHAT-03)."""
+    from app.handlers.lobby import announce_lobby_line_visibility
+
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    ctx.block_service = muted({"user-ada": {"user-bob"}})
+    for sid, token in (("sid-a", "tok-a"), ("sid-b", "tok-b"), ("sid-c", "tok-c")):
+        await arrive(ctx, sio, sid, token)
+    line = ctx.lobby_chat.append(
+        user_id="user-ada", display_name="Ada", name_color=None, is_anonymous=False,
+        text="regrettable", sent_at=datetime.now(timezone.utc), retained_message_id="msg-1",
+    )
+    sio.emit.reset_mock()
+
+    await announce_lobby_line_visibility(
+        ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=True, text=None
+    )
+    [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
+    assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": True}
+    assert set(call.kwargs["to"]) == {"sid-a", "sid-c"}
+    [held] = ctx.lobby_chat.backlog_for()
+    assert held.seq == line.seq and held.payload()["text"] == "" and held.payload()["hidden"] is True
+
+    sio.emit.reset_mock()
+    await announce_lobby_line_visibility(
+        ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=False, text="regrettable"
+    )
+    [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
+    assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": False, "text": "regrettable"}
+    assert "sid-b" not in call.kwargs["to"]
+    assert ctx.lobby_chat.backlog_for()[0].payload()["text"] == "regrettable"

@@ -205,6 +205,12 @@ export function useLobbyChannel(): void {
     // A line before the baseline is usually in the backlog the answer carries;
     // one said after the backlog was read is not, so it is held like the rest
     // and the store's sequence numbers drop the duplicates.
+    // Applied to whatever lines are held, baseline or not: a backlog asked
+    // for meanwhile is read from the ring the server changed first (#1435).
+    const onChatLineChanged = (payload: unknown) => {
+      if (cancelled) return;
+      useLobbyChatStore.getState().receiveLineChange(payload);
+    };
     const onChat = (payload: unknown) => {
       if (cancelled) return;
       if (!baseline) {
@@ -245,6 +251,7 @@ export function useLobbyChannel(): void {
     socket.on("lobby_presence_changed", onPresence);
     socket.on("lobby_rooms_changed", onRooms);
     socket.on("lobby_chat_message", onChat);
+    socket.on("lobby_chat_line_changed", onChatLineChanged);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     document.addEventListener("visibilitychange", onVisibility);
@@ -261,6 +268,7 @@ export function useLobbyChannel(): void {
       socket.off("lobby_presence_changed", onPresence);
       socket.off("lobby_rooms_changed", onRooms);
       socket.off("lobby_chat_message", onChat);
+      socket.off("lobby_chat_line_changed", onChatLineChanged);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       document.removeEventListener("visibilitychange", onVisibility);

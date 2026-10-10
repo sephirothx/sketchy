@@ -6,6 +6,7 @@ import {
   MAX_HELD_LINES,
   applyChatBacklog,
   applyChatLine,
+  applyLineVisibility,
   chatResumeRequest,
   chatTimeLabel,
   parseLine,
@@ -169,4 +170,26 @@ test("a line is reportable only by a registered viewer, only when retained, and 
   // A socket with no account yet reads the lobby, and reports nothing.
   assert.equal(reportableLine(retained, null), false);
   assert.equal(reportableLine(retained, undefined), false);
+});
+
+
+test("a line a moderator hid is held without its words, and shown again in place", () => {
+  // #1435: matched by the id that names it everywhere, replaced where it
+  // stands; an unknown or malformed change leaves the state as it was.
+  let held = applyChatLine(EMPTY_LOBBY_CHAT, line(1, { retainedMessageId: "msg-1" }));
+  held = applyChatLine(held, line(2, { retainedMessageId: "msg-2" }));
+
+  const hidden = applyLineVisibility(held, { retainedMessageId: "msg-1", hidden: true });
+  assert.deepEqual(hidden.lines.map((l) => [l.seq, l.hidden ?? false, l.text]), [[1, true, ""], [2, false, "line 2"]]);
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: true }), hidden, "already so");
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "nope", hidden: true }), hidden);
+  assert.equal(applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false }), hidden, "no words, no change");
+
+  const shown = applyLineVisibility(hidden, { retainedMessageId: "msg-1", hidden: false, text: "line 1" });
+  assert.deepEqual(shown.lines[0], held.lines[0], "as it was before it was hidden");
+
+  // From the wire: a hidden line arrives with no words, and cannot be reported.
+  const parsed = parseLine({ ...line(3, { retainedMessageId: "msg-3" }), text: "", hidden: true });
+  assert.equal(parsed.hidden, true);
+  assert.equal(reportableLine(parsed, { id: "user-bob", isAnonymous: false }), false);
 });
