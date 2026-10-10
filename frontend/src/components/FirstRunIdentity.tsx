@@ -1,5 +1,4 @@
 import { useId, useState, type CSSProperties } from "react";
-import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -11,7 +10,6 @@ import { DOODLE_SPRITE } from "../lib/avatarDoodles";
 import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
 import { IdentityAgreement } from "./IdentityAgreement";
-import { InfoIcon } from "./icons";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
@@ -150,19 +148,13 @@ export function FirstRunIdentity() {
         <button type="submit" className="btn btn-secondary first-run-guest-submit" disabled={busy}>
           {busy ? ui.firstRunIdentity.saving : ui.firstRunIdentity.stickItOn}
         </button>
-        {/* The tag's fine print. Before a name there is no chip and its menu,
-            and on a phone the header has no room for its site links, so
-            without this a visitor could not read the rules of a game they
-            were about to join. Small and plain under the button, so it never
-            reads as a second thing to press. */}
-        <Link to="/rules" className="first-run-rules">
-          <InfoIcon size={13} />
-          {ui.accountMenu.rules}
-        </Link>
-        {/* The moment a new identity starts playing is the moment to say
-            what it agrees to: the age, and that a drawing in a public room
-            is published (R-GAL-01, #1417). Fine print, like the link above. */}
-        <IdentityAgreement className="first-run-fineprint" />
+        {/* The tag's fine print, one row: the rules - before a name there is
+            no chip and its menu, and on a phone the header has no room for
+            its site links, so without this a visitor could not read the
+            rules of a game they were about to join - then the terms, the
+            privacy notice and the age (#1417). Small and plain under the
+            button, so it never reads as a second thing to press. */}
+        <IdentityAgreement withRules className="first-run-fineprint" />
       </form>
 
       <div className="first-run-say">

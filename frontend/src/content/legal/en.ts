@@ -50,8 +50,11 @@ export const LEGAL_EN: LegalDocuments = {
             "profile picture if you upload one, your friends, the players you " +
             "block, your saved room settings, and the lists you star.",
           "Your games: the rooms you played in, your guesses, points and " +
-            "scores, your reactions, and the drawings you made.",
+            "scores, your reactions, the drawings you made, and the drawings " +
+            "you shared to the Gallery.",
           "Chat, in rooms and in the lobby.",
+          "The messages in your inbox, about your account, your drawings " +
+            "and your friends.",
           "The prompt lists you write, and whether you published them.",
           "Reports you send, and reports about you, with the messages and " +
             "drawings they point to; and any warning or suspension given to " +
@@ -98,13 +101,18 @@ export const LEGAL_EN: LegalDocuments = {
         body: [
           "The people in a room see your name, your messages, your drawings " +
             "and your score.",
-          "Drawings made in a public room are shown in the Gallery, where " +
-            "anybody can see them, with the name they were drawn under: " +
-            "playing in a public room is playing in public, under the terms " +
-            "of use. Drawings from a private room are seen only by the people " +
-            "who were in it. Deleting your account erases every drawing you " +
-            "made, except a copy attached to a report, which stays with the " +
-            "report; to have a single drawing removed, write to {contact}.",
+          "A drawing is shown in the Gallery, where anybody can see it, only " +
+            "once somebody shares it, with the name it was drawn under and " +
+            "the name of the first player who shared it. You can share your " +
+            "own drawings from any room. In a public room the other players " +
+            "can share yours too, without asking first: playing in a public " +
+            "room is playing in public, under the terms of use. You can take " +
+            "any drawing of yours out of the Gallery, and nobody can share it " +
+            "again unless you do. Drawings from a private room are seen only " +
+            "by the people who were in it, unless you share your own.",
+          "Deleting your account erases every drawing you made, except a " +
+            "copy attached to a report, which stays with the report; to have " +
+            "a single drawing erased, write to {contact}.",
           "A prompt list you publish can be read by everybody, with your name " +
             "as its author. Your profile shows what you have chosen to show.",
         ],
@@ -134,10 +142,13 @@ export const LEGAL_EN: LegalDocuments = {
         body: [],
         items: [
           "Chat: 30 days, except lines cited in a report, which stay with it.",
-          "Reports and what they cite, warnings, suspensions, the security " +
-            "and moderation log, and bug reports: kept as the lasting record " +
-            "of moderation and of the service's security, also after you " +
-            "delete your account. Log entries then no longer name you.",
+          "Reports and what they cite, suspensions, the security and " +
+            "moderation log, and bug reports: kept as the lasting record of " +
+            "moderation and of the service's security, also after you delete " +
+            "your account. Log entries then no longer name you.",
+          "Warnings: 12 months, and deleted with your account.",
+          "Messages in your inbox: 90 days, read or not, and deleted with " +
+            "your account.",
           "Bug-report screenshots: until the report is dealt with, and never " +
             "more than 90 days.",
           "Guests: removed after 30 days without a finished game, or after " +
@@ -257,7 +268,8 @@ export const LEGAL_EN: LegalDocuments = {
         body: [
           "What you draw, write and publish stays yours. So that the game " +
             "can work, you allow the operator to store, show and copy it " +
-            "within Sketchy — in your room, in the Gallery for public rooms, " +
+            "within Sketchy — in your room, in the Gallery once a drawing is " +
+            "shared, " +
             "in prompt lists you publish and in copies other players make of " +
             "them — free of charge, worldwide, for as long as Sketchy keeps " +
             "it.",

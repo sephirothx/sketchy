@@ -537,7 +537,7 @@ export const NL: Catalogue = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Maak je rol als ${p.role === "admin" ? "beheerder" : "moderator"} af`,
     agreeToRules:
-      "Door een account te maken accepteer je de {terms}, ga je ermee akkoord de {rules} te volgen en bevestig je dat je minstens {age} jaar oud bent. In de {privacy} staat hoe je gegevens worden gebruikt.",
+      "Door een account te maken accepteer je de {terms} en {rules} en bevestig je dat je minstens {age} jaar oud bent. Zie de {privacy}.",
     reportBug: "Een bug melden",
     account: "Account",
     settings: "Instellingen",
@@ -1003,8 +1003,10 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "Door te spelen accepteer je de {terms} en bevestig je dat je minstens {age} jaar oud bent. Tekeningen uit openbare kamers verschijnen in de openbare Galerij: zie de {privacy}.",
+    terms: "Voorwaarden",
+    privacy: "Privacy",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy is voor iedereen van ${p.age} jaar of ouder`,
     nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
@@ -1964,7 +1966,7 @@ export const NL: Catalogue = {
     buyLettersAndWheelNeedScoring: "Letters kopen en Rad van fortuin hebben puntentelling nodig.",
     allColors: "Alle kleuren",
     noScoring: "Zonder punten",
-    listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen, en de tekeningen verschijnen in de openbare Galerij.",
+    listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen, en wie meespeelt kan de tekeningen in de Galerij delen.",
     joinableOnlyWithTheCode: "Alleen toegankelijk met de code of de uitnodigingslink.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} eigen`,

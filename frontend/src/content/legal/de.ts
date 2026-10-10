@@ -40,8 +40,11 @@ export const LEGAL_DE: LegalDocuments = {
             "die du blockierst, deine gespeicherten Raumeinstellungen und die " +
             "Listen, die du mit einem Stern markierst.",
           "Deine Spiele: die Räume, in denen du gespielt hast, deine Tipps, " +
-            "Punkte und Ergebnisse, deine Reaktionen und deine Zeichnungen.",
+            "Punkte und Ergebnisse, deine Reaktionen, deine Zeichnungen und die " +
+            "Zeichnungen, die du in die Galerie gestellt hast.",
           "Der Chat, in Räumen und in der Lobby.",
+          "Die Nachrichten in deinem Posteingang, zu deinem Konto, deinen " +
+            "Zeichnungen und deinen Freundschaften.",
           "Die Begriffslisten, die du schreibst, und ob du sie veröffentlicht hast.",
           "Meldungen, die du abschickst, und Meldungen über dich, mit den " +
             "Nachrichten und Zeichnungen, auf die sie sich beziehen; dazu jede " +
@@ -94,14 +97,21 @@ export const LEGAL_DE: LegalDocuments = {
         body: [
           "Wer mit dir in einem Raum ist, sieht deinen Namen, deine Nachrichten, " +
             "deine Zeichnungen und deine Punkte.",
-          "Zeichnungen aus einem öffentlichen Raum erscheinen in der Galerie, wo " +
-            "jeder sie sehen kann, mit dem Namen, unter dem sie gezeichnet " +
-            "wurden: Wer in einem öffentlichen Raum spielt, spielt öffentlich, " +
-            "nach den Nutzungsbedingungen. Zeichnungen aus einem privaten Raum " +
-            "sehen nur die, die darin waren. Wenn du dein Konto löschst, wird " +
-            "jede deiner Zeichnungen gelöscht, außer einer Kopie, die einer " +
-            "Meldung beigefügt ist und bei der Meldung bleibt; soll nur eine " +
-            "einzelne entfernt werden, schreib an {contact}.",
+          "Eine Zeichnung erscheint erst dann in der Galerie, wo alle sie sehen " +
+            "können, wenn jemand sie in die Galerie stellt – mit dem Namen, unter " +
+            "dem sie gezeichnet wurde, und dem Namen der Person, die sie als " +
+            "Erste hineingestellt hat. Deine eigenen Zeichnungen kannst du aus " +
+            "jedem Raum in die Galerie stellen. In einem öffentlichen Raum können " +
+            "auch die anderen im Raum deine hineinstellen, ohne vorher zu fragen: " +
+            "Wer in einem öffentlichen Raum spielt, spielt öffentlich, nach den " +
+            "Nutzungsbedingungen. Jede deiner Zeichnungen kannst du aus der " +
+            "Galerie nehmen, und dann kann niemand sie erneut hineinstellen, außer " +
+            "du selbst. Zeichnungen aus einem privaten Raum sehen nur die, die " +
+            "darin waren, außer du stellst deine eigenen in die Galerie.",
+          "Wenn du dein Konto löschst, wird jede deiner Zeichnungen gelöscht, " +
+            "außer einer Kopie, die einer Meldung beigefügt ist und bei der " +
+            "Meldung bleibt; soll nur eine einzelne gelöscht werden, schreib an " +
+            "{contact}.",
           "Eine Begriffsliste, die du veröffentlichst, kann jeder lesen, mit " +
             "deinem Namen als Autor. Dein Profil zeigt, was du dort zeigen willst.",
         ],
@@ -132,11 +142,14 @@ export const LEGAL_DE: LegalDocuments = {
         items: [
           "Chat: 30 Tage, außer Zeilen, die in einer Meldung zitiert werden; " +
             "sie bleiben bei der Meldung.",
-          "Meldungen und das, worauf sie sich beziehen, Verwarnungen, Sperren, " +
-            "das Sicherheits- und Moderationsprotokoll und Fehlerberichte: " +
-            "dauerhaft aufbewahrt als Nachweis der Moderation und der Sicherheit " +
-            "des Dienstes, auch nachdem du dein Konto gelöscht hast. " +
+          "Meldungen und das, worauf sie sich beziehen, Sperren, das " +
+            "Sicherheits- und Moderationsprotokoll und Fehlerberichte: dauerhaft " +
+            "aufbewahrt als Nachweis der Moderation und der Sicherheit des " +
+            "Dienstes, auch nachdem du dein Konto gelöscht hast. " +
             "Protokolleinträge nennen dich danach nicht mehr.",
+          "Verwarnungen: 12 Monate, und mit deinem Konto gelöscht.",
+          "Nachrichten in deinem Posteingang: 90 Tage, gelesen oder nicht, und " +
+            "mit deinem Konto gelöscht.",
           "Screenshots in Fehlerberichten: bis der Bericht bearbeitet ist, und " +
             "nie länger als 90 Tage.",
           "Gäste: gelöscht nach 30 Tagen ohne abgeschlossenes Spiel, oder nach " +
@@ -259,7 +272,8 @@ export const LEGAL_DE: LegalDocuments = {
           "Was du zeichnest, schreibst und veröffentlichst, bleibt deins. Damit " +
             "das Spiel funktioniert, erlaubst du dem Betreiber, es innerhalb von " +
             "Sketchy zu speichern, zu zeigen und zu kopieren – in deinem Raum, in " +
-            "der Galerie bei öffentlichen Räumen, in Begriffslisten, die du " +
+            "der Galerie, sobald eine Zeichnung hineingestellt ist, in " +
+            "Begriffslisten, die du " +
             "veröffentlichst, und in Kopien, die andere davon machen –, " +
             "kostenlos, weltweit und so lange, wie Sketchy es aufbewahrt.",
           "Zeichne und schreibe nur, was du teilen darfst, und nichts, was die " +

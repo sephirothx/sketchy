@@ -41,8 +41,11 @@ export const LEGAL_FR: LegalDocuments = {
             "bloques, tes réglages de salon enregistrés et les listes que tu " +
             "mets en favori.",
           "Tes parties : les salons où tu as joué, tes réponses, tes points et " +
-            "résultats, tes réactions et les dessins que tu as faits.",
+            "résultats, tes réactions, les dessins que tu as faits et les " +
+            "dessins que tu as partagés dans la Galerie.",
           "Le chat, dans les salons et dans le hall.",
+          "Les messages de ta boîte de réception, au sujet de ton compte, de " +
+            "tes dessins et de tes amitiés.",
           "Les listes de mots que tu écris, et si tu les as publiées.",
           "Les signalements que tu envoies et ceux qui te concernent, avec les " +
             "messages et dessins auxquels ils renvoient, ainsi que tout " +
@@ -94,13 +97,20 @@ export const LEGAL_FR: LegalDocuments = {
         body: [
           "Les personnes d'un salon voient ton nom, tes messages, tes dessins " +
             "et ton score.",
-          "Les dessins faits dans un salon public apparaissent dans la Galerie, " +
-            "où tout le monde peut les voir, avec le nom sous lequel ils ont été " +
-            "dessinés : jouer dans un salon public, c'est jouer en public, selon " +
-            "les conditions d'utilisation. Les dessins d'un salon privé ne sont " +
-            "vus que par les personnes qui y étaient. Supprimer ton compte efface " +
-            "tous tes dessins, sauf une copie jointe à un signalement, qui reste " +
-            "avec lui ; pour en faire retirer un seul, écris à {contact}.",
+          "Un dessin n'apparaît dans la Galerie, où tout le monde peut le voir, " +
+            "qu'une fois que quelqu'un l'a partagé, avec le nom sous lequel il a " +
+            "été dessiné et le nom de la première personne qui l'a partagé. Tu " +
+            "peux partager tes propres dessins depuis n'importe quel salon. Dans " +
+            "un salon public, les autres personnes du salon peuvent aussi " +
+            "partager les tiens, sans te demander d'abord : jouer dans un salon " +
+            "public, c'est jouer en public, selon les conditions d'utilisation. " +
+            "Tu peux retirer de la Galerie n'importe lequel de tes dessins, et " +
+            "personne ne peut alors le partager de nouveau, sauf toi. Les dessins " +
+            "d'un salon privé ne sont vus que par les personnes qui y étaient, " +
+            "sauf si tu partages les tiens.",
+          "Supprimer ton compte efface tous tes dessins, sauf une copie jointe " +
+            "à un signalement, qui reste avec lui ; pour en faire effacer un " +
+            "seul, écris à {contact}.",
           "Une liste de mots que tu publies peut être lue par tout le monde, " +
             "avec ton nom comme auteur. Ton profil montre ce que tu choisis d'y " +
             "montrer.",
@@ -134,11 +144,14 @@ export const LEGAL_FR: LegalDocuments = {
         items: [
           "Chat : 30 jours, sauf les lignes citées dans un signalement, qui " +
             "restent avec lui.",
-          "Les signalements et ce qu'ils citent, les avertissements, les " +
-            "suspensions, le journal de sécurité et de modération et les " +
-            "rapports de bug : conservés comme trace durable de la modération et " +
-            "de la sécurité du service, y compris après la suppression de ton " +
-            "compte. Les entrées du journal ne te nomment alors plus.",
+          "Les signalements et ce qu'ils citent, les suspensions, le journal " +
+            "de sécurité et de modération et les rapports de bug : conservés " +
+            "comme trace durable de la modération et de la sécurité du service, " +
+            "y compris après la suppression de ton compte. Les entrées du " +
+            "journal ne te nomment alors plus.",
+          "Avertissements : 12 mois, et supprimés avec ton compte.",
+          "Messages de ta boîte de réception : 90 jours, lus ou non, et " +
+            "supprimés avec ton compte.",
           "Captures d'écran des rapports de bug : jusqu'au traitement du " +
             "rapport, et jamais plus de 90 jours.",
           "Invités : supprimés après 30 jours sans partie terminée, ou après " +
@@ -261,8 +274,9 @@ export const LEGAL_FR: LegalDocuments = {
         body: [
           "Ce que tu dessines, écris et publies reste à toi. Pour que le jeu " +
             "fonctionne, tu autorises l'opérateur à le conserver, l'afficher et " +
-            "le copier au sein de Sketchy – dans ton salon, dans la Galerie pour " +
-            "les salons publics, dans les listes de mots que tu publies et dans " +
+            "le copier au sein de Sketchy – dans ton salon, dans la Galerie une " +
+            "fois un dessin partagé, " +
+            "dans les listes de mots que tu publies et dans " +
             "les copies que d'autres en font –, gratuitement, dans le monde " +
             "entier et aussi longtemps que Sketchy le conserve.",
           "Ne dessine et n'écris que ce que tu as le droit de partager, et rien " +

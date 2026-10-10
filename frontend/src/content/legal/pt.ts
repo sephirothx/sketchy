@@ -40,8 +40,11 @@ export const LEGAL_PT: LegalDocuments = {
             "jogadores que bloqueias, as definições de sala guardadas e as " +
             "listas que marcas com estrela.",
           "Os teus jogos: as salas em que jogaste, os teus palpites, pontos e " +
-            "resultados, as tuas reações e os desenhos que fizeste.",
+            "resultados, as tuas reações, os desenhos que fizeste e os desenhos " +
+            "que partilhaste na Galeria.",
           "O chat, nas salas e no átrio.",
+          "As mensagens da tua caixa de entrada, sobre a tua conta, os teus " +
+            "desenhos e as tuas amizades.",
           "As listas de palavras que escreves, e se as publicaste.",
           "As denúncias que envias e as denúncias sobre ti, com as mensagens e " +
             "os desenhos a que se referem, e qualquer advertência ou suspensão " +
@@ -90,13 +93,19 @@ export const LEGAL_PT: LegalDocuments = {
         body: [
           "Quem está numa sala contigo vê o teu nome, as tuas mensagens, os teus " +
             "desenhos e a tua pontuação.",
-          "Os desenhos feitos numa sala pública aparecem na Galeria, onde " +
-            "qualquer pessoa os pode ver, com o nome com que foram desenhados: " +
-            "jogar numa sala pública é jogar em público, nos termos de " +
-            "utilização. Os desenhos de uma sala privada só são vistos por quem " +
-            "lá estava. Eliminar a tua conta apaga todos os teus desenhos, exceto " +
-            "uma cópia anexada a uma denúncia, que fica com ela; para retirar " +
-            "apenas um, escreve para {contact}.",
+          "Um desenho só aparece na Galeria, onde qualquer pessoa o pode ver, " +
+            "depois de alguém o partilhar, com o nome com que foi desenhado e o " +
+            "nome da primeira pessoa que o partilhou. Podes partilhar os teus " +
+            "próprios desenhos a partir de qualquer sala. Numa sala pública, as " +
+            "outras pessoas da sala também podem partilhar os teus, sem " +
+            "perguntar primeiro: jogar numa sala pública é jogar em público, nos " +
+            "termos de utilização. Podes tirar da Galeria qualquer desenho teu, " +
+            "e ninguém o pode voltar a partilhar a não ser que tu o faças. Os " +
+            "desenhos de uma sala privada só são vistos por quem lá estava, a " +
+            "não ser que partilhes os teus.",
+          "Eliminar a tua conta apaga todos os teus desenhos, exceto uma cópia " +
+            "anexada a uma denúncia, que fica com ela; para apagar apenas um, " +
+            "escreve para {contact}.",
           "Uma lista de palavras que publiques pode ser lida por todos, com o " +
             "teu nome como autor. O teu perfil mostra o que escolheres mostrar.",
         ],
@@ -126,11 +135,14 @@ export const LEGAL_PT: LegalDocuments = {
         items: [
           "Chat: 30 dias, exceto as linhas citadas numa denúncia, que ficam com " +
             "ela.",
-          "As denúncias e o que citam, as advertências, as suspensões, o " +
+          "As denúncias e o que citam, as suspensões, o " +
             "registo de segurança e moderação e os relatórios de erros: " +
             "guardados como registo duradouro da moderação e da segurança do " +
             "serviço, mesmo depois de eliminares a tua conta. As entradas do " +
             "registo deixam então de te identificar.",
+          "Advertências: 12 meses, e eliminadas com a tua conta.",
+          "Mensagens da tua caixa de entrada: 90 dias, lidas ou não, e " +
+            "eliminadas com a tua conta.",
           "Capturas de ecrã dos relatórios de erros: até o relatório ser " +
             "tratado, e nunca mais de 90 dias.",
           "Convidados: eliminados após 30 dias sem um jogo terminado, ou após " +
@@ -250,8 +262,9 @@ export const LEGAL_PT: LegalDocuments = {
         body: [
           "O que desenhas, escreves e publicas continua a ser teu. Para que o " +
             "jogo funcione, autorizas o operador a guardá-lo, mostrá-lo e " +
-            "copiá-lo dentro do Sketchy – na tua sala, na Galeria para as salas " +
-            "públicas, nas listas de palavras que publicas e nas cópias que " +
+            "copiá-lo dentro do Sketchy – na tua sala, na Galeria depois de um " +
+            "desenho ser partilhado, " +
+            "nas listas de palavras que publicas e nas cópias que " +
             "outros fazem delas –, gratuitamente, em todo o mundo e enquanto o " +
             "Sketchy o guardar.",
           "Desenha e escreve apenas o que tens o direito de partilhar, e nada " +

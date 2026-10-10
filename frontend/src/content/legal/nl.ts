@@ -40,8 +40,11 @@ export const LEGAL_NL: LegalDocuments = {
             "blokkeert, je opgeslagen kamerinstellingen en de lijsten die je " +
             "een ster geeft.",
           "Je spellen: de kamers waarin je speelde, je gokken, punten en " +
-            "uitslagen, je reacties en de tekeningen die je maakte.",
+            "uitslagen, je reacties, de tekeningen die je maakte en de " +
+            "tekeningen die je in de Galerij deelde.",
           "De chat, in kamers en in de lobby.",
+          "De berichten in je inbox, over je account, je tekeningen en je " +
+            "vriendschappen.",
           "De woordenlijsten die je schrijft, en of je ze hebt gepubliceerd.",
           "Meldingen die je verstuurt en meldingen over jou, met de berichten " +
             "en tekeningen waarnaar ze verwijzen, en elke waarschuwing of " +
@@ -94,14 +97,19 @@ export const LEGAL_NL: LegalDocuments = {
         body: [
           "Wie met je in een kamer zit, ziet je naam, je berichten, je " +
             "tekeningen en je score.",
-          "Tekeningen uit een openbare kamer verschijnen in de Galerij, waar " +
-            "iedereen ze kan zien, met de naam waaronder ze zijn getekend: wie in " +
+          "Een tekening verschijnt pas in de Galerij, waar iedereen hem kan " +
+            "zien, als iemand hem deelt, met de naam waaronder hij is getekend en " +
+            "de naam van wie hem als eerste deelde. Je eigen tekeningen kun je " +
+            "vanuit elke kamer delen. In een openbare kamer kunnen de anderen in " +
+            "de kamer ook die van jou delen, zonder het eerst te vragen: wie in " +
             "een openbare kamer speelt, speelt in het openbaar, volgens de " +
-            "gebruiksvoorwaarden. Tekeningen uit een privékamer zien alleen de " +
-            "mensen die erin zaten. Als je je account verwijdert, worden al je " +
-            "tekeningen gewist, behalve een kopie die bij een melding hoort en " +
-            "daarbij blijft; wil je er één laten verwijderen, schrijf dan naar " +
-            "{contact}.",
+            "gebruiksvoorwaarden. Je kunt elke tekening van jou uit de Galerij " +
+            "halen, en dan kan niemand hem opnieuw delen, behalve jij. Tekeningen " +
+            "uit een privékamer zien alleen de mensen die erin zaten, tenzij je " +
+            "je eigen tekeningen deelt.",
+          "Als je je account verwijdert, worden al je tekeningen gewist, " +
+            "behalve een kopie die bij een melding hoort en daarbij blijft; wil " +
+            "je er één laten wissen, schrijf dan naar {contact}.",
           "Een woordenlijst die je publiceert, kan iedereen lezen, met jouw naam " +
             "als auteur. Je profiel toont wat jij ervoor kiest te tonen.",
         ],
@@ -133,11 +141,14 @@ export const LEGAL_NL: LegalDocuments = {
         items: [
           "Chat: 30 dagen, behalve regels die in een melding worden " +
             "aangehaald; die blijven bij de melding.",
-          "Meldingen en waar ze naar verwijzen, waarschuwingen, schorsingen, " +
-            "het beveiligings- en moderatielogboek en bugmeldingen: blijvend " +
-            "bewaard als vastlegging van de moderatie en de beveiliging van de " +
-            "dienst, ook nadat je je account hebt verwijderd. Logboekregels " +
-            "noemen je daarna niet meer.",
+          "Meldingen en waar ze naar verwijzen, schorsingen, het beveiligings- " +
+            "en moderatielogboek en bugmeldingen: blijvend bewaard als " +
+            "vastlegging van de moderatie en de beveiliging van de dienst, ook " +
+            "nadat je je account hebt verwijderd. Logboekregels noemen je daarna " +
+            "niet meer.",
+          "Waarschuwingen: 12 maanden, en verwijderd met je account.",
+          "Berichten in je inbox: 90 dagen, gelezen of niet, en verwijderd met " +
+            "je account.",
           "Screenshots bij bugmeldingen: tot de melding is afgehandeld, en " +
             "nooit langer dan 90 dagen.",
           "Gasten: verwijderd na 30 dagen zonder afgerond spel, of na 365 dagen " +
@@ -259,7 +270,8 @@ export const LEGAL_NL: LegalDocuments = {
           "Wat je tekent, schrijft en publiceert, blijft van jou. Zodat het " +
             "spel kan werken, geef je de exploitant toestemming het binnen " +
             "Sketchy te bewaren, te tonen en te kopiëren – in je kamer, in de " +
-            "Galerij voor openbare kamers, in woordenlijsten die je publiceert en " +
+            "Galerij zodra een tekening is gedeeld, in woordenlijsten die je " +
+            "publiceert en " +
             "in kopieën die anderen ervan maken –, kosteloos, wereldwijd en " +
             "zolang Sketchy het bewaart.",
           "Teken en schrijf alleen wat je mag delen, en niets wat de regels " +

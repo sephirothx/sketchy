@@ -537,7 +537,7 @@ export const PL: Catalogue = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Dokończ konfigurację roli ${p.role === "admin" ? "administratora" : "moderatora"}`,
     agreeToRules:
-      "Tworząc konto, akceptujesz {terms}, zgadzasz się przestrzegać {rules} i potwierdzasz, że masz co najmniej {age} lat. Jak używane są Twoje dane, wyjaśnia {privacy}.",
+      "Tworząc konto, akceptujesz {terms} i {rules} oraz potwierdzasz, że masz co najmniej {age} lat. Zobacz: {privacy}.",
     reportBug: "Zgłoś błąd",
     account: "Konto",
     settings: "Ustawienia",
@@ -559,7 +559,7 @@ export const PL: Catalogue = {
     optional: "(opcjonalnie)",
     letsYouResetYourPasswordLater:
       "Służy wyłącznie kontu: do jego potwierdzenia, resetowania hasła do konta i powiadomień o zmianach.",
-    rules2: "zasad",
+    rules2: "zasady",
     terms2: "warunki korzystania",
     privacy2: "polityka prywatności",
     privacyAndTerms: "Prywatność i warunki",
@@ -1012,8 +1012,10 @@ export const PL: Catalogue = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "Grając, akceptujesz {terms} i potwierdzasz, że masz co najmniej {age} lat. Rysunki z pokoi publicznych trafiają do publicznej Galerii – szczegóły: {privacy}.",
+    terms: "Warunki",
+    privacy: "Prywatność",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy jest dla osób, które mają co najmniej ${p.age} lat`,
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) =>
       `Nazwa musi mieć co najmniej ${counted(p.min, { one: "znak", few: "znaki", many: "znaków", other: "znaku" })}.`,
@@ -1972,7 +1974,7 @@ export const PL: Catalogue = {
     buyLettersAndWheelNeedScoring: "Kupowanie liter i Koło fortuny wymagają punktacji.",
     allColors: "Wszystkie kolory",
     noScoring: "Bez punktacji",
-    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść, a rysunki trafiają do publicznej Galerii.",
+    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść, a osoby, które w nim grają, mogą udostępniać jego rysunki w Galerii.",
     joinableOnlyWithTheCode: "Dołączyć można tylko przez kod lub link z zaproszeniem.",
     customCount: (p: { count: number }) =>
       `własne: ${number(p.count)}`,

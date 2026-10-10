@@ -537,7 +537,7 @@ export const DE: Catalogue = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Schließe deine Rolle als ${p.role === "admin" ? "Administrator" : "Moderator"} ab`,
     agreeToRules:
-      "Mit dem Anlegen eines Kontos akzeptierst du die {terms}, stimmst zu, die {rules} zu befolgen, und bestätigst, dass du mindestens {age} Jahre alt bist. Wie deine Daten verwendet werden, steht in der {privacy}.",
+      "Mit dem Anlegen eines Kontos akzeptierst du die {terms} und {rules} und bestätigst, dass du mindestens {age} Jahre alt bist. Mehr dazu in der {privacy}.",
     reportBug: "Fehler melden",
     account: "Konto",
     settings: "Einstellungen",
@@ -1003,8 +1003,10 @@ export const DE: Catalogue = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "Wer spielt, akzeptiert die {terms} und bestätigt, mindestens {age} Jahre alt zu sein. Zeichnungen aus öffentlichen Räumen erscheinen in der öffentlichen Galerie – mehr dazu in der {privacy}.",
+    terms: "Bedingungen",
+    privacy: "Datenschutz",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy ist für Menschen ab ${p.age} Jahren`,
     nameTooShort: (p: { min: number }) => `Ein Name braucht mindestens ${p.min} Zeichen.`,
     nameInUse: (p: { name: string }) =>
       `Jemand, der gerade online ist, spielt schon als „${p.name}“. Wähle einen anderen Namen, um weiterzuspielen.`,
@@ -1964,7 +1966,7 @@ export const DE: Catalogue = {
     buyLettersAndWheelNeedScoring: "Buchstaben kaufen und Glücksrad brauchen eine Punktewertung.",
     allColors: "Alle Farben",
     noScoring: "Ohne Punkte",
-    listedInTheLobbyAnyone: "In der Lobby gelistet – jeder kann hereinschauen, und die Zeichnungen erscheinen in der öffentlichen Galerie.",
+    listedInTheLobbyAnyone: "In der Lobby gelistet – alle können hereinschauen, und wer mitspielt, kann die Zeichnungen in die Galerie stellen.",
     joinableOnlyWithTheCode: "Nur mit dem Code oder Einladungslink zugänglich.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} eigene`,

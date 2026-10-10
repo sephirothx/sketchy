@@ -604,8 +604,9 @@
   font-weight: 600;
 }
 
-/* What starting to play agrees to (#1417), under the invite's Join and
-   Spectate and the Settings name form: fine print, never a third button. */
+/* What starting to play is held to (#1417), under the invite's Join and
+   Spectate and the Settings name form: one row of fine print, never a third
+   button; its links underline only on hover. */
 .identity-agreement {
   color: var(--muted);
   font-size: 12.5px;
@@ -616,7 +617,12 @@
 .identity-agreement a {
   color: inherit;
   font-weight: 700;
+  text-decoration: none;
   text-underline-offset: 2px;
+}
+
+.identity-agreement a:hover {
+  text-decoration: underline;
 }
 
 .invite-agreement {

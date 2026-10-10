@@ -81,9 +81,10 @@ keyboard that takes half the screen, and one thumb.
   between them, in all eight interface languages: what is kept, why and for how long, who
   else handles it, what the Gallery publishes, every right and how to use it, and the
   agreement a player accepts — the minimum age (16), the licence for what they draw and
-  publish, moderation, and Swiss law. A new identity is told what it accepts wherever it
-  starts — the lobby's name tag, an invite link's name field, Settings for a visitor with
-  no name, and account creation — and a suspended player can still read both, and the
+  publish, moderation, and Swiss law. A new identity sees what it accepts wherever it
+  starts, as unobtrusively as possible: one row of fine print — *Terms · Privacy · 16+* —
+  under the lobby's name tag, an invite link's name field and Settings for a visitor with
+  no name, and a sentence on account creation; and a suspended player can still read both, and the
   Rules, under a bar rather than behind a dialog. The account menu has a *Privacy and
   terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`,
   which production refuses to start without.

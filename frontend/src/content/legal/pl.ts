@@ -41,8 +41,11 @@ export const LEGAL_PL: LegalDocuments = {
             "profilowe, jeśli zostanie wgrane, twoi znajomi, zablokowani gracze, " +
             "zapisane ustawienia pokoi oraz listy oznaczone gwiazdką.",
           "Twoje gry: pokoje, w których toczyła się gra, twoje odpowiedzi, " +
-            "punkty i wyniki, twoje reakcje oraz twoje rysunki.",
+            "punkty i wyniki, twoje reakcje, twoje rysunki oraz rysunki " +
+            "udostępnione przez ciebie w Galerii.",
           "Czat, w pokojach i w lobby.",
+          "Wiadomości w twojej skrzynce, dotyczące twojego konta, twoich " +
+            "rysunków i znajomych.",
           "Twoje listy haseł oraz informacja, czy zostały opublikowane.",
           "Zgłoszenia wysłane przez ciebie i zgłoszenia dotyczące ciebie, wraz " +
             "z wiadomościami i rysunkami, których dotyczą, a także każde " +
@@ -92,13 +95,19 @@ export const LEGAL_PL: LegalDocuments = {
         body: [
           "Osoby w pokoju widzą twoją nazwę, twoje wiadomości, twoje rysunki i " +
             "twój wynik.",
-          "Rysunki z pokoju publicznego trafiają do Galerii, gdzie każdy może je " +
-            "zobaczyć, z nazwą, pod którą powstały: gra w pokoju publicznym to " +
-            "gra publiczna, zgodnie z warunkami korzystania. Rysunki z pokoju " +
-            "prywatnego widzą tylko osoby, które w nim były. Usunięcie konta " +
-            "kasuje wszystkie twoje rysunki, oprócz kopii dołączonej do " +
-            "zgłoszenia, która zostaje przy nim; żeby usunąć tylko jeden, napisz " +
-            "na adres {contact}.",
+          "Rysunek trafia do Galerii, gdzie każdy może go zobaczyć, dopiero gdy " +
+            "ktoś go udostępni, z nazwą, pod którą powstał, i nazwą osoby, która " +
+            "udostępniła go jako pierwsza. Swoje rysunki możesz udostępniać z " +
+            "każdego pokoju. W pokoju publicznym inne grające w nim osoby też " +
+            "mogą udostępniać twoje, bez wcześniejszego pytania: gra w pokoju " +
+            "publicznym to gra publiczna, zgodnie z warunkami korzystania. Każdy " +
+            "swój rysunek możesz zdjąć z Galerii i wtedy nikt nie może go " +
+            "ponownie udostępnić, chyba że zrobisz to ty. Rysunki z pokoju " +
+            "prywatnego widzą tylko osoby, które w nim były, chyba że udostępnisz " +
+            "swoje.",
+          "Usunięcie konta kasuje wszystkie twoje rysunki, oprócz kopii " +
+            "dołączonej do zgłoszenia, która zostaje przy nim; żeby skasować " +
+            "tylko jeden, napisz na adres {contact}.",
           "Opublikowaną przez ciebie listę haseł może przeczytać każdy, z twoją " +
             "nazwą jako autorem. Twój profil pokazuje to, co zdecydujesz się " +
             "pokazać.",
@@ -130,10 +139,13 @@ export const LEGAL_PL: LegalDocuments = {
         items: [
           "Czat: 30 dni, oprócz wierszy przytoczonych w zgłoszeniu, które " +
             "zostają przy nim.",
-          "Zgłoszenia i to, czego dotyczą, ostrzeżenia, zawieszenia, dziennik " +
+          "Zgłoszenia i to, czego dotyczą, zawieszenia, dziennik " +
             "bezpieczeństwa i moderacji oraz zgłoszenia błędów: przechowywane " +
             "trwale jako zapis moderacji i bezpieczeństwa usługi, także po " +
             "usunięciu konta. Wpisy dziennika przestają wtedy wskazywać ciebie.",
+          "Ostrzeżenia: 12 miesięcy; usuwane razem z kontem.",
+          "Wiadomości w twojej skrzynce: 90 dni, przeczytane czy nie; usuwane " +
+            "razem z kontem.",
           "Zrzuty ekranu ze zgłoszeń błędów: do rozpatrzenia zgłoszenia i nigdy " +
             "dłużej niż 90 dni.",
           "Goście: usuwani po 30 dniach bez ukończonej gry albo po 365 dniach " +
@@ -253,8 +265,9 @@ export const LEGAL_PL: LegalDocuments = {
         body: [
           "To, co rysujesz, piszesz i publikujesz, pozostaje twoje. Żeby gra " +
             "mogła działać, pozwalasz operatorowi przechowywać, pokazywać i " +
-            "kopiować to w ramach Sketchy – w twoim pokoju, w Galerii w przypadku " +
-            "pokoi publicznych, w listach haseł, które publikujesz, i w kopiach, " +
+            "kopiować to w ramach Sketchy – w twoim pokoju, w Galerii, gdy " +
+            "rysunek zostanie udostępniony, " +
+            "w listach haseł, które publikujesz, i w kopiach, " +
             "które robią z nich inni – bezpłatnie, na całym świecie i tak długo, " +
             "jak Sketchy to przechowuje.",
           "Rysuj i pisz tylko to, czym masz prawo się dzielić, i nic, czego " +

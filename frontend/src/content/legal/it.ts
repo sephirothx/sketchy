@@ -40,8 +40,11 @@ export const LEGAL_IT: LegalDocuments = {
             "giocatori che blocchi, le impostazioni di stanza salvate e le liste " +
             "a cui metti la stella.",
           "Le tue partite: le stanze in cui hai giocato, le tue risposte, punti " +
-            "e risultati, le tue reazioni e i disegni che hai fatto.",
+            "e risultati, le tue reazioni, i disegni che hai fatto e i disegni " +
+            "che hai condiviso nella Galleria.",
           "La chat, nelle stanze e nella lobby.",
+          "I messaggi della tua posta in arrivo, sul tuo account, sui tuoi " +
+            "disegni e sulle tue amicizie.",
           "Le liste di parole che scrivi, e se le hai pubblicate.",
           "Le segnalazioni che invii e quelle che ti riguardano, con i messaggi " +
             "e i disegni a cui si riferiscono, e ogni ammonimento o sospensione " +
@@ -92,13 +95,19 @@ export const LEGAL_IT: LegalDocuments = {
         body: [
           "Chi è in una stanza con te vede il tuo nome, i tuoi messaggi, i tuoi " +
             "disegni e il tuo punteggio.",
-          "I disegni fatti in una stanza pubblica compaiono nella Galleria, dove " +
-            "chiunque può vederli, con il nome con cui sono stati disegnati: " +
-            "giocare in una stanza pubblica è giocare in pubblico, secondo i " +
-            "termini d'uso. I disegni di una stanza privata li vede solo chi " +
-            "c'era. Eliminare il tuo account cancella tutti i tuoi disegni, " +
-            "tranne una copia allegata a una segnalazione, che resta con essa; " +
-            "per farne rimuovere uno solo, scrivi a {contact}.",
+          "Un disegno compare nella Galleria, dove chiunque può vederlo, solo " +
+            "dopo che qualcuno lo ha condiviso, con il nome con cui è stato " +
+            "disegnato e il nome della prima persona che lo ha condiviso. Puoi " +
+            "condividere i tuoi disegni da qualsiasi stanza. In una stanza " +
+            "pubblica anche le altre persone nella stanza possono condividere i " +
+            "tuoi, senza chiedertelo prima: giocare in una stanza pubblica è " +
+            "giocare in pubblico, secondo i termini d'uso. Puoi togliere dalla " +
+            "Galleria qualsiasi tuo disegno, e nessuno potrà più condividerlo, a " +
+            "meno che non lo faccia tu. I disegni di una stanza privata li vede " +
+            "solo chi c'era, a meno che tu non condivida i tuoi.",
+          "Eliminare il tuo account cancella tutti i tuoi disegni, tranne una " +
+            "copia allegata a una segnalazione, che resta con essa; per farne " +
+            "cancellare uno solo, scrivi a {contact}.",
           "Una lista di parole che pubblichi può essere letta da tutti, con il " +
             "tuo nome come autore. Il tuo profilo mostra ciò che scegli di " +
             "mostrare.",
@@ -131,11 +140,14 @@ export const LEGAL_IT: LegalDocuments = {
         items: [
           "Chat: 30 giorni, tranne le righe citate in una segnalazione, che " +
             "restano con essa.",
-          "Le segnalazioni e ciò che citano, gli ammonimenti, le sospensioni, il " +
-            "registro di sicurezza e moderazione e le segnalazioni di bug: " +
-            "conservati come traccia duratura della moderazione e della " +
-            "sicurezza del servizio, anche dopo che hai eliminato il tuo " +
-            "account. Le voci del registro da quel momento non ti nominano più.",
+          "Le segnalazioni e ciò che citano, le sospensioni, il registro di " +
+            "sicurezza e moderazione e le segnalazioni di bug: conservati come " +
+            "traccia duratura della moderazione e della sicurezza del servizio, " +
+            "anche dopo che hai eliminato il tuo account. Le voci del registro " +
+            "da quel momento non ti nominano più.",
+          "Ammonimenti: 12 mesi, ed eliminati insieme al tuo account.",
+          "Messaggi nella tua posta in arrivo: 90 giorni, letti o no, ed " +
+            "eliminati insieme al tuo account.",
           "Screenshot delle segnalazioni di bug: finché la segnalazione non " +
             "viene gestita, e mai più di 90 giorni.",
           "Ospiti: eliminati dopo 30 giorni senza una partita conclusa, oppure " +
@@ -256,8 +268,9 @@ export const LEGAL_IT: LegalDocuments = {
         body: [
           "Ciò che disegni, scrivi e pubblichi resta tuo. Perché il gioco " +
             "funzioni, consenti al gestore di conservarlo, mostrarlo e copiarlo " +
-            "all'interno di Sketchy – nella tua stanza, nella Galleria per le " +
-            "stanze pubbliche, nelle liste di parole che pubblichi e nelle copie " +
+            "all'interno di Sketchy – nella tua stanza, nella Galleria una volta " +
+            "che un disegno è condiviso, " +
+            "nelle liste di parole che pubblichi e nelle copie " +
             "che altri ne fanno – gratuitamente, in tutto il mondo e finché " +
             "Sketchy lo conserva.",
           "Disegna e scrivi solo ciò che hai il diritto di condividere, e nulla " +

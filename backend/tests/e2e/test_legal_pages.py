@@ -68,7 +68,8 @@ async def test_a_suspended_player_can_read_the_privacy_notice_and_the_terms():
 
 async def test_every_form_that_starts_an_identity_says_what_it_agrees_to():
     """The lobby's name tag was the only one; an invite link and Settings
-    made guests without the age or the Gallery rule (review of #1429)."""
+    made guests without the age (review of #1429). One row of links: the
+    terms, the privacy notice and the age."""
     suffix = _suffix()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -87,8 +88,9 @@ async def test_every_form_that_starts_an_identity_says_what_it_agrees_to():
             await visitor.goto(f"{BASE_URL}/room/{code}")
             agreement = visitor.locator(".invite-agreement")
             await expect(agreement).to_contain_text("16 or older")
-            await expect(agreement.get_by_role("link", name="terms of use")).to_have_attribute("href", "/terms")
-            await expect(agreement.get_by_role("link", name="privacy notice")).to_have_attribute("href", "/privacy")
+            await expect(agreement).to_contain_text("16+")
+            await expect(agreement.get_by_role("link", name="Terms")).to_have_attribute("href", "/terms")
+            await expect(agreement.get_by_role("link", name="Privacy")).to_have_attribute("href", "/privacy")
 
             await settings.goto(f"{BASE_URL}/settings")
             nameless = settings.get_by_test_id("settings-nameless")

@@ -547,7 +547,7 @@ export const EN = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Finish your ${p.role === "admin" ? "administrator" : "moderator"} role`,
     agreeToRules:
-      "By creating an account you accept the {terms}, agree to follow the {rules} and confirm you are {age} or older. The {privacy} says how your data is used.",
+      "By creating an account you accept the {terms} and {rules} and confirm you are {age} or older. See the {privacy}.",
     reportBug: "Report a bug",
     account: "Account",
     settings: "Settings",
@@ -1020,8 +1020,12 @@ export const EN = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "By playing you accept the {terms} and confirm you are {age} or older. Drawings from public rooms are shown in the public Gallery: see the {privacy}.",
+    // The row under every form that starts an identity (#1417): links, and
+    // the age as a fact, rather than a sentence to read before playing.
+    terms: "Terms",
+    privacy: "Privacy",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy is for players ${p.age} or older`,
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
@@ -1979,7 +1983,7 @@ export const EN = {
     buyLettersAndWheelNeedScoring: "Buy letters and Wheel of Fortune need scoring.",
     allColors: "All colors",
     noScoring: "No scoring",
-    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in, and its drawings are shown in the public Gallery.",
+    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in, and players can share its drawings to the Gallery.",
     joinableOnlyWithTheCode: "Joinable only with the code or invite link.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} custom`,

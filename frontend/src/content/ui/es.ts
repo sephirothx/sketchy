@@ -537,7 +537,7 @@ export const ES: Catalogue = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Completa tu rol de ${p.role === "admin" ? "administrador" : "moderador"}`,
     agreeToRules:
-      "Al crear una cuenta aceptas las {terms}, te comprometes a seguir las {rules} y confirmas que tienes al menos {age} años. La {privacy} explica cómo se usan tus datos.",
+      "Al crear una cuenta aceptas las {terms} y las {rules} y confirmas que tienes al menos {age} años. Consulta la {privacy}.",
     reportBug: "Informar de un fallo",
     account: "Cuenta",
     settings: "Ajustes",
@@ -1003,8 +1003,10 @@ export const ES: Catalogue = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "Al jugar aceptas las {terms} y confirmas que tienes al menos {age} años. Los dibujos de las salas públicas se muestran en la Galería pública: consulta la {privacy}.",
+    terms: "Condiciones",
+    privacy: "Privacidad",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `Sketchy es para personas de ${p.age} años o más`,
     nameTooShort: (p: { min: number }) => `Un nombre necesita al menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguien conectado ya juega como «${p.name}». Elige otro nombre para seguir jugando.`,
@@ -1963,7 +1965,7 @@ export const ES: Catalogue = {
     buyLettersAndWheelNeedScoring: "Comprar letras y Ruleta de la suerte necesitan puntuación.",
     allColors: "Todos los colores",
     noScoring: "Sin puntuación",
-    listedInTheLobbyAnyone: "Aparece en el vestíbulo: cualquiera puede entrar, y sus dibujos se muestran en la Galería pública.",
+    listedInTheLobbyAnyone: "Aparece en el vestíbulo: cualquiera puede entrar, y quienes juegan pueden compartir sus dibujos en la Galería.",
     joinableOnlyWithTheCode: "Solo se entra con el código o el enlace de invitación.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "propia", other: "propias" }),

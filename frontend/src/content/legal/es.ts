@@ -38,8 +38,11 @@ export const LEGAL_ES: LegalDocuments = {
             "perfil si subes una, tus amigos, los jugadores que bloqueas, tus " +
             "ajustes de sala guardados y las listas que marcas con estrella.",
           "Tus partidas: las salas en las que jugaste, tus respuestas, puntos y " +
-            "resultados, tus reacciones y los dibujos que hiciste.",
+            "resultados, tus reacciones, los dibujos que hiciste y los dibujos " +
+            "que compartiste en la Galería.",
           "El chat, en las salas y en el vestíbulo.",
+          "Los mensajes de tu bandeja de entrada, sobre tu cuenta, tus dibujos " +
+            "y tus amistades.",
           "Las listas de palabras que escribes y si las publicaste.",
           "Las denuncias que envías y las denuncias sobre ti, con los mensajes y " +
             "dibujos a los que se refieren, y cualquier advertencia o suspensión " +
@@ -88,13 +91,19 @@ export const LEGAL_ES: LegalDocuments = {
         body: [
           "Quienes están en una sala contigo ven tu nombre, tus mensajes, tus " +
             "dibujos y tu puntuación.",
-          "Los dibujos hechos en una sala pública se muestran en la Galería, " +
-            "donde cualquiera puede verlos, con el nombre con el que se " +
-            "dibujaron: jugar en una sala pública es jugar en público, según las " +
-            "condiciones de uso. Los dibujos de una sala privada solo los ven " +
-            "quienes estaban en ella. Si eliminas tu cuenta, se borran todos tus " +
-            "dibujos, salvo una copia adjunta a una denuncia, que se queda con " +
-            "ella; para que se retire uno solo, escribe a {contact}.",
+          "Un dibujo se muestra en la Galería, donde cualquiera puede verlo, " +
+            "solo cuando alguien lo comparte, con el nombre con el que se dibujó " +
+            "y el nombre de la primera persona que lo compartió. Puedes " +
+            "compartir tus propios dibujos desde cualquier sala. En una sala " +
+            "pública, el resto de la sala también puede compartir los tuyos, sin " +
+            "preguntarte antes: jugar en una sala pública es jugar en público, " +
+            "según las condiciones de uso. Puedes quitar de la Galería cualquier " +
+            "dibujo tuyo, y nadie podrá volver a compartirlo a menos que lo " +
+            "hagas tú. Los dibujos de una sala privada solo los ven quienes " +
+            "estaban en ella, salvo que compartas los tuyos.",
+          "Si eliminas tu cuenta, se borran todos tus dibujos, salvo una copia " +
+            "adjunta a una denuncia, que se queda con ella; para que se borre " +
+            "uno solo, escribe a {contact}.",
           "Una lista de palabras que publiques puede leerla cualquiera, con tu " +
             "nombre como autor. Tu perfil muestra lo que tú decidas mostrar.",
         ],
@@ -125,11 +134,14 @@ export const LEGAL_ES: LegalDocuments = {
         items: [
           "Chat: 30 días, salvo las líneas citadas en una denuncia, que se " +
             "quedan con ella.",
-          "Las denuncias y lo que citan, las advertencias, las suspensiones, el " +
-            "registro de seguridad y moderación y los informes de fallos: se " +
-            "conservan como constancia duradera de la moderación y de la " +
-            "seguridad del servicio, también después de que elimines tu cuenta. " +
-            "Las entradas del registro dejan entonces de nombrarte.",
+          "Las denuncias y lo que citan, las suspensiones, el registro de " +
+            "seguridad y moderación y los informes de fallos: se conservan como " +
+            "constancia duradera de la moderación y de la seguridad del " +
+            "servicio, también después de que elimines tu cuenta. Las entradas " +
+            "del registro dejan entonces de nombrarte.",
+          "Advertencias: 12 meses, y se eliminan con tu cuenta.",
+          "Mensajes de tu bandeja de entrada: 90 días, leídos o no, y se " +
+            "eliminan con tu cuenta.",
           "Capturas de los informes de fallos: hasta que se atienda el informe, " +
             "y nunca más de 90 días.",
           "Invitados: se eliminan tras 30 días sin una partida terminada, o tras " +
@@ -247,8 +259,9 @@ export const LEGAL_ES: LegalDocuments = {
         body: [
           "Lo que dibujas, escribes y publicas sigue siendo tuyo. Para que el " +
             "juego funcione, permites al operador guardarlo, mostrarlo y " +
-            "copiarlo dentro de Sketchy —en tu sala, en la Galería para las " +
-            "salas públicas, en las listas de palabras que publiques y en las " +
+            "copiarlo dentro de Sketchy —en tu sala, en la Galería una vez que " +
+            "se comparte un dibujo, " +
+            "en las listas de palabras que publiques y en las " +
             "copias que otros hagan de ellas—, de forma gratuita, en todo el " +
             "mundo y mientras Sketchy lo conserve.",
           "Dibuja y escribe solo lo que tengas derecho a compartir, y nada que " +

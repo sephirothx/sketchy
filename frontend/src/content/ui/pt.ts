@@ -537,7 +537,7 @@ export const PT: Catalogue = {
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Conclui o teu papel de ${p.role === "admin" ? "administrador" : "moderador"}`,
     agreeToRules:
-      "Ao criares uma conta aceitas os {terms}, comprometes-te a seguir as {rules} e confirmas que tens pelo menos {age} anos. A {privacy} explica como os teus dados são usados.",
+      "Ao criares uma conta aceitas os {terms} e as {rules} e confirmas que tens pelo menos {age} anos. Consulta a {privacy}.",
     reportBug: "Comunicar um erro",
     account: "Conta",
     settings: "Definições",
@@ -1003,8 +1003,10 @@ export const PT: Catalogue = {
   },
 
   firstRunIdentity: {
-    agreement:
-      "Ao jogar aceitas os {terms} e confirmas que tens pelo menos {age} anos. Os desenhos das salas públicas aparecem na Galeria pública: consulta a {privacy}.",
+    terms: "Termos",
+    privacy: "Privacidade",
+    agePlus: (p: { age: number }): string => `${p.age}+`,
+    ageTitle: (p: { age: number }): string => `O Sketchy é para pessoas com ${p.age} anos ou mais`,
     nameTooShort: (p: { min: number }) => `Um nome precisa de pelo menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguém online já está a jogar como «${p.name}». Escolhe outro nome para continuar a jogar.`,
@@ -1963,7 +1965,7 @@ export const PT: Catalogue = {
     buyLettersAndWheelNeedScoring: "Comprar letras e Roda da sorte precisam de pontuação.",
     allColors: "Todas as cores",
     noScoring: "Sem pontuação",
-    listedInTheLobbyAnyone: "Aparece no átrio — qualquer pessoa pode entrar, e os seus desenhos aparecem na Galeria pública.",
+    listedInTheLobbyAnyone: "Aparece no átrio — qualquer pessoa pode entrar, e quem joga pode partilhar os seus desenhos na Galeria.",
     joinableOnlyWithTheCode: "Só se entra com o código ou a ligação de convite.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "própria", other: "próprias" }),
