@@ -617,6 +617,21 @@ REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
 # so; a picture's removal restricts uploads and says for how long. They share
 # the machinery - shown once, acknowledged - and nothing else (R-AVA-08).
 WARNING_KINDS = ("warning", "avatar_removal")
+# What an account's inbox can hold (#1436). An entry is the message about a
+# fact kept elsewhere - the warning row, the share, the friendship, the role -
+# and names it by `subject_id` where there is one row to name.
+INBOX_KINDS = (
+    "warning",
+    "drawing_shared",
+    "friend_request",
+    "friend_accepted",
+    "game_invite",
+    "reports_reviewed",
+    "role",
+)
+# The steps a `role` entry can describe: an offer to take up, a role given
+# outright, a role taken away.
+INBOX_ROLE_CHANGES = ("offered", "granted", "removed")
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
 GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)

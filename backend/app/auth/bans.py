@@ -7,8 +7,24 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import UserBan
+from app.db.models import User, UserBan
 from app.services.player_reports import cited_notice_messages, notice_drawings
+
+
+async def lock_ban_target(session: AsyncSession, user_id: UUID) -> User | None:
+    """The account a suspension is about, locked for the decision.
+
+    `FOR NO KEY UPDATE`, which still excludes a second ban of the same
+    account, an erasure and a guest merge - each takes a lock it conflicts
+    with - but not `FOR KEY SHARE`: the lock a decision takes on each
+    reporter it tells (`services/inbox.py`), and the one every foreign key
+    to the account takes on insert. Two bans of players who had reported
+    each other each held its target `FOR UPDATE` and then reached for the
+    other as a reporter, and PostgreSQL rolled one back as a deadlock. The
+    suspension writes no key column, so the stronger lock bought nothing."""
+    return await session.scalar(
+        select(User).where(User.id == user_id).with_for_update(key_share=True)
+    )
 
 
 def active_ban_filter(now: datetime):

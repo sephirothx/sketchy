@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e7f8a9b0c1d4_gallery_by_sharing.py` (#1430). Both this line and the table
+`f8a9b0c1d2e5_account_inbox.py` (#1436). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-65 tables in eight domains.
+64 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -106,8 +106,7 @@ erDiagram
     users ||--o{ room_presets : "owns"
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
-    users ||--o{ role_change_notices : "told about a role"
-    users ||--o{ drawing_share_notices : "told about a share"
+    users ||--o{ inbox_entries : "told"
     users ||--o{ turn_drawing_shares : "shares"
 
     game_records ||--o{ game_participants : "seats"
@@ -124,7 +123,6 @@ erDiagram
     turn_records ||--o{ profile_drawing_pins : "pinned"
     turn_records ||--o{ turn_drawing_shares : "shared"
     game_participants ||--o{ turn_drawing_shares : "sharer seat"
-    turn_records ||--o| drawing_share_notices : "drawer told"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -147,10 +145,10 @@ erDiagram
 | Domain | Tables |
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
-| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges` |
-| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges`, `inbox_entries` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `drawing_share_notices`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
@@ -521,14 +519,10 @@ been replaced would be the hole this closes.
 `ck_friendships_ordered` (`user_low_id < user_high_id`) and
 `ck_friendships_requester_is_a_member`.
 
-`acceptance_announced_at` is when the **asker** was told their request had been accepted, null while they are still owed it. A fact on the row rather than
-a difference between two client reads: a reader that was not present for the
-move — reloading, on another device, offline — has no earlier state to compare
-against, and would never learn it (R-FRIEND-14). It has no index of its own
-(#890): the listing reads an account's friendships by key and picks the
-unannounced ones out in Python, and the announcing `UPDATE` names primary-key
-pairs, so a partial index over those rows was written on every accept and every
-announce and read by nothing.
+What either account is told about the pair is not kept here: a request is an entry in
+the asked account's inbox and an acceptance one in the asker's, written in the same
+transaction as the row (`inbox_entries` below, R-FRIEND-14). The row had carried
+`acceptance_announced_at` for the second until #1436, which the inbox replaced.
 
 **One row per pair, in a canonical order** rather than one row per direction.
 Two directional rows can disagree — one accepted, one not — and no constraint
@@ -787,7 +781,8 @@ Format v1 exports expire after seven days. The document contains the owner's acc
 fields, linked guest identities, session metadata, game seats, drawn turns, correct
 guesses, prompt lists with their working copies and live and pending editions (schema 16,
 #1362), the lists it starred, unexpired authored retained
-messages, submitted evidence, blocks, presets, and account-event metadata.
+messages, submitted evidence, blocks, presets, account-event metadata, and its inbox as
+kinds and values (`inbox`, schema 17, #1436).
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin — nor what other people
 did to the requester (schema 13, #1238): a friend request of theirs that was declined
@@ -796,7 +791,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v16_fields.json`](../fixtures/account_data_export_v16_fields.json).
+pinned by [`fixtures/account_data_export_v17_fields.json`](../fixtures/account_data_export_v17_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -869,6 +864,116 @@ transaction (R-AVA-05). The export carries the bytes.
 **Reserved, unused in v1.** Schema for a future authenticated identity provider. No
 provider-login API is enabled until identity-linking flows ship.
 
+### `inbox_entries`
+`id` · `user_id` (→ `users`, **CASCADE**, NOT NULL) · `kind` · `subject_id` (nullable, no
+foreign key) · `params` (JSON / `JSONB`) · `created_at` · `read_at`, with
+`ck_inbox_entries_kind` (`warning`, `drawing_shared`, `friend_request`,
+`friend_accepted`, `game_invite`, `reports_reviewed`, `role`),
+`ix_inbox_entries_user_created` on (`user_id`, `created_at`) for the newest-first page,
+`ix_inbox_entries_created_at` for the sweep, the partial `ix_inbox_entries_user_unread`
+on `user_id` `WHERE read_at IS NULL` for the bell's count, and the partial unique
+`uq_inbox_entries_subject` on (`user_id`, `kind`, `subject_id`)
+`WHERE subject_id IS NOT NULL`, and the partial unique `uq_inbox_entries_unread_reviews`
+on `user_id` `WHERE kind = 'reports_reviewed' AND read_at IS NULL` — the one unread count
+every decision is counted into.
+
+Everything the app tells a player about their own account, behind the header's bell
+(#1436, R-INBOX-01). It replaced three stores that each did part of this with different
+rules — `role_change_notices`, `drawing_share_notices`, and the "told yet?" columns
+`player_reports.reporter_notified_at` and `friendships.acceptance_announced_at` — which
+disagreed on order, on what an acknowledgement settled and on whether a reconnect caught
+up, and none of which another tab heard being read.
+
+**An entry is the message, not the fact.** The warning, the share, the friendship and the
+role keep their own rows and their own retention; the entry only says the account was
+told. So `params` holds **values and never a sentence** (R-INBOX-05) — `{role, change}`
+with `change` ∈ `offered | granted | removed` for a role, `{count}` for reviewed reports,
+`{expiresAt}` for an invitation, nothing for the rest — and what an entry shows is read
+from the fact **when it is shown**: who shared a drawing (the earliest share still
+standing by somebody other than its drawer) and whether it is still in the Gallery,
+whether a friend request is still waiting, whether an offer still stands
+(`users.pending_role`, within its thirty-day lifetime). A fact that has gone leaves its entry saying so rather than a
+stale line offering to act on it.
+
+`subject_id` names the fact where there is one row or account to name: the warning, the
+turn of a shared drawing, or the **other account** for `friend_request`,
+`friend_accepted` and `game_invite`. No foreign key, because the kinds name different
+tables; a fact that goes is noticed when the entry is read. The unique index makes it
+**one entry per fact** — a second share of the drawing says nothing the first did not —
+and the kinds that are asked again **renew** the one entry instead (`ON CONFLICT DO
+UPDATE`: back to the top, unread): a request asked again after it was cancelled, a
+second invitation from the same friend. `reports_reviewed` and `role` have no subject.
+
+**Writes**, each in the transaction of the fact it is about
+([`services/inbox.py`](../backend/app/services/inbox.py)), so there is no fact nobody was
+told about and no entry about a fact that rolled back; the account's sockets are sent
+`inbox_changed` once it commits:
+
+- `warning` — a moderator's warning (`POST /api/moderation/warnings`) and a picture's
+  removal (`services/avatars.py`), its subject the `user_warnings` row. Answering the
+  warning marks it read.
+- `drawing_shared` — the first share of a drawing by somebody other than its drawer, in
+  the share's write; a live share's in the finished-game write (`save_game`); a pin, since
+  a pin is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
+(R-SHARE-09). The drawer's withdrawal
+  marks it read — they have just acted on it — and the entry stays, naming nobody once no
+  share stands.
+- `friend_request` — in the asked account's inbox, renewed if asked before. An acceptance
+  marks it read and writes `friend_accepted` in the **asker's** inbox (R-FRIEND-14).
+  Cancelling, unfriending and blocking delete both accounts' friend and invitation
+  entries about the pair. A decline writes nothing and deletes nothing: the decliner's own entry is left,
+  reading as answered, and the asker is never told (R-FRIEND-04, R-FRIEND-05).
+- `game_invite` — a friend's invitation (`invite_friend`), renewed per inviter, with
+  `expiresAt`. The token is **not** stored: it stays with the live card, and the entry
+  offers Join only while that card's invitation from the same friend still stands. Best
+  effort, in a transaction of its own, since the invitation was sent either way.
+- `reports_reviewed` — a decision over an incident (a review, or a ban or warning issued
+  from a report) counts its reports into each reporter's **unread** entry, or starts one, so a moderator working through a queue
+  leaves one line rather than one per report; `uq_inbox_entries_unread_reviews` makes
+  that hold for two moderators at once, the loser of the insert counting into the
+  winner's. The count only, and dated to the **day** (UTC midnight), never the decision
+  (R-MOD-20). A guest reporter's count goes to the account it merged into; an erased
+  reporter is told nothing.
+- `role` — an offer (`offered`), a grant (`granted`) and a demotion (`removed`) by
+  `PATCH /api/admin/players/{id}/role`. Withdrawing an offer writes nothing: the offer's
+  entry stays as what happened and stops offering enrolment, its fact being gone. Taking
+  an offer up marks the account's role entries read. No actor and no reason: who acted
+  is in the ledger, and the reason is text one administrator wrote for another that can
+  name a report or a second account, so it has no route to the person it is about
+  (R-ROLE-02).
+
+**Merge.** A guest signing in moves its whole inbox into the account in the merge's
+transaction (`_merge_inbox`), under the account's rules: where both hold an entry about
+the same fact the account's stands, read if either was, and the guest's unread count
+of reviewed reports is added into the account's — under the row locks a decision takes,
+in the same order (`add_reviewed_count`), so a decision landing mid-merge is waited for
+and counted rather than overwritten by a sum read before it. Both take **accounts before
+inbox rows**: the merge locks its two `users` rows `FOR UPDATE`, and a decision locks every
+reporter's row, and the accounts they merged into, `FOR KEY SHARE` in ascending order
+before counting into any inbox. A decision that locked one reporter's count first and
+then wrote another's entry waited on that user row's foreign-key lock while a merge held
+it — a deadlock that rolled the decision back. A **ban** holds its target `FOR NO KEY
+UPDATE` (`auth/bans.py`), not `FOR UPDATE`: it still excludes a second ban, an erasure and a
+merge of that account, but not another decision's `FOR KEY SHARE` on it as a reporter. Two
+bans of players who had reported each other each held one and reached for the other, and
+one was rolled back. Left with the guest, an entry was
+outside `uq_inbox_entries_subject`, and the account's next share of the same drawing
+wrote a second one.
+
+**Reads.** `GET /api/inbox` pages the entries of **every identity of the account**,
+newest first, 20 at a time, and counts the unread; `POST /api/inbox/read` sets
+`read_at` on named entries or all of them. Read state is the account's, so reading one
+anywhere is read everywhere (R-INBOX-03).
+
+**Retention.** Deleted **90 days after `created_at`, read or not** (R-INBOX-06), by the
+`inbox_entries` sweep (§10). Ninety days is a player session's idle window (R-AUTH-03):
+an absence longer than that is a fresh sign-in anyway, and nothing is lost with an entry
+but the telling. The account's erasure deletes its entries, and deletes the entries in
+**other** inboxes whose subject is the erased account (`friend_request`,
+`friend_accepted`, `game_invite`), which would otherwise name an account that is gone;
+a guest's purge removes its user row and CASCADE takes the entries (§11). Exported as
+`inbox` (schema 17).
+
 ---
 
 ## 5. Moderation
@@ -917,11 +1022,10 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
 `ck_player_reports_not_self` forbids self-reports.
 
-`reporter_notified_at` records that the reporter was told their report had been
-looked at, which is what stops it being said twice. It records only the telling —
-never what was decided, which is the reported player's business (R-MOD-20). The
-partial index `ix_player_reports_reporter_unannounced` answers the one question
-asked on every page load, over only the rows that can still answer yes.
+A decision tells each reporter only that their report was **reviewed**: it is counted into
+their unread `reports_reviewed` inbox entry in the deciding transaction, and nothing is
+stamped here — never what was decided, which is the reported player's business
+(R-MOD-20). Until #1436 the telling was `reporter_notified_at`, read on every page load.
 
 **Where the complaint happened**, so reports of one incident are read and decided
 together (#620). `scope` and `room_instance_id` are one fact in two columns and
@@ -1290,60 +1394,46 @@ issued from a report also **resolves that report in the same transaction**, and 
 already decided refuses the ban - one complaint, one consequence.
 
 ### `user_warnings`
-`id` · `user_id` (`SET NULL`) · `issued_by_user_id` (`SET NULL`) · `reason` ·
-`source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `created_at` · `acknowledged_at`.
+`id` · `user_id` (NOT NULL, `fk_user_warnings_user_id_users` → `users` **CASCADE**) ·
+`issued_by_user_id` (`SET NULL`) · `reason` · `kind` (`warning \| avatar_removal`,
+checked) · `source_report_id` (FK → `player_reports`, `SET NULL`) · `category` ·
+`created_at` · `acknowledged_at`, with `ix_user_warnings_user_pending` on (`user_id`,
+`acknowledged_at`).
 
 `category` is the moderator's own finding about what rule a decision was about,
 checked against the six report reasons and **nullable**: it is optional, so every
 notice has to read correctly without it (R-MOD-19). It is never the reporters'
-reason, which is their claim rather than a finding.
+reason, which is their claim rather than a finding. `kind` says which notice the row
+is: a moderator's removal of a picture travels as a warning (R-AVA-08) but is not
+one, and its `reason` is **empty** — the client says the removal, and the date another
+picture may go up (`users.avatar_upload_blocked_until`, served as `uploadAgainAt`), in
+the reader's language, where a sentence built on the server was English on every screen.
 
 **Flow.** The step between dismissing a report and suspending the account: nothing is
-restricted. A connected player is told immediately over the socket (`moderator_warning`);
-otherwise the client's `GET /api/warnings/pending` on their next visit - or when a tab
-that had no socket connects, and after each acknowledgement (#1336) - returns the oldest unacknowledged warning together with the pinned messages of its
-source report — the same own-words rule as a suspension, and a warning naming a report
-about somebody else is refused for the same reason. Acknowledging sets
-`acknowledged_at`, which is what stops it being shown again and records that the notice
-actually landed. Issuing one writes a `warning.issued` audit event. A warning issued
-from a report **resolves that report in the same transaction**, and a report already
-decided refuses the warning - which is also what stops a retry from warning twice.
+restricted but a new seat and publishing, until it is acknowledged (R-INBOX-04). Issuing
+one writes a `warning` entry in the account's inbox in the same transaction, and the
+account's sockets are sent `inbox_changed` once it commits. Every read of
+`GET /api/inbox` carries the oldest unacknowledged warning (`mustAcknowledge`) together
+with the pinned messages of its source reports — the same own-words rule as a
+suspension, and a warning naming a report about somebody else is refused for the same
+reason — which the client shows as a dialog that can only be acknowledged.
+Acknowledging sets `acknowledged_at`, which is what stops it being shown again, records
+that the notice actually landed and lifts the hold on room entry; it marks the entry
+read too. Room entry and the prompt-list publish gate both ask this table for an
+unacknowledged row, so the hold is the server's and no tab can skip it. A guest warned
+and then signed in takes its warnings into the account in the merge's transaction
+(`merge_guest_into_account`): the warning is about the person, so it holds the
+account's seats and is the account's to answer. Issuing one
+writes a `warning.issued` audit event. A warning issued from a report **resolves that
+report in the same transaction**, and a report already decided refuses the warning -
+which is also what stops a retry from warning twice.
 
-### `role_change_notices`
-`id` · `user_id` (`SET NULL`) · `role` (`user`/`moderator`, checked) · `pending` ·
-`created_at` · `acknowledged_at`, with `ix_role_change_notices_user_pending` on
-(`user_id`, `acknowledged_at`). `pending` separates the two things an account can be
-told: that it **holds** a role, and that one is **waiting** for it. The second asks
-something of the reader — a second factor, before the role takes effect — so it cannot
-be worded like the first. The check is the *grantable* roles rather than every role:
-`admin` is never set over the network, so a notice about one could only arrive
-by mistake, and the database is where that mistake should stop.
-
-**Flow.** What an account still has to be told about its own role. Written by
-`PATCH /api/admin/players/{id}/role` in the same transaction as the change and its
-audit event — `admin.role_changed` for a grant, `admin.role_offered` for an offer, `admin.role_offer_withdrawn` for one taken back — so
-there can be no role nobody was told about and no notice about a role that was never
-granted; a no-op change writes neither. Taking an offer up writes **no** notice: that
-is the account's own last action, done in a dialog that says what just happened, and a
-pop-up on the next page load would be the app talking to itself — it settles the offer's
-own notice instead, as withdrawing one does. A lapse settles nothing, because nothing
-writes when an offer lapses, so a `pending` notice is served only while
-`users.pending_role` still stands: the row is the message and the column is the fact. A connected
-player is told immediately over the socket (`role_changed`), and everybody else by
-`GET /api/role-notices/pending` on their next visit — the same two-route shape a warning
-uses, sharing one payload builder so they cannot drift.
-
-**Newest, not oldest** — the one place this parts company with `user_warnings`. Two
-warnings are two things a moderator said and both are worth reading; two role notices
-are one fact recorded twice, and the older is simply wrong. So the pending query orders
-by `created_at DESC`, and acknowledging one settles every older row with it: an account
-promoted and then demoted while it was away is told once, correctly, rather than
-congratulated and then contradicted.
-
-**No actor column, and no reason.** Who acted is in the ledger, in the same transaction.
-The reason is there too and stays there: it is text one administrator wrote for another
-and can name a report or a second account, so it deliberately has no route to the person
-it is about (R-ROLE-02).
+**Twelve months, then gone; and gone with the account.** A warning is moderation
+history: a later suspension decision reads what the account was warned about before,
+which is why it outlives its inbox entry. It is kept no longer than that reason needs —
+swept 365 days after `created_at` (§10) — and **CASCADE** deletes it with the account,
+where it used to be orphaned by `SET NULL` and kept for ever (#1436). An erased
+account has no future decision for its history to inform.
 
 ### `user_blocks`
 `blocker_user_id` + `blocked_user_id` composite **PK** (both CASCADE) · `created_at`,
@@ -1791,28 +1881,6 @@ share and every pin of the drawing and sets `gallery_withdrawn_at`.
 Deleting an account deletes the shares of the drawings it erases and every share it
 made, and sets the projections again on the drawings that lose one (§11).
 
-### `drawing_share_notices`
-`id` · `user_id` (the drawer's account, canonical when written, FK to `users` CASCADE) ·
-`game_id` · `turn_id` · `created_at` · `acknowledged_at`, with
-`uq_drawing_share_notices_turn_id`, `ix_drawing_share_notices_user_pending` on
-`(user_id, acknowledged_at)` and `fk_drawing_share_notices_turn_same_game` on
-`(game_id, turn_id)`, CASCADE.
-
-What a drawer still has to be told: somebody else shared their drawing (R-SHARE-09).
-One row per drawing, ever, written by the first share by somebody other than the drawer
-that the drawer did not watch happen; the second share says nothing the first did not.
-Who to name is not kept: the pending read names the earliest share still standing by
-somebody other than the drawer, so a sharer who took theirs back or was erased is never
-named, and a notice with no such share — or whose drawing has left the Gallery — is
-neither shown nor counted.
-
-**Flow.** Written in the share's transaction — a live share's by the finished-game
-write — and pushed to the drawer's connected sockets (`drawing_share_notice`) once it
-commits; everybody else reads `GET /api/share-notices/pending` on their next visit. The
-same two routes as `role_change_notices`, sharing one payload builder. Acknowledging the
-newest settles every older one; the drawer's withdrawal settles the drawing's. Deleting
-the drawer's account deletes them.
-
 ### `gallery_shelf_reviews`
 `turn_id` **PK** (→ `turn_records`, CASCADE) · `decision` ∈ `released \| hidden` ·
 `decided_by_user_id` (→ `users`, SET NULL, indexed) · `decided_at`.
@@ -1846,7 +1914,7 @@ with a `ready`, unhidden, non-blank drawing the pinner sat in the game of and ma
 (R-SHARE-02) — their own from any game, another player's from a public one its drawer has
 not taken out — credited through the turn's frozen drawer snapshot. A pin **is** a share
 (R-PIN-03): the write shares every pinned drawing the pinner has not shared yet, in the
-same transaction, with its notice. Only a `registered` account may pin, so a guest merge
+same transaction, with its inbox entry for the drawer. Only a `registered` account may pin, so a guest merge
 never brings a shelf with it.
 
 **Reads.** `get_profile_pins` lists the shelf, joined to the turn and the drawing so a pin
@@ -2645,6 +2713,8 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Bug report rows | Indefinite | — | Permanently kept: a defect outlives its triage | — | — |
 | Bug report screenshots | Until the report is decided, **and 90 days either way** | 6 h | The report row and every piece of screenshot metadata | Erased in the deciding transaction; expired unreviewed by the hourly sweep; `ck_bug_reports_screenshot_erased` and `ck_bug_reports_screenshot_expired` | `bug_report_screenshots` |
 | Data exports | 7 days (format v1) | 6 h | — | `expires_at`; hourly retention sweep | `data_exports` |
+| Inbox entries | 90 days after arrival, read or not (R-INBOX-06); deleted with the account | 6 h | — | Hourly retention sweep by `created_at` on `ix_inbox_entries_created_at` (#1436). The facts they name keep their own retention | `inbox_entries` |
+| Moderator warnings, picture removals included | 12 months after issue (R-INBOX-06); deleted with the account (CASCADE) | 6 h | — | Hourly retention sweep by `created_at`. Kept that long because a later suspension decision reads them as history; kept for ever and orphaned on erasure before #1436 | `user_warnings` |
 | Expired sessions | 30 days past `expires_at` | 6 h | Sessions of a suspended account, their only route to export and deletion (R-BAN-04) | Hourly retention sweep | `auth_sessions` |
 | Expired rate-limit buckets | Their window | 6 h | — | One batch every 100 checks, and the hourly retention sweep | `auth_rate_limit_buckets` |
 | Login lockouts | A day after the last failure (`LOCKOUT_FORGET_AFTER`); cleared at once by a correct password | 6 h | — | Hourly retention sweep, oldest first on `ix_auth_login_lockouts_updated_at`. Never ran before #891, though this row said a day: a failure is counted for usernames that do not exist, so every name anybody tried stayed for ever (R-RATE-12) | `auth_login_lockouts` |
@@ -2652,7 +2722,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, share notices, usage facts | Indefinite | — | Permanently kept (R-PRIV-05); a share and the notices are the account's to take back, and go with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -2693,7 +2763,7 @@ so one rule holds every table to its own policy), `sketchy_retention_backlog_row
 `sketchy_retention_sweep_failures_total`. The alerts are `SketchyRetentionBehind`,
 `SketchyRetentionSweepFailing` and `SketchyRetentionSweepStarved`, all naming the table
 — because fault isolation means nothing else will: one sweep failing every hour leaves
-the other twelve succeeding and the loop looking merely intermittent
+the other fourteen succeeding and the loop looking merely intermittent
 ([`slo.md`](slo.md) SLO-10).
 
 Deletion evidence in `audit_events` is deliberately **aggregate and sparse**: the guest
@@ -2773,11 +2843,14 @@ Deletion:
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting
-  the Gallery's projections again on the other players' drawings that lose one, and the
-  share notices it was still to be told (`turn_drawing_shares`, `drawing_share_notices` in
-  §6). Every drawing row it writes - its own, and the others' it shared or pinned - is
+  the Gallery's projections again on the other players' drawings that lose one
+  (`turn_drawing_shares` in §6). Every drawing row it writes - its own, and the others' it shared or pinned - is
   locked first, in one ascending statement, before any row that hangs off one is touched:
   a drawer's withdrawal holds its drawing and then deletes the shares and pins on it;
+- deletes the account's inbox entries and its warnings, and the entries in other
+  accounts' inboxes about it as a friend or an inviter, which would name an account that
+  is gone; an entry about a drawing it shared names nobody now, since who a share entry
+  names is read when it is shown (`inbox_entries` in §4, `user_warnings` in §5);
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
 

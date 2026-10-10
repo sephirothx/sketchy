@@ -31,7 +31,8 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.pending_role import OFFER_LIFETIME
 from app.auth.routes import create_auth_router
 from app.db import create_db_engine
-from app.db.models import AuditEvent, Base, RoleChangeNotice, User, generate_uuid
+from app.api.inbox import inbox_payload
+from app.db.models import AuditEvent, Base, InboxEntry, User, generate_uuid
 from app.domain_values import AccountState, UserRole
 from app.game import Game, Phase
 from app.handlers import register_all_handlers
@@ -58,9 +59,16 @@ def role_pushes() -> list[str]:
 
     A sibling fixture rather than a seventh element of `env`: every test in
     this file unpacks that tuple at a fixed arity, and growing it would be a
-    diff across all of them for the benefit of a handful.
+    diff across all of them for the benefit of a handful. `signed_out` lists
+    the ones whose sockets the change closed (a promotion, #1436).
     """
-    return []
+
+    class Pushes(list):
+        signed_out: list[str]
+
+    pushes = Pushes()
+    pushes.signed_out = []
+    return pushes
 
 
 @pytest_asyncio.fixture
@@ -95,8 +103,10 @@ async def env(monkeypatch, role_pushes, tmp_path):
     # process would stop the test runner.
     exit_requests: list[int] = []
 
-    async def record_role_push(user_id: str) -> None:
+    async def record_role_push(user_id: str, *, signed_out: bool = False) -> None:
         role_pushes.append(user_id)
+        if signed_out:
+            role_pushes.signed_out.append(user_id)
 
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
@@ -754,7 +764,7 @@ async def test_a_moderator_can_be_put_back_to_an_ordinary_player(env):
         assert (await session.get(User, UUID(subject["id"]))).role == "user"
 
 
-async def test_a_role_change_signs_the_account_out_everywhere(env):
+async def test_a_promotion_signs_the_account_out_everywhere(env, role_pushes):
     """R-AUTH-20: a staff role must not be reachable from a session issued
     before the second factor was ever required.
 
@@ -775,8 +785,10 @@ async def test_a_role_change_signs_the_account_out_everywhere(env):
     )
     assert response.status_code == 200, response.text
     assert await list_active_sessions(factory, user_id=target["id"]) == []
-    # And the cookie they were holding no longer identifies anybody.
+    # And the cookie they were holding no longer identifies anybody, and its
+    # open sockets are closed with the reason (#1436).
     assert (await target_http.get("/api/auth/me")).json() is None
+    assert role_pushes.signed_out == [target["id"]]
 
 
 async def test_a_role_change_leaves_a_suspended_accounts_escape_hatch(env):
@@ -842,14 +854,9 @@ async def test_a_promotion_reaches_the_promoted_account(env, role_pushes):
         json={"role": "moderator", "reason": "joining the safety rota"},
     )
     assert role_pushes == [subject["id"]]
-    async with factory() as session:
-        notices = list(
-            (await session.scalars(select(RoleChangeNotice))).all()
-        )
-    assert [(str(row.user_id), row.role) for row in notices] == [
-        (subject["id"], "moderator")
+    assert await role_entries(factory) == [
+        (subject["id"], {"role": "moderator", "change": "granted"}, False)
     ]
-    assert notices[0].acknowledged_at is None
 
 
 async def test_the_push_names_the_account_the_way_its_sockets_do(env, role_pushes):
@@ -871,22 +878,29 @@ async def test_the_push_names_the_account_the_way_its_sockets_do(env, role_pushe
     assert role_pushes == [subject["id"]]
 
 
-async def test_a_demotion_tells_the_account_too(env, role_pushes):
+async def test_a_demotion_tells_the_account_and_leaves_it_signed_in(env, role_pushes):
     """A Moderation entry that vanishes with no explanation is worse than the
-    sentence saying why it went."""
+    sentence saying why it went - and signing somebody out of the game they
+    are playing to say it was all a demotion's revocation did (#1436). The
+    powers go on the next request anyway: every staff check reads the role."""
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Stepping")
+    client = new_client()
+    subject = await register(client, "Stepping")
     await set_role(factory, subject["id"], UserRole.MODERATOR.value)
+    held = await list_active_sessions(factory, user_id=subject["id"])
 
     await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "user", "reason": "stepped down"},
     )
-    assert role_pushes == [subject["id"]]
-    async with factory() as session:
-        notice = await session.scalar(select(RoleChangeNotice))
-    assert notice.role == "user"
+    assert role_pushes == [subject["id"]] and role_pushes.signed_out == []
+    assert await role_entries(factory) == [
+        (subject["id"], {"role": "user", "change": "removed"}, False)
+    ]
+    assert await list_active_sessions(factory, user_id=subject["id"]) == held
+    me = (await client.get("/api/auth/me")).json()
+    assert me["id"] == subject["id"] and me["role"] == "user"
 
 
 async def test_the_reason_never_leaves_the_ledger(env):
@@ -901,9 +915,7 @@ async def test_the_reason_never_leaves_the_ledger(env):
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "cleaning up after report 41"},
     )
-    async with factory() as session:
-        notice = await session.scalar(select(RoleChangeNotice))
-    assert "report" not in str(notice.__dict__.values())
+    assert "report" not in str(await role_entries(factory))
     event = (await audit_rows(factory))[0]
     assert event.details["reason"] == "cleaning up after report 41"
 
@@ -922,8 +934,7 @@ async def test_a_role_change_that_changes_nothing_tells_nobody(env, role_pushes)
     assert response.status_code == 200
     assert role_pushes == []
     assert await audit_rows(factory) == []
-    async with factory() as session:
-        assert (await session.scalars(select(RoleChangeNotice))).all() == []
+    assert await role_entries(factory) == []
 
 
 async def test_a_refused_role_change_announces_nothing(env, role_pushes):
@@ -946,8 +957,7 @@ async def test_a_refused_role_change_announces_nothing(env, role_pushes):
         )
         assert response.status_code == 400
     assert role_pushes == []
-    async with factory() as session:
-        assert (await session.scalars(select(RoleChangeNotice))).all() == []
+    assert await role_entries(factory) == []
 
 
 async def test_an_administrator_cannot_be_minted_over_the_network(env):
@@ -1107,19 +1117,11 @@ async def test_enrolling_takes_up_the_offer_and_ends_every_session(env):
     assert len(remaining) == 1
     assert {session.id for session in remaining}.isdisjoint(held_before)
 
-    # And the invitation is settled with the offer it was about. Left
-    # unacknowledged it would be served on the next visit, sending a
-    # moderator to set up the second factor they have just set up.
-    async with factory() as session:
-        unread = (
-            await session.scalars(
-                select(RoleChangeNotice).where(
-                    RoleChangeNotice.user_id == UUID(subject["id"]),
-                    RoleChangeNotice.acknowledged_at.is_(None),
-                )
-            )
-        ).all()
-    assert unread == []
+    # And the invitation is read with the offer it was about, and no longer
+    # leads to enrolment: the moderator has just set up the second factor.
+    assert [read for _, _, read in await role_entries(factory)] == [True]
+    [shown] = (await inbox_payload(factory, subject["id"]))["entries"]
+    assert shown["offerOpen"] is False
 
 
 async def test_an_offer_nobody_took_up_lapses_rather_than_standing_for_ever(env):
@@ -1243,19 +1245,10 @@ async def test_setting_the_role_back_withdraws_a_standing_offer(env):
         "admin.role_offered",
         "admin.role_offer_withdrawn",
     ]
-    # And nothing is left waiting to tell them a role is on its way: the
-    # invitation goes with the offer, or it would surface on their next visit
-    # and send them to enrol for nothing.
-    async with factory() as session:
-        unread = (
-            await session.scalars(
-                select(RoleChangeNotice).where(
-                    RoleChangeNotice.user_id == UUID(subject["id"]),
-                    RoleChangeNotice.acknowledged_at.is_(None),
-                )
-            )
-        ).all()
-    assert unread == []
+    # The invitation stays as what happened, but no longer sends them to enrol
+    # for nothing: its way in is read from the offer, which is gone.
+    [shown] = (await inbox_payload(factory, subject["id"]))["entries"]
+    assert (shown["change"], shown["offerOpen"]) == ("offered", False)
 
 
 async def test_a_returning_moderator_is_promoted_rather_than_offered(env):
@@ -1647,3 +1640,14 @@ async def test_a_search_term_with_a_control_character_is_refused(env):
     response = await admin.get("/api/admin/players", params={"q": "ad\x00a"})
     assert response.status_code == 422, response.text
     assert response.json()["detail"] == "Text must not contain control characters"
+
+
+async def role_entries(factory) -> list[tuple[str, dict, bool]]:
+    """What the inbox holds about roles: whose, what it says, whether read."""
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(InboxEntry).where(InboxEntry.kind == "role").order_by(InboxEntry.created_at)
+            )
+        ).all()
+    return [(str(row.user_id), row.params, row.read_at is not None) for row in rows]

@@ -1,136 +1,60 @@
 import { useClock } from "../hooks/useClock";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  acknowledgeWarning,
-  fetchPendingWarning,
-  fetchWarningDrawing,
-  reportedDrawing,
-  type PendingWarning,
-} from "../lib/moderation";
-import { asReportReason, humanizeCategory } from "../lib/moderation";
+import { acknowledgeWarning, fetchWarningDrawing } from "../lib/moderation";
+import { humanizeCategory } from "../lib/moderation";
+import { onSuspended } from "../lib/suspension";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
-import { onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+import { useGameStore } from "../store/gameStore";
+import { useInboxStore } from "../store/inboxStore";
 import { ModalShell } from "./ui/ModalShell";
 import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
-/** Keep only a payload shaped like a warning; a malformed one is dropped
-rather than rendered as "undefined" in front of the player. */
-function warningFromPayload(payload: unknown): PendingWarning | null {
-  if (!payload || typeof payload !== "object") return null;
-  const body = (payload as { warning?: unknown }).warning;
-  if (!body || typeof body !== "object") return null;
-  const warning = body as Record<string, unknown>;
-  if (typeof warning.id !== "string" || typeof warning.reason !== "string") {
-    return null;
-  }
-  return {
-    id: warning.id,
-    kind: warning.kind === "avatar_removal" ? "avatar_removal" : "warning",
-    reason: warning.reason,
-    category: asReportReason(warning.category),
-    createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
-    messages: Array.isArray(warning.messages)
-      ? warning.messages.filter(
-          (line): line is { text: string; at: string | null } =>
-            !!line && typeof (line as { text?: unknown }).text === "string",
-        )
-      : [],
-    drawings: Array.isArray(warning.drawings)
-      ? warning.drawings.flatMap((entry) => {
-          const drawing = reportedDrawing(entry);
-          const reportId = (entry as { reportId?: unknown })?.reportId;
-          return drawing && typeof reportId === "string"
-            ? [{ ...drawing, reportId }]
-            : [];
-        })
-      : [],
-  };
-}
-
-/** Show a moderator's warning to its player, once.
+/** A moderator's warning, which the player must acknowledge before going on.
 
 The step between a report going nowhere and an account being suspended:
 nothing is restricted, but the player is told what was reported - in their own
-words - and that a moderator looked. Acknowledging it records that the message
-actually landed, and it does not come back. */
+words - and that a moderator looked. Until it is acknowledged the account
+cannot take a seat (R-INBOX-04): the server refuses, so another tab cannot
+skip it. Answered once, it stays in the inbox as what happened (#1436).
+
+It is read from the inbox, which every push and every connection reads again,
+so it reaches a tab that was offline when it was issued. It never opens over a
+game: a warning issued mid-turn waits for the waiting room, the lobby or any
+other page, because a dialog in front of a turn is the one thing the inbox is
+built not to do (R-INBOX-02). And never over a suspension, which says more and
+ends the session anyway: one dialog at a time, the more serious first. */
 export function WarningNotice() {
-  const { dateTime } = useClock();
-  const userId = useAuthStore((state) => state.user?.id);
-  const hasResolved = useAuthStore((state) => state.hasResolved);
-  const [warning, setWarning] = useState<PendingWarning | null>(null);
+  const { dateTime, date } = useClock();
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const pending = useInboxStore((state) => state.mustAcknowledge);
+  const owner = useInboxStore((state) => state.owner);
+  const playing = useGameStore((state) => state.roomId !== null && state.roomState === "playing");
+  const [suspended, setSuspended] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const acknowledgeRef = useRef<HTMLButtonElement | null>(null);
-  // Bumped by a push and by an acknowledgement. A read that was already on its
-  // way when either happened is older news - sent before that warning existed,
-  // or before this one was answered - and must not replace what is on screen
-  // (#1336).
-  const newer = useRef(0);
-  // Bumped on every connection and after an acknowledgement, each of which
-  // reads again. A push reaches the sockets that are there when it is sent, so
-  // a tab still opening its connection - or between a drop and the reconnect -
-  // heard nothing; and a push carries the *oldest* pending warning, so a second
-  // one issued while the first is up is found only by reading once the first
-  // is answered (#1336).
-  const [reads, setReads] = useState(0);
 
-  useEffect(() => {
-    if (!hasResolved || !userId) return;
-    let cancelled = false;
-    const before = newer.current;
-    void fetchPendingWarning()
-      .then((result) => {
-        if (!cancelled && newer.current === before) setWarning(result.warning);
-      })
-      .catch(() => {
-        // Nothing to do: the warning stays pending server-side and will be
-        // fetched again on the next connection or visit.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasResolved, userId, reads]);
+  useEffect(() => onSuspended(() => setSuspended(true)), []);
 
-  useEffect(() => {
-    // A player who is online when the moderator decides hears it now; the
-    // read above is the catch-up route for everybody else.
-    function onModeratorWarning(payload: unknown) {
-      const pushed = warningFromPayload(payload);
-      if (pushed) {
-        newer.current += 1;
-        setWarning(pushed);
-        setFailed(false);
-      }
-    }
-    socket.on("moderator_warning", onModeratorWarning);
-    // Spread behind a reconnect like every REST refetch one triggers
-    // (R-CONN-14); a first connection reads at once.
-    const stopReading = onConnectSpread(() => setReads((count) => count + 1));
-    return () => {
-      socket.off("moderator_warning", onModeratorWarning);
-      stopReading();
-    };
-  }, []);
-
-  if (!warning) return null;
+  const warning = owner !== null && owner === userId ? pending : null;
+  if (!warning || playing || suspended) return null;
 
   // A removal restricts something; a formal warning restricts nothing. They
   // share this surface and must not share its words.
   const isRemoval = warning.kind === "avatar_removal";
 
   async function dismiss() {
-    if (busy || !warning) return;
+    if (busy || !warning || userId === null) return;
     setBusy(true);
     setFailed(false);
     try {
       await acknowledgeWarning(warning.id);
-      newer.current += 1;
-      setWarning(null);
-      setReads((count) => count + 1);
+      // The next one, if two were waiting, comes from this read.
+      await useInboxStore.getState().refresh(userId);
     } catch {
       // Leave the notice up: closing it without the receipt landing would
       // mark nothing. Said, so the button that did nothing is not a mystery,
@@ -176,7 +100,15 @@ export function WarningNotice() {
           })}
         </p>
       )}
-      <p className="modal-body suspension-reason">{warning.reason}</p>
+      {isRemoval ? (
+        <p className="modal-body suspension-reason">
+          {warning.uploadAgainAt
+            ? ui.warningNotice.uploadAgainOn({ date: date(new Date(warning.uploadAgainAt)) })
+            : ui.warningNotice.uploadAgainNow}
+        </p>
+      ) : (
+        <p className="modal-body suspension-reason">{warning.reason}</p>
+      )}
       {/* A removal shares this surface and nothing else. Saying "nothing is
           restricted" of one would be false - it restricts uploading, and by
           more each time (R-AVA-08) - so a removal says what it restricts,

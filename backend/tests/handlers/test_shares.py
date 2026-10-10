@@ -250,7 +250,7 @@ async def test_a_recap_share_is_written_first_then_shown_and_announced():
     async def push(user_id):
         pushed.append(user_id)
 
-    ctx.on_share_notice = push
+    ctx.on_inbox_changed = push
     ctx.on_gallery_changed = lambda: changed.append(True)
     history.share_result = DrawingShareResult(
         turn_id=entry.turn_id,

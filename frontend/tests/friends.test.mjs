@@ -238,19 +238,16 @@ test("a suggestion is dropped once it is on one of the lists, but a refusal is n
 
 // ------------------------------------------------ what moved since last time
 
-test("a request arriving and one being answered are told apart", () => {
+test("only a request arriving is worked out from the lists", () => {
+  // Being accepted is an entry in the asker's inbox (#1436, R-FRIEND-14),
+  // held by the server, not something a diff of two reads could see.
   const before = { ...NO_FRIENDS, outgoing: [entry("asked-them")] };
   const after = {
     friends: [entry("asked-them")],
     incoming: [entry("new-asker")],
     outgoing: [],
-    // The acceptance is what the server says is owed, not what the lists
-    // moving imply (R-FRIEND-14).
-    announce: [entry("asked-them")],
   };
-  const changes = friendListChanges(before, after);
-  assert.deepEqual(changes.arrived.map((row) => row.userId), ["new-asker"]);
-  assert.deepEqual(changes.accepted.map((row) => row.userId), ["asked-them"]);
+  assert.deepEqual(friendListChanges(before, after), { arrived: [entry("new-asker")] });
 });
 
 test("a request that stopped being pending is never reported", () => {
@@ -260,18 +257,7 @@ test("a request that stopped being pending is never reported", () => {
     { ...NO_FRIENDS, outgoing: [entry("they-said-no")] },
     NO_FRIENDS,
   );
-  assert.deepEqual(changes, { arrived: [], accepted: [] });
-});
-
-test("a payload with no announce list is read as nothing owed", () => {
-  // An older server, or a shape that predates the field. Told late beats
-  // throwing on every read.
-  const changes = friendListChanges(NO_FRIENDS, {
-    friends: [entry("them")],
-    incoming: [],
-    outgoing: [],
-  });
-  assert.deepEqual(changes.accepted, []);
+  assert.deepEqual(changes, { arrived: [] });
 });
 
 test("answering a request yourself is not news", () => {
@@ -281,13 +267,12 @@ test("answering a request yourself is not news", () => {
     { ...NO_FRIENDS, incoming: [entry("asked-me")] },
     { ...NO_FRIENDS, friends: [entry("asked-me")] },
   );
-  assert.deepEqual(changes.accepted, []);
   assert.deepEqual(changes.arrived, []);
 });
 
 test("a request still waiting is not re-announced", () => {
   const lists = { ...NO_FRIENDS, incoming: [entry("patient")] };
-  assert.deepEqual(friendListChanges(lists, lists), { arrived: [], accepted: [] });
+  assert.deepEqual(friendListChanges(lists, lists), { arrived: [] });
 });
 
 test("the badge counts only what is waiting for an answer", () => {
@@ -396,30 +381,6 @@ test("a seat offers a friendship where one can exist, and not to a marked friend
   assert.equal(seatMayOfferFriendship({ ...them, connected: false }, me, new Set()), false);
 });
 
-// ------------------------------------- an acceptance that lands during a load
-
-test("an acceptance is told from the row, not from watching the lists move", () => {
-  const them = { userId: "them", displayName: "Them" };
-
-  // The page reloaded while the answer was in flight, so the first lists this
-  // client ever saw already contain the friendship: there is no transition to
-  // notice. It is told anyway, because the server says it is owed (#724).
-  const reloaded = friendListChanges(NO_FRIENDS, {
-    ...NO_FRIENDS,
-    friends: [them],
-    announce: [them],
-  });
-  assert.deepEqual(reloaded.accepted, [them]);
-
-  // And once it has been told, the same lists say nothing more - the row
-  // carries that it was announced, so a later read does not repeat it.
-  const already = friendListChanges(
-    { ...NO_FRIENDS, outgoing: [them] },
-    { ...NO_FRIENDS, friends: [them] },
-  );
-  assert.deepEqual(already.accepted, []);
-});
-
 test("an arrival is still a diff, because an unannounced one leaves a trace", () => {
   const them = { userId: "them", displayName: "Them" };
   const arrived = friendListChanges(NO_FRIENDS, {
@@ -427,8 +388,7 @@ test("an arrival is still a diff, because an unannounced one leaves a trace", ()
     incoming: [them],
   });
   // Skipped on a first read by `absorb`, and that is fine: the request is
-  // still sitting in the list with a badge over it. An acceptance leaves
-  // nothing behind, which is why that one is durable and this is not.
+  // still sitting in the list with a badge over it, and in the inbox.
   assert.deepEqual(arrived.arrived, [them]);
 });
 

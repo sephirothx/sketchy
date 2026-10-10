@@ -251,8 +251,9 @@ class TurnDrawingShareInput:
 class DrawingShareResult:
     """What a share write leaves behind (#1430): the seats that share the
     drawing now, the first sharer first, and whether the drawer has taken it
-    out. `notify_user_id` is the drawer's account when this write left them a
-    notice to be pushed once it commits (R-SHARE-09)."""
+    out. `notify_user_id` is the drawer's account when this write moved their
+    inbox - an entry left (R-SHARE-09), or read by their withdrawal - to be
+    pushed once it commits."""
 
     turn_id: str
     shares: tuple[str, ...]

@@ -40,10 +40,11 @@ from enum import StrEnum
 import logging
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.inbox import add_entry, forget_subjects, mark_read
 from app.db.models import Friendship, IdentityAlias, User, UserBlock
 from app.domain_values import AccountState, FriendshipState
 
@@ -87,6 +88,40 @@ class FriendshipRefused(Exception):
 
 class FriendshipThrottled(FriendshipRefused):
     """Too many requests in too short a time, rather than too many at once."""
+
+
+async def _tell_requested(session: AsyncSession, *, asker: UUID, asked: UUID) -> None:
+    """A request is an entry in the asked account's inbox (#1436), renewed
+    if it was asked before. Nothing for the asker: what becomes of it is
+    told only if it is accepted (R-FRIEND-04)."""
+    await add_entry(
+        session, user_id=asked, kind="friend_request", subject_id=asker, renew=True
+    )
+
+
+async def _tell_accepted(session: AsyncSession, *, asker: UUID, answerer: UUID) -> None:
+    """An acceptance is an entry in the asker's inbox, held there for a reader
+    who was not present for it (R-FRIEND-14); the answerer's request entry
+    is read, since answering it is reading it."""
+    await add_entry(
+        session, user_id=asker, kind="friend_accepted", subject_id=answerer, renew=True
+    )
+    await mark_read(
+        session, user_ids=[answerer], kind="friend_request", subject_id=asker
+    )
+
+
+_PAIR_KINDS = ("friend_request", "friend_accepted", "game_invite")
+
+
+async def _forget_pair_entries(session: AsyncSession, a: UUID, b: UUID) -> None:
+    """A request withdrawn, a friendship ended or blocked: the entries about it
+    are about nothing now, in either inbox - an invitation too, whose Join
+    would only be refused (R-FRIEND-14)."""
+    for owner, subject in ((a, b), (b, a)):
+        await forget_subjects(
+            session, kinds=_PAIR_KINDS, subject_ids=[subject], user_ids=[owner]
+        )
 
 
 def friendship_key(a: UUID, b: UUID) -> tuple[UUID, UUID]:
@@ -270,60 +305,7 @@ class FriendService:
                 outgoing.append((row, person))
             else:
                 incoming.append((row, person))
-        # What this account asked for, has had accepted, and has not been
-        # told about. Held on the row rather than derived from the lists
-        # moving, so a reader who was not present for the move still learns
-        # it - a reload, another device, or simply being offline when the
-        # answer came (R-FRIEND-14).
-        announce = [
-            (row, person)
-            for row, person in friends
-            if row.requested_by_id == user_id
-            and row.acceptance_announced_at is None
-        ]
-        return {
-            "friends": friends,
-            "incoming": incoming,
-            "outgoing": outgoing,
-            "announce": announce,
-        }
-
-    async def announced(self, user_id: UUID, others: list[UUID]) -> int:
-        """Record that the asker was told, for exactly the ones they were told
-        about.
-
-        Named rather than "everything outstanding": the message is shown
-        first and says which friendships it was about, so an acceptance that
-        landed between the read and this call keeps its turn. Every condition
-        is re-checked here - their own request, accepted, still unannounced -
-        because the list is a client's account of what it displayed.
-        """
-        if not others:
-            return 0
-        now = datetime.now(timezone.utc)
-        async with self._session_factory() as session:
-            async with session.begin():
-                stamped = await session.execute(
-                    update(Friendship)
-                    .where(
-                        Friendship.requested_by_id == user_id,
-                        Friendship.status == FriendshipState.ACCEPTED.value,
-                        Friendship.acceptance_announced_at.is_(None),
-                        or_(
-                            *[
-                                and_(
-                                    Friendship.user_low_id == low,
-                                    Friendship.user_high_id == high,
-                                )
-                                for low, high in (
-                                    friendship_key(user_id, other) for other in others
-                                )
-                            ]
-                        ),
-                    )
-                    .values(acceptance_announced_at=now)
-                )
-        return stamped.rowcount or 0
+        return {"friends": friends, "incoming": incoming, "outgoing": outgoing}
 
     # --- writes -----------------------------------------------------------
 
@@ -459,6 +441,7 @@ class FriendService:
                         )
                         row.status = FriendshipState.ACCEPTED.value
                         row.responded_at = _now()
+                        await _tell_accepted(session, asker=target.id, answerer=requester_id)
                         return FriendshipOutcome.ACCEPTED
                     # Declined. If this caller is the one who was refused, the
                     # refusal stands and they are told nothing. If they are the
@@ -477,6 +460,7 @@ class FriendService:
                     row.status = FriendshipState.PENDING.value
                     row.requested_by_id = requester_id
                     row.responded_at = None
+                    await _tell_requested(session, asker=requester_id, asked=target.id)
                     return FriendshipOutcome.CREATED
 
                 await self._raise_if_full(session, requester_id)
@@ -494,6 +478,7 @@ class FriendService:
                         status=FriendshipState.PENDING.value,
                     )
                 )
+                await _tell_requested(session, asker=requester_id, asked=target.id)
                 return FriendshipOutcome.CREATED
 
     async def accept(self, user_id: UUID, other_id: UUID) -> FriendshipOutcome:
@@ -543,6 +528,7 @@ class FriendService:
         await self._raise_if_either_list_is_full(session, user_id, other_id)
         row.status = FriendshipState.ACCEPTED.value
         row.responded_at = _now()
+        await _tell_accepted(session, asker=other_id, answerer=user_id)
         return FriendshipOutcome.ACCEPTED
 
     async def remove(self, user_id: UUID, other_id: UUID) -> FriendshipOutcome:
@@ -582,6 +568,7 @@ class FriendService:
             # Somebody else's refusal is not this caller's to clear.
             return FriendshipOutcome.UNCHANGED
         await session.delete(row)
+        await _forget_pair_entries(session, row.user_low_id, row.user_high_id)
         return FriendshipOutcome.REMOVED
 
     async def forget_pair(
@@ -606,7 +593,10 @@ class FriendService:
         # a friend. Handed back rather than announced here because this joins a
         # transaction it does not own, and the caller is the only one who knows
         # when it committed. `announce_to` is the other half.
-        return (str(a), str(b)) if result.rowcount else ()
+        if not result.rowcount:
+            return ()
+        await _forget_pair_entries(session, a, b)
+        return (str(a), str(b))
 
     # --- ceilings ---------------------------------------------------------
 

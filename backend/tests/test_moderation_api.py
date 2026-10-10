@@ -15,6 +15,7 @@ from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from app.api.inbox import create_inbox_router
 from app.api.moderation import create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -55,11 +56,12 @@ async def env(monkeypatch):
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(users, factory))
+    app.include_router(create_inbox_router(factory, on_inbox_changed=warned_callback))
     app.include_router(
         create_moderation_router(
             factory,
             on_user_banned=banned_callback,
-            on_user_warned=warned_callback,
+            on_inbox_changed=warned_callback,
         )
     )
 
@@ -937,13 +939,18 @@ async def test_a_warning_reaches_the_player_once_and_its_receipt_is_recorded(env
     assert issued.status_code == 201
     warning_id = issued.json()["id"]
     # The live-push hook fired after commit, naming the warned account - this
-    # is what tells a connected player without waiting for their next visit.
-    new_client.warned_callback.assert_awaited_once_with(target["id"])
+    # is what tells a connected player without waiting for their next visit -
+    # and the reporter, whose report the warning decided.
+    new_client.warned_callback.assert_any_await(target["id"])
+    entries = (await target_http.get("/api/inbox")).json()["entries"]
+    assert [(e["kind"], e["warning"]["id"], e["read"]) for e in entries] == [
+        ("warning", warning_id, False)
+    ]
 
     # The warned player sees their own words behind the reason, exactly once.
-    pending = await target_http.get("/api/warnings/pending")
+    pending = await target_http.get("/api/inbox")
     assert pending.status_code == 200
-    body = pending.json()["warning"]
+    body = pending.json()["mustAcknowledge"]
     assert body["id"] == warning_id
     assert body["reason"].startswith("Harassment in room chat")
     assert body["messages"] == [
@@ -954,7 +961,7 @@ async def test_a_warning_reaches_the_player_once_and_its_receipt_is_recorded(env
     ]
 
     # Nobody else can see it or acknowledge it away.
-    assert (await reporter_http.get("/api/warnings/pending")).json()["warning"] is None
+    assert (await reporter_http.get("/api/inbox")).json()["mustAcknowledge"] is None
     assert (
         await reporter_http.post(f"/api/warnings/{warning_id}/acknowledge")
     ).status_code == 404
@@ -962,7 +969,11 @@ async def test_a_warning_reaches_the_player_once_and_its_receipt_is_recorded(env
     assert (
         await target_http.post(f"/api/warnings/{warning_id}/acknowledge")
     ).status_code == 200
-    assert (await target_http.get("/api/warnings/pending")).json()["warning"] is None
+    after = (await target_http.get("/api/inbox")).json()
+    assert after["mustAcknowledge"] is None
+    # Answered is read, and it stays in the inbox as what happened (#1436).
+    [entry] = after["entries"]
+    assert entry["read"] and entry["warning"]["acknowledged"]
 
     async with factory() as session:
         events = (
@@ -1355,8 +1366,8 @@ async def test_a_report_carries_what_was_said_around_the_cited_line(env):
         json={"userId": target["id"], "reason": "Mind the tone.", "reportId": case["id"]},
     )
     assert warned.status_code == 201, warned.text
-    pending = await target_http.get("/api/warnings/pending")
-    assert [line["text"] for line in pending.json()["warning"]["messages"]] == [
+    pending = await target_http.get("/api/inbox")
+    assert [line["text"] for line in pending.json()["mustAcknowledge"]["messages"]] == [
         "the line itself"
     ]
 
@@ -1919,7 +1930,7 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
             json={"userId": warned["id"], "reason": "Not a lighthouse.", "reportId": warning_report},
         )
     ).json()["id"]
-    pending = (await warned_http.get("/api/warnings/pending")).json()["warning"]
+    pending = (await warned_http.get("/api/inbox")).json()["mustAcknowledge"]
     (drawing,) = pending["drawings"]
     assert drawing["prompt"] == "lighthouse"
     assert drawing["reportId"] == warning_report
@@ -1967,7 +1978,7 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
     assert picture.content == frame
     assert picture.headers["cache-control"] == "private, no-store"
     # The escape hatch opens that one path and nothing beside it.
-    assert (await suspended_http.get("/api/warnings/pending")).status_code == 403
+    assert (await suspended_http.get("/api/inbox")).status_code == 403
 
 
 async def test_a_report_records_where_the_complaint_happened(env):
@@ -3131,12 +3142,12 @@ async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env)
 
     with_category, payload = await warn("CatTold", "harassment")
     assert payload["category"] == "harassment"
-    shown = (await with_category.get("/api/warnings/pending")).json()["warning"]
+    shown = (await with_category.get("/api/inbox")).json()["mustAcknowledge"]
     assert shown["category"] == "harassment"
 
     without, payload = await warn("CatQuiet", None)
     assert payload["category"] is None
-    shown = (await without.get("/api/warnings/pending")).json()["warning"]
+    shown = (await without.get("/api/inbox")).json()["mustAcknowledge"]
     assert shown["category"] is None
 
     # Not any word a caller likes: the six a report may name, and nothing else.
@@ -3154,11 +3165,9 @@ async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env)
 
 
 async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
-    """Reporting into silence teaches people not to bother, so a decided
-    report is told back to whoever made it - as a count, and nothing else.
-    What was decided belongs to the reported player, and an outcome handed
-    back to whoever asked about them would make a report a way of finding
-    things out about somebody (R-MOD-20)."""
+    """A decision is counted into the reporter's inbox: that their reports
+    were reviewed, never what was decided or about whom (R-MOD-20, #1436).
+    A moderator working through a queue leaves one line, not one per report."""
     new_client, factory, _ = env
     reporter_http = new_client()
     moderator_http = new_client()
@@ -3180,193 +3189,52 @@ async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
         assert sent.status_code == 201, sent.text
         return sent.json()["id"]
 
-    first, second = await report("LoopA"), await report("LoopB")
-
-    # Nothing decided yet, so nothing to say.
-    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 0
-
-    for report_id, status in ((first, "dismissed"), (second, "resolved")):
+    async def decide(report_id, status="dismissed"):
         decided = await moderator_http.patch(
             f"/api/moderation/reports/{report_id}",
             json={"status": status, "note": "Looked at."},
         )
         assert decided.status_code == 200, decided.text
 
-    # Both, counted - and the count is the whole of it: no outcome, no target.
-    reviewed = (await reporter_http.get("/api/reports/reviewed")).json()
-    assert reviewed["count"] == 2
-    assert set(reviewed["reportIds"]) == {first, second}
+    first, second, third = await report("LoopA"), await report("LoopB"), await report("LoopC")
 
-    acked = await reporter_http.post(
-        "/api/reports/reviewed/acknowledge", json={"reportIds": reviewed["reportIds"]}
+    # Nothing decided yet, so nothing to say.
+    assert (await reporter_http.get("/api/inbox")).json()["entries"] == []
+
+    await decide(first)
+    await decide(second, "resolved")
+    inbox = (await reporter_http.get("/api/inbox")).json()
+    [entry] = inbox["entries"]
+    # The count is the whole of it: no outcome, no target, no report ids.
+    assert entry["kind"] == "reports_reviewed" and entry["count"] == 2
+    assert set(entry) == {"id", "kind", "createdAt", "read", "count"}
+    assert inbox["unreadCount"] == 1
+    for name in ("LoopA", "LoopB"):
+        assert name not in str(inbox)
+    new_client.warned_callback.assert_any_await(
+        (await reporter_http.get("/api/auth/me")).json()["id"]
     )
-    assert acked.json() == {"ok": True, "acknowledged": 2}
-    # Said once.
-    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 0
+
+    # Read is read; a later decision is a new line rather than a changed old one.
+    assert (
+        await reporter_http.post("/api/inbox/read", json={"ids": [entry["id"]]})
+    ).json() == {"unreadCount": 0}
+    await decide(third)
+    entries = (await reporter_http.get("/api/inbox")).json()["entries"]
+    assert [(e["count"], e["read"]) for e in entries] == [(1, False), (2, True)]
 
     # Somebody else's decided reports are not theirs to hear about.
     other_http = new_client()
     await register(other_http, "LoopOther")
-    assert (await other_http.get("/api/reports/reviewed")).json()["count"] == 0
+    assert (await other_http.get("/api/inbox")).json()["entries"] == []
 
 
-async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
-    """It is about the caller's own reports, so there has to be a caller."""
+async def test_the_inbox_needs_an_identity_of_its_own(env):
+    """It is about the caller's own account, so there has to be a caller."""
     new_client, _, _ = env
     anonymous = new_client()
-    assert (await anonymous.get("/api/reports/reviewed")).status_code == 401
-    assert (
-        await anonymous.post(
-            "/api/reports/reviewed/acknowledge", json={"reportIds": []}
-        )
-    ).status_code == 401
-
-
-async def test_a_report_decided_mid_notice_is_counted_rather_than_swallowed(env):
-    """The claim counts and stamps in one statement. Counting first and
-    stamping second would mark whatever is decided by the time the second
-    request lands - so a report decided in between would be recorded as told
-    without anybody having been told, and would never be announced (R-MOD-20).
-    """
-    new_client, factory, _ = env
-    reporter_http = new_client()
-    moderator_http = new_client()
-    await register(reporter_http, "RaceRep")
-    moderator = await register(moderator_http, "RaceMod")
-    await set_role(factory, moderator["id"], UserRole.MODERATOR)
-
-    async def report(name):
-        target_http = new_client()
-        target = await register(target_http, name)
-        sent = await reporter_http.post(
-            "/api/reports",
-            json={
-                "reportedUserId": target["id"],
-                "reason": "harassment",
-                "details": "Please look.",
-            },
-        )
-        assert sent.status_code == 201, sent.text
-        return sent.json()["id"]
-
-    async def decide(report_id):
-        answered = await moderator_http.patch(
-            f"/api/moderation/reports/{report_id}",
-            json={"status": "dismissed", "note": "Looked at."},
-        )
-        assert answered.status_code == 200, answered.text
-
-    first, second = await report("RaceA"), await report("RaceB")
-    await decide(first)
-
-    # What the reader saw when the page loaded, and which reports it was of.
-    seen = (await reporter_http.get("/api/reports/reviewed")).json()
-    assert seen["count"] == 1
-    assert seen["reportIds"] == [first]
-
-    # And then the second is decided, before the acknowledgement lands.
-    await decide(second)
-
-    # The acknowledgement takes only what the message named. The second was
-    # never mentioned, so it keeps its turn rather than being marked as told
-    # by a message that said nothing about it.
-    acked = await reporter_http.post(
-        "/api/reports/reviewed/acknowledge", json={"reportIds": seen["reportIds"]}
-    )
-    assert acked.json() == {"ok": True, "acknowledged": 1}
-
-    still = (await reporter_http.get("/api/reports/reviewed")).json()
-    assert still["count"] == 1
-    assert still["reportIds"] == [second]
-
-    # Acknowledging the same list twice takes nothing the second time, which
-    # is how a second tab learns there is nothing left to say.
-    again = await reporter_http.post(
-        "/api/reports/reviewed/acknowledge", json={"reportIds": seen["reportIds"]}
-    )
-    assert again.json() == {"ok": True, "acknowledged": 0}
-
-
-async def test_a_message_that_was_never_shown_marks_nothing_as_told(env):
-    """The reader is read-only, so a page that asks and then never renders -
-    the account signs out mid-request, the effect is torn down - leaves the
-    reports exactly where they were. A report marked as told that nobody was
-    told about is never announced again, which is the one outcome worth
-    ruling out (R-MOD-20)."""
-    new_client, factory, _ = env
-    reporter_http = new_client()
-    moderator_http = new_client()
-    await register(reporter_http, "ShownRep")
-    moderator = await register(moderator_http, "ShownMod")
-    await set_role(factory, moderator["id"], UserRole.MODERATOR)
-
-    target_http = new_client()
-    target = await register(target_http, "ShownTgt")
-    sent = await reporter_http.post(
-        "/api/reports",
-        json={
-            "reportedUserId": target["id"],
-            "reason": "harassment",
-            "details": "Please look.",
-        },
-    )
-    report_id = sent.json()["id"]
-    decided = await moderator_http.patch(
-        f"/api/moderation/reports/{report_id}",
-        json={"status": "dismissed", "note": "Looked at."},
-    )
-    assert decided.status_code == 200, decided.text
-
-    # Asked twice and never acknowledged: reading is not being told.
-    for _ in range(2):
-        answer = (await reporter_http.get("/api/reports/reviewed")).json()
-        assert answer["count"] == 1
-        assert answer["reportIds"] == [report_id]
-
-    # And an acknowledgement naming nothing takes nothing, which is what a
-    # torn-down render sends if it sends anything at all.
-    empty = await reporter_http.post(
-        "/api/reports/reviewed/acknowledge", json={"reportIds": []}
-    )
-    assert empty.json() == {"ok": True, "acknowledged": 0}
-    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 1
-
-
-async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
-    """The list is a client's account of what it showed, never authority over
-    a row: every condition is checked again on the write."""
-    new_client, factory, _ = env
-    mine_http = new_client()
-    theirs_http = new_client()
-    moderator_http = new_client()
-    await register(mine_http, "MineRep")
-    await register(theirs_http, "TheirsRep")
-    moderator = await register(moderator_http, "MineMod")
-    await set_role(factory, moderator["id"], UserRole.MODERATOR)
-
-    target_http = new_client()
-    target = await register(target_http, "MineTgt")
-    sent = await theirs_http.post(
-        "/api/reports",
-        json={
-            "reportedUserId": target["id"],
-            "reason": "harassment",
-            "details": "Theirs.",
-        },
-    )
-    theirs = sent.json()["id"]
-    await moderator_http.patch(
-        f"/api/moderation/reports/{theirs}",
-        json={"status": "dismissed", "note": "Looked at."},
-    )
-
-    # Naming a report that is not mine stamps nothing...
-    taken = await mine_http.post(
-        "/api/reports/reviewed/acknowledge", json={"reportIds": [theirs]}
-    )
-    assert taken.json() == {"ok": True, "acknowledged": 0}
-    # ...and its own reporter still has it waiting.
-    assert (await theirs_http.get("/api/reports/reviewed")).json()["count"] == 1
+    assert (await anonymous.get("/api/inbox")).status_code == 401
+    assert (await anonymous.post("/api/inbox/read", json={"all": True})).status_code == 401
 
 
 def _retention_held_until_flushed(factory):

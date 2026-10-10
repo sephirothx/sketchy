@@ -258,15 +258,13 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             # Nothing is in the Gallery until somebody shares it (R-SHARE-01):
             # the host shares both from the recap - the one they drew, and the
             # other player's, without asking (R-SHARE-02). The other player is
-            # in the room watching, so nobody is sent a notice (R-SHARE-09).
+            # in the room watching, so nothing lands in their inbox (R-SHARE-09).
             await game_end.get_by_role("button", name="Drawings", exact=True).click()
             recap = host.locator(".drawing-recap")
             await recap.wait_for()
             for index in range(2):
                 await share_from_recap(host, recap)
-                await expect(
-                    other.locator('[data-testid="share-notice"]')
-                ).to_have_count(0)
+                await expect(other.get_by_test_id("inbox-count")).to_have_count(0)
                 if index == 0:
                     await recap.get_by_role("button", name="Next").click()
 

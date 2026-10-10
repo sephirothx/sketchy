@@ -6,6 +6,7 @@ import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { loadRecapDrawing } from "../lib/recapDrawings";
 import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { InboxBell } from "./InboxBell";
 import { AccountMenu } from "../components/AccountMenu";
 import { AfkCheckDialog } from "../components/AfkCheckDialog";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
@@ -566,6 +567,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           ) : (
             <RoomMenuDropdown actions={roomMenuActions} />
           )}
+          <InboxBell compact={identityCompact} />
           <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>

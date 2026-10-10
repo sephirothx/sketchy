@@ -15,6 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
 from app.api.avatars import AVATAR_UPLOAD_LIMIT, create_avatar_router
+from app.api.inbox import create_inbox_router
 from app.api.moderation import create_moderation_router
 from app.auth.avatar_doodles import DOODLES
 from app.auth.avatars import (
@@ -50,6 +51,7 @@ async def env(monkeypatch):
     app.include_router(create_auth_router(users, factory))
     app.include_router(create_avatar_router(users, factory, on_avatar_changed=changed))
     app.include_router(create_moderation_router(factory, on_avatar_changed=changed))
+    app.include_router(create_inbox_router(factory))
     clients: list[AsyncClient] = []
 
     def new_client() -> AsyncClient:
@@ -790,14 +792,13 @@ async def test_a_removed_picture_is_something_its_owner_is_told_about(env):
     )
     assert removed.status_code == 200, removed.text
 
-    pending = await target_http.get("/api/warnings/pending")
+    pending = await target_http.get("/api/inbox")
     assert pending.status_code == 200
-    warning = pending.json()["warning"]
-    assert warning is not None
-    assert "removed the picture" in warning["reason"]
-    # The first costs nothing, and the notice says so rather than leaving them
-    # to discover it by trying.
-    assert "upload another one now" in warning["reason"]
+    warning = pending.json()["mustAcknowledge"]
+    assert warning is not None and warning["kind"] == "avatar_removal"
+    # Said by the client in the reader's language (#1436), so no sentence
+    # here; the first removal costs nothing, so there is no date to wait for.
+    assert warning["reason"] == "" and warning["uploadAgainAt"] is None
     # It carries no evidence: the picture it was about is deleted, and there
     # are no words to quote.
     assert warning["messages"] == []
@@ -806,7 +807,10 @@ async def test_a_removed_picture_is_something_its_owner_is_told_about(env):
     # Acknowledged like any other, and gone.
     ack = await target_http.post(f"/api/warnings/{warning['id']}/acknowledge")
     assert ack.status_code == 200
-    assert (await target_http.get("/api/warnings/pending")).json()["warning"] is None
+    after = (await target_http.get("/api/inbox")).json()
+    assert after["mustAcknowledge"] is None
+    [entry] = after["entries"]
+    assert entry["warning"]["kind"] == "avatar_removal" and entry["read"]
 
 
 async def test_a_second_removal_says_when_the_picture_may_come_back(env):
@@ -829,8 +833,14 @@ async def test_a_second_removal_says_when_the_picture_may_come_back(env):
             )
         ).all()
     assert len(warnings) == 2
-    assert "upload another one now" in warnings[0].reason
-    assert "upload another one on" in warnings[1].reason
+    # The date is read from the account, not written into a sentence.
+    assert [w.reason for w in warnings] == ["", ""]
+    shown = (await target_http.get("/api/inbox")).json()["mustAcknowledge"]
+    async with factory() as session:
+        until = await session.scalar(
+            select(User.avatar_upload_blocked_until).where(User.id == UUID(target["id"]))
+        )
+    assert shown["uploadAgainAt"] == until.isoformat()
 
 
 async def test_a_removal_notice_is_not_a_formal_warning(env):
@@ -844,7 +854,7 @@ async def test_a_removal_notice_is_not_a_formal_warning(env):
     await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=31)))
     await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
 
-    shown = (await target_http.get("/api/warnings/pending")).json()["warning"]
+    shown = (await target_http.get("/api/inbox")).json()["mustAcknowledge"]
     assert shown["kind"] == "avatar_removal"
 
     async with factory() as session:

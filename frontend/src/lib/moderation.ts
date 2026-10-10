@@ -467,6 +467,9 @@ export interface PendingWarning {
   messages: { text: string; at: string | null }[];
   /** The canvases those reports carried, if any did - the player's own work. */
   drawings: (PlayerReportDrawing & { reportId: string })[];
+  /** For a removal: when another picture may go up, said in the reader's
+      language (#1436). Null when it may go up now. */
+  uploadAgainAt: string | null;
 }
 
 /** One drawing behind the caller's own warning. */
@@ -507,31 +510,39 @@ export function createUserWarning(input: {
   return apiRequest("/api/moderation/warnings", { method: "POST", body: input });
 }
 
-/** How many of your own reports have been decided since you were last told.
-
-A count and nothing else: what was decided belongs to the reported player
-(R-MOD-20). */
-export function countReportsReviewed(): Promise<{
-  count: number;
-  /** Which reports the count was of, so the acknowledgement can name exactly
-      the ones a message was actually about. */
-  reportIds: string[];
-}> {
-  return apiRequest("/api/reports/reviewed");
-}
-
-export function acknowledgeReportsReviewed(reportIds: string[]): Promise<{
-  ok: boolean;
-  acknowledged: number;
-}> {
-  return apiRequest("/api/reports/reviewed/acknowledge", {
-    method: "POST",
-    body: { reportIds },
-  });
-}
-
-export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
-  return apiRequest("/api/warnings/pending");
+/** Keep only a payload shaped like a warning; a malformed one is dropped
+rather than rendered as "undefined" in front of the player. */
+export function parsePendingWarning(payload: unknown): PendingWarning | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = (payload as { warning?: unknown }).warning;
+  if (!body || typeof body !== "object") return null;
+  const warning = body as Record<string, unknown>;
+  if (typeof warning.id !== "string" || typeof warning.reason !== "string") {
+    return null;
+  }
+  return {
+    id: warning.id,
+    kind: warning.kind === "avatar_removal" ? "avatar_removal" : "warning",
+    reason: warning.reason,
+    category: asReportReason(warning.category),
+    createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
+    messages: Array.isArray(warning.messages)
+      ? warning.messages.filter(
+          (line): line is { text: string; at: string | null } =>
+            !!line && typeof (line as { text?: unknown }).text === "string",
+        )
+      : [],
+    drawings: Array.isArray(warning.drawings)
+      ? warning.drawings.flatMap((entry) => {
+          const drawing = reportedDrawing(entry);
+          const reportId = (entry as { reportId?: unknown })?.reportId;
+          return drawing && typeof reportId === "string"
+            ? [{ ...drawing, reportId }]
+            : [];
+        })
+      : [],
+    uploadAgainAt: typeof warning.uploadAgainAt === "string" ? warning.uploadAgainAt : null,
+  };
 }
 
 export function acknowledgeWarning(warningId: string): Promise<{ ok: boolean }> {

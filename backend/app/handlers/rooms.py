@@ -11,6 +11,7 @@ from functools import partial
 
 from app.announcements import Announcement
 from app.game import Phase
+from app.auth.warnings import has_unacknowledged_warning
 from app.handlers.context import HandlerContext
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import telemetry
@@ -193,6 +194,30 @@ ACCOUNT_REQUIRED_TO_OPEN = {
 }
 
 
+# A warning not yet acknowledged holds every new seat back (#1436,
+# R-INBOX-04): the client answers this code by showing the warning.
+WARNING_UNREAD_ACKNOWLEDGEMENT = {
+    "ok": False,
+    "errorCode": ErrorCode.WARNING_UNREAD,
+    "error": "Read your moderator warning first.",
+    "params": {"action": "play"},
+}
+
+
+async def _warning_holds(ctx: HandlerContext, user_id: str | None) -> bool:
+    """Whether an unacknowledged warning holds this account back from a seat.
+
+    Checked on the server so another tab, or a client that never shows the
+    dialog, cannot skip it; never on a seat the account already holds, which
+    a reconnect takes back whatever arrived meanwhile."""
+    if not user_id or ctx.session_factory is None:
+        return False
+    return await _bounded(
+        has_unacknowledged_warning(ctx.session_factory, user_id),
+        "checking for a warning",
+    )
+
+
 BUSY_ACKNOWLEDGEMENT = {
     "ok": False, "errorCode": ErrorCode.DATABASE_BUSY,
     "error": "Sketchy is having trouble reaching its database. Please try again.",
@@ -341,6 +366,11 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         # a code reservation and a prompt pool, and a ceiling nothing can be
         # keyed on is not a ceiling.
         return ACCOUNT_REQUIRED_TO_OPEN
+    try:
+        if await _warning_holds(ctx, identity.user_id):
+            return WARNING_UNREAD_ACKNOWLEDGEMENT
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
     repeat = _room_already_created(ctx, identity.user_id, payload.request_id)
     if repeat is not None:
         # A retry of a creation that happened: the answer was lost, or came
@@ -982,6 +1012,13 @@ async def _seat_in_room(
         # too, since the vote was about the person, not the seat. Before the
         # join is charged, so there is nothing to refund.
         return KICKED_FROM_ROOM_ACKNOWLEDGEMENT
+    if not quick_play:
+        # Quick play asked once for the whole walk, before its first room.
+        try:
+            if await _warning_holds(ctx, identity.user_id):
+                return WARNING_UNREAD_ACKNOWLEDGEMENT
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
     if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
         # Deliberately not `room_full`: that code is what makes the client
         # offer spectating instead, and offering it to somebody refused *as* a
@@ -1447,6 +1484,11 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
         )
     except IdentityError as error:
         return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    try:
+        if await _warning_holds(ctx, identity.user_id):
+            return WARNING_UNREAD_ACKNOWLEDGEMENT
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
 

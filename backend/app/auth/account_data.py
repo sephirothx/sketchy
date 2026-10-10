@@ -67,7 +67,8 @@ from app.db.models import (
     ProfileDrawingPin,
     TurnDrawingReaction,
     TurnDrawingShare,
-    DrawingShareNotice,
+    InboxEntry,
+    UserWarning,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnRecord,
@@ -84,6 +85,7 @@ from app.db.models import (
 )
 from app.services.avatars import delete_avatars_for
 from app.services.gallery_ranking import refresh_share_projection
+from app.services.inbox import forget_subjects
 from app.services.prompt_reclaim import delete_owned_lists
 from app.services.prompt_takedowns import release_takedowns
 from app.domain_values import (
@@ -115,7 +117,7 @@ from app.domain_values import (
 # offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
 # To 15 when a list carries its working copy's `prompts` instead of every
 # revision it was saved as (#1359).
-EXPORT_SCHEMA_VERSION = 16
+EXPORT_SCHEMA_VERSION = 17
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -1348,6 +1350,29 @@ async def _write_export_artifact(
             else None,
         },
     )
+    # The inbox (#1436): what the account was told, as kinds and values -
+    # the same facts the account sees, never a sentence about anybody else.
+    # A count of reviewed reports goes without its dates, which would say
+    # when a decision was made (R-MOD-20).
+    writer.key("inbox")
+    await _write_rows(
+        writer,
+        session,
+        select(InboxEntry)
+        .where(InboxEntry.user_id.in_(identity_ids))
+        .order_by(InboxEntry.created_at, InboxEntry.id),
+        lambda entry: {
+            "kind": entry.kind,
+            "subjectId": str(entry.subject_id) if entry.subject_id else None,
+            "params": entry.params,
+            "createdAt": None
+            if entry.kind == "reports_reviewed"
+            else _timestamp(entry.created_at),
+            "readAt": _timestamp(entry.read_at)
+            if entry.read_at and entry.kind != "reports_reviewed"
+            else None,
+        },
+    )
     # Audit details and other actor identifiers are deliberately omitted:
     # they can contain moderator or third-party data. This still exposes
     # every security event in which the requester participated.
@@ -1818,13 +1843,21 @@ async def anonymize_account(
             for turn_id in sorted(others_shared):
                 if turn_id in locked_drawings:
                     await refresh_share_projection(session, locked_drawings[turn_id])
-            # The notices this account was still to be told. One naming it as
-            # a sharer names nobody now: who a notice names is read when it
-            # is shown, from the shares still standing.
+            # The account's inbox, and its warnings: moderation history kept
+            # with the account, not after it (#1436). An entry elsewhere naming
+            # it as a sharer names nobody now - who a share entry names is read
+            # when it is shown, from the shares still standing - and one about
+            # it as a friend or an inviter is about nobody, so it goes.
             await session.execute(
-                delete(DrawingShareNotice).where(
-                    DrawingShareNotice.user_id.in_(identity_ids)
-                )
+                delete(InboxEntry).where(InboxEntry.user_id.in_(identity_ids))
+            )
+            await forget_subjects(
+                session,
+                kinds=("friend_request", "friend_accepted", "game_invite"),
+                subject_ids=list(identity_ids),
+            )
+            await session.execute(
+                delete(UserWarning).where(UserWarning.user_id.in_(identity_ids))
             )
             # Ordinary retained messages are short-lived user content and are
             # erased immediately on account deletion. Evidence already copied

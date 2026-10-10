@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { mineAmong, satIn, shareCredit, shareOffer } from "../src/lib/shares.ts";
-import { laterOf, pendingShareNoticesFrom } from "../src/lib/shareNotices.ts";
 
 const situation = {
   isDrawer: false,
@@ -62,18 +61,6 @@ test("the credit is the first sharer, in the viewer's own words", () => {
     isAnonymous: false,
   });
   assert.deepEqual(shareCredit(["gone"], context), { kind: "someone" }, "a seat that left");
-});
-
-test("a pushed notice is read only when it has the right shape, and the newest read wins", () => {
-  assert.equal(pendingShareNoticesFrom(null), null);
-  assert.equal(pendingShareNoticesFrom({ notices: "x", total: 1 }), null);
-  const older = { notices: [{ id: "1", createdAt: "2026-10-07T10:00:00+00:00" }], total: 1 };
-  const newer = { notices: [{ id: "2", createdAt: "2026-10-07T11:00:00+00:00" }], total: 2 };
-  assert.deepEqual(pendingShareNoticesFrom(newer), newer);
-  assert.equal(laterOf(null, older), older);
-  assert.equal(laterOf(older, newer), newer);
-  assert.equal(laterOf(newer, older), newer);
-  assert.equal(laterOf(older, { notices: [], total: 0 }), older);
 });
 
 test("a player who came back is still the one who shared under their old seat", () => {

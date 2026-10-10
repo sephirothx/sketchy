@@ -21,11 +21,14 @@ from app.db.models import (
     AuthSession,
     DataExport,
     GameParticipant,
+    InboxEntry,
     User,
     UserBan,
+    UserWarning,
     generate_uuid,
 )
 from app.domain_values import AccountState
+from app.services.inbox import INBOX_RETENTION_DAYS
 from app.services.prompt_reclaim import reclaim_unlisted_versions
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
@@ -53,6 +56,8 @@ SESSION_GRACE_DAYS = 30
 DEFAULT_UNUSED_RETENTION_DAYS = 30
 DEFAULT_PLAYER_RETENTION_DAYS = 365
 DEFAULT_BATCH_SIZE = 500
+# How long a moderator's warning is kept as moderation history (#1436).
+WARNING_RETENTION_DAYS = 365
 
 
 @dataclass(frozen=True)
@@ -127,6 +132,67 @@ async def purge_expired_auth_sessions(
             AuthSession.expires_at <= cutoff,
             AuthSession.user_id.not_in(protected),
         ),
+        now=cutoff,
+    )
+
+
+async def purge_expired_inbox_entries(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Remove inbox entries 90 days after they arrived, read or not (#1436).
+
+    An entry is only the message: the warning, the share, the friendship and
+    the role it is about keep their own records and their own retention, so
+    nothing is lost with it but the telling (R-INBOX-06)."""
+    if batch_size < 1:
+        raise ValueError("batch size must be positive")
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=INBOX_RETENTION_DAYS)
+    resolved = budget or sweep_budget_from_env()
+    return await delete_in_batches(
+        session_factory,
+        name="inbox_entries",
+        candidates=select(InboxEntry.id)
+        .where(InboxEntry.created_at <= cutoff)
+        .order_by(InboxEntry.created_at, InboxEntry.id),
+        delete_for=lambda ids: delete(InboxEntry).where(InboxEntry.id.in_(ids)),
+        budget=SweepBudget(
+            rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
+        ),
+        probe=overdue_probe(InboxEntry.created_at, InboxEntry.created_at <= cutoff),
+        now=cutoff,
+    )
+
+
+async def purge_expired_warnings(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Remove moderator warnings twelve months after they were issued
+    (#1436, R-INBOX-06): long enough for a later suspension decision to read
+    them as history, and no longer kept than that reason needs. Their inbox
+    entries are long gone by then."""
+    if batch_size < 1:
+        raise ValueError("batch size must be positive")
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=WARNING_RETENTION_DAYS)
+    resolved = budget or sweep_budget_from_env()
+    return await delete_in_batches(
+        session_factory,
+        name="user_warnings",
+        candidates=select(UserWarning.id)
+        .where(UserWarning.created_at <= cutoff)
+        .order_by(UserWarning.created_at, UserWarning.id),
+        delete_for=lambda ids: delete(UserWarning).where(UserWarning.id.in_(ids)),
+        budget=SweepBudget(
+            rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
+        ),
+        probe=overdue_probe(UserWarning.created_at, UserWarning.created_at <= cutoff),
         now=cutoff,
     )
 
@@ -411,6 +477,8 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             exempt="sessions of a suspended account, their only route to export and deletion",
         ),
         Sweep("data_exports", purge_expired_data_exports),
+        Sweep("inbox_entries", purge_expired_inbox_entries),
+        Sweep("user_warnings", purge_expired_warnings),
         Sweep("shutdown_abandonments", purge_expired_shutdown_abandonments),
         Sweep("auth_rate_limit_buckets", cleanup_expired_rate_limit_buckets),
         Sweep("auth_login_lockouts", purge_forgotten_lockouts),
