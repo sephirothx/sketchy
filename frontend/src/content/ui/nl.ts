@@ -2008,6 +2008,8 @@ export const NL: Catalogue = {
     contactUnavailable: "[het adres kon niet worden geladen; probeer het later opnieuw]",
     terms: "Gebruiksvoorwaarden",
     privacy: "Privacyverklaring",
+    lastUpdated: (p: { date: string }): string => `Laatst bijgewerkt op ${p.date}`,
+    history: "geschiedenis",
   },
 
   sessionManagerDialog: {

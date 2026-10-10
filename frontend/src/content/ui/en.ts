@@ -2025,6 +2025,8 @@ export const EN = {
     contactUnavailable: "[the address could not be loaded — try again later]",
     terms: "Terms of use",
     privacy: "Privacy notice",
+    lastUpdated: (p: { date: string }): string => `Last updated ${p.date}`,
+    history: "history",
   },
 
   sessionManagerDialog: {

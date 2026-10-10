@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { Card, SectionLabel } from "../components/ui/Card";
-import { legalFor } from "../content/legal/index.ts";
+import { LEGAL_REVISION, legalFor, legalHistoryUrl } from "../content/legal/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -31,6 +31,14 @@ type Contact =
   | { state: "loading" }
   | { state: "failed" }
   | { state: "loaded"; address: string | null };
+
+/** The revision date in the reader's language, as a calendar date: read in
+UTC, so no time zone moves it to the day before. */
+function revisionDate(locale: string | null | undefined): string {
+  return new Intl.DateTimeFormat(locale ?? undefined, { dateStyle: "long", timeZone: "UTC" }).format(
+    new Date(`${LEGAL_REVISION.date}T00:00:00Z`),
+  );
+}
 
 export function LegalPage({ document: which }: { document: Which }) {
   const { hash } = useLocation();
@@ -83,6 +91,15 @@ export function LegalPage({ document: which }: { document: Which }) {
           <Link to={`/${other}`}>{documents[other].title}</Link>
           {" · "}
           <Link to="/rules">{ui.accountMenu.rules}</Link>
+        </p>
+        {/* When it last changed, and every change before it (#1417): what
+            "Changes to this notice" and "Changes to these terms" point to. */}
+        <p className="legal-updated">
+          {ui.legalPage.lastUpdated({ date: revisionDate(locale) })}
+          {" · "}
+          <a href={legalHistoryUrl(locale)} target="_blank" rel="noreferrer">
+            {ui.legalPage.history}
+          </a>
         </p>
       </header>
 

@@ -2009,6 +2009,8 @@ export const IT: Catalogue = {
     contactUnavailable: "[non è stato possibile caricare l'indirizzo; riprova più tardi]",
     terms: "Termini d'uso",
     privacy: "Informativa sulla privacy",
+    lastUpdated: (p: { date: string }): string => `Ultimo aggiornamento: ${p.date}`,
+    history: "cronologia",
   },
 
   sessionManagerDialog: {

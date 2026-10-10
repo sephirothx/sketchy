@@ -128,6 +128,11 @@ export const LEGAL_FR: LegalDocuments = {
             "par la loi, comme les clauses contractuelles types de la Commission " +
             "européenne ; écris à {contact} pour savoir quels pays et quelles " +
             "garanties.",
+          "Chaque connexion à Sketchy est chiffrée, les mots de passe ne sont " +
+            "conservés que sous forme d'empreintes à sens unique, l'équipe de " +
+            "modération et d'administration ne voit que ce que chaque rôle " +
+            "exige, et les données anciennes sont supprimées selon les durées " +
+            "indiquées plus bas.",
           "Les modérateurs et administrateurs désignés par l'opérateur voient " +
             "les signalements qu'ils tranchent et ce à quoi ils renvoient. Les " +
             "administrateurs lisent aussi les rapports de bug et peuvent " +
@@ -287,8 +292,10 @@ export const LEGAL_FR: LegalDocuments = {
         id: "moderation",
         heading: "Modération",
         body: [
-          "Les modérateurs peuvent masquer du contenu, avertir des joueurs et " +
-            "suspendre les comptes qui enfreignent ces conditions ou les règles. " +
+          "La modération est assurée par des personnes adultes désignées par " +
+            "l'opérateur. Elles peuvent masquer du contenu, donner des " +
+            "avertissements et suspendre les comptes qui enfreignent ces " +
+            "conditions ou les règles. " +
             "Lorsqu'un modérateur indique quelle règle une décision concerne, on " +
             "te le dit. Les données d'un compte suspendu peuvent toujours être " +
             "téléchargées ou supprimées, depuis un appareil qui était connecté " +

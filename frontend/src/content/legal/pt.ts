@@ -121,6 +121,10 @@ export const LEGAL_PT: LegalDocuments = {
             "e da UE, é com garantias que a lei reconhece, como as cláusulas " +
             "contratuais-tipo da Comissão Europeia; escreve para {contact} para " +
             "saberes que países e que garantias.",
+          "Todas as ligações ao Sketchy são cifradas, as palavras-passe só são " +
+            "guardadas como hashes de sentido único, a equipa de moderação e " +
+            "administração só vê o que cada função exige, e os dados antigos são " +
+            "eliminados segundo os prazos indicados mais abaixo.",
           "Os moderadores e administradores nomeados pelo operador veem as " +
             "denúncias sobre as quais decidem e aquilo a que se referem. Os " +
             "administradores também leem os relatórios de erros e podem " +
@@ -275,8 +279,10 @@ export const LEGAL_PT: LegalDocuments = {
         id: "moderation",
         heading: "Moderação",
         body: [
-          "Os moderadores podem ocultar conteúdo, advertir jogadores e suspender " +
-            "contas que violem estes termos ou as regras. Quando um moderador " +
+          "A moderação está a cargo de pessoas adultas nomeadas pelo operador. " +
+            "Estas pessoas podem ocultar conteúdo, fazer advertências e " +
+            "suspender contas que violem estes termos ou as regras. Quando um " +
+            "moderador " +
             "regista a que regra se refere uma decisão, é-te dito. Os dados de " +
             "uma conta suspensa podem continuar a ser descarregados ou " +
             "eliminados, a partir de um dispositivo que tinha sessão iniciada " +

@@ -126,6 +126,10 @@ export const LEGAL_NL: LegalDocuments = {
             "wet erkent, zoals de standaardcontractbepalingen van de Europese " +
             "Commissie; schrijf naar {contact} om te vragen welke landen en welke " +
             "waarborgen.",
+          "Elke verbinding met Sketchy is versleuteld, wachtwoorden worden " +
+            "alleen als eenrichtingshashes bewaard, moderators en beheerders zien " +
+            "alleen wat hun rol vereist, en oude gegevens worden gewist volgens " +
+            "de termijnen hieronder.",
           "Door de exploitant aangestelde moderators en beheerders zien de " +
             "meldingen waarover ze beslissen en waar die naar verwijzen. " +
             "Beheerders lezen ook bugmeldingen en kunnen een account en de " +
@@ -282,7 +286,8 @@ export const LEGAL_NL: LegalDocuments = {
         id: "moderation",
         heading: "Moderatie",
         body: [
-          "Moderators kunnen inhoud verbergen, spelers waarschuwen en accounts " +
+          "Moderators zijn volwassenen die door de exploitant zijn aangesteld. " +
+            "Ze kunnen inhoud verbergen, spelers waarschuwen en accounts " +
             "schorsen die deze voorwaarden of de regels overtreden. Als een " +
             "moderator vastlegt over welke regel een beslissing gaat, hoor je " +
             "dat. De gegevens van een geschorst account kunnen nog steeds worden " +

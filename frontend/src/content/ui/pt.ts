@@ -2007,6 +2007,8 @@ export const PT: Catalogue = {
     contactUnavailable: "[não foi possível carregar o endereço; tenta mais tarde]",
     terms: "Termos de utilização",
     privacy: "Política de privacidade",
+    lastUpdated: (p: { date: string }): string => `Última atualização: ${p.date}`,
+    history: "histórico",
   },
 
   sessionManagerDialog: {

@@ -85,7 +85,8 @@ keyboard that takes half the screen, and one thumb.
   starts, as unobtrusively as possible: one row of fine print — *Terms · Privacy · 16+* —
   under the lobby's name tag, an invite link's name field and Settings for a visitor with
   no name, and a sentence on account creation; and a suspended player can still read both, and the
-  Rules, under a bar rather than behind a dialog. The account menu has a *Privacy and
+  Rules, under a bar rather than behind a dialog. Each page says when it last changed
+  and links its public history. The account menu has a *Privacy and
   terms* entry beside the Rules. The operator's address comes from `CONTACT_ADDRESS`,
   which production refuses to start without.
 - Sharing — a drawing reaches the gallery only when a player who sat in its game shares

@@ -2010,6 +2010,8 @@ export const FR: Catalogue = {
     contactUnavailable: "[l'adresse n'a pas pu être chargée ; réessaie plus tard]",
     terms: "Conditions d'utilisation",
     privacy: "Politique de confidentialité",
+    lastUpdated: (p: { date: string }): string => `Dernière mise à jour : ${p.date}`,
+    history: "historique",
   },
 
   sessionManagerDialog: {

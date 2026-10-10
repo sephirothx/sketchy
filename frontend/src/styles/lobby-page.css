@@ -2036,6 +2036,17 @@ a.online-player-name:focus-visible {
   text-underline-offset: 2px;
 }
 
+.legal-updated {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.legal-updated a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
 .legal-page .rules-section {
   scroll-margin-top: 16px;
 }

@@ -125,6 +125,10 @@ export const LEGAL_PL: LegalDocuments = {
             "uznawanymi przez prawo, takimi jak standardowe klauzule umowne " +
             "Komisji Europejskiej; napisz na adres {contact}, żeby zapytać, o " +
             "jakie kraje i zabezpieczenia chodzi.",
+          "Każde połączenie ze Sketchy jest szyfrowane, hasła do kont są " +
+            "przechowywane wyłącznie jako jednokierunkowe skróty, zespół " +
+            "moderacji i administracji widzi tylko to, czego wymaga dana rola, a " +
+            "stare dane są usuwane zgodnie z terminami podanymi niżej.",
           "Moderatorzy i administratorzy wyznaczeni przez operatora widzą " +
             "zgłoszenia, o których decydują, i to, czego dotyczą. Administratorzy " +
             "czytają też zgłoszenia błędów i mogą sprawdzić konto oraz jego " +
@@ -278,8 +282,9 @@ export const LEGAL_PL: LegalDocuments = {
         id: "moderation",
         heading: "Moderacja",
         body: [
-          "Moderatorzy mogą ukrywać treści, upominać graczy oraz zawieszać " +
-            "konta, które łamią te warunki lub zasady. Jeśli moderator zapisze, " +
+          "Moderacją zajmują się osoby dorosłe wyznaczone przez operatora. " +
+            "Mogą ukrywać treści, udzielać upomnień oraz zawieszać konta, które " +
+            "łamią te warunki lub zasady. Jeśli moderator zapisze, " +
             "której zasady dotyczy decyzja, otrzymasz tę informację. Dane " +
             "zawieszonego konta nadal można pobrać lub usunąć – z urządzenia, " +
             "które było zalogowane w chwili zawieszenia, albo pisząc na adres " +

@@ -2016,6 +2016,8 @@ export const PL: Catalogue = {
     contactUnavailable: "[nie udało się wczytać adresu; spróbuj później]",
     terms: "Warunki korzystania",
     privacy: "Polityka prywatności",
+    lastUpdated: (p: { date: string }): string => `Ostatnia aktualizacja: ${p.date}`,
+    history: "historia zmian",
   },
 
   sessionManagerDialog: {

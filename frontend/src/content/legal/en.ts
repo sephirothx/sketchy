@@ -129,6 +129,9 @@ export const LEGAL_EN: LegalDocuments = {
             "recognises, such as the European Commission's standard " +
             "contractual clauses; write to {contact} to ask which countries " +
             "and which safeguards.",
+          "Every connection to Sketchy is encrypted, passwords are stored " +
+            "only as one-way hashes, staff see only what their role needs, " +
+            "and old data is deleted on the schedule below.",
           "Moderators and administrators appointed by the operator see the " +
             "reports they decide and what those reports point to. " +
             "Administrators also read bug reports, and can look up an account " +
@@ -281,8 +284,9 @@ export const LEGAL_EN: LegalDocuments = {
         id: "moderation",
         heading: "Moderation",
         body: [
-          "Moderators can hide content, warn players, and suspend accounts " +
-            "that break these terms or the rules. Where a moderator records " +
+          "Moderators are adults appointed by the operator. They can hide " +
+            "content, warn players, and suspend accounts that break these " +
+            "terms or the rules. Where a moderator records " +
             "which rule a decision is about, you are told it. A suspended " +
             "account's data can still be downloaded or deleted, from a device " +
             "that was signed in when the suspension began, or by writing to " +

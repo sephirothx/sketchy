@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createHash } from "node:crypto";
+
+import { LEGAL_EN } from "../src/content/legal/en.ts";
 import {
   LEGAL_FALLBACK_LOCALE,
+  LEGAL_REVISION,
+  legalHistoryUrl,
   MINIMUM_AGE,
   legalFor,
   legalLocales,
@@ -87,4 +92,27 @@ test("the placeholders are filled with the address and the minimum age", () => {
     `Write to privacy@example.org if you are under ${MINIMUM_AGE}.`,
   );
   assert.equal(MINIMUM_AGE, 16);
+});
+
+
+test("the date under the title moves whenever the reference text does", () => {
+  // The page says when it last changed (#1417). A change to the English
+  // text - the reference - that leaves the date alone would show an old date
+  // over new terms; this makes that a failing build rather than a slip.
+  const now = createHash("sha256").update(JSON.stringify(LEGAL_EN)).digest("hex");
+  assert.equal(
+    now,
+    LEGAL_REVISION.reference,
+    `The English notice or terms changed: set LEGAL_REVISION.date to today and its reference to ${now}`,
+  );
+  assert.match(LEGAL_REVISION.date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(new Date(`${LEGAL_REVISION.date}T00:00:00Z`) <= new Date(), "not a date in the future");
+});
+
+test("the history link opens the file of the language shown", () => {
+  const base = "https://github.com/sephirothx/sketchy/commits/main/frontend/src/content/legal/";
+  assert.equal(legalHistoryUrl("de"), `${base}de.ts`);
+  assert.equal(legalHistoryUrl("pt-PT"), `${base}pt.ts`);
+  assert.equal(legalHistoryUrl("ja"), `${base}en.ts`, "a language without the documents reads English");
+  assert.equal(legalHistoryUrl(null), `${base}en.ts`);
 });
