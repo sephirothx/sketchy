@@ -201,14 +201,39 @@ test("a late change to a line cannot undo a newer one, and the muted get only th
   held = applyChatLine(held, line(2, { retainedMessageId: "m2" }));
   const restored = applyLineVisibility(held, { retainedMessageId: "m1", hidden: false, text: "line 1", visibility: 2 });
   const late = applyLineVisibility(restored, { retainedMessageId: "m1", hidden: true, visibility: 1 });
-  assert.equal(late, restored, "the older hide arrives second and changes nothing");
+  assert.equal(late.lines[0], restored.lines[0], "the older hide arrives second and leaves the line");
+  assert.deepEqual([late.visibility, late.visibilityAhead], [2, []], "but it closes the gap below change 2");
   const other = applyLineVisibility(late, { retainedMessageId: "m2", hidden: true, visibility: 1 });
   assert.equal(other.lines[1].hidden, true, "an older count, but news for this line");
 
   // Shown again to somebody who muted its author: no words, only the count.
   const muted = applyLineVisibility(other, { retainedMessageId: "m9", hidden: false, visibility: 9 });
-  assert.equal(muted.visibility, 9);
+  assert.deepEqual([muted.visibility, muted.visibilityAhead], [2, [9]], "counted, past a gap");
   assert.equal(muted.lines, other.lines);
+});
+
+test("a change received early does not hide that an earlier one never came", () => {
+  // The review's case (#1435): line A is restored as change 2, but the block
+  // lookup holds that broadcast; hiding B goes out at once as change 3; the
+  // tab disconnects before change 2 arrives. Counting the highest received
+  // resumed as caught up, and A stayed a placeholder for good.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [
+      { ...line(1, { retainedMessageId: "A" }), text: "", hidden: true, visibility: 1 },
+      line(2, { retainedMessageId: "B" }),
+    ],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 1,
+  }, owner);
+  held = applyLineVisibility(held, { retainedMessageId: "B", hidden: true, visibility: 3 });
+  assert.equal(held.lines[1].hidden, true);
+  assert.deepEqual([held.visibility, held.visibilityAhead], [1, [3]]);
+  assert.equal(chatResumeRequest(held, owner).chatVisibility, 1, "resumes from below the gap");
+
+  // Had change 2 arrived after all, the count would have closed up to 3.
+  const closed = applyLineVisibility(held, { retainedMessageId: "A", hidden: false, text: "line 1", visibility: 2 });
+  assert.deepEqual([closed.visibility, closed.visibilityAhead], [3, []]);
+  assert.equal(closed.lines[0].text, "line 1");
 });
 
 test("a lobby that missed a hide replaces what it holds with the backlog it is handed", () => {

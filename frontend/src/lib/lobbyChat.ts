@@ -46,10 +46,14 @@ export interface LobbyChatState {
   /** The account these lines were filtered for. Another account's blocks
   differ, so its lobby asks for everything and replaces them. */
   owner: string | null;
-  /** How many hides and show-agains this process announced that these lines
-  reflect (#1435): a returning lobby sends it, and one behind is handed the
-  whole backlog to replace them with. */
+  /** The hides and show-agains these lines are known to reflect, with no
+  gap below it (#1435): a returning lobby sends it, and one behind is handed
+  the whole backlog to replace them with. Not the highest change received -
+  changes can arrive out of order, and receiving the third proves nothing
+  about the second. */
   visibility: number;
+  /** Changes received past a gap, waiting for the ones below them. */
+  visibilityAhead: number[];
 }
 
 export const EMPTY_LOBBY_CHAT: LobbyChatState = {
@@ -58,7 +62,33 @@ export const EMPTY_LOBBY_CHAT: LobbyChatState = {
   epoch: null,
   owner: null,
   visibility: 0,
+  visibilityAhead: [],
 };
+
+/** Count one change received (#1435): the contiguous count moves only when
+    nothing below the change is still missing; one past a gap waits. */
+function noteChange(
+  counted: { visibility: number; visibilityAhead: number[] },
+  at: number,
+): { visibility: number; visibilityAhead: number[] } {
+  // The two fields only, never the object handed in: spread over a state, a
+  // whole state here would put its old lines back.
+  if (at <= counted.visibility || counted.visibilityAhead.includes(at)) {
+    return { visibility: counted.visibility, visibilityAhead: counted.visibilityAhead };
+  }
+  return settled(counted.visibility, [...counted.visibilityAhead, at]);
+}
+
+/** The count as far as it runs unbroken, and what is still past a gap. */
+function settled(
+  visibility: number,
+  ahead: number[],
+): { visibility: number; visibilityAhead: number[] } {
+  const waiting = new Set(ahead.filter((at) => at > visibility));
+  let next = visibility;
+  while (waiting.delete(next + 1)) next += 1;
+  return { visibility: next, visibilityAhead: [...waiting].sort((a, b) => a - b) };
+}
 
 /** More than the server hands an arrival, so a long-open lobby keeps some of
 what it watched go by; bounded so it never grows with the evening. */
@@ -113,7 +143,10 @@ export function applyLineVisibility(state: LobbyChatState, payload: unknown): Lo
   // line of theirs. Only the count moves, so a resync does not take the
   // change for one it missed.
   if (!hidden && text === null) {
-    return at > state.visibility ? { ...state, visibility: at } : state;
+    const counted = noteChange(state, at);
+    return counted.visibility === state.visibility && counted.visibilityAhead === state.visibilityAhead
+      ? state
+      : { ...state, ...counted };
   }
   let changed = false;
   const lines = state.lines.map((line) => {
@@ -128,9 +161,10 @@ export function applyLineVisibility(state: LobbyChatState, payload: unknown): Lo
     delete shown.hidden;
     return shown;
   });
-  const visibility = Math.max(state.visibility, at);
-  if (!changed) return visibility === state.visibility ? state : { ...state, visibility };
-  return { ...state, lines, visibility };
+  const counted = noteChange(state, at);
+  const countMoved = counted.visibility !== state.visibility || counted.visibilityAhead !== state.visibilityAhead;
+  if (!changed) return countMoved ? { ...state, ...counted } : state;
+  return { ...state, lines, ...counted };
 }
 
 function capped(lines: LobbyChatLine[]): LobbyChatLine[] {
@@ -223,18 +257,24 @@ export function applyChatBacklog(
         ? { ...line, hidden: held.hidden, text: held.text, visibility: held.visibility }
         : line;
     });
+    // An answer reflects every change up to its count - in its lines, or as
+    // an event this socket is sent after joining, held and replayed.
+    const counted =
+      replace && epoch === state.epoch
+        ? settled(Math.max(visibility, state.visibility), state.visibilityAhead)
+        : settled(visibility, []);
     return {
       lastSeq: Math.max(chatSeq, last),
       lines: capped(kept),
       epoch,
       owner,
-      visibility: Math.max(visibility, replace && epoch === state.epoch ? state.visibility : 0),
+      ...counted,
     };
   }
   let next = state;
   for (const line of lines) next = append(next, line);
   if (chatSeq > next.lastSeq) next = { ...next, lastSeq: chatSeq };
-  if (visibility > next.visibility) next = { ...next, visibility };
+  if (visibility > next.visibility) next = { ...next, ...settled(visibility, next.visibilityAhead) };
   return next;
 }
 
