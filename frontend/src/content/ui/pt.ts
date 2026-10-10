@@ -1865,7 +1865,7 @@ export const PT: Catalogue = {
     theLastPlayerSeatWasTaken: "O último lugar de jogador acabou de ser ocupado, mas ainda podes assistir.",
     joinAsASpectator: "entrar como espectador",
     joinThisRoom: "entrar nesta sala",
-    nicknameRule: "Usa de 3 a 16 caracteres: letras, números, hífenes ou sublinhados. Sem espaços.",
+    nicknameRule: "Usa de 3 a 16 caracteres: letras de A a Z, números, hífenes ou sublinhados. Sem espaços.",
   },
 
   roomFacts: {
