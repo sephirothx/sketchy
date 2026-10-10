@@ -1265,7 +1265,10 @@ is sent and *replaces* what the client holds, since the numbers mean nothing
 here. So is it, marked `chatReplace: true`, for a client whose `chatVisibility` is
 behind the server's (#1435). The client sends the count it has **without a gap below
 it**, not the highest it received: changes can arrive out of order, and a client that
-received change 3 but not change 2, then disconnected, must not resume as caught up. a moderator hid or showed again a line while it was
+received change 3 but not change 2, then disconnected, must not resume as caught up.
+Only a replacing answer sets the client's count outright; a merged one carries only
+newer lines, so it says nothing about a held line's change still on its way, and the
+count moves only by the events the client receives. a moderator hid or showed again a line while it was
 away, a line it already holds and resuming from `chatSince` would never correct, so
 the backlog replaces what it holds, older lines included. Every answer carries
 `chatVisibility`, the count of hides and show-agains this process has announced, and

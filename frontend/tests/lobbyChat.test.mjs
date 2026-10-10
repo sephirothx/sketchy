@@ -273,3 +273,31 @@ test("a lobby that missed a hide replaces what it holds with the backlog it is h
   }, owner);
   assert.deepEqual(merged.lines.map((l) => l.seq), [2, 3]);
 });
+
+
+test("a merged answer does not count changes it does not carry", () => {
+  // The review's case (#1435): the tab resumes level at count 1, and during
+  // the subscription A is restored (change 2, held up by its block lookup) and
+  // B hidden (change 3, delivered). The answer merges with chatVisibility 3,
+  // but it carries no held line - counting it would resume past change 2.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [
+      { ...line(1, { retainedMessageId: "A" }), text: "", hidden: true, visibility: 1 },
+      line(2, { retainedMessageId: "B" }),
+    ],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 1,
+  }, owner);
+  held = applyLineVisibility(held, { retainedMessageId: "B", hidden: true, visibility: 3 });
+  const merged = applyChatBacklog(held, { chat: [], chatSeq: 2, chatEpoch: "e1", chatVisibility: 3 }, owner);
+  assert.deepEqual([merged.visibility, merged.visibilityAhead], [1, [3]]);
+  assert.equal(chatResumeRequest(merged, owner).chatVisibility, 1);
+
+  // A whole backlog is everything as it stands: that one sets the count.
+  const replaced = applyChatBacklog(merged, {
+    chat: [line(1, { retainedMessageId: "A", visibility: 2 }), { ...line(2, { retainedMessageId: "B" }), text: "", hidden: true, visibility: 3 }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 3, chatReplace: true,
+  }, owner);
+  assert.deepEqual([replaced.visibility, replaced.visibilityAhead], [3, []]);
+  assert.equal(replaced.lines[0].text, "line 1");
+});

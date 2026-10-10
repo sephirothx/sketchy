@@ -274,7 +274,12 @@ export function applyChatBacklog(
   let next = state;
   for (const line of lines) next = append(next, line);
   if (chatSeq > next.lastSeq) next = { ...next, lastSeq: chatSeq };
-  if (visibility > next.visibility) next = { ...next, ...settled(visibility, next.visibilityAhead) };
+  // The count is not moved by a merged answer (#1435): it carries only the
+  // lines newer than those held, so its count says nothing about a change to
+  // a held line whose event is still on its way - it was merged because this
+  // tab's count matched the server's at the join, and every change since
+  // reaches it as an event, which is what counts. Only a whole backlog, the
+  // branch above, sets the count outright.
   return next;
 }
 
