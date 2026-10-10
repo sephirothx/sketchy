@@ -1348,6 +1348,9 @@
   "drawing_reaction": {
    "shape": "object"
   },
+  "drawing_removed": {
+   "shape": "object"
+  },
   "drawing_shared": {
    "shape": "object"
   },
@@ -1741,6 +1744,7 @@
    "reportedUserId",
    "reporterCount",
    "reporterUserId",
+   "turnErased",
    "turnId"
   ],
   "api.moderation:_incident_picture": [
@@ -1784,6 +1788,9 @@
    "userId"
   ],
   "api.moderation:decide_gallery_drawing": [
+   "turnId"
+  ],
+  "api.moderation:erase_drawing": [
    "turnId"
   ],
   "api.moderation:list_closed_cases": [
@@ -2618,6 +2625,9 @@
   "handlers.shares:_refused": [
    "errorCode"
   ],
+  "handlers.shares:erase_from_recaps": [
+   "turnId"
+  ],
   "handlers.shares:share_drawing": [
    "errorCode"
   ],
@@ -2953,7 +2963,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 64,
+ "protocolVersion": 65,
  "refusal": {
   "codes": [
    "invalid_payload",

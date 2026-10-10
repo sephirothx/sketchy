@@ -193,7 +193,11 @@ export function DrawingRecapGallery({
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          {unavailable ? (
+          {unavailable && entry.removed ? (
+            <div className="drawing-recap-status">
+              <p>{ui.drawingRecapGallery.removedByModeration}</p>
+            </div>
+          ) : unavailable ? (
             <div className="drawing-recap-status">
               <p>{ui.drawingRecapGallery.thisDrawingWasNotKept}</p>
               <p className="drawing-recap-status-detail">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
 import { ReportedDrawing } from "../components/ReportedDrawing";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { Chip, type ChipKind } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 
@@ -13,6 +14,7 @@ import {
   createUserBan,
   createUserWarning,
   decideGalleryDrawing,
+  eraseDrawing,
   fetchModerationGalleryDrawing,
   fetchReportDrawing,
   listClosedCases,
@@ -177,12 +179,24 @@ function ReportDrawing({
   drawing,
   drawerName,
   dateTime,
+  isAdmin,
 }: {
   reportId: string;
   drawing: PlayerReportDrawing;
   drawerName: string;
   dateTime: (date: Date) => string;
+  isAdmin: boolean;
 }) {
+  // Erased by an administrator (#1419): the copy kept with the report opens
+  // for administrators alone, and a moderator is told why it does not.
+  if (drawing.erased && !isAdmin) {
+    return (
+      <p className="mod-evidence-caption" data-testid="mod-drawing-erased">
+        An administrator erased this drawing for illegal content. The copy kept with this report
+        opens for administrators only.
+      </p>
+    );
+  }
   return (
     <ReportedDrawing
       className="mod-drawing"
@@ -191,6 +205,7 @@ function ReportDrawing({
       label={`${drawerName}'s drawing of ${drawing.prompt}, as it was when reported`}
       caption={
         <>
+          {drawing.erased && "Erased everywhere else for illegal content; this copy is for administrators only. "}
           The canvas when the report was sent, {formatWhen(drawing.capturedAt, dateTime)}:
           round {drawing.roundNumber}, {drawing.actionCount} action
           {drawing.actionCount === 1 ? "" : "s"}. They were asked to draw{" "}
@@ -472,6 +487,8 @@ export function ModerationPage() {
   const [category, setCategory] = useState<Record<string, ReportReason>>({});
   const [duration, setDuration] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  // The turn an administrator is being asked to confirm erasing (#1419).
+  const [confirmErase, setConfirmErase] = useState<string | null>(null);
   const { guard, dialog: stepUpDialog } = useStepUp();
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -774,6 +791,20 @@ export function ModerationPage() {
   // door: reported as offensive and naming a turn. Hiding it from the
   // Gallery is then a third answer beside warning and suspending, because
   // the drawing may still be on show whatever is decided about the drawer.
+  const isAdmin = user?.role === "admin";
+  // The drawing a case is about, while there is one left to erase: the turn
+  // a report named, or the one its attached canvas was copied from.
+  const erasableReport = playerCase?.reports.find(
+    (report) =>
+      report.reason === "offensive_drawing" &&
+      (report.turnId ?? report.drawing?.turnId) &&
+      !report.turnErased &&
+      !report.drawing?.erased,
+  );
+  const erasableTurnId = erasableReport
+    ? (erasableReport.turnId ?? erasableReport.drawing?.turnId ?? null)
+    : null;
+  const eraseNoteKey = playerCase ? `erase:${playerCase.id}` : "erase";
   const reportedGalleryTurnId =
     playerCase?.status === "pending" && playerCase.reasons.includes("offensive_drawing")
       ? playerCase.reports.find((report) => report.turnId && report.reason === "offensive_drawing")
@@ -1088,6 +1119,7 @@ export function ModerationPage() {
                             "The reported player"
                           }
                           dateTime={dateTime}
+                          isAdmin={isAdmin}
                         />
                       ))
                     : playerCase.reasons.includes("offensive_drawing") && (
@@ -1359,7 +1391,55 @@ export function ModerationPage() {
               ) : (
                 <DecisionCard report={playerCase} dateTime={dateTime} />
               )}
+              {/* Beyond hiding (#1419, R-MOD-22): for a drawing nobody may
+                  keep seeing. Administrators only, decided or not, and it
+                  cannot be undone - so its own note and a confirmation. */}
+              {isAdmin && erasableTurnId && (
+                <div className="mod-erase" data-testid="mod-erase">
+                  <SectionLabel>Illegal content</SectionLabel>
+                  <p className="mod-evidence-caption">
+                    Erase the drawing everywhere a player could see it: history, the Gallery, pins,
+                    profiles and a recap still open. It cannot be undone. The copy kept with this
+                    report stays, for administrators only.
+                  </p>
+                  <label className="mod-note">
+                    Why (for the ledger)
+                    <textarea
+                      value={note[eraseNoteKey] ?? ""}
+                      onChange={(change) =>
+                        setNote((current) => ({ ...current, [eraseNoteKey]: change.target.value }))
+                      }
+                      rows={2}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="mod-danger-button"
+                    disabled={busy === eraseNoteKey || !(note[eraseNoteKey] ?? "").trim()}
+                    onClick={() => setConfirmErase(erasableTurnId)}
+                  >
+                    Erase drawing
+                  </button>
+                </div>
+              )}
             </>
+          )}
+          {confirmErase && (
+            <ConfirmationDialog
+              title="Erase this drawing everywhere?"
+              description="It leaves every player's history, the Gallery, pins and any open recap, and cannot be brought back. Only the copy kept with the report remains, for administrators."
+              confirmLabel="Erase drawing"
+              onCancel={() => setConfirmErase(null)}
+              onConfirm={() => {
+                const turnId = confirmErase;
+                setConfirmErase(null);
+                void act(
+                  eraseNoteKey,
+                  () => eraseDrawing(turnId, (note[eraseNoteKey] ?? "").trim()),
+                  "Erased everywhere. The copy kept with the report is for administrators only.",
+                );
+              }}
+            />
           )}
 
           {contentCase && (

@@ -3040,6 +3040,12 @@ class TurnDrawing(Base):
             "status <> 'deleted' OR deleted_at IS NOT NULL",
             name="ck_turn_drawings_deleted_at",
         ),
+        # Erased by an administrator is erased (#1419): never a stamp on a
+        # drawing that still has its bytes.
+        CheckConstraint(
+            "moderation_erased_at IS NULL OR status = 'deleted'",
+            name="ck_turn_drawings_moderation_erased",
+        ),
         # The declared size is the inline payload's size, on both engines
         # (`length` of a blob is bytes on SQLite and on PostgreSQL's bytea).
         CheckConstraint(
@@ -3149,6 +3155,14 @@ class TurnDrawing(Base):
     # set, the drawing leaves the Gallery, the shelf and the gallery routes
     # in one act while the players who were there keep seeing it.
     gallery_hidden_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+    # An administrator erased it for illegal content (#1419, R-MOD-22): the
+    # bytes went as an account erasure takes them (`status` `deleted`), and
+    # this says why, so the players who were there read "removed by
+    # moderation" rather than an erasure that reads like the drawer leaving.
+    # The report's evidence copy stays, for administrators only.
+    moderation_erased_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
     # In the Gallery while at least one share holds it (R-SHARE-01).

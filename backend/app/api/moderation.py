@@ -42,6 +42,7 @@ from app.repositories.sqlalchemy import (
     _gallery_predicate,
     _lock_versions,
     apply_gallery_decision,
+    erase_drawing_for_moderation,
 )
 from app.services.gallery_shelf import read_shelf_review
 from app.services.prompt_editions import UNDER_REVIEW as EDITION_UNDER_REVIEW
@@ -53,6 +54,7 @@ from app.services.player_reports import (
     decided_incident_report_ids,
     drawing_evidence_for_report,
     drawing_evidence_payload,
+    moderation_erased_turns,
     open_report_id,
     record_player_report,
     CapturedDrawing,
@@ -212,6 +214,23 @@ class GalleryReportBody(ControlFreeModel):
     @classmethod
     def clean_details(cls, value: str) -> str:
         return value.strip()
+
+
+class EraseDrawingBody(ControlFreeModel):
+    """Why an administrator erased a drawing: for the ledger, never shown to
+    the drawer or anybody else."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("An erasure needs a note.")
+        return cleaned
 
 
 class GalleryDecisionBody(ControlFreeModel):
@@ -790,12 +809,28 @@ def _incident_picture(
     }
 
 
+def _evidence_turn(report: PlayerReport) -> UUID | None:
+    """The turn a report's attached canvas was copied from, if it has one."""
+    evidence = report.drawing_evidence
+    return evidence.turn_id_snapshot if evidence is not None else None
+
+
+async def _erased_turns_of(session: AsyncSession, reports) -> set[UUID]:
+    """Which turns a page of reports names - reported, or copied as evidence -
+    an administrator has erased (#1419)."""
+    return await moderation_erased_turns(
+        session,
+        [turn for report in reports for turn in (report.turn_id, _evidence_turn(report))],
+    )
+
+
 def _incident_payload(
     incident: Incident,
     player_context: dict[UUID, dict] | None = None,
     decisions: dict[UUID, _Decision] | None = None,
     prior: dict[UUID, dict] | None = None,
     removals: dict[UUID, dict] | None = None,
+    erased_turns: set[UUID] | None = None,
 ) -> dict:
     """One incident as a queue entry: who it is about, who complained, and
     the whole of what they complained about, read once.
@@ -807,6 +842,7 @@ def _incident_payload(
     merged above them.
     """
     first = incident.reports[0]
+    erased = erased_turns or set()
     context = (
         (player_context or {}).get(first.reported_user_id)
         if first.reported_user_id
@@ -860,8 +896,14 @@ def _incident_payload(
                 "contextSnapshot": report.context_snapshot,
                 "gameId": str(report.game_id) if report.game_id else None,
                 "turnId": str(report.turn_id) if report.turn_id else None,
+                # The reported turn's drawing was erased by an administrator
+                # (#1419): nothing is left to hide or erase.
+                "turnErased": report.turn_id in erased,
                 "createdAt": report.created_at.isoformat(),
-                "drawing": drawing_evidence_payload(report.drawing_evidence),
+                "drawing": drawing_evidence_payload(
+                    report.drawing_evidence,
+                    erased=_evidence_turn(report) in erased,
+                ),
                 # True when this complaint was about a picture the account no
                 # longer carries. The old one is gone - an upload deletes the
                 # one it replaces - so this says the moderator is looking at a
@@ -877,7 +919,13 @@ def _incident_payload(
         "drawings": [
             {
                 "reportId": str(report.id),
-                **(drawing_evidence_payload(report.drawing_evidence) or {}),
+                **(
+                    drawing_evidence_payload(
+                        report.drawing_evidence,
+                        erased=_evidence_turn(report) in erased,
+                    )
+                    or {}
+                ),
             }
             for report in incident.drawings
         ],
@@ -1302,6 +1350,9 @@ def create_moderation_router(
     # is written, so the cached This week shelf does not wait a minute for it.
     game_history_repo: GameHistoryRepository | None = None,
     on_gallery_decision: Callable[[], None] | None = None,
+    # Called with a turn an administrator erased once the erasure commits, so
+    # a room still showing the game's recap stops showing it (#1419).
+    on_drawing_erased: Callable[[str], Awaitable[None]] | None = None,
     # Writes the chat lines still waiting in the retention queue, so a report
     # citing one a moment after it was said finds it (#972).
     flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
@@ -1862,10 +1913,11 @@ def create_moderation_router(
             removals = await _avatar_removals(
                 session, _accounts_with_no_picture(on_page, player_context)
             )
+            erased_turns = await _erased_turns_of(session, on_page)
             return {
                 "incidents": [
                     _incident_payload(
-                        incident, player_context, decisions, prior, removals
+                        incident, player_context, decisions, prior, removals, erased_turns
                     )
                     for incident in page
                 ],
@@ -1977,10 +2029,19 @@ def create_moderation_router(
         cached anywhere shared, and never answered to anyone but a reviewer.
         """
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
             evidence = await drawing_evidence_for_report(
                 session, report_id, with_bytes=True
             )
+            # A drawing an administrator erased keeps its copy here for
+            # administrators alone (#1419, R-MOD-22); to a moderator it is
+            # gone, as it is to everybody else.
+            if (
+                evidence is not None
+                and reviewer.role != UserRole.ADMIN.value
+                and await moderation_erased_turns(session, [evidence.turn_id_snapshot])
+            ):
+                evidence = None
         return _drawing_response(evidence, who="moderator")
 
     @router.get("/moderation/closed-cases")
@@ -2070,6 +2131,7 @@ def create_moderation_router(
             removals = await _avatar_removals(
                 session, _accounts_with_no_picture(list(players), player_context)
             )
+            erased_turns = await _erased_turns_of(session, list(players))
             by_player_group = group_by_decision(list(players))
             by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
@@ -2084,6 +2146,7 @@ def create_moderation_router(
                         player_context,
                         decisions,
                         removals=removals,
+                        erased_turns=erased_turns,
                     )
                     for kind, group in page
                     if kind == "player"
@@ -2368,7 +2431,10 @@ def create_moderation_router(
                         attribute_names=["message_evidence", "drawing_evidence"],
                     )
                 decisions = await _decisions(session, list(incident.reports))
-            payload = _incident_payload(incident, decisions=decisions)
+                erased_turns = await _erased_turns_of(session, list(incident.reports))
+            payload = _incident_payload(
+                incident, decisions=decisions, erased_turns=erased_turns
+            )
         await _tell(*told)
         return payload
 
@@ -3319,7 +3385,13 @@ def create_moderation_router(
             session, source_report_id
         ):
             return None
-        return await drawing_evidence_for_report(session, report_id, with_bytes=True)
+        evidence = await drawing_evidence_for_report(session, report_id, with_bytes=True)
+        # Never shown back once an administrator erased it (#1419).
+        if evidence is not None and await moderation_erased_turns(
+            session, [evidence.turn_id_snapshot]
+        ):
+            return None
+        return evidence
 
     @router.get("/warnings/{warning_id}/drawings/{report_id}")
     async def warning_drawing(warning_id: UUID, report_id: UUID, request: Request):
@@ -3558,6 +3630,68 @@ def create_moderation_router(
             "waiting": len(candidates),
             "candidates": [gallery_entry_payload(entry) for entry in candidates],
         }
+
+    @router.post("/moderation/drawings/{turn_id}/erase")
+    async def erase_drawing(turn_id: str, body: EraseDrawingBody, request: Request):
+        """Erase one drawing for illegal content, everywhere a player could
+        meet it (#1419, R-MOD-22). Administrators only, behind a step-up,
+        audited against the drawing with the drawer as the target account.
+
+        Hiding (R-GAL-09) takes a drawing off the public surfaces and leaves
+        it to the players who were there; this is for a drawing nobody may
+        keep seeing. The report's evidence copy stays, readable by
+        administrators alone. A moderator is answered 404, as for every
+        administrator's route (R-ROLE-01); a player is refused as every
+        moderation route refuses one."""
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            db_turn_id = UUID(turn_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Not found") from None
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            async with session.begin():
+                reviewer = await _reviewer(session, request)
+                if reviewer.role != UserRole.ADMIN.value:
+                    raise HTTPException(status_code=404, detail="Not found")
+                require_step_up(request)
+                # The drawer through the alias, as the ledger names every
+                # takedown's target. No own-content check: administrators are
+                # exempt from it (`_is_about_themselves`).
+                turn = await session.get(TurnRecord, db_turn_id)
+                drawer_id = (
+                    await canonical_user_id(session, turn.drawer_user_id)
+                    if turn is not None and turn.drawer_user_id is not None
+                    else None
+                )
+                erased = await erase_drawing_for_moderation(
+                    session, db_turn_id, erased_by_user_id=reviewer.id, now=now
+                )
+                if erased is None:
+                    raise HTTPException(status_code=404, detail="No such drawing.")
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type="drawing.erased",
+                        actor_user_id=reviewer.id,
+                        target_user_id=drawer_id,
+                        target_type=AuditTargetType.DRAWING.value,
+                        target_id=turn_id,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={"note": body.note},
+                        created_at=now,
+                    )
+                )
+        # Once committed: the shelf and a live recap read the drawing as it is.
+        if on_gallery_decision is not None:
+            on_gallery_decision()
+        if on_drawing_erased is not None:
+            try:
+                await on_drawing_erased(turn_id)
+            except Exception:  # noqa: BLE001 - erased either way; the recap is a view
+                logger.exception("Failed to take an erased drawing out of a live recap")
+        return {"turnId": turn_id, "erased": True}
 
     @router.patch("/moderation/gallery/{turn_id}")
     async def decide_gallery_drawing(

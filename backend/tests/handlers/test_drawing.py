@@ -552,6 +552,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "prompt": "tree",
         "actionCount": 1,
         "available": True,
+        "removed": False,
         "canvas": canvas,
     }
     assert room.last_game_drawings[0].canvas_history == canvas
@@ -1394,3 +1395,51 @@ async def test_the_points_after_a_refused_opener_are_not_glued_onto_the_open_pat
     assert len(canvas.history[0].points) == 2, "the open path kept only its own points"
     assert canvas.active_draw_sequence == 1, "and is still open"
     assert "draw" not in _emitted_events(sio), "nothing of the refused path reached the room"
+
+
+async def test_an_erased_drawing_leaves_an_open_recap_and_the_room_is_told():
+    """An administrator erased it after the game (#1419): the room still
+    showing the recap drops the canvas and what was about it, keeps the
+    entry saying why, and is told at once. A room not showing it hears
+    nothing."""
+    from types import SimpleNamespace
+
+    from app.handlers.shares import erase_from_recaps
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    other = room_manager.create_room(name="Other", is_public=True)
+    player = room_manager.add_player(room, "Player")
+    player.sid = "player-sid"
+    cleared = PackedCanvasHistory()
+    cleared.append_clear()
+    turn_id = str(generate_uuid7())
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            turn_id=turn_id, round_number=1, turn_number=1, drawer_id=player.id,
+            drawer_nickname=player.nickname, drawer_name_color=None, prompt="tree",
+            action_count=1, canvas_history=cleared.binary_payload(),
+        )
+    )
+    room.set_drawing_reaction(turn_id, "token", "fire")
+    room.set_drawing_share(turn_id, "token", True)
+    emitted = AsyncMock()
+    ctx = SimpleNamespace(room_manager=room_manager, sio=SimpleNamespace(emit=emitted))
+
+    await erase_from_recaps(ctx, turn_id)
+
+    [entry] = room.last_game_drawings
+    assert entry.canvas_history is None and entry.removed is True
+    assert entry.metadata(0)["available"] is False and entry.metadata(0)["removed"] is True
+    assert room.drawing_reactions_for(turn_id) == []
+    assert turn_id not in room.drawing_shares
+    emitted.assert_awaited_once_with(
+        "drawing_removed", {"turnId": turn_id, "highlight": None}, room=room.id
+    )
+    assert other.last_game_drawings == []
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id})
+    refused = await sio.handlers["/"]["get_recap_drawing"]("player-sid", {"index": 0})
+    assert refused["errorCode"] == "drawing_not_kept"

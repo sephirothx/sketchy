@@ -402,6 +402,14 @@ export interface DrawingSharedEvent {
   shareWithdrawn: boolean;
 }
 
+/** An administrator erased a drawing the recap shows (#1419): its canvas,
+    reactions and shares are gone, and the most-reacted card is recomputed
+    without it. */
+export interface DrawingRemovedEvent {
+  turnId: string;
+  highlight: GameHighlight | null;
+}
+
 export interface ShareDrawingResponse extends AckResponse {
   turnId?: string;
   shares?: string[];
@@ -537,6 +545,8 @@ export interface DrawingRecapMetadata {
   actionCount: number;
   /** False once the room gave this bitmap up to stay inside its recap budget. */
   available?: boolean;
+  /** Erased by an administrator (#1419): not kept for a different reason. */
+  removed?: boolean;
 }
 
 export interface DrawingRecapEntry extends DrawingRecapMetadata {

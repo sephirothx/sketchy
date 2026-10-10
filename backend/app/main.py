@@ -83,7 +83,7 @@ from app.security_headers import (
     public_origin,
 )
 from app.handlers import register_all_handlers
-from app.handlers.shares import refresh_recaps
+from app.handlers.shares import erase_from_recaps, refresh_recaps
 from app.logging_config import configure_logging
 from app.auth.retention import (
     start_retention_loop,
@@ -724,6 +724,12 @@ async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
     await refresh_recaps(handler_context, turn_ids)
 
 
+async def erase_from_live_recaps(turn_id: str) -> None:
+    """A drawing an administrator erased leaves every recap still showing it
+    (#1419, R-MOD-22)."""
+    await erase_from_recaps(handler_context, turn_id)
+
+
 async def announce_recorded_game(game_id: str) -> None:
     """A finished game's history is in. Its live shares may have put drawings
     in the Gallery, so This week is read again (R-GAL-07), and the drawers
@@ -1112,6 +1118,7 @@ api.include_router(
         on_avatar_changed=refresh_avatar_on_live_surfaces,
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
+        on_drawing_erased=erase_from_live_recaps,
         flush_retained_messages=(
             handler_context.message_retention.flush
             if handler_context.message_retention is not None

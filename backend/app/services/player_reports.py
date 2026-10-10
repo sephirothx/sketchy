@@ -17,6 +17,7 @@ construction. What is left in common is the writing, which is what lives here
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -34,6 +35,7 @@ from app.db.models import (
     PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
     RoomMessage,
+    TurnDrawing,
     UserBlock,
     generate_uuid,
 )
@@ -165,7 +167,32 @@ def drawing_from_live_room(room: Room, target_player_id: str) -> CapturedDrawing
     )
 
 
-def drawing_evidence_payload(evidence: PlayerReportDrawingEvidence | None) -> dict | None:
+async def moderation_erased_turns(
+    session: AsyncSession, turn_ids: Iterable[UUID | None]
+) -> set[UUID]:
+    """Which of these turns an administrator erased (#1419, R-MOD-22).
+
+    A report's evidence copy of such a drawing stays, but for administrators
+    alone: moderators are told it was erased, and the reported player's
+    notice no longer offers it."""
+    wanted = {turn_id for turn_id in turn_ids if turn_id is not None}
+    if not wanted:
+        return set()
+    return set(
+        (
+            await session.scalars(
+                select(TurnDrawing.turn_id).where(
+                    TurnDrawing.turn_id.in_(wanted),
+                    TurnDrawing.moderation_erased_at.is_not(None),
+                )
+            )
+        ).all()
+    )
+
+
+def drawing_evidence_payload(
+    evidence: PlayerReportDrawingEvidence | None, *, erased: bool = False
+) -> dict | None:
     """The attached drawing by its metadata; the bytes travel by their own route.
 
     One shape for every reader - the moderator's queue, the warned player's
@@ -181,6 +208,8 @@ def drawing_evidence_payload(evidence: PlayerReportDrawingEvidence | None) -> di
         "actionCount": evidence.action_count,
         "byteSize": evidence.byte_size,
         "capturedAt": evidence.captured_at.isoformat(),
+        # Erased by an administrator: the copy is theirs alone to open.
+        "erased": erased,
     }
 
 
@@ -310,9 +339,13 @@ async def notice_drawings(
             .order_by(PlayerReport.created_at, PlayerReport.id)
         )
     ).all()
+    # Not a drawing an administrator erased: the player is not shown it back,
+    # whatever else the notice says (#1419).
+    erased = await moderation_erased_turns(session, (row.turn_id_snapshot for row in rows))
     return [
         {"reportId": str(row.report_id), **(drawing_evidence_payload(row) or {})}
         for row in rows
+        if row.turn_id_snapshot not in erased
     ]
 
 

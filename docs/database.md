@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`f8a9b0c1d2e5_account_inbox.py` (#1436). Both this line and the table
+`a9b0c1d2e3f6_moderation_erased_drawings.py` (#1419). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1206,7 +1206,11 @@ report: the drawer can add to it, undo the part complained about, or clear it. T
 turn's own `turn_drawings` row is written only when the game ends, holds the
 turn's *final* state, and is erased when the drawer's account is deleted. What a
 moderator has to judge is what the reporter saw, so that is what is kept, for as
-long as the report is — the same rule as message evidence. `turn_id_snapshot`
+long as the report is — the same rule as message evidence. When an administrator
+erases the turn itself (R-MOD-22, `turn_drawings.moderation_erased_at`), the copy
+stays — the owner's decision, so it can be given to the police on request — but only
+an administrator may open it: a moderator's queue marks it `erased`, the bytes route
+answers them 404, and a warned or suspended player's notice no longer lists it. `turn_id_snapshot`
 carries no foreign key for the reason `room_messages.turn_id` does not: the report
 is filed while the game is still being played, and a game abandoned before it ends
 never writes a `turn_records` row.
@@ -1662,12 +1666,33 @@ goes with its whole game.
 `turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
 `format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
 `unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · `gallery_share_count` ·
-`gallery_shared_at` · `gallery_withdrawn_at` · `gallery_hidden_at` · timestamps.
+`gallery_shared_at` · `gallery_withdrawn_at` · `gallery_hidden_at` · `moderation_erased_at` ·
+timestamps.
 
 `status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
 `ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
 identity, size, checksum, and either inline bytes or an object key.
 `ck_turn_drawings_erased` requires a null payload once unavailable or deleted.
+`ck_turn_drawings_moderation_erased` allows `moderation_erased_at` only on a `deleted`
+row.
+
+**Erased by an administrator** (#1419, R-MOD-22). `erase_drawing_for_moderation` writes
+the tombstone an account erasure writes — `status` `deleted`, the bytes and their
+identity nulled, the projections zeroed, the turn's reactions, shares and pins deleted,
+the drawer's `drawing_shared` inbox entries forgotten — and stamps
+`moderation_erased_at`, and moves the drawer's `user_stats_daily.reactions_received` down
+by the reactions it deleted (counted under the drawing's lock). A row whose bytes had
+already gone — `unavailable`, or `deleted` with its drawer's account, whose `deleted_at`
+it keeps — is erased all the same, for its evidence copy. A reaction write reads the
+status from the drawing row it locks (`populate_existing`), not from the turn it loaded
+before the lock: an administrator's erasure leaves the drawer's account standing, so the
+account lock does not order the two. The stamp is the only difference: the game detail reads it as
+`drawingStatus` `removed`, and the report evidence routes hold a copy of that turn back
+from everybody but administrators (`player_report_drawing_evidence`). It locks the
+drawer's and the administrator's `users` rows (shared, ascending) before the drawing row,
+the order an account erasure takes them in: drawing first, its audit row's foreign key
+waited on the account a concurrent erasure of the drawer held, while that erasure waited
+on the drawing.
 `byte_size` ≤ 8 MiB. `ck_turn_drawings_reaction_count` and
 `ck_turn_drawings_gallery_share_count` keep both counts non-negative;
 `ix_turn_drawings_gallery_top` `(reaction_count, gallery_shared_at)`,
@@ -2706,7 +2731,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |
 | Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) | `auth_tokens` |
-| Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence | Copied on report submission | — |
+| Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence — a drawing copy of a turn an administrator erased included, readable by administrators only (R-MOD-22) | Copied on report submission | — |
 | Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Swept hourly by the retention loop (the metrics loop's own purge before #478) | `runtime_events` |
 | Daily runtime roll-ups | Permanent | — | Permanently kept | — | — |
 | Shutdown abandonments | 90 days | 6 h | — | Hourly retention sweep (startup-only before #550) | `shutdown_abandonments` |

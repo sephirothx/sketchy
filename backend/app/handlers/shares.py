@@ -6,6 +6,7 @@ import logging
 from collections.abc import Iterable
 from functools import partial
 
+from app.services.game_highlights import MOST_REACTED_KIND, refresh_reaction_highlight
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import PayloadError, ShareDrawingPayload, parse_payload
 from app.handlers.refusals import ErrorCode
@@ -184,6 +185,33 @@ async def refresh_recaps(ctx: HandlerContext, turn_ids: Iterable[str]) -> None:
                 continue
             apply_recorded_shares(room, state)
             await ctx.sio.emit("drawing_shared", share_broadcast(room, turn_id), room=room.id)
+
+
+async def erase_from_recaps(ctx: HandlerContext, turn_id: str) -> None:
+    """An administrator erased a drawing (#1419): every room whose recap still
+    shows it drops the canvas, and its reactions and shares with it, and is
+    told - so a recap open on somebody's screen stops showing it now rather
+    than at the next game. The most-reacted card is recomputed without it,
+    and rides the event as it rides a reaction (#871)."""
+    for room in list(ctx.room_manager.rooms.values()):
+        if room.game is not None or not room.erase_recap_drawing(turn_id):
+            continue
+        refresh_reaction_highlight(room)
+        await ctx.sio.emit(
+            "drawing_removed",
+            {
+                "turnId": turn_id,
+                "highlight": next(
+                    (
+                        card
+                        for card in room.last_game_highlights
+                        if card.get("kind") == MOST_REACTED_KIND
+                    ),
+                    None,
+                ),
+            },
+            room=room.id,
+        )
 
 
 def _accepted(room, turn_id: str) -> dict:
