@@ -1130,7 +1130,13 @@ async def erase_drawing_for_moderation(
     ordered statement - and the drawing row after: the order an account's
     erasure takes them in, whose own drawing writes this could otherwise
     meet in a cycle. Answers the turn and the drawer's account, or ``None``
-    when there is no stored drawing with that id to erase."""
+    when there is no drawing row for that turn, or an administrator already
+    erased it.
+
+    A drawing whose bytes are already gone - not kept for the recap's budget,
+    or erased with its drawer's account - is still erased: the report's copy
+    of it may be all that is left, and the stamp is what holds that copy back
+    from everybody but administrators."""
     turn = await session.get(TurnRecord, turn_id)
     if turn is None:
         return None
@@ -1140,15 +1146,21 @@ async def erase_drawing_for_moderation(
     await erased_identity_ids(session, accounts)
     drawing = await session.scalar(
         select(TurnDrawing)
-        .where(
-            TurnDrawing.turn_id == turn_id,
-            TurnDrawing.status == TurnDrawingStatus.READY.value,
-        )
+        .where(TurnDrawing.turn_id == turn_id)
         .options(defer(TurnDrawing.payload))
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    if drawing is None:
+    if drawing is None or drawing.moderation_erased_at is not None:
         return None
+    # The reactions about to go, counted under the drawing's lock - which
+    # every reaction write takes too - so the drawer's received total loses
+    # exactly these, as a reaction taken back would take its one.
+    reactions_removed = await session.scalar(
+        select(func.count())
+        .select_from(TurnDrawingReaction)
+        .where(TurnDrawingReaction.turn_id == turn_id)
+    )
     await session.execute(
         update(TurnDrawing)
         .where(TurnDrawing.turn_id == turn_id)
@@ -1160,7 +1172,11 @@ async def erase_drawing_for_moderation(
             byte_size=None,
             format_magic=None,
             format_version=None,
-            deleted_at=now,
+            # When the bytes went, if they had already: an account erasure's
+            # date stays the date the drawing was erased.
+            deleted_at=drawing.deleted_at or now,
+            # `unavailable` names a reason the row no longer has.
+            unavailable_reason=None,
             updated_at=now,
             reaction_count=0,
             hot_score=0.0,
@@ -1185,6 +1201,14 @@ async def erase_drawing_for_moderation(
     await forget_inbox_subjects(
         session, kinds=("drawing_shared",), subject_ids=[turn_id]
     )
+    if reactions_removed and turn.drawer_user_id is not None:
+        game = await session.get(GameRecord, turn.game_id)
+        await adjust_reactions_received(
+            session,
+            user_id=turn.drawer_user_id,
+            finished_at=game.finished_at,
+            delta=-reactions_removed,
+        )
     await session.flush()
     return turn_id, turn.drawer_user_id
 
@@ -3177,11 +3201,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # The drawing row, locked: the count and the Hot score kept
                 # on it are set from the rows after this write, and two
                 # reactions landing together must not both count their own.
+                # `populate_existing`: the turn's drawing was loaded before this
+                # lock, and the lock alone does not overwrite a loaded object -
+                # an erasure that committed meanwhile would read as `ready`.
                 drawing_row = await session.scalar(
                     select(TurnDrawing)
                     .where(TurnDrawing.turn_id == db_turn_id)
                     .options(defer(TurnDrawing.payload))
                     .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
                 if from_gallery:
                     # The gallery predicate (R-GAL-01): a kept drawing that
@@ -3198,10 +3226,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 ) or turn.drawer_user_id in identity_ids:
                     return None
                 # An erased drawing takes its reactions with it and takes no
-                # new ones; there is nothing left to react to.
+                # new ones; there is nothing left to react to. Read from the
+                # row as locked, not as loaded: an administrator's erasure
+                # leaves the drawer's account standing, so the account lock
+                # above does not stand between them (#1419).
                 if (
-                    turn.drawing is not None
-                    and turn.drawing.status == TurnDrawingStatus.DELETED.value
+                    drawing_row is not None
+                    and drawing_row.status == TurnDrawingStatus.DELETED.value
                 ):
                     return None
 

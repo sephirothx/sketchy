@@ -1680,7 +1680,13 @@ row.
 the tombstone an account erasure writes — `status` `deleted`, the bytes and their
 identity nulled, the projections zeroed, the turn's reactions, shares and pins deleted,
 the drawer's `drawing_shared` inbox entries forgotten — and stamps
-`moderation_erased_at`, which is the only difference: the game detail reads it as
+`moderation_erased_at`, and moves the drawer's `user_stats_daily.reactions_received` down
+by the reactions it deleted (counted under the drawing's lock). A row whose bytes had
+already gone — `unavailable`, or `deleted` with its drawer's account, whose `deleted_at`
+it keeps — is erased all the same, for its evidence copy. A reaction write reads the
+status from the drawing row it locks (`populate_existing`), not from the turn it loaded
+before the lock: an administrator's erasure leaves the drawer's account standing, so the
+account lock does not order the two. The stamp is the only difference: the game detail reads it as
 `drawingStatus` `removed`, and the report evidence routes hold a copy of that turn back
 from everybody but administrators (`player_report_drawing_evidence`). It locks the
 drawer's and the administrator's `users` rows (shared, ascending) before the drawing row,

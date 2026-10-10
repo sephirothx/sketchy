@@ -11,7 +11,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.api.errors import install_refusal_handler
 from app.api.gallery import create_gallery_router, gallery_limiter
@@ -21,6 +21,7 @@ from app.auth.account_data import anonymize_account
 from app.auth.middleware import SessionAuthMiddleware
 from app.db.models import (
     AuditEvent,
+    UserStatsDaily,
     generate_uuid,
     InboxEntry,
     ProfileDrawingPin,
@@ -273,3 +274,121 @@ async def test_an_erasure_and_its_drawers_account_deletion_wait_for_each_other(e
         drawing = await session.get(TurnDrawing, turn)
         assert drawing.status == TurnDrawingStatus.DELETED.value
         assert drawing.moderation_erased_at is not None
+
+
+async def _received(factory, user_id: str) -> int:
+    async with factory() as session:
+        return int(
+            await session.scalar(
+                select(func.coalesce(func.sum(UserStatsDaily.reactions_received), 0)).where(
+                    UserStatsDaily.user_id == UUID(user_id)
+                )
+            )
+        )
+
+
+async def test_the_drawers_received_reactions_lose_the_ones_the_erasure_took(env):
+    """The reactions go with the drawing, so the profile's total - a
+    projection of them - goes down by as many, as a rebuild would read it."""
+    http, users, history, factory = env
+    game, ann, _, _ = await _reported_drawing(http, users, history, factory)
+    assert await _received(factory, ann.id) == 1
+    admin = await _staff(users, factory, "Admin", UserRole.ADMIN)
+    await _as_moderator(http, factory, admin.id)
+    assert (await http.post(f"/api/moderation/drawings/{game.turn_id}/erase", json={"note": "x"})).status_code == 200
+    assert await _received(factory, ann.id) == 0
+
+
+async def test_a_drawing_whose_bytes_already_went_is_still_erased_for_its_evidence(env):
+    """Not kept for the recap's budget, or erased with its drawer's account:
+    the report's copy may be all that is left, and only the erasure holds it
+    back from everybody but administrators."""
+    http, users, history, factory = env
+    game, ann, bob, report_id = await _reported_drawing(http, users, history, factory)
+    turn = UUID(game.turn_id)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id == turn)
+                .values(
+                    status=TurnDrawingStatus.UNAVAILABLE.value, unavailable_reason="recap_budget",
+                    payload=None, object_key=None,
+                )
+            )
+    admin = await _staff(users, factory, "Admin", UserRole.ADMIN)
+    await _as_moderator(http, factory, admin.id)
+    assert (await http.post(f"/api/moderation/drawings/{game.turn_id}/erase", json={"note": "x"})).status_code == 200
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, turn)
+        assert drawing.status == TurnDrawingStatus.DELETED.value and drawing.unavailable_reason is None
+        assert drawing.moderation_erased_at is not None
+    moderator = await _staff(users, factory, "Mod", UserRole.MODERATOR)
+    await _as_moderator(http, factory, moderator.id)
+    assert (await http.get(f"/api/moderation/reports/{report_id}/drawing")).status_code == 404
+
+    # Erased with its account, then by an administrator: the date it went stays.
+    other = await record_game(history, drawer=bob.id, reactor=ann.id, visibility="public", finished_at=NOW)
+    gone = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id == UUID(other.turn_id))
+                .values(
+                    status=TurnDrawingStatus.DELETED.value, deleted_at=gone, payload=None,
+                    object_key=None, checksum_sha256=None, byte_size=None,
+                    format_magic=None, format_version=None,
+                )
+            )
+    await _as_moderator(http, factory, admin.id)
+    path = f"/api/moderation/drawings/{other.turn_id}/erase"
+    assert (await http.post(path, json={"note": "x"})).status_code == 200
+    assert (await http.post(path, json={"note": "again"})).status_code == 404, "once"
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, UUID(other.turn_id))
+        assert drawing.deleted_at.replace(tzinfo=timezone.utc) == gone
+
+
+async def test_a_reaction_in_flight_when_the_drawing_is_erased_is_refused(env, monkeypatch):
+    """The reaction read the drawing before the erasure committed; the row it
+    then locks is erased, and that is what decides (R-REACT-10). The account
+    lock is no barrier here - an administrator's erasure leaves the drawer's
+    account standing. PostgreSQL only: SQLite has one writer, so the two
+    cannot interleave."""
+    http, users, history, factory = env
+    async with factory() as probe:
+        if probe.get_bind().dialect.name != "postgresql":
+            pytest.skip("row locks interleave only on PostgreSQL")
+    ann = await _registered(users, "AnnDraws")
+    bob = await _registered(users, "BobReacts")
+    admin = await _staff(users, factory, "AdminErasesMid", UserRole.ADMIN)
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    turn = UUID(game.turn_id)
+
+    read, carry_on = asyncio.Event(), asyncio.Event()
+    original = repository.erased_identity_ids
+
+    async def pausing(*args, **kwargs):
+        # The reaction's first account check: by here it has read the turn
+        # and its drawing, as `ready`.
+        if not read.is_set():
+            read.set()
+            await carry_on.wait()
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(repository, "erased_identity_ids", pausing)
+    reacting = asyncio.create_task(
+        history.set_drawing_reaction(game.game_id, game.turn_id, requesting_user_id=bob.id, emoji="fire")
+    )
+    await asyncio.wait_for(read.wait(), timeout=10)
+    async with factory() as session:
+        async with session.begin():
+            assert await erase_drawing_for_moderation(
+                session, turn, erased_by_user_id=UUID(admin.id), now=NOW
+            )
+    carry_on.set()
+    assert await asyncio.wait_for(reacting, timeout=10) is None
+    assert await _count(factory, TurnDrawingReaction, turn) == 0
+    async with factory() as session:
+        assert (await session.get(TurnDrawing, turn)).reaction_count == 0
