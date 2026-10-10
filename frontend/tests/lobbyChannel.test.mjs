@@ -79,3 +79,13 @@ test("past the cap the buffer gives up and asks for a fresh baseline instead", (
   assert.equal(pending.hold("rooms", { revision: 9 }), true, "a drain resets it");
   assert.equal(MAX_HELD_DELTAS, 64);
 });
+
+test("a hide held before the baseline survives it only if the baseline does not include it", () => {
+  // #1435: the hide that beat the baseline's continuation used to find no
+  // line and be dropped; held, its count says whether the baseline has it.
+  const pending = createPendingDeltas();
+  pending.hold("chatVisibility", { retainedMessageId: "m1", hidden: true, visibility: 4 });
+  pending.hold("chatVisibility", { retainedMessageId: "m2", hidden: true, visibility: 5 });
+  const replayed = pending.drain({ presence: 0, rooms: 0, chatSeq: 0, chatVisibility: 4 });
+  assert.deepEqual(replayed.map((d) => [d.feed, d.at]), [["chatVisibility", 5]]);
+});

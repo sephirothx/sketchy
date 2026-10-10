@@ -544,7 +544,7 @@ async def test_a_line_a_moderator_hid_changes_in_every_lobby_and_its_words_go_on
         ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=True, text=None
     )
     [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
-    assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": True}
+    assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": True, "visibility": 1}
     assert set(call.kwargs["to"]) == {"sid-a", "sid-c"}
     [held] = ctx.lobby_chat.backlog_for()
     assert held.seq == line.seq and held.payload()["text"] == "" and held.payload()["hidden"] is True
@@ -554,6 +554,49 @@ async def test_a_line_a_moderator_hid_changes_in_every_lobby_and_its_words_go_on
         ctx, retained_message_id="msg-1", author_user_id="user-ada", hidden=False, text="regrettable"
     )
     [call] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
-    assert call.args[1] == {"retainedMessageId": "msg-1", "hidden": False, "text": "regrettable"}
+    assert call.args[1] == {
+        "retainedMessageId": "msg-1", "hidden": False, "visibility": 2, "text": "regrettable",
+    }
     assert "sid-b" not in call.kwargs["to"]
     assert ctx.lobby_chat.backlog_for()[0].payload()["text"] == "regrettable"
+
+
+async def test_a_lobby_that_missed_a_hide_is_handed_the_whole_backlog_to_replace_its_lines(
+    monkeypatch,
+):
+    """#1435: a hide changes a line the returning lobby already holds, which
+    resuming from its `chatSince` would never correct. Behind on the count,
+    it is handed everything, marked to replace; level, only what is new."""
+    from app.handlers.lobby import announce_lobby_line_visibility
+
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    first = await arrive(ctx, sio, "sid-a", "tok-a")
+    assert first["chatVisibility"] == 0 and "chatReplace" not in first
+    ctx.lobby_chat.append(
+        user_id="user-bob", display_name="Bob", name_color=None, is_anonymous=False,
+        text="regrettable", sent_at=datetime.now(timezone.utc), retained_message_id="msg-1",
+    )
+    await say(sio, "sid-a", "after it")
+    seen = {"chatSince": 2, "chatEpoch": first["chatEpoch"], "chatVisibility": 0}
+
+    # Level: only what is new, which is nothing.
+    level = await sio.handlers["/"]["watch_lobby"]("sid-a", seen)
+    assert level["chat"] == [] and "chatReplace" not in level
+
+    # Away while it was hidden.
+    await announce_lobby_line_visibility(
+        ctx, retained_message_id="msg-1", author_user_id="user-bob", hidden=True, text=None
+    )
+    [event] = [c for c in sio.emit.await_args_list if c.args[0] == "lobby_chat_line_changed"]
+    assert event.args[1]["visibility"] == 1
+    back = await sio.handlers["/"]["watch_lobby"]("sid-a", seen)
+    assert back["chatReplace"] is True and back["chatVisibility"] == 1
+    assert [(line["seq"], line["text"], line.get("hidden")) for line in back["chat"]] == [
+        (1, "", True),
+        (2, "after it", None),
+    ]
+    # Caught up, it resumes as before (another socket: the baseline has a
+    # budget of its own per socket).
+    await arrive(ctx, sio, "sid-a2", "tok-a", watch=False)
+    caught_up = await sio.handlers["/"]["watch_lobby"]("sid-a2", {**seen, "chatVisibility": 1})
+    assert caught_up["chat"] == [] and "chatReplace" not in caught_up

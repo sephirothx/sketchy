@@ -130,7 +130,7 @@ test("only lines from a known process and the same account are resumed (#885)", 
     { chat: [line(1), line(2)], chatSeq: 5, chatEpoch: "e" },
     "u",
   );
-  assert.deepEqual(chatResumeRequest(held, "u"), { chatSince: 5, chatEpoch: "e" });
+  assert.deepEqual(chatResumeRequest(held, "u"), { chatSince: 5, chatEpoch: "e", chatVisibility: 0 });
   assert.deepEqual(chatResumeRequest(held, "someone-else"), {});
   assert.deepEqual(chatResumeRequest(held, null), {});
 });
@@ -192,4 +192,33 @@ test("a line a moderator hid is held without its words, and shown again in place
   const parsed = parseLine({ ...line(3, { retainedMessageId: "msg-3" }), text: "", hidden: true });
   assert.equal(parsed.hidden, true);
   assert.equal(reportableLine(parsed, { id: "user-bob", isAnonymous: false }), false);
+});
+
+test("a lobby that missed a hide replaces what it holds with the backlog it is handed", () => {
+  // #1435: the count rides the resume request; behind, the server marks the
+  // backlog `chatReplace`, and lines held older than it go too - nothing
+  // vouches for them now.
+  const owner = "user-carol";
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, {
+    chat: [line(1, { retainedMessageId: "m1" }), line(2, { retainedMessageId: "m2" })],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 3,
+  }, owner);
+  assert.deepEqual(chatResumeRequest(held, owner), { chatSince: 2, chatEpoch: "e1", chatVisibility: 3 });
+
+  // A change this tab did see moves its count, held line or not.
+  held = applyLineVisibility(held, { retainedMessageId: "elsewhere", hidden: true, visibility: 4 });
+  assert.equal(held.visibility, 4);
+
+  const replaced = applyChatBacklog(held, {
+    chat: [{ ...line(2, { retainedMessageId: "m2" }), text: "", hidden: true }],
+    chatSeq: 2, chatEpoch: "e1", chatVisibility: 6, chatReplace: true,
+  }, owner);
+  assert.deepEqual(replaced.lines.map((l) => [l.seq, l.hidden ?? false]), [[2, true]]);
+  assert.equal(replaced.visibility, 6);
+
+  // Level, a resumed backlog still merges.
+  const merged = applyChatBacklog(replaced, {
+    chat: [line(3)], chatSeq: 3, chatEpoch: "e1", chatVisibility: 6,
+  }, owner);
+  assert.deepEqual(merged.lines.map((l) => l.seq), [2, 3]);
 });

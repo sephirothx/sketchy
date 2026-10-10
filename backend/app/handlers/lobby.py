@@ -107,6 +107,13 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         and payload.chat_since <= chat.last_seq
         else 0
     )
+    # A line hidden or shown again while this lobby was away (#1435) is one it
+    # already holds, so resuming from `chatSince` would never correct it: it
+    # is handed the whole backlog, marked to replace what it holds - lines
+    # older than the ring included, since nothing here can vouch for them.
+    replace = bool(after) and (payload.chat_visibility or 0) < chat.visibility
+    if replace:
+        after = 0
     # The join comes first, the lookups next, and the baselines are read last,
     # with nothing that can yield between them and the answer. Each order
     # has been wrong once. The baselines used to be read before the lookups
@@ -145,6 +152,8 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         ],
         "chatSeq": chat.last_seq,
         "chatEpoch": chat.epoch,
+        "chatVisibility": chat.visibility,
+        **({"chatReplace": True} if replace else {}),
     }
     # Every baseline in one acknowledgement is the lobby's largest message and
     # is paid again on every resync (#882, #885): sized here, where it is built.
@@ -210,7 +219,13 @@ async def announce_lobby_line_visibility(
     only where the line itself would - not to whoever muted its author
     (R-LCHAT-03); hidden carries none, and the same rule keeps it simple."""
     ctx.lobby_chat.set_hidden(retained_message_id, hidden)
-    payload: dict = {"retainedMessageId": retained_message_id, "hidden": hidden}
+    payload: dict = {
+        "retainedMessageId": retained_message_id,
+        "hidden": hidden,
+        # Which change this is, so a lobby holding it until its baseline
+        # lands can tell it from one the baseline already includes.
+        "visibility": ctx.lobby_chat.visibility,
+    }
     if not hidden and text is not None:
         payload["text"] = text
     recipients = await _lobby_recipients(ctx, author_user_id)

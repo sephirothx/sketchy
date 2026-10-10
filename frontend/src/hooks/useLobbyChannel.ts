@@ -129,14 +129,21 @@ export function useLobbyChannel(): void {
         baseline = true;
         attempt = 0;
         const revisionOf = (value: unknown) => (typeof value === "number" ? value : 0);
-        for (const held of pending.drain({
+        const drained = pending.drain({
           presence: revisionOf(answer.revision),
           rooms: revisionOf(answer.roomsRevision),
           chatSeq: revisionOf(answer.chatSeq),
-        })) {
+          chatVisibility: revisionOf(answer.chatVisibility),
+        });
+        for (const held of drained) {
           if (held.feed === "presence") usePresenceStore.getState().receiveDelta(held.payload);
           else if (held.feed === "rooms") useRoomsStore.getState().receiveDelta(held.payload);
-          else useLobbyChatStore.getState().receiveLine(held.payload);
+          else if (held.feed === "chat") useLobbyChatStore.getState().receiveLine(held.payload);
+        }
+        // After the lines, so a hide held here finds the line it names
+        // (#1435); only those newer than the baseline survived the drain.
+        for (const held of drained) {
+          if (held.feed === "chatVisibility") useLobbyChatStore.getState().receiveLineChange(held.payload);
         }
         if (
           usePresenceStore.getState().presence.needsResync
@@ -176,7 +183,10 @@ export function useLobbyChannel(): void {
 
     // Held while the baseline is pending; past the buffer's cap a fresh
     // baseline is asked for, since what was held no longer joins onto anything.
-    const holdOrResubscribe = (feed: "presence" | "rooms" | "chat", payload: unknown) => {
+    const holdOrResubscribe = (
+      feed: "presence" | "rooms" | "chat" | "chatVisibility",
+      payload: unknown,
+    ) => {
       if (!pending.hold(feed, payload)) void subscribe();
     };
 
@@ -205,10 +215,16 @@ export function useLobbyChannel(): void {
     // A line before the baseline is usually in the backlog the answer carries;
     // one said after the backlog was read is not, so it is held like the rest
     // and the store's sequence numbers drop the duplicates.
-    // Applied to whatever lines are held, baseline or not: a backlog asked
-    // for meanwhile is read from the ring the server changed first (#1435).
+    // Held like a line while the baseline is pending (#1435): applied now, a
+    // hide that beat the baseline's continuation found no line to change and
+    // was lost, and the older baseline then showed the words. Its count says
+    // whether the baseline already included it.
     const onChatLineChanged = (payload: unknown) => {
       if (cancelled) return;
+      if (!baseline) {
+        holdOrResubscribe("chatVisibility", payload);
+        return;
+      }
       useLobbyChatStore.getState().receiveLineChange(payload);
     };
     const onChat = (payload: unknown) => {

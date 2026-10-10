@@ -3784,7 +3784,9 @@ def create_moderation_router(
                             created_at=now,
                         )
                     )
-                sender = str(line.sender_user_id)
+                # The account, not the id the line was said under: a guest
+                # who has since claimed one has its blocks there (R-LCHAT-03).
+                sender = str(author)
                 text = line.text
         if changed and on_lobby_line_changed is not None:
             try:

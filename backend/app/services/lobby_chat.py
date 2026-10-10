@@ -98,6 +98,12 @@ class LobbyChatLog:
     def __init__(self, *, backlog: int = LOBBY_CHAT_BACKLOG) -> None:
         self._lines: deque[LobbyChatLine] = deque(maxlen=backlog)
         self._seq = 0
+        # How many hides and show-agains this process has announced (#1435).
+        # Not a line number: a hide changes a line already numbered, which
+        # the `seq` a returning lobby resumes from cannot see. A lobby that
+        # last saw a smaller count missed one, and is handed the whole
+        # backlog to replace what it holds.
+        self.visibility = 0
         # Which numbering `seq` belongs to. Random rather than a start time:
         # two processes started in the same second must not look like one.
         self.epoch = secrets.token_hex(6)
@@ -188,8 +194,10 @@ class LobbyChatLog:
 
     def set_hidden(self, retained_message_id: str, hidden: bool) -> bool:
         """Hide one line, or show it again (#1435), keeping its place and its
-        number. Answers whether the ring still held it - a line older than
-        the backlog is only in the clients that kept it."""
+        number. Counted whether or not the ring still holds it - a line older
+        than the backlog is only in the clients that kept it, and they are
+        the ones the count is for. Answers whether the ring held it."""
+        self.visibility += 1
         for index, line in enumerate(self._lines):
             if line.retained_message_id == retained_message_id:
                 self._lines[index] = replace(line, hidden=hidden)

@@ -186,3 +186,34 @@ async def test_hiding_is_refused_to_players_without_a_step_up_and_for_ones_own_l
         await target_http.patch(f"/api/moderation/lobby-messages/{own.id}", json=body)
     ).status_code == 403
     assert new_client.told == []
+
+
+
+async def test_showing_a_merged_guests_line_again_is_filtered_by_the_account_it_became(env):
+    """The line was said as a guest who has since claimed an account, whose
+    blocks now live on that account: the words go back out filtered by the
+    account, not the guest id the row still carries (R-LCHAT-03)."""
+    new_client, factory = env
+    reporter_http, moderator_http, account_http = new_client(), new_client(), new_client()
+    await register(reporter_http, "MergeReporter")
+    moderator = await register(moderator_http, "MergeMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    account = await register(account_http, "MergedAccount")
+    guest_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=guest_id, display_name="Guest 9", state="anonymous"))
+            await session.flush()
+            line = _lobby_line(str(guest_id), "said as a guest", at=datetime.now(timezone.utc))
+            session.add(line)
+    filed = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": str(guest_id), "reason": "harassment", "details": "x", "messageIds": [str(line.id)]},
+    )
+    assert filed.status_code == 201, filed.text
+    path = f"/api/moderation/lobby-messages/{line.id}"
+    assert (await moderator_http.patch(path, json={"hidden": True, "note": "x"})).status_code == 200
+
+    await SqlAlchemyUserRepository(factory).merge_guest_into_account(str(guest_id), account["id"])
+    assert (await moderator_http.patch(path, json={"hidden": False, "note": "y"})).status_code == 200
+    assert new_client.told[-1] == (str(line.id), account["id"], False, "said as a guest")

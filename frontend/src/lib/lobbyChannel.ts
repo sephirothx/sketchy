@@ -38,7 +38,7 @@ emptied and the caller asks for a fresh baseline instead, since what it
 holds no longer joins onto anything. */
 export const MAX_HELD_DELTAS = 64;
 
-export type LobbyFeed = "presence" | "rooms" | "chat";
+export type LobbyFeed = "presence" | "rooms" | "chat" | "chatVisibility";
 
 export interface HeldDelta {
   feed: LobbyFeed;
@@ -51,6 +51,8 @@ export interface BaselineRevisions {
   presence: number;
   rooms: number;
   chatSeq: number;
+  /** Hides and show-agains the backlog already reflects (#1435). */
+  chatVisibility: number;
 }
 
 export interface PendingDeltas {
@@ -66,7 +68,8 @@ export interface PendingDeltas {
 
 function sequenceOf(feed: LobbyFeed, payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null;
-  const value = (payload as Record<string, unknown>)[feed === "chat" ? "seq" : "revision"];
+  const field = feed === "chat" ? "seq" : feed === "chatVisibility" ? "visibility" : "revision";
+  const value = (payload as Record<string, unknown>)[field];
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
@@ -91,6 +94,7 @@ export function createPendingDeltas(limit: number = MAX_HELD_DELTAS): PendingDel
         presence: baseline.presence,
         rooms: baseline.rooms,
         chat: baseline.chatSeq,
+        chatVisibility: baseline.chatVisibility,
       };
       const newer = held
         .filter((delta) => delta.at > floor[delta.feed])

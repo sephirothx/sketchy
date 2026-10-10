@@ -42,6 +42,10 @@ export interface LobbyChatState {
   /** The account these lines were filtered for. Another account's blocks
   differ, so its lobby asks for everything and replaces them. */
   owner: string | null;
+  /** How many hides and show-agains this process announced that these lines
+  reflect (#1435): a returning lobby sends it, and one behind is handed the
+  whole backlog to replace them with. */
+  visibility: number;
 }
 
 export const EMPTY_LOBBY_CHAT: LobbyChatState = {
@@ -49,6 +53,7 @@ export const EMPTY_LOBBY_CHAT: LobbyChatState = {
   lines: [],
   epoch: null,
   owner: null,
+  visibility: 0,
 };
 
 /** More than the server hands an arrival, so a long-open lobby keeps some of
@@ -95,6 +100,7 @@ export function applyLineVisibility(state: LobbyChatState, payload: unknown): Lo
   const event = payload as Record<string, unknown>;
   if (typeof event.retainedMessageId !== "string" || typeof event.hidden !== "boolean") return state;
   const hidden = event.hidden;
+  const at = typeof event.visibility === "number" ? event.visibility : 0;
   const text = typeof event.text === "string" ? event.text : null;
   if (!hidden && text === null) return state;
   let changed = false;
@@ -107,7 +113,9 @@ export function applyLineVisibility(state: LobbyChatState, payload: unknown): Lo
     delete shown.hidden;
     return shown;
   });
-  return changed ? { ...state, lines } : state;
+  const visibility = Math.max(state.visibility, at);
+  if (!changed) return visibility === state.visibility ? state : { ...state, visibility };
+  return { ...state, lines, visibility };
 }
 
 function capped(lines: LobbyChatLine[]): LobbyChatLine[] {
@@ -131,8 +139,12 @@ function parseBacklog(payload: unknown): {
   lines: LobbyChatLine[];
   chatSeq: number;
   epoch: string | null;
+  visibility: number;
+  replace: boolean;
 } {
-  if (!payload || typeof payload !== "object") return { lines: [], chatSeq: 0, epoch: null };
+  if (!payload || typeof payload !== "object") {
+    return { lines: [], chatSeq: 0, epoch: null, visibility: 0, replace: false };
+  }
   const answer = payload as Record<string, unknown>;
   const lines = Array.isArray(answer.chat)
     ? answer.chat.map(parseLine).filter((line): line is LobbyChatLine => line !== null)
@@ -143,7 +155,11 @@ function parseBacklog(payload: unknown): {
       ? answer.chatSeq
       : 0;
   const epoch = typeof answer.chatEpoch === "string" && answer.chatEpoch ? answer.chatEpoch : null;
-  return { lines, chatSeq, epoch };
+  const visibility =
+    typeof answer.chatVisibility === "number" && Number.isSafeInteger(answer.chatVisibility) && answer.chatVisibility >= 0
+      ? answer.chatVisibility
+      : 0;
+  return { lines, chatSeq, epoch, visibility, replace: answer.chatReplace === true };
 }
 
 /** What a `watch_lobby` sends about the chat it already holds (#885).
@@ -155,9 +171,9 @@ nothing to resume, or when the lines were filtered for another account. */
 export function chatResumeRequest(
   state: LobbyChatState,
   owner: string | null,
-): { chatSince: number; chatEpoch: string } | Record<string, never> {
+): { chatSince: number; chatEpoch: string; chatVisibility: number } | Record<string, never> {
   if (!state.epoch || state.lastSeq === 0 || state.owner !== owner) return {};
-  return { chatSince: state.lastSeq, chatEpoch: state.epoch };
+  return { chatSince: state.lastSeq, chatEpoch: state.epoch, chatVisibility: state.visibility };
 }
 
 /** Take the backlog a `watch_lobby` acknowledgement carries, for *owner*.
@@ -173,14 +189,18 @@ export function applyChatBacklog(
   payload: unknown,
   owner: string | null,
 ): LobbyChatState {
-  const { lines, chatSeq, epoch } = parseBacklog(payload);
-  if (!epoch || epoch !== state.epoch || owner !== state.owner) {
+  const { lines, chatSeq, epoch, visibility, replace } = parseBacklog(payload);
+  // Replaced, too, when the server says a hide or show-again was missed
+  // (#1435): the lines held may be showing words since hidden, or a
+  // placeholder since lifted, and only the backlog is known to be right.
+  if (replace || !epoch || epoch !== state.epoch || owner !== state.owner) {
     const last = lines.length ? lines[lines.length - 1].seq : 0;
-    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines), epoch, owner };
+    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines), epoch, owner, visibility };
   }
   let next = state;
   for (const line of lines) next = append(next, line);
   if (chatSeq > next.lastSeq) next = { ...next, lastSeq: chatSeq };
+  if (visibility > next.visibility) next = { ...next, visibility };
   return next;
 }
 
