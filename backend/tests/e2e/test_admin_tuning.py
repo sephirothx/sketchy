@@ -7,13 +7,15 @@ is already armed in a browser that never reloaded. Each of those is somewhere
 the value could be quietly dropped, and none of them is visible from one side.
 
 The cadence under test is the drawer's flush interval, and it is observed on
-the wire: the `client_config` frame the running socket receives. This used to
+the wire: the `client_config` event the running socket receives. This used to
 count the lobby's polling instead, which #462 retired - the room list is pushed
-now and has no cadence of its own. Reading the frame is the better test
+now and has no cadence of its own. Reading the event is the better test
 anyway. It asserts the *value* that arrived rather than inferring a change from
 timing, so it needs no discriminating window and cannot flake on a slow worker,
-and it still adds nothing to the application: the frame is protocol, not a
-hook exposed on `window` for the benefit of this file (R-ENG-10).
+and it still adds nothing to the application: the event is protocol, read
+through the socket the diagnostics build already exposes - over whichever
+transport carried it - not a hook added for the benefit of this file
+(R-ENG-10).
 
 **A tunable is process-wide, and this suite shares one server.** `--dist=load`
 spreads individual tests across workers, so anything changed here is changed
@@ -33,7 +35,6 @@ coverage is worth. The pause is covered against the API in
 `tests/test_admin_controls.py`, and the banner that reports it by
 `frontend/tests/adminControls.test.mjs`.
 """
-import asyncio
 import os
 
 import pytest
@@ -45,6 +46,7 @@ from app.db.models import AppConfig, AuditEvent
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import register_account, use_guest_name
 from tests.e2e.staff_helpers import set_role
+from tests.e2e.test_canvas_commit_fanout import SocketEventLog
 
 
 BASE_URL = "http://localhost:8000"
@@ -113,19 +115,11 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
         player_page = await player_context.new_page()
         player_page.set_default_timeout(10000)
 
-        notices: list[str] = []
-        arrived = asyncio.Event()
-
-        def record(payload) -> None:
-            if isinstance(payload, str) and '"client_config"' in payload:
-                notices.append(payload)
-                arrived.set()
-
         # Attached before the socket opens, so the handshake's own notice is
         # seen too - and so nothing is missed between navigating and listening.
-        player_page.on(
-            "websocket", lambda websocket: websocket.on("framereceived", record)
-        )
+        # Off the socket rather than its WebSocket frames, which a session on
+        # long-polling (#601) never has.
+        events = await SocketEventLog.attach(player_page)
 
         try:
             # Connected before anything is tuned, and never reloaded after.
@@ -134,12 +128,10 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             # client that was already running.
             await player_page.goto(BASE_URL)
             await use_guest_name(player_page, "TunedPlayer")
-            async with asyncio.timeout(10):
-                while not notices:
-                    arrived.clear()
-                    await arrived.wait()
-            assert '"flushIntervalMs":80' in notices[-1].replace(" ", ""), notices[-1]
-            already_seen = len(notices)
+            await events.wait_for("client_config", since=0, timeout_s=10)
+            notices = await events.payloads("client_config")
+            assert notices[-1][0]["flushIntervalMs"] == 80, notices[-1]
+            already_seen = await events.mark()
 
             await admin_page.goto(f"{BASE_URL}/admin/operations?tab=tuning")
             # The tab is addressable, so a link to one survives being sent.
@@ -166,12 +158,9 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
 
             # The point of the test: a notice the running socket had not
             # received when the page loaded, carrying the new value.
-            async with asyncio.timeout(10):
-                while len(notices) == already_seen:
-                    arrived.clear()
-                    await arrived.wait()
-            fresh = notices[-1].replace(" ", "")
-            assert '"flushIntervalMs":56' in fresh, (
+            await events.wait_for("client_config", since=already_seen, timeout_s=10)
+            fresh = (await events.payloads("client_config", since=already_seen))[-1][0]
+            assert fresh["flushIntervalMs"] == 56, (
                 f"the client_config notice said {fresh}; a change from 40ms to "
                 "56ms did not reach a browser already running"
             )

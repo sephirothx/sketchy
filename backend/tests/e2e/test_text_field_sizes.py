@@ -126,12 +126,14 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await _open_every_section(page)
             await measure("create room")
             # A registered player's preset bar: the name field it focuses,
-            # then the select once there is a preset to start from.
+            # then the page with a preset to start from (a picker, which is a
+            # button and not a field - still walked, so a field beside it
+            # would be measured).
             await page.get_by_role("button", name="Save as preset").click()
             await page.locator(".room-preset-name").fill("Sized preset")
             await measure("create room, naming a preset")
             await page.locator(".room-preset-bar").get_by_role("button", name="Save").click()
-            await page.locator(".room-preset-bar select").wait_for()
+            await page.locator(".room-preset-bar .picker-trigger").wait_for()
             await measure("create room, with a preset")
             await page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
             await page.click('button:has-text("Create room")')

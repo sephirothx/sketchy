@@ -139,7 +139,6 @@
 }
 
 .prompt-list-manager-layout input,
-.prompt-list-manager-layout select,
 .prompt-list-manager-layout textarea {
   background: var(--field);
   border: 1.5px solid var(--line-strong);
@@ -153,8 +152,8 @@
   width: 100%;
 }
 
-/* A field's inner editor clips at its content box; a select and a textarea
-   do not, and a textarea would indent only its first line. Text fields only:
+/* A field's inner editor clips at its content box; a textarea does not, and
+   would indent only its first line. Text fields only:
    the same rule above also pads the checkboxes. */
 .prompt-list-manager-layout input:not([type="checkbox"], [type="radio"], [type="number"], [type="range"], [type="color"], [type="file"]) {
   padding-inline-start: calc(10px - var(--ink-overhang));

@@ -370,8 +370,8 @@ async def test_discovery_asks_for_the_ranked_languages():
 
             await page.click(".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible")
             await page.wait_for_selector(".create-room-submit")
-            await page.click(".create-room-language-field .language-picker-trigger")
-            options = await page.locator(".language-picker-option").evaluate_all(
+            await page.click(".create-room-language-field .picker-trigger")
+            options = await page.locator(".picker-option").evaluate_all(
                 "rows => rows.map(row => row.dataset.language)"
             )
             assert options[:4] == ["mul", "fr", "nl", "it"], options
@@ -381,7 +381,7 @@ async def test_discovery_asks_for_the_ranked_languages():
 
             async def filter_order(label: str) -> list[str]:
                 await page.get_by_role("button", name=re.compile(f"^{label}: ")).click()
-                rows = await page.locator(".language-picker-option").evaluate_all(
+                rows = await page.locator(".picker-option").evaluate_all(
                     "rows => rows.map(row => row.dataset.language)"
                 )
                 await page.keyboard.press("Escape")

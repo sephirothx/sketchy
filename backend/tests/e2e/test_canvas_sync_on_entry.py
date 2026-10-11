@@ -7,13 +7,14 @@ already held a verified prefix. Now the canvas asks - on mount, and once a new
 socket has rebound its seat - claiming the prefix it holds.
 
 Read off the socket rather than the canvas: the waste was invisible in pixels.
+And off the socket rather than its WebSocket: a reconnect may open on polling.
 """
 import asyncio
 from uuid import uuid4
 
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
-from tests.e2e.test_canvas_commit_fanout import FrameLog, _draw_stroke, _named
+from tests.e2e.test_canvas_commit_fanout import SocketEventLog, _draw_stroke
 
 BASE_URL = "http://localhost:8000"
 CANVAS_PNG = "() => document.querySelector('canvas.drawing-canvas').toDataURL()"
@@ -23,11 +24,6 @@ CANVAS_PNG = "() => document.querySelector('canvas.drawing-canvas').toDataURL()"
 # within 1.5 s and the second within 3 s, and `CONNECT_TIMEOUT_MS`
 # (`frontend/src/lib/socket.ts`) gives each 6 s to open - 16.5 s in all.
 RECONNECT_BOUND_MS = (1_500 + 6_000) + (3_000 + 6_000)
-
-
-def _full_syncs(frames) -> list:
-    # `sync_strokes_tail` contains `sync_strokes`; count the full reply alone.
-    return [frame for frame in _named(frames, "sync_strokes") if '"sync_strokes_tail"' not in frame]
 
 
 async def _same_canvas(a, b) -> None:
@@ -43,7 +39,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         pages = [await (await browser.new_context()).new_page() for _ in range(3)]
         host_page, player_page, late_page = pages
-        logs = {id(page): FrameLog(page) for page in pages}
+        logs = {id(page): await SocketEventLog.attach(page) for page in pages}
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, f"EntryHost{uuid4().hex[:6]}")
@@ -77,7 +73,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             await late_page.wait_for_selector('canvas.drawing-canvas')
             await _same_canvas(drawing, late_page)
             await asyncio.sleep(1)
-            assert len(_full_syncs(logs[id(late_page)].frames)) == 1, (
+            assert (await logs[id(late_page)].received()).count("sync_strokes") == 1, (
                 "a mid-turn entry was sent the canvas more than once"
             )
 
@@ -85,7 +81,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             # holds a verified prefix, so the answer is a tail, never a dump.
             viewer_log = logs[id(viewing)]
             old_socket = await viewing.evaluate("() => window.__SKETCHY_SOCKET__.id")
-            watch_from = viewer_log.mark()
+            watch_from = await viewer_log.mark()
             await viewing.evaluate("() => window.__SKETCHY_SOCKET__.io.engine.close()")
             # The client comes back on its own backoff, not at once: waiting on
             # the tail alone gave a reconnect the tail's five seconds, which a
@@ -100,9 +96,9 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             # rather than as a wait for a tail that never comes.
             await viewer_log.wait_for("sync_strokes_tail", "sync_strokes", since=watch_from)
             await _same_canvas(drawing, viewing)
-            after = viewer_log.frames[watch_from:]
-            assert _full_syncs(after) == [], "a reconnect with a verified prefix got a full dump"
-            assert _named(after, "sync_strokes_tail"), "a reconnect was never sent its tail"
+            after = await viewer_log.received(watch_from)
+            assert "sync_strokes" not in after, "a reconnect with a verified prefix got a full dump"
+            assert "sync_strokes_tail" in after, "a reconnect was never sent its tail"
 
             # And it keeps up afterwards: the next stroke reaches it as usual.
             await _draw_stroke(drawing, box, 260)

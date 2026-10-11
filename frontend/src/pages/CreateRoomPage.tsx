@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { Picker } from "../components/ui/Picker";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -506,15 +507,20 @@ export function CreateRoomPage() {
       {authUser && !authUser.isAnonymous && (
         <div className="room-preset-bar">
           {presets.length > 0 && (
-            <select
-              aria-label={ui.createRoomPage.startFromSavedPreset}
+            <Picker
+              label={ui.createRoomPage.startFromSavedPreset}
+              variant="pill"
+              // The rest row says "Start from a preset…" itself, and a chosen
+              // preset's name stands beside Update and Delete.
+              prefix={null}
+              options={[
+                { value: "", label: ui.createRoomPage.startFromPreset },
+                ...presets.map((preset) => ({ value: preset.id, label: preset.name })),
+              ]}
               value={selectedPresetId}
               disabled={presetBusy}
-              onChange={(event) => void handleChoosePreset(event.target.value)}
-            >
-              <option value="">{ui.createRoomPage.startFromPreset}</option>
-              {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-            </select>
+              onChange={(id) => void handleChoosePreset(id)}
+            />
           )}
           {namingPreset ? (
             <>

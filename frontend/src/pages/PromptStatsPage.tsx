@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { SectionLabel } from "../components/ui/Card";
+import { Picker } from "../components/ui/Picker";
 import { ApiError, apiRequest } from "../lib/api";
 import { promptLanguageLabel, selectionForLanguage } from "../lib/promptLanguages";
 import {
@@ -215,57 +216,57 @@ export function PromptStatsPage() {
 
       <div className="prompt-stats-controls">
         {lists && lists.length > 1 && (
-          <div className="prompt-stats-control">
-            <label htmlFor="prompt-stats-list">{ui.promptStatsPage.promptList}</label>
-            <select
-              id="prompt-stats-list"
-              value={slug ?? ""}
-              onChange={(event) => chooseList(event.target.value)}
-            >
-              {listGroups.map((group) => (
-                <optgroup key={group.language} label={group.label}>
-                  {group.lists.map((entry) => (
-                    <option key={entry.slug} value={entry.slug}>
-                      {entry.name} ({ui.format.number({ value: entry.promptCount })})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+          <Picker
+            id="prompt-stats-list"
+            label={ui.promptStatsPage.promptList}
+            variant="pill"
+            // Every list is as much of a choice as any other: no rest to tint against.
+            restValue={slug ?? ""}
+            // By language, the reader's first (#1424): 136 lists in one
+            // column was no way to find one.
+            options={listGroups.flatMap((group) =>
+              group.lists.map((entry) => ({
+                value: entry.slug,
+                label: `${entry.name} (${ui.format.number({ value: entry.promptCount })})`,
+                group: group.label,
+              })),
+            )}
+            value={slug ?? ""}
+            onChange={chooseList}
+          />
         )}
-        <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-sort">{ui.promptStatsPage.sort}</label>
-          <select
-            id="prompt-stats-sort"
-            value={sort}
-            onChange={(event) => setFilter("sort", event.target.value, "hardest")}
-          >
-            {PROMPT_STATS_SORTS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-window">{ui.promptStatsPage.period}</label>
-          <select id="prompt-stats-window" value={windowFilter} onChange={(event) => setFilter("window", event.target.value, "all")}>
-            {WINDOWS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-        <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-scoring">{ui.promptStatsPage.scoring}</label>
-          <select id="prompt-stats-scoring" value={scoringMode} onChange={(event) => setFilter("scoringMode", event.target.value, "all")}>
-            {SCORING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-        <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-hints">{ui.promptStatsPage.hints}</label>
-          <select id="prompt-stats-hints" value={hintMode} onChange={(event) => setFilter("hintMode", event.target.value, "all")}>
-            {HINT_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
+        <Picker
+          id="prompt-stats-sort"
+          label={ui.promptStatsPage.sort}
+          variant="pill"
+          options={PROMPT_STATS_SORTS}
+          value={sort}
+          onChange={(value) => setFilter("sort", value, "hardest")}
+        />
+        <Picker
+          id="prompt-stats-window"
+          label={ui.promptStatsPage.period}
+          variant="pill"
+          options={WINDOWS}
+          value={windowFilter}
+          onChange={(value) => setFilter("window", value, "all")}
+        />
+        <Picker
+          id="prompt-stats-scoring"
+          label={ui.promptStatsPage.scoring}
+          variant="pill"
+          options={SCORING_FILTERS}
+          value={scoringMode}
+          onChange={(value) => setFilter("scoringMode", value, "all")}
+        />
+        <Picker
+          id="prompt-stats-hints"
+          label={ui.promptStatsPage.hints}
+          variant="pill"
+          options={HINT_FILTERS}
+          value={hintMode}
+          onChange={(value) => setFilter("hintMode", value, "all")}
+        />
         <div className="prompt-stats-control prompt-stats-search">
           <label htmlFor="prompt-stats-search">{ui.promptStatsPage.findPrompt}</label>
           <input
