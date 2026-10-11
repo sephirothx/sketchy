@@ -50,6 +50,11 @@ type PlayerVoteChip = `player-vote:${string}`;
     vote, a friend's invitation, or a friend request. */
 type RoomChip = ChipNotice | "restart-vote" | PlayerVoteChip | "invite" | "friend-request";
 
+/** How long a closed kick or AFK vote stays asked-about: the server's
+    `player_vote_announce_cooldown_seconds`, so a vote reopened within it
+    neither says so in the chat nor asks again (#1422). */
+const PLAYER_VOTE_FORGET_MS = 60_000;
+
 function isVoteChip(chip: RoomChip): boolean {
   return chip === "restart-vote" || chip.startsWith("player-vote:");
 }
@@ -167,13 +172,29 @@ export function RoomNoticeChips({
   // A notice that ends closes its own popover rather than leaving a card that
   // describes something no longer true - and closes it for good: only hiding
   // it kept the choice, so the next outage opened the card nobody asked for.
-  if (open !== null && !chips.includes(open)) setOpen(null);
+  // What `open` becomes in this render. Each step below may change it, and a
+  // later step must see what an earlier one decided: a restart vote and a kick
+  // vote opening in the same render used to race, and the later one won
+  // (review of #1422).
+  let nextOpen = open;
+  const decide = (chip: RoomChip | null) => {
+    nextOpen = chip;
+    setOpen(chip);
+  };
+  if (nextOpen !== null && !chips.includes(nextOpen)) decide(null);
   const offline = connection !== "connected";
-  if (offline && open !== null && isVoteChip(open)) setOpen(null);
+  if (offline && nextOpen !== null && isVoteChip(nextOpen)) decide(null);
+  // Kick and AFK votes this seat has been asked about - by the popover opening
+  // by itself, a tap on the chip, or a ballot of its own - so each asks once.
+  const playerVoteKeys = playerVotes.map((vote) => vote.key);
+  const [playerVotesSeen, setPlayerVotesSeen] = useState<string[]>([]);
+  const [playerVotesCast, setPlayerVotesCast] = useState<string[]>([]);
+  const [autoOpenedVote, setAutoOpenedVote] = useState<string | null>(null);
   // The vote asks for an answer: its popover opens by itself once per vote for
   // a seat that can still give one, and closes once that seat has - after
   // which the chip opens it again on a tap. Adjusted during render, as the
   // line above is, so the answer and the popover never disagree for a frame.
+  // It comes first: it lasts twenty seconds, and a kick or AFK vote waits.
   const voteKey = restartVote ? `${restartVote.proposerId}:${restartVote.expiresAt}` : null;
   const myVote = restartVote ? myRestartVote(restartVote, voter) : null;
   const [voteOpenedFor, setVoteOpenedFor] = useState<string | null>(null);
@@ -183,33 +204,51 @@ export function RoomNoticeChips({
     && restartVote !== null && canCastRestartVote(restartVote, voter)
   ) {
     setVoteOpenedFor(voteKey);
-    setOpen("restart-vote");
+    // A kick or AFK popover it covers has not been answered: it asks again.
+    const covered = nextOpen?.startsWith("player-vote:") ? nextOpen.slice("player-vote:".length) : null;
+    if (covered !== null && playerVotesSeen.includes(covered) && !playerVotesCast.includes(covered)) {
+      setPlayerVotesSeen(playerVotesSeen.filter((key) => key !== covered));
+    }
+    decide("restart-vote");
   }
   if (voteKey !== null && myVote !== null && voteKey !== voteAnsweredFor) {
     setVoteAnsweredFor(voteKey);
-    if (open === "restart-vote") setOpen(null);
+    if (nextOpen === "restart-vote") decide(null);
   }
   // A kick or AFK vote opens by itself once, for a seat that may still cast
-  // in it, when nothing else is open; it closes once that seat has cast. A
-  // vote that ends is forgotten, so the same seat voted on again later asks
-  // again.
-  const playerVoteKeys = playerVotes.map((vote) => vote.key);
-  const [playerVotesSeen, setPlayerVotesSeen] = useState<string[]>([]);
-  const [playerVotesCast, setPlayerVotesCast] = useState<string[]>([]);
-  if (playerVotesSeen.some((key) => !playerVoteKeys.includes(key))) {
-    setPlayerVotesSeen(playerVotesSeen.filter((key) => playerVoteKeys.includes(key)));
-  }
+  // in it, when nothing else is open; it closes once that seat has cast.
   const castNow = playerVotes.filter((vote) => vote.mine).map((vote) => vote.key);
   if (castNow.join() !== playerVotesCast.join()) {
     const newlyCast = castNow.filter((key) => !playerVotesCast.includes(key));
     setPlayerVotesCast(castNow);
-    if (newlyCast.some((key) => open === `player-vote:${key}`)) setOpen(null);
+    // A ballot of its own is an answer: withdrawn, it does not ask again.
+    const unseen = newlyCast.filter((key) => !playerVotesSeen.includes(key));
+    if (unseen.length > 0) setPlayerVotesSeen([...playerVotesSeen, ...unseen]);
+    if (newlyCast.some((key) => nextOpen === `player-vote:${key}`)) decide(null);
   }
-  const askMe = playerVotes.find((vote) => vote.canVote && !vote.mine && !playerVotesSeen.includes(vote.key));
-  if (askMe && open === null && !voteQuiet && !offline) {
+  const askMe = playerVotes.find(
+    (vote) => vote.canVote && !vote.mine && !playerVotesSeen.includes(vote.key) && !castNow.includes(vote.key),
+  );
+  if (askMe && nextOpen === null && !voteQuiet && !offline) {
     setPlayerVotesSeen([...playerVotesSeen, askMe.key]);
-    setOpen(`player-vote:${askMe.key}`);
+    setAutoOpenedVote(askMe.key);
+    decide(`player-vote:${askMe.key}`);
   }
+  // A vote that closes is forgotten only a while later - as long as the
+  // server waits before announcing it again: a ballot is a toggle, and one
+  // withdrawn and recast must not ask every seat again (review of #1422).
+  const liveVoteKeys = useRef(playerVoteKeys);
+  useEffect(() => {
+    liveVoteKeys.current = playerVoteKeys;
+  });
+  const closedSeen = playerVotesSeen.filter((key) => !playerVoteKeys.includes(key)).join();
+  useEffect(() => {
+    if (closedSeen === "") return;
+    const timer = window.setTimeout(() => {
+      setPlayerVotesSeen((seen) => seen.filter((key) => liveVoteKeys.current.includes(key)));
+    }, PLAYER_VOTE_FORGET_MS);
+    return () => window.clearTimeout(timer);
+  }, [closedSeen]);
   const openNotice = open !== null && chips.includes(open) ? open : null;
   const openPlayerVote = openNotice?.startsWith("player-vote:")
     ? playerVotes.find((vote) => `player-vote:${vote.key}` === openNotice) ?? null
@@ -252,7 +291,12 @@ export function RoomNoticeChips({
               aria-label={playerVoteChipLabel(vote)}
               aria-expanded={openNotice === notice}
               aria-controls={openNotice === notice ? popoverId : undefined}
-              onClick={() => setOpen((current) => (current === notice ? null : notice))}
+              onClick={() => {
+                // Asked by hand: it does not open by itself as well later.
+                if (!playerVotesSeen.includes(vote.key)) setPlayerVotesSeen([...playerVotesSeen, vote.key]);
+                setAutoOpenedVote(null);
+                setOpen((current) => (current === notice ? null : notice));
+              }}
             >
               {vote.kind === "afk" ? <MoonIcon size={13} strokeWidth={2.4} /> : <UsersIcon size={13} strokeWidth={2.4} />}
               <span className="room-notice-chip-label">{playerVoteChipBody(vote)}</span>
@@ -393,7 +437,7 @@ export function RoomNoticeChips({
           key={openPlayerVote.key}
           id={popoverId}
           vote={openPlayerVote}
-          arming={playerVotesSeen.includes(openPlayerVote.key) && !openPlayerVote.mine}
+          arming={autoOpenedVote === openPlayerVote.key && !openPlayerVote.mine}
           offline={offline}
           onVote={() => onPlayerVote?.(openPlayerVote)}
           onDismiss={() => setOpen(null)}

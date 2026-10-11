@@ -74,6 +74,17 @@ async def test_a_phone_seat_sees_and_answers_a_kick_and_an_afk_vote():
             await expect(popover).to_be_visible(timeout=8000)
             await expect(popover).to_contain_text(f"Kick {names[target]} from the room?")
             await expect(popover).to_contain_text("1 of 3 votes")
+            # Put off, then withdrawn and cast again: a ballot is a toggle, and
+            # the reopened vote does not ask the phone a second time.
+            await popover.get_by_role("button", name="Not now").click()
+            await expect(popover).to_be_hidden()
+            await vote_from_the_list(starter, names[target], "kick")
+            await expect(voter.locator(".room-notice-chip", has_text="Kick")).to_have_count(0)
+            await vote_from_the_list(starter, names[target], "kick")
+            await expect(voter.locator(".room-notice-chip", has_text="Kick 1/3")).to_be_visible()
+            await voter.wait_for_timeout(1500)
+            await expect(popover).to_be_hidden()
+            await voter.locator(".room-notice-chip", has_text="Kick 1/3").click()
             await popover.get_by_role("button", name="Vote to kick").click()
             # Cast: the popover goes, and the chip carries the new tally.
             await expect(popover).to_be_hidden()

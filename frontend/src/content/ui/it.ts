@@ -1918,7 +1918,8 @@ export const IT: Catalogue = {
     afkQuestion: (p: { nickname: string }) => `Segnare ${p.nickname} come AFK?`,
     kickAboutYou: "C’è una votazione aperta per espellerti dalla stanza.",
     afkAboutYou: "C’è una votazione aperta per segnarti come AFK.",
-    tally: (p: { count: number; required: number }) => `${p.count} voti su ${p.required}`,
+    tally: (p: { count: number; required: number }) =>
+      plural(p.count, { one: `${p.count} voto su ${p.required}`, other: `${p.count} voti su ${p.required}` }),
     voteKick: "Vota per espellere",
     voteAfk: "Vota AFK",
     withdraw: "Ritira il mio voto",

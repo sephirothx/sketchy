@@ -1415,3 +1415,34 @@ async def test_a_kick_or_afk_vote_is_announced_once_when_it_opens():
         ("afk_vote_started", {"nickname": "P2"}),
         ("kick_vote_started", {"nickname": "P3"}),
     ]
+
+
+async def test_an_afk_vote_ends_when_its_seat_goes_afk_and_is_not_reopened_on_an_afk_seat():
+    """Review of #1422: AFK ballots on a seat that went AFK by itself were kept
+    and came back as a fresh vote - a popover on every phone - the moment it
+    returned. They are cleared when the seat goes AFK, and an AFK ballot on a
+    seat that already is one is not counted or announced."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    seats = [room_manager.add_player(room, f"P{n}") for n in range(1, 5)]
+    for seat in seats:
+        seat.sid = f"{seat.nickname.lower()}-sid"
+    p1, p2, p3, _p4 = seats
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {seat.sid: {"room_id": room.id, "player_id": seat.id} for seat in seats}
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    vote_player = sio.handlers["/"]["vote_player"]
+    toggle_afk = sio.handlers["/"]["toggle_afk"]
+
+    await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "afk"})
+    assert p2.afk_votes == {p1.id}
+    await toggle_afk("p2-sid", {"afk": True})
+    assert p2.afk_votes == set()
+
+    sio.emit.reset_mock()
+    answer = await vote_player("p3-sid", {"targetPlayerId": p2.id, "action": "afk"})
+    assert answer == {"ok": True, "action": "afk", "executed": False}
+    assert p2.afk_votes == set()
+    assert not [line for line in room_lines(sio.emit) if line.get("code") == "afk_vote_started"]

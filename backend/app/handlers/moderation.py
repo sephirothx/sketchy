@@ -67,6 +67,9 @@ async def toggle_afk(ctx: HandlerContext, sid, data=None):
         return {"ok": True, "isAfk": player.is_afk}
 
     player.is_afk = target_afk
+    if player.is_afk:
+        # An AFK vote on the seat is over (#1422): see AfkService._raise.
+        player.afk_votes.clear()
     await ctx.game_flow._emit_room_state(room)
 
     await ctx.game_flow.apply_afk_consequences(room, player)
@@ -95,6 +98,11 @@ async def vote_player(ctx: HandlerContext, sid, data):
         return {"ok": False, "errorCode": ErrorCode.INVALID_VOTE_TARGET, "error": "Cannot vote on yourself or non-existent player"}
     if target.is_spectator:
         return {"ok": False, "errorCode": ErrorCode.SPECTATORS_CANNOT_BE_TARGETS, "error": "Spectators cannot be moderation targets"}
+
+    if action == "afk" and target.is_afk:
+        # Nothing to vote on: the seat is AFK already, and a ballot kept now
+        # would come back as a fresh vote when it returns (#1422).
+        return {"ok": True, "action": action, "executed": False}
 
     eligible_voter_ids = {player.id for player in room.moderation_voters()}
     target.kick_votes.intersection_update(eligible_voter_ids)

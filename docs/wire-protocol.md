@@ -838,7 +838,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `buy_hint` | `HintPayload` | ✓ `{cost, hintSpend, maskedPrompt, hintCost}` — what it revealed (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_wheel_letter` | `WheelLetterPayload` | ✓ `{cost, found, hintSpend, maskedPrompt, letterPrices, line}` — what it revealed and the `hint_letter_found` / `hint_letter_missing` line (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
-| `vote_player` | `VotePayload` | — — a ballot is a toggle; the first one of a kick or AFK vote on a seat is said to the room as `kick_vote_started` / `afk_vote_started` `{nickname}`, riding `room_state`'s causes, at most once a minute per seat and kind so a toggled ballot cannot fill the chat (#1422, protocol 67) | [`moderation.py`](../backend/app/handlers/moderation.py) |
+| `vote_player` | `VotePayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
@@ -1355,6 +1355,13 @@ guessers), and `isSpectator`. It carries **no retained-message id**, though the 
 retained: nothing in a room cites a line (`report_player` selects its own evidence), and
 the UUIDv7's random half, which deflate cannot remove, was 39% of a viewer's whole
 stream on the wire (#869). A lobby line keeps its id because a lobby report cites it.
+
+**A kick or AFK vote opening is announced** (#1422, protocol 67): the first ballot of a
+`vote_player` on a seat says `kick_vote_started` / `afk_vote_started` `{nickname}`, riding
+that action's `room_state` causes, at most once a minute per seat and kind, since a ballot
+is a toggle and withdrawing and recasting it must not fill the chat. An AFK ballot on a seat
+that is already AFK is acknowledged and not counted, and a seat's AFK ballots are cleared
+the moment it becomes AFK, so they cannot return as a vote nobody just cast.
 
 **A room-authored announcement carries no text.** Said to the whole room as part of an
 action that changes it — a rename, a vote, a restart — it rides that action's
