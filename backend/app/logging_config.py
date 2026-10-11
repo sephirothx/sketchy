@@ -123,10 +123,24 @@ _IPV6 = re.compile(
 )
 
 
+def _parse_address(candidate: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """The address a candidate is, if any - read once more without a trailing
+    `:port`: uvicorn writes `host:port` unbracketed, and an IPv6 address
+    ending in `::` runs into its port (`2600:1234:::0`) as something no
+    parser reads (review of #1452)."""
+    for text in (candidate, *(
+        [candidate.rsplit(":", 1)[0]] if candidate.rsplit(":", 1)[-1].isdigit() else []
+    )):
+        try:
+            return ipaddress.ip_address(text)
+        except ValueError:
+            continue
+    return None
+
+
 def _mask_address(match: re.Match[str]) -> str:
-    try:
-        address = ipaddress.ip_address(match.group("ip"))
-    except ValueError:
+    address = _parse_address(match.group("ip"))
+    if address is None:
         return match.group(0)
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped

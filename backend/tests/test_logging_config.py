@@ -228,6 +228,10 @@ def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
     )
     line = json.loads(JsonFormatter().format(record))["msg"]
     assert "10.0.0.6" not in line and "[accepted]" in line
+    # The same line for a client whose address ends in `::` (review of #1452).
+    record.args = ("2600:1234:::0", "/socket.io/?EIO=4")
+    line = json.loads(JsonFormatter().format(record))["msg"]
+    assert "2600" not in line and line.startswith("[address] - "), line
     for text in (
         "client 203.0.113.9 connected",
         "refused a socket from 203.0.113.9.",
@@ -242,10 +246,14 @@ def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
         "connect to 2001:db8::1:443: refused",
         "::ffff:203.0.113.9: refused",
         "[2001:db8::1]: closed",
+        # Uvicorn writes `host:port` unbracketed, so an address ending in
+        # `::` and its port run together into something no parser reads.
+        '2600:1234:::0 - "WebSocket /socket.io/?EIO=4" [accepted]',
+        "2600:1234:::52114 closed",
     ):
         masked = redact(text)
         assert "[address]" in masked, masked
-        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b", ".113", "]]")), masked
+        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b", ".113", "]]", "2600")), masked
     for text in (
         "took 12:34:56",
         "version 1.2.3",
