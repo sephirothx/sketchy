@@ -300,7 +300,9 @@ def test_a_sender_off_the_site_s_domain_starts_and_is_said(caplog):
         validate_mail_configuration({**base, "SMTP_FROM": "noreply@sketchy.app"})
         assert not caplog.records
         validate_mail_configuration({**base, "SMTP_FROM": "noreply@mailer.net"})
-    assert "mailer.net" in caplog.text
+    [warning] = caplog.records
+    # The domains themselves, compared whole.
+    assert warning.args == ("mailer.net", "play.sketchy.app")
 
 
 @pytest.mark.parametrize(
