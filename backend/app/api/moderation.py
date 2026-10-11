@@ -5,14 +5,14 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, bindparam, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
@@ -1249,6 +1249,8 @@ async def _carry_decision_to_copies(
             moderation_state=decision,
             moderated_by_user_id=reviewer_id,
             moderated_at=now,
+            # A decision about the word, no longer its list's (#1425 review).
+            hidden_with_list_id=None,
         )
         .execution_options(synchronize_session=False)
     )
@@ -1290,6 +1292,7 @@ async def _list_words(session: AsyncSession, prompt_list_id: UUID) -> set[UUID]:
 async def _hide_list_words(
     session: AsyncSession,
     *,
+    prompt_list_id: UUID,
     concept_ids: set[UUID],
     owners: set[UUID],
     reviewer_id: UUID,
@@ -1301,19 +1304,25 @@ async def _hide_list_words(
     paste the same words into a new list, publish it, and strangers played
     them again - the bypass #1020 closed for a single word. Each word not
     already hidden is hidden as a reported word is - every version of it -
-    with the list's own decision byline (this reviewer, this instant), and
-    recorded against its owners, so the word typed back into any of their
-    lists comes back hidden. The byline is what lets a later decision on the
-    list carry to these words and their copies (`_carry_decision_to_copies`).
-    A word already hidden keeps its own decision. The caller holds the owners
-    and the list; the versions are locked here, in id order. Returns how many
-    words were taken down.
+    and recorded against its owners, so the word typed back into any of their
+    lists comes back hidden.
+
+    Each word gets a byline of its own: this reviewer, and this instant plus a
+    microsecond per word, in concept order. The byline is how a decision on
+    one word finds the copies it was carried to (`_carry_decision_to_copies`),
+    and a byline the whole list shared made restoring one word restore all of
+    them (review of #1425). The list is named on each version instead
+    (`hidden_with_list_id`), which is how restoring the list finds them -
+    and what keeps them reachable after a second takedown, which leaves a
+    word already hidden as it was. A word hidden by a decision of its own
+    keeps it. The caller holds the owners and the list; the versions are
+    locked here, in id order. Returns how many words were taken down.
     """
     if not concept_ids:
         return 0
     await _lock_versions(session, PromptVersion.concept_id.in_(concept_ids))
     live = PromptVersion.moderation_state != PromptContentModerationState.HIDDEN.value
-    taken = set(
+    taken = sorted(
         (
             await session.scalars(
                 select(PromptVersion.concept_id.distinct()).where(
@@ -1324,20 +1333,76 @@ async def _hide_list_words(
     )
     if not taken:
         return 0
+    # One statement run once per word, on the table rather than the entity:
+    # an ORM update given a list of rows reads them as rows to update by key.
+    versions = PromptVersion.__table__
     await session.execute(
-        update(PromptVersion)
-        .where(PromptVersion.concept_id.in_(taken), live)
+        update(versions)
+        .where(
+            versions.c.concept_id == bindparam("concept"),
+            versions.c.moderation_state != PromptContentModerationState.HIDDEN.value,
+        )
         .values(
             moderation_state=PromptContentModerationState.HIDDEN.value,
             moderated_by_user_id=reviewer_id,
-            moderated_at=now,
-        )
-        .execution_options(synchronize_session=False)
+            moderated_at=bindparam("decided_at"),
+            hidden_with_list_id=prompt_list_id,
+        ),
+        [
+            {"concept": concept_id, "decided_at": now + timedelta(microseconds=index)}
+            for index, concept_id in enumerate(taken, start=1)
+        ],
     )
     await record_takedowns(
         session, ((owner_id, concept_id) for concept_id in taken for owner_id in owners)
     )
     return len(taken)
+
+
+async def _restore_list_words(
+    session: AsyncSession,
+    *,
+    prompt_list_id: UUID,
+    owner_user_id: UUID | None,
+    reviewer_id: UUID,
+    now: datetime,
+) -> None:
+    """Bring back the words a list's takedown hid, and the copies they were
+    carried to, when the list is left up after all (#1425 review).
+
+    Found by the list they name, through the owner's takedown records - every
+    word the takedown hid is recorded there, and so is every copy - so a
+    second takedown, which left them as the first one hid them, does not put
+    them out of reach. A word decided on its own since names no list and
+    stays as its moderator left it.
+    """
+    if owner_user_id is None:
+        return
+    held = (
+        PromptVersion.hidden_with_list_id == prompt_list_id,
+        PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+        PromptVersion.concept_id.in_(
+            select(PromptTakedown.concept_id).where(PromptTakedown.owner_user_id == owner_user_id)
+        ),
+    )
+    concept_ids = set(
+        (await session.scalars(select(PromptVersion.concept_id.distinct()).where(*held))).all()
+    )
+    if not concept_ids:
+        return
+    await _lock_versions(session, PromptVersion.concept_id.in_(concept_ids))
+    await session.execute(
+        update(PromptVersion)
+        .where(*held)
+        .values(
+            moderation_state=PromptContentModerationState.ACTIVE.value,
+            moderated_by_user_id=reviewer_id,
+            moderated_at=now,
+            hidden_with_list_id=None,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    await release_takedowns(session, PromptTakedown.concept_id.in_(concept_ids))
 
 
 async def _lock_takedown_owners(
@@ -2752,6 +2817,7 @@ def create_moderation_router(
                     if hides_list and body.scope == "words":
                         await _hide_list_words(
                             session,
+                            prompt_list_id=target.id,
                             concept_ids=list_words,
                             owners=list_owners,
                             reviewer_id=reviewer.id,
@@ -2760,10 +2826,9 @@ def create_moderation_router(
                     if restores_list:
                         # Left up after all: the words it took down with it
                         # come back, with the copies they were carried to.
-                        await _carry_decision_to_copies(
+                        await _restore_list_words(
                             session,
-                            prior=prior_decision,
-                            decision=body.moderation_state,
+                            prompt_list_id=target.id,
                             owner_user_id=target.owner_user_id or report.reported_owner_user_id,
                             reviewer_id=reviewer.id,
                             now=now,
@@ -2786,8 +2851,12 @@ def create_moderation_router(
                                 moderation_state=body.moderation_state,
                                 moderated_by_user_id=reviewer.id,
                                 moderated_at=now,
+                                # The word's own decision now, not its
+                                # list's (#1425 review).
+                                hidden_with_list_id=None,
                             )
                         )
+                        target.hidden_with_list_id = None
                         await _record_takedown(
                             session,
                             concept_id=target.concept_id,
@@ -3233,6 +3302,7 @@ def create_moderation_router(
                     if body.scope == "words":
                         await _hide_list_words(
                             session,
+                            prompt_list_id=prompt_list.id,
                             concept_ids=list_words,
                             owners=list_owners,
                             reviewer_id=reviewer.id,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import os
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -2005,3 +2005,79 @@ async def test_a_list_left_up_after_all_brings_back_the_words_its_takedown_hid(e
         prompts=(PromptListEntryInput(answer="stoat"),),
     )
     assert again.prompts[0].moderation_state == "active"
+
+
+async def _list_moderation_setup(env, tag: str, words: tuple[str, ...]):
+    new_client, factory, prompts = env
+    owner_http, moderator_http = new_client(), new_client()
+    reporters = [new_client() for _ in range(3)]
+    owner = await register(owner_http, f"{tag}Owner")
+    for index, reporter_http in enumerate(reporters):
+        await register(reporter_http, f"{tag}Reporter{index}")
+    moderator = await register(moderator_http, f"{tag}Mod")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    prompt_list = await prompts.create_owned(
+        owner["id"], name=f"{tag} list", description="", language="en",
+        prompts=tuple(PromptListEntryInput(answer=word) for word in words),
+    )
+    await published(factory, prompt_list.id)
+
+    async def report(by: int = 0, **target) -> str:
+        # One report each: a reporter cannot report the same thing twice.
+        filed = await reporters[by].post(
+            "/api/prompt-content-reports",
+            json={"promptListId": prompt_list.id, "reason": "spam", "details": "This.", **target},
+        )
+        assert filed.status_code == 201, filed.text
+        return filed.json()["id"]
+
+    async def decide(report_id: str, state: str) -> None:
+        decided = await moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report_id}",
+            json={"status": "resolved", "note": "Decided.", "moderationState": state},
+        )
+        assert decided.status_code == 200, decided.text
+
+    async def typed_again(*answers: str) -> dict[str, str]:
+        again = await prompts.create_owned(
+            owner["id"], name=f"{tag} again {uuid4().hex[:6]}", description="", language="en",
+            prompts=tuple(PromptListEntryInput(answer=answer) for answer in answers),
+        )
+        return {p.answer: p.moderation_state for p in again.prompts}
+
+    return prompt_list, report, decide, typed_again
+
+
+async def test_restoring_one_word_of_a_list_taken_down_leaves_the_rest_down(env):
+    """Review of #1425: every word a list's takedown hid shared one byline,
+    and the byline is how a word's decision finds its copies - so leaving one
+    reported word up brought back every word of the list, and its owner could
+    paste them into a new list and publish them."""
+    prompt_list, report, decide, typed_again = await _list_moderation_setup(
+        env, "OneWord", ("vole", "shrew", "mole")
+    )
+    vole = next(p for p in prompt_list.prompts if p.answer == "vole")
+    about_vole = await report(promptVersionId=vole.prompt_version_id)
+    await decide(await report(1), "hidden")
+    await decide(about_vole, "active")
+    assert await typed_again("vole", "shrew", "mole") == {"vole": "active", "shrew": "hidden", "mole": "hidden"}
+
+
+async def test_a_list_taken_down_twice_and_then_left_up_brings_its_words_back(env):
+    """Review of #1425: a second takedown moved the list's byline and left its
+    words on the first, so leaving the list up restored the list and no word
+    in it."""
+    _, report, decide, typed_again = await _list_moderation_setup(
+        env, "Twice", ("lynx", "puma")
+    )
+    # One after another: reports about one list waiting together are one
+    # incident, decided once.
+    await decide(await report(0), "hidden")
+    await decide(await report(1), "hidden")
+    assert await typed_again("lynx") == {"lynx": "hidden"}
+    await decide(await report(2), "active")
+    assert await typed_again("lynx", "puma") == {"lynx": "active", "puma": "active"}

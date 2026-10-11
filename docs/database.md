@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b0c1d2e3f4a7_hidden_lobby_messages.py` (#1435). Both this line and the table
+`c1d2e3f4a5b8_words_hidden_with_their_list.py` (#1425). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -2108,8 +2108,9 @@ An immutable, language-specific wording.
 `match_key` · `editorial_difficulty` (`unspecified \| easy \| medium \| hard`) ·
 `content_rating` (`everyone \| teen \| mature`) ·
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
-`moderated_at` · `unlisted_at` (nullable, partial index) · `unlisted_from_list_id`
-(nullable, `SET NULL`, partial index) · `created_at`, with
+`moderated_at` · `hidden_with_list_id` (nullable, no foreign key) · `unlisted_at`
+(nullable, partial index) · `unlisted_from_list_id` (nullable, `SET NULL`, partial
+index) · `created_at`, with
 `uq_prompt_version_concept_language_version`. A save numbers a new wording above the highest
 version its concept has stored, not above the working copy's: Discard changes puts an
 edition's older wording back while the newer one stays (#1392 review).
@@ -2121,6 +2122,16 @@ its turns when it ends, so the hourly `unlisted_prompt_versions` sweep
 if nothing names it — no list, turn, offer, usage fact, report or takedown record; one that
 something does name is unstamped, kept by that reference from then on. A revision used to
 keep a replaced wording that long; a save writes none now.
+
+**`hidden_with_list_id`** is the list whose takedown for its words hid this word
+(#1425), while that is still the word's decision. Each word such a takedown hides gets a
+byline of its own - the moderator, and the decision's instant plus a microsecond per
+word - because the byline is how a word's decision finds the copies it was carried to:
+shared, restoring one word restored every word of the list. A restored list finds its
+words by this column, through its owner's takedown records, so a second takedown that
+left them hidden does not leave them out of reach. It is copied with the decision onto a
+later version and onto a copy, and cleared by any decision about the word itself. No
+foreign key: a list can be deleted while its words stay hidden.
 
 **`unlisted_from_list_id`** is the list it was taken out of, set and cleared with
 `unlisted_at`. A reader who opened a catalogue page before the save can still report the

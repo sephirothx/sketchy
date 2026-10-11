@@ -610,6 +610,7 @@ class _RevisionVersion:
     moderation_state: str
     moderated_at: datetime | None
     moderated_by_user_id: UUID | None
+    hidden_with_list_id: UUID | None
     aliases: tuple[str, ...]
 
 
@@ -630,6 +631,7 @@ async def _working_copy_versions(
                 PromptVersion.moderation_state,
                 PromptVersion.moderated_at,
                 PromptVersion.moderated_by_user_id,
+                PromptVersion.hidden_with_list_id,
                 PromptAlias.answer,
             )
             .select_from(Prompt)
@@ -6784,6 +6786,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 prompt_version.moderation_state = decided_by.moderation_state
                 prompt_version.moderated_by_user_id = decided_by.moderated_by_user_id
                 prompt_version.moderated_at = decided_by.moderated_at
+                # And which list's takedown it was, so restoring that list
+                # finds this version too (#1425 review).
+                prompt_version.hidden_with_list_id = decided_by.hidden_with_list_id
                 if decided_by is not existing:
                     # Carried from another of the owner's words: this concept
                     # is that takedown's too, so it is recorded - the next
