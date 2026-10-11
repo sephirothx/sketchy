@@ -156,6 +156,15 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await username.focus()
             await page.keyboard.insert_text("José")
             assert await username.input_value() == "Jose"
+            # The length is capped after the marks are dropped, not before: a
+            # composition 17 characters raw is the 14-letter name it spells
+            # (review of #1441 - the field's own maxLength cut it first).
+            await username.fill("")
+            await username.focus()
+            spelled = "Jose\u0301Jose\u0301Jose\u0301Jo"
+            await ime.send("Input.imeSetComposition", {"text": spelled, "selectionStart": 17, "selectionEnd": 17})
+            await ime.send("Input.insertText", {"text": spelled})
+            assert await username.input_value() == "JoseJoseJoseJo"
             await page.keyboard.press("Escape")
             await dialog.wait_for(state="hidden")
 
@@ -230,6 +239,11 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             # the server can refuse, so it keeps a Save button of its own
             # where everything else applies at once.
             await guest.click('.settings-you button:has-text("Change")')
+            # The name tag's rule here too (#1420): it took "Zoë" as typed.
+            await guest.fill("#settings-display-name", "")
+            await guest.focus("#settings-display-name")
+            await guest.keyboard.insert_text("Zoë")
+            assert await guest.input_value("#settings-display-name") == "Zoe"
             await guest.fill("#settings-display-name", "takenname")
             await guest.click('.settings-you button:has-text("Save")')
             await guest.wait_for_selector("#settings-name-error")
