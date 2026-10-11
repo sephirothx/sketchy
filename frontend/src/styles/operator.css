@@ -1110,21 +1110,6 @@
 }
 
 /* Outlined danger: destructive, but never the visually loudest thing. */
-.mod-danger-button {
-  align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--danger);
-  border-radius: var(--radius-sm);
-  color: var(--danger);
-  cursor: pointer;
-  display: inline-flex;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 800;
-  gap: 7px;
-  min-height: 44px;
-  padding: 10px 16px;
-}
 
 .mod-resolution {
   color: var(--muted);
@@ -1257,11 +1242,6 @@
 
 
 
-
-
-
-
-
 .bug-shot-head { align-items: center; display: flex; gap: 8px; }
 .bug-shot-head h2 { margin: 0; }
 
@@ -1299,11 +1279,8 @@
 }
 
 
-
 /* The flat lists inside can be long; bound them rather than letting one
    disclosure push the decision controls off the screen again. */
-
-
 
 
 
@@ -1674,7 +1651,6 @@
 /* What a decision was recorded as, above the moderator's own sentence. An
    eyebrow rather than a heading: it categorises what follows and should not
    compete with it. */
-
 
 /* The category sits above the note and reads as part of the same block. */
 .mod-category select {
