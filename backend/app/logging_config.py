@@ -64,11 +64,12 @@ FORMATS = (JSON_FORMAT, TEXT_FORMAT)
 # Written as one pattern, `://([^:/@\s]+):([^@\s]+)@`, the password ran from
 # each `://` to the next `@` or space - which can be the whole line, since a
 # password may hold `:`, `/` and further `://` - and a line of `://a:` with no
-# `@` took over 100 ms. That end is the same for every `://` before it, so the
-# scan is done once: find a run with neither `@` nor whitespace in it that an
-# `@` ends (anchored to the run's start, so each run is walked once), and only
-# inside it look for the first `://user:` with a password after it. A run
-# holds at most one such URL, because the password runs to the run's end.
+# `@` took over 100 ms on 12 KB. That end is the same for every `://` before
+# it, so the scan is done once: find a run with neither `@` nor whitespace in
+# it that an `@` ends (anchored to the run's start, so each run is walked
+# once), and only inside it look for the first `://user:` with a password
+# after it. A run holds at most one such URL, because the password runs to
+# the run's end.
 _USERINFO_RUN = re.compile(r"(?<![^@\s])[^@\s]+@")
 _USERINFO = re.compile(r"://[^:/@\s]+:(?=[^@])")
 
