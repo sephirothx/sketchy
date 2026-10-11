@@ -502,18 +502,25 @@ export function ModerationPage() {
   // The turn an administrator is being asked to confirm erasing (#1419).
   const [confirmErase, setConfirmErase] = useState<string | null>(null);
   const { guard, dialog: stepUpDialog } = useStepUp();
-  const [error, setError] = useState<string | null>(null);
+  // Who put the error up. A read that succeeds takes down only what a read
+  // put up: a refused decision starts a reload of its own (`decideHeld`), and
+  // clearing it there took the refusal off screen a moment after it landed,
+  // so the moderator never saw why their decision did not take. A decision's
+  // error stays until the next decision.
+  const [error, setError] = useState<{ text: string; from: "read" | "decision" } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const allowed = hasResolved && canModerate(user?.role);
   const showingClosed = filter === "closed";
 
-  const fail = useCallback((problem: unknown) => {
-    setError(
-      problem instanceof ApiError
-        ? problem.message
-        : "Could not reach the moderation queue.",
-    );
+  const fail = useCallback((problem: unknown, from: "read" | "decision" = "read") => {
+    setError({
+      text:
+        problem instanceof ApiError
+          ? problem.message
+          : "Could not reach the moderation queue.",
+      from,
+    });
   }, []);
 
   // Which load is the latest. Each answers for the filter and page it was
@@ -575,7 +582,7 @@ export function ModerationPage() {
             // And so is a shelf candidate: the front page waits on it.
             + galleryResult.waiting,
         );
-        setError(null);
+        setError((current) => (current?.from === "read" ? null : current));
       })
       .catch((problem) => {
         if (thisLoad === latestLoad.current) fail(problem);
@@ -782,7 +789,10 @@ export function ModerationPage() {
   ) {
     if (busy) return;
     if (composed !== false && !(composed ?? note[id] ?? "").trim()) {
-      setError("A note is required, so the decision is not anonymous.");
+      setError({
+        text: "A note is required, so the decision is not anonymous.",
+        from: "decision",
+      });
       return;
     }
     setBusy(id);
@@ -798,7 +808,7 @@ export function ModerationPage() {
       setNote((current) => ({ ...current, [id]: "" }));
       latestLoadFn.current();
     } catch (problem) {
-      fail(problem);
+      fail(problem, "decision");
     } finally {
       setBusy(null);
     }
@@ -949,7 +959,7 @@ export function ModerationPage() {
 
       {error && (
         <p className="auth-error" role="alert">
-          {error}
+          {error.text}
         </p>
       )}
       {message && (
