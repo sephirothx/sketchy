@@ -47,7 +47,8 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             label = await page.locator(
                 f"#prompt-stats-list option[value='{selected}']"
             ).inner_text()
-            expected = int(re.search(r"\((\d+)\)\s*$", label).group(1))
+            # Locale-formatted since #1424: "1,036".
+            expected = int(re.search(r"\(([\d,]+)\)\s*$", label).group(1).replace(",", ""))
 
             more = page.locator(".prompt-stats-more button")
             while await more.count() > 0:
@@ -87,14 +88,31 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # returns at the *start* of that window. It is one frame on an idle
             # machine and eight under load, which is why this only ever failed
             # on CI.
+            # The selector groups the lists by language, the reader's first
+            # (#1424): 136 options in one column was no way to find one.
+            first_group = page.locator("#prompt-stats-list optgroup").first
+            assert await first_group.get_attribute("label") == "English"
+            asked: list[str] = []
+            page.on("request", lambda request: asked.append(request.url) if "/prompt-stats" in request.url else None)
+
             await page.select_option("#prompt-stats-sort", "most-picked")
             await page.wait_for_url("**sort=most-picked")
             await expect(page.locator("#prompt-stats-sort")).to_have_value("most-picked")
+            # Sorted here: the same counts in another order are not a request.
+            await page.wait_for_timeout(300)
+            assert asked == [], asked
 
             # Facts can be sliced without resetting or rewriting them. The
             # chosen period and rule dimensions remain linkable in the URL.
             await page.select_option("#prompt-stats-window", "30d")
             await page.wait_for_url("**window=30d*")
+            # The period by name, which the server caches by - not a timestamp.
+            for _ in range(50):
+                if any("window=30d" in url for url in asked):
+                    break
+                await page.wait_for_timeout(100)
+            assert any("window=30d" in url for url in asked), asked
+            assert not any("from=" in url for url in asked), asked
             await page.select_option("#prompt-stats-scoring", "pressure")
             await page.wait_for_url("**scoringMode=pressure*")
             await page.select_option("#prompt-stats-hints", "wheel")
