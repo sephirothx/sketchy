@@ -1,0 +1,333 @@
+"""The server's live-drawing decoder against the client's, over generated frames (#1464).
+
+The server checks a drawer's frame with `decode_live_drawing` and then forwards
+the drawer's own bytes to every viewer (`_rebroadcast` in
+`app/handlers/drawing.py`), where `decodeLiveDrawing` in
+`frontend/src/lib/liveDrawing.ts` reads them. Nothing re-encodes in between. So
+the two decoders have to agree on every frame: one the server accepts that a
+viewer refuses or reads differently puts a stroke in the room's history that
+the viewer never drew - and a drawer can send such a frame on purpose. The
+shared fixtures pin a handful of frames both sides wrote; this compares the
+decoders on frames neither side wrote.
+
+Frames are built **record by record** rather than by flipping bytes. A spike
+over 200k byte-mutated frames found no disagreement, and when the client's
+upper range check was removed on purpose it found that only 7 times in 200k:
+the interesting frames are the ones whose structure is nearly right, with a
+coordinate on the range edge or a width marker in an odd place, and random
+bytes almost never are. Each frame is then optionally truncated, extended or
+bit-flipped, so the refusal paths are compared too.
+
+Every frame is compared in each shape it can cross the wire in - binary, the
+base64 string small frames travel as, and the bare integer of a control action
+- and the two sides must agree on *whether* it decodes as well as on what to.
+A relative frame is resolved against the same predecessor on both sides, as the
+server and a viewer each resolve it against the open path's last point.
+
+The client runs as one Node process for the whole module
+(`live_drawing_oracle.mjs`), so a generated frame costs a pipe round trip
+rather than a process. Budgets and reproducibility: `tests/fuzzing.py`.
+"""
+from __future__ import annotations
+
+import base64
+import json
+import shutil
+import subprocess
+from collections import Counter
+from pathlib import Path
+
+import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
+
+from app.canvas_history import (
+    CANVAS_HEIGHT,
+    CANVAS_WIDTH,
+    COORDINATE_SCALE,
+    MAX_PACKED_COORDINATE,
+    MIN_PACKED_COORDINATE,
+)
+from app.live_drawing import (
+    CLEAR_TAG,
+    FILL_TAG,
+    LIVE_DRAWING_VERSION,
+    MAX_POINTS_PER_FRAME,
+    PATH_END_TAG,
+    PATH_POINTS_DELTA_TAG,
+    PATH_POINTS_END_TAG,
+    PATH_POINTS_RELATIVE_TAG,
+    PATH_POINTS_TAG,
+    PATH_START_TAG,
+    SHAPE_TAG,
+    decode_live_drawing,
+    is_relative,
+    resolve_relative_points,
+)
+from tests.fuzzing import budget
+
+ORACLE = Path(__file__).with_name("live_drawing_oracle.mjs")
+TAGS = {
+    PATH_START_TAG: "path_start",
+    PATH_POINTS_TAG: "path_points",
+    PATH_END_TAG: "path_end",
+    SHAPE_TAG: "shape",
+    FILL_TAG: "fill",
+    CLEAR_TAG: "clear",
+    PATH_POINTS_DELTA_TAG: "path_points_delta",
+    PATH_POINTS_RELATIVE_TAG: "path_points_relative",
+    PATH_POINTS_END_TAG: "path_points_end",
+}
+
+# --- The client, as a process ----------------------------------------------------
+
+
+class Oracle:
+    def __init__(self) -> None:
+        node = shutil.which("node")
+        if node is None:
+            # Not a skip: a comparison that quietly does not run is the failure
+            # this suite exists to prevent. The backend CI job installs Node
+            # for it.
+            pytest.fail("node is not on PATH; the live-drawing differential needs Node 22")
+        self._process = subprocess.Popen(
+            # The flag is a no-op on a Node that strips types by default.
+            [node, "--experimental-strip-types", "--no-warnings", str(ORACLE)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    def decode(self, requests: list[dict]) -> list[dict]:
+        assert self._process.stdin and self._process.stdout
+        self._process.stdin.write(json.dumps(requests) + "\n")
+        self._process.stdin.flush()
+        line = self._process.stdout.readline()
+        if not line:
+            stderr = self._process.stderr.read() if self._process.stderr else ""
+            raise RuntimeError(f"the Node decoder exited: {stderr.strip()}")
+        return json.loads(line)
+
+    def close(self) -> None:
+        if self._process.stdin:
+            self._process.stdin.close()
+        self._process.wait(timeout=10)
+
+
+@pytest.fixture(scope="module")
+def oracle():
+    process = Oracle()
+    yield process
+    process.close()
+
+
+# --- The server, normalized to the same shape -----------------------------------
+
+
+def _python_decode(wire, previous: tuple[float, float]):
+    """What the server makes of `wire`: the packet it would record and relay,
+    or None for one it refuses - including a relative frame whose walk from the
+    open path's last point leaves the packed range, which the handler refuses."""
+    try:
+        packet = decode_live_drawing(wire)
+        if is_relative(packet):
+            packet = resolve_relative_points(packet, previous)
+    except ValueError:
+        return None
+    out: dict = {"event": packet.event}
+    for key, value in packet.payload.items():
+        if key == "points":
+            out[key] = [[point["x"], point["y"]] for point in value]
+        elif key in ("from", "to"):
+            out[key] = [value["x"], value["y"]]
+        else:
+            out[key] = value
+    # Through JSON, as the client's answer came: tuples become lists, and a
+    # float is compared as the double both languages parse it to.
+    return json.loads(json.dumps(out))
+
+
+# --- Frames, record by record ----------------------------------------------------
+
+_int16 = st.one_of(
+    st.sampled_from([
+        -(2**15), MIN_PACKED_COORDINATE, MIN_PACKED_COORDINATE + 1, -1, 0, 1,
+        CANVAS_WIDTH * COORDINATE_SCALE - 1, CANVAS_WIDTH * COORDINATE_SCALE,
+        CANVAS_HEIGHT * COORDINATE_SCALE, MAX_PACKED_COORDINATE - 1, MAX_PACKED_COORDINATE,
+    ]),
+    st.integers(-(2**15), 2**15 - 1),
+)
+_int8 = st.one_of(st.sampled_from([-128, -127, -126, -1, 0, 1, 126, 127]), st.integers(-128, 127))
+_width = st.one_of(st.sampled_from([0, 1, 2, 63, 64, 65, 128, 255]), st.integers(0, 255))
+_color = st.binary(min_size=3, max_size=3)
+
+
+def _i16(value: int) -> bytes:
+    return value.to_bytes(2, "little", signed=True)
+
+
+_point = st.builds(lambda x, y: _i16(x) + _i16(y), _int16, _int16)
+# The three records an offset frame is made of. A delta is written as raw
+# signed bytes, so its first byte can itself be the escape or width marker -
+# which an encoder never writes and a peer can.
+_delta = st.builds(lambda dx, dy: dx.to_bytes(1, "little", signed=True) + dy.to_bytes(1, "little", signed=True), _int8, _int8)
+_record = st.one_of(
+    _delta,
+    st.builds(lambda point: b"\x80" + point, _point),
+    st.builds(lambda width: b"\x81" + bytes((width,)), _width),
+)
+
+# Long runs are built from records that are each well-formed - points inside
+# the packed range, steps that cannot be read as a marker, a width change only
+# ever followed by its point - because 250 freely drawn records essentially
+# always contain one bad one, and a frame at the point limit would then never
+# be accepted. The range edges stay in, and the frame-level mutation in
+# `frames` is what breaks these.
+_coordinate = st.one_of(
+    st.sampled_from([MIN_PACKED_COORDINATE, 0, MAX_PACKED_COORDINATE]),
+    st.integers(MIN_PACKED_COORDINATE, MAX_PACKED_COORDINATE),
+)
+_valid_point = st.builds(lambda x, y: _i16(x) + _i16(y), _coordinate, _coordinate)
+_step = st.builds(lambda dx, dy: dx.to_bytes(1, "little", signed=True) + dy.to_bytes(1, "little", signed=True), st.integers(-4, 4), st.integers(-4, 4))
+_valid_record = st.one_of(
+    _step,
+    _step,
+    st.builds(lambda point: b"\x80" + point, _valid_point),
+    st.builds(lambda width, step: b"\x81" + bytes((width,)) + step, st.integers(1, 64), _step),
+)
+
+
+@st.composite
+def _long_run(draw, valid_element, element) -> bytes:
+    """A well-formed run straddling the per-frame point limit (the delta
+    frame's first point makes 255 records a full frame): a short drawn pattern
+    tiled out to length, which costs a handful of draws instead of 256 and
+    still shrinks. Now and then one record anywhere in it is replaced by an
+    arbitrary one, so a single bad record deep in a long frame is compared too."""
+    pattern = draw(st.lists(valid_element, min_size=1, max_size=6))
+    length = draw(st.integers(MAX_POINTS_PER_FRAME - 2, MAX_POINTS_PER_FRAME + 1))
+    run = (pattern * (length // len(pattern) + 1))[:length]
+    if draw(st.integers(0, 3)) == 0:
+        run[draw(st.integers(0, length - 1))] = draw(element)
+    return b"".join(run)
+
+
+def _counted(element, valid_element):
+    """A short run of anything, or a long well-formed one."""
+    return st.one_of(
+        st.lists(element, max_size=12).map(b"".join),
+        st.lists(element, max_size=12).map(b"".join),
+        _long_run(valid_element, element),
+    )
+
+
+_BODIES = {
+    PATH_START_TAG: st.builds(lambda c, w, p: c + bytes((w,)) + p, _color, _width, _point),
+    PATH_POINTS_TAG: _counted(_point, _valid_point),
+    PATH_END_TAG: st.just(b""),
+    SHAPE_TAG: st.builds(
+        lambda shape, c, w, a, b: bytes((shape,)) + c + bytes((w,)) + a + b,
+        st.integers(0, 5), _color, _width, _point, _point,
+    ),
+    FILL_TAG: st.builds(
+        lambda c, x, y: c + x.to_bytes(2, "little") + y.to_bytes(2, "little"),
+        _color,
+        st.one_of(st.sampled_from([0, CANVAS_WIDTH - 1, CANVAS_WIDTH, 65535]), st.integers(0, 65535)),
+        st.one_of(st.sampled_from([0, CANVAS_HEIGHT - 1, CANVAS_HEIGHT, 65535]), st.integers(0, 65535)),
+    ),
+    CLEAR_TAG: st.just(b""),
+    PATH_POINTS_DELTA_TAG: st.builds(lambda first, rest: first + rest, _point, _counted(_record, _valid_record)),
+    PATH_POINTS_RELATIVE_TAG: _counted(_record, _valid_record),
+    PATH_POINTS_END_TAG: _counted(_record, _valid_record),
+}
+
+# Known tags most of the time; the seven unassigned ones and a wrong version
+# now and then.
+_tag = st.sampled_from([*TAGS] * 4 + list(range(9, 16)))
+_version = st.sampled_from([LIVE_DRAWING_VERSION] * 12 + [0, 2, 15])
+
+
+@st.composite
+def frames(draw) -> bytes:
+    if draw(st.integers(0, 19)) == 0:
+        return draw(st.binary(max_size=40))
+    tag = draw(_tag)
+    body = draw(_BODIES.get(tag, st.binary(max_size=16)))
+    frame = bytes(((draw(_version) << 4) | tag,)) + body
+    mutation = draw(st.sampled_from(["none"] * 6 + ["truncate", "extend", "flip"]))
+    if mutation == "truncate" and len(frame) > 1:
+        frame = frame[: draw(st.integers(1, len(frame) - 1))]
+    elif mutation == "extend":
+        frame += draw(st.binary(min_size=1, max_size=6))
+    elif mutation == "flip":
+        index = draw(st.integers(0, len(frame) - 1))
+        frame = frame[:index] + bytes((frame[index] ^ (1 << draw(st.integers(0, 7))),)) + frame[index + 1 :]
+    return frame
+
+
+# The open path's last point, as both histories keep it: a packed value turned
+# back into a normalized coordinate.
+_previous = st.builds(
+    lambda x, y: (x / (CANVAS_WIDTH * COORDINATE_SCALE), y / (CANVAS_HEIGHT * COORDINATE_SCALE)),
+    st.one_of(st.sampled_from([MIN_PACKED_COORDINATE, 0, MAX_PACKED_COORDINATE]), st.integers(MIN_PACKED_COORDINATE, MAX_PACKED_COORDINATE)),
+    st.one_of(st.sampled_from([MIN_PACKED_COORDINATE, 0, MAX_PACKED_COORDINATE]), st.integers(MIN_PACKED_COORDINATE, MAX_PACKED_COORDINATE)),
+)
+
+# Frames that once told the two decoders apart, or would: a delta walk past the
+# top of the packed range (the client's upper bound, removed in the spike), and
+# the same walk from an escape record sitting on the edge.
+_EDGE_WALK = bytes((0x16,)) + _i16(MAX_PACKED_COORDINATE) + _i16(0) + b"\x01\x00"
+_ESCAPE_THEN_WALK = bytes((0x17,)) + b"\x80" + _i16(MAX_PACKED_COORDINATE) + _i16(0) + b"\x01\x00"
+
+
+def _shapes(frame: bytes) -> list[tuple[str, object, dict]]:
+    """`frame` in every shape it can cross the wire in, as (name, what Python
+    receives, what Node receives)."""
+    shapes = [("binary", frame, {"hex": frame.hex()})]
+    text = base64.b64encode(frame).decode()
+    shapes.append(("base64", text, {"b64": text}))
+    if len(frame) == 1:
+        shapes.append(("integer", frame[0], {"int": frame[0]}))
+    return shapes
+
+
+def test_both_decoders_agree_on_every_generated_frame(oracle):
+    seen: Counter = Counter()
+
+    @settings(max_examples=budget(3000))
+    @example(frame=_EDGE_WALK, previous=(0.5, 0.5))
+    @example(frame=_ESCAPE_THEN_WALK, previous=(0.5, 0.5))
+    @given(frame=frames(), previous=_previous)
+    def check(frame: bytes, previous: tuple[float, float]):
+        shapes = _shapes(frame)
+        answers = oracle.decode([{**request, "previous": list(previous)} for _, _, request in shapes])
+        for (shape, wire, _), answer in zip(shapes, answers, strict=True):
+            expected = _python_decode(wire, previous)
+            assert "threw" not in answer, (
+                f"the client threw on a {shape} frame instead of refusing it: "
+                f"{answer['threw']} (frame {frame.hex()})"
+            )
+            assert answer["result"] == expected, (
+                f"the decoders disagree on a {shape} frame {frame.hex()} "
+                f"from previous {previous}:\n  server: {expected}\n  client: {answer['result']}"
+            )
+            if shape == "binary":
+                tag = TAGS.get(frame[0] & 0x0F) if frame else None
+                seen[(tag, expected is not None)] += 1
+                if expected is not None and len(expected.get("points", ())) == MAX_POINTS_PER_FRAME:
+                    seen["full_frame"] += 1
+                if expected is not None and expected.get("widths"):
+                    seen["widths"] += 1
+
+    check()
+
+    # A generator that drifts into producing only refused frames would pass
+    # the comparison while comparing nothing. Every frame kind has to be
+    # reached both accepted and refused, frames at the point limit have to be
+    # accepted, and so do width changes.
+    for name in TAGS.values():
+        assert seen[(name, True)] >= 5, (name, dict(seen))
+        assert seen[(name, False)] >= 5, (name, dict(seen))
+    assert seen["full_frame"] >= 10, dict(seen)
+    assert seen["widths"] >= 20, dict(seen)

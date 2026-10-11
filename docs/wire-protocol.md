@@ -1799,6 +1799,13 @@ rejects, before anything is recorded or rebroadcast:
 - A brush width outside 1 – 64, an unknown shape id, a fill point outside the canvas.
 - A width keyframe that is misplaced (above), and any coordinate packed to −32768.
 
+The server forwards the drawer's own bytes rather than re-encoding them, so the client's
+`decodeLiveDrawing` ([`frontend/src/lib/liveDrawing.ts`](../frontend/src/lib/liveDrawing.ts))
+has to refuse exactly these frames and decode every other one to the same packet — a frame
+the server accepts and a viewer reads differently is a stroke in the history that viewer
+never drew. [`test_live_drawing_differential.py`](../backend/tests/test_live_drawing_differential.py)
+compares the two decoders over generated frames in every wire shape (R-ENG-20).
+
 On top of the codec, [`drawing.py`](../backend/app/handlers/drawing.py) refuses:
 
 - A sender who is not the current drawer, or a phase other than `drawing`.
