@@ -92,3 +92,17 @@ test("a two-letter fold goes in whole or not at all", () => {
   assert.equal(nameCharactersToInsert("ß", 1), "", "half a letter is not the letter");
   assert.equal(nameCharactersToInsert("aß", 2), "a");
 });
+
+test("at the length limit a letter that folds to two goes whole or not at all (review of #1441)", () => {
+  // A composition committed with one character left: "ß" is "ss", and "s" is
+  // not the letter the player entered.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoß", 16), { value: "abcdefghijklmno", caret: 15 });
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoæ", 16), { value: "abcdefghijklmno", caret: 15 });
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoŒ", 16), { value: "abcdefghijklmno", caret: 15 });
+  // Entered before a suffix that was already there: the suffix stays.
+  assert.deepEqual(keepNameCharacters("abcdefgßhijklmno", 8), { value: "abcdefghijklmno", caret: 7 });
+  // Nothing inserted before the caret to give way: the end is cut at a letter.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoß", 0), { value: "abcdefghijklmno", caret: 0 });
+  // Room for both halves: kept.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnß", 15), { value: "abcdefghijklmnss", caret: 16 });
+});

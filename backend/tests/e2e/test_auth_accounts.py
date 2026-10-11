@@ -135,6 +135,14 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await field.focus()
             await page.keyboard.insert_text("Zoe\u0308")
             assert await field.input_value() == "Zoe"
+            # Composed with one character left, "ß" is refused whole: "ss"
+            # does not fit, and half of it is not the letter (review of #1441).
+            await field.fill("abcdefghijklmno")
+            await field.focus()
+            ime = await page.context.new_cdp_session(page)
+            await ime.send("Input.imeSetComposition", {"text": "ß", "selectionStart": 1, "selectionEnd": 1})
+            await ime.send("Input.insertText", {"text": "ß"})
+            assert await field.input_value() == "abcdefghijklmno"
 
             # The account dialog's username follows the same rule, the same way.
             await field.fill("")

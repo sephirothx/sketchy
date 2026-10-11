@@ -26,27 +26,33 @@ const NICKNAME_CHARACTER = /^[a-zA-Z0-9_-]$/;
  * the characters kept before it, so it stays after what was just typed rather
  * than jumping to the end. Past the length limit it is the characters just
  * inserted - those before the caret - that give way, as with `maxLength`,
- * rather than the end of a name that was already there.
+ * rather than the end of a name that was already there. A letter that folds
+ * to two gives way whole: half of "ß" is not the letter, and keeping "s" would
+ * make the name depend on how it was entered (review of #1441).
  */
 export function keepNameCharacters(raw: string, caret: number = raw.length): { value: string; caret: number } {
-  let kept = "";
-  let keptBeforeCaret = 0;
+  // Each source letter's fold, so the limit removes letters, not halves.
+  const before: string[] = [];
+  const after: string[] = [];
   for (let index = 0; index < raw.length; index += 1) {
     const folded = foldNameCharacter(raw[index]);
-    if (!folded) continue;
-    kept += folded;
-    if (index < caret) keptBeforeCaret = kept.length;
+    if (folded) (index < caret ? before : after).push(folded);
   }
-  const excess = kept.length - MAX_NICKNAME_LENGTH;
-  if (excess <= 0) return { value: kept, caret: keptBeforeCaret };
+  const length = (pieces: string[]) => pieces.reduce((sum, piece) => sum + piece.length, 0);
+  const keptBeforeCaret = length(before);
+  let excess = keptBeforeCaret + length(after) - MAX_NICKNAME_LENGTH;
+  if (excess <= 0) return { value: before.join("") + after.join(""), caret: keptBeforeCaret };
   if (keptBeforeCaret < excess) {
-    const value = kept.slice(0, MAX_NICKNAME_LENGTH);
+    let value = "";
+    for (const piece of [...before, ...after]) {
+      if (value.length + piece.length > MAX_NICKNAME_LENGTH) break;
+      value += piece;
+    }
     return { value, caret: Math.min(keptBeforeCaret, value.length) };
   }
-  return {
-    value: kept.slice(0, keptBeforeCaret - excess) + kept.slice(keptBeforeCaret),
-    caret: keptBeforeCaret - excess,
-  };
+  while (excess > 0) excess -= before.pop()!.length;
+  const kept = before.join("");
+  return { value: kept + after.join(""), caret: kept.length };
 }
 
 /**
