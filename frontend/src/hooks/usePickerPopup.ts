@@ -72,7 +72,9 @@ export function usePickerPopup({ alignEnd = false, triggerRef: externalTriggerRe
       list.style.left = "0px";
       list.style.right = "auto";
       list.style.bottom = "auto";
-      list.style.minWidth = `${trigger.width}px`;
+      list.style.minWidth = `${Math.min(trigger.width, viewportWidth - 2 * margin)}px`;
+      // Never wider than the window: a row's label wraps instead.
+      list.style.maxWidth = `${viewportWidth - 2 * margin}px`;
       list.style.maxHeight = "";
       const natural = list.scrollHeight;
       const upward = natural > below && above > below;

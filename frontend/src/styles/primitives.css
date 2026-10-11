@@ -734,8 +734,12 @@ input:focus-visible ~ .switch-track {
    screen the operating system drew rather than the game. For a language it
    was worse still: the flag and the endonym stopped at the closed field and
    never reached the list. */
+/* Never wider than the row it stands in: a preset is named by its owner,
+   up to 64 characters, and a trigger sized to that pushed a phone's page
+   sideways. The value ellipsizes; the list shows the whole name. */
 .picker {
   display: inline-flex;
+  max-width: 100%;
   position: relative;
 }
 
@@ -752,6 +756,7 @@ input:focus-visible ~ .switch-track {
   font-weight: 700;
   gap: 10px;
   justify-content: space-between;
+  max-width: 100%;
   min-height: 44px;
   min-width: 190px;
   padding: 8px 12px;
@@ -785,6 +790,7 @@ input:focus-visible ~ .switch-track {
 }
 
 .picker-value {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -849,10 +855,11 @@ input:focus-visible ~ .switch-track {
   color: var(--muted);
 }
 
+/* The same ink as the value, not a lighter one: at 13px the label has to
+   keep 4.5:1 on the tint (R-A11Y-05), which a wash of the ink would not. */
 .picker.is-pill .picker-trigger.is-set .picker-prefix,
 .picker.is-pill.is-open .picker-prefix {
   color: inherit;
-  opacity: 0.75;
 }
 
 /* A raised card rather than the inverted popover the seat menus use: this one
@@ -900,8 +907,15 @@ input:focus-visible ~ .switch-track {
   justify-content: space-between;
   padding: 8px 10px;
   text-align: left;
-  white-space: nowrap;
   width: 100%;
+}
+
+/* A long label wraps inside the window's width (usePickerPopup caps the
+   list to it) rather than running off the screen, where two names that
+   differ only at their ends would read as one. */
+.picker-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .picker-option:hover,

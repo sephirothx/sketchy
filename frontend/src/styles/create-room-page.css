@@ -30,6 +30,16 @@
   font-size: 13px;
   color: var(--muted);
   gap: 10px;
+  /* A flex item's floor is its content, and a preset's name is its owner's,
+     64 characters long if they like: without this the bar grew to the name
+     and took a phone's page sideways with it. */
+  min-width: 0;
+}
+
+/* The preset's name ellipsizes at the width the select used to cap it at;
+   the open list shows the whole of it. */
+.room-preset-bar .picker {
+  max-width: 220px;
 }
 
 .room-preset-bar .room-preset-name {
