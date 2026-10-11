@@ -73,7 +73,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             await late_page.wait_for_selector('canvas.drawing-canvas')
             await _same_canvas(drawing, late_page)
             await asyncio.sleep(1)
-            assert (await logs[id(late_page)].since(0)).count("sync_strokes") == 1, (
+            assert (await logs[id(late_page)].received()).count("sync_strokes") == 1, (
                 "a mid-turn entry was sent the canvas more than once"
             )
 
@@ -96,7 +96,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             # rather than as a wait for a tail that never comes.
             await viewer_log.wait_for("sync_strokes_tail", "sync_strokes", since=watch_from)
             await _same_canvas(drawing, viewing)
-            after = await viewer_log.since(watch_from)
+            after = await viewer_log.received(watch_from)
             assert "sync_strokes" not in after, "a reconnect with a verified prefix got a full dump"
             assert "sync_strokes_tail" in after, "a reconnect was never sent its tail"
 
