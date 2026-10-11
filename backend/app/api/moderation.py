@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import and_, bindparam, func, or_, select, update
+from sqlalchemy import and_, bindparam, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
@@ -1393,7 +1393,10 @@ async def _restore_list_words(
     await _lock_versions(session, PromptVersion.concept_id.in_(concept_ids))
     await session.execute(
         update(PromptVersion)
-        .where(*held)
+        # Only the concepts read and locked above: a save carrying one of
+        # these words onto a new concept may commit in between, and its copy
+        # is the next restore's, locked in order (review of #1450).
+        .where(*held, PromptVersion.concept_id.in_(concept_ids))
         .values(
             moderation_state=PromptContentModerationState.ACTIVE.value,
             moderated_by_user_id=reviewer_id,
@@ -1402,7 +1405,17 @@ async def _restore_list_words(
         )
         .execution_options(synchronize_session=False)
     )
-    await release_takedowns(session, PromptTakedown.concept_id.in_(concept_ids))
+    # A concept another decision still hides a version of keeps its records:
+    # an entry respelled into a hidden word holds that word's decision on its
+    # new wording, and the word's own restore finds it through them.
+    await release_takedowns(
+        session,
+        PromptTakedown.concept_id.in_(concept_ids),
+        ~exists().where(
+            PromptVersion.concept_id == PromptTakedown.concept_id,
+            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+        ),
+    )
 
 
 async def _lock_takedown_owners(

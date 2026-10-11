@@ -2081,3 +2081,71 @@ async def test_a_list_taken_down_twice_and_then_left_up_brings_its_words_back(en
     assert await typed_again("lynx") == {"lynx": "hidden"}
     await decide(await report(2), "active")
     assert await typed_again("lynx", "puma") == {"lynx": "active", "puma": "active"}
+
+
+async def test_a_list_restored_keeps_the_record_a_word_s_own_decision_still_needs(env):
+    """Review of #1450: a restored list released every takedown record of its
+    words' concepts - including one a word's own decision still needed, for
+    an entry respelled into that hidden word. Leaving the word up later then
+    could not find that entry, which stayed hidden with nobody to decide it."""
+    new_client, factory, prompts = env
+    owner_http, moderator_http = new_client(), new_client()
+    reporters = [new_client() for _ in range(4)]
+    owner = await register(owner_http, "KeepOwner")
+    for index, reporter_http in enumerate(reporters):
+        await register(reporter_http, f"KeepReporter{index}")
+    moderator = await register(moderator_http, "KeepMod")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+
+    async def report(by: int, list_id: str, **target) -> str:
+        filed = await reporters[by].post(
+            "/api/prompt-content-reports",
+            json={"promptListId": list_id, "reason": "spam", "details": "This.", **target},
+        )
+        assert filed.status_code == 201, filed.text
+        return filed.json()["id"]
+
+    async def decide(report_id: str, state: str) -> None:
+        decided = await moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report_id}",
+            json={"status": "resolved", "note": "Decided.", "moderationState": state},
+        )
+        assert decided.status_code == 200, decided.text
+
+    elsewhere = await prompts.create_owned(
+        owner["id"], name="Elsewhere", description="", language="en",
+        prompts=(PromptListEntryInput(answer="ferret"),),
+    )
+    await published(factory, elsewhere.id)
+    [ferret] = elsewhere.prompts
+    await decide(await report(0, elsewhere.id, promptVersionId=ferret.prompt_version_id), "hidden")
+
+    listed = await prompts.create_owned(
+        owner["id"], name="Burrows", description="", language="en",
+        prompts=(PromptListEntryInput(answer="rabbit"), PromptListEntryInput(answer="hare")),
+    )
+    await published(factory, listed.id)
+    rabbit, hare = listed.prompts
+    # Respelled into the hidden word: born hidden under its decision, while the
+    # published edition still shows the old wording.
+    respelled = await prompts.update_owned(
+        owner["id"], listed.id, expected_version=listed.version, name="Burrows", description="",
+        prompts=(
+            PromptListEntryInput(answer="ferret", concept_id=rabbit.concept_id),
+            PromptListEntryInput(answer="hare", concept_id=hare.concept_id),
+        ),
+    )
+    assert next(p for p in respelled.prompts if p.concept_id == rabbit.concept_id).moderation_state == "hidden"
+
+    await decide(await report(1, listed.id), "hidden")
+    await decide(await report(2, listed.id), "active")
+    await decide(await report(3, elsewhere.id, promptVersionId=ferret.prompt_version_id), "active")
+    async with factory() as session:
+        states = set((await session.scalars(
+            select(PromptVersion.moderation_state).where(PromptVersion.concept_id == UUID(rabbit.concept_id))
+        )).all())
+    assert states == {"active"}, states
