@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { ReportDialog } from "./ReportDialog";
+import { Picker } from "./ui/Picker";
 import {
   submitPromptContentReport,
   type PromptContentReportReason,
@@ -51,14 +52,16 @@ export function PromptContentReportDialog({
       extraFields={
         <>
           <label htmlFor={targetId}>{ui.promptContentReportDialog.content}</label>
-          <select id={targetId} value={target} onChange={(event) => setTarget(event.target.value)}>
-            <option value="list">{ui.promptContentReportDialog.entireList}</option>
-            {promptList.prompts.map((prompt) => (
-              <option key={prompt.promptVersionId} value={prompt.promptVersionId}>
-                {prompt.prompt}
-              </option>
-            ))}
-          </select>
+          <Picker
+            id={targetId}
+            label={ui.promptContentReportDialog.content}
+            options={[
+              { value: "list", label: ui.promptContentReportDialog.entireList },
+              ...promptList.prompts.map((prompt) => ({ value: prompt.promptVersionId, label: prompt.prompt })),
+            ]}
+            value={target}
+            onChange={setTarget}
+          />
         </>
       }
       onSend={async (details) => {

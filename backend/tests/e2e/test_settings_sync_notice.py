@@ -38,7 +38,7 @@ async def test_a_refused_save_from_the_lobby_raises_a_notice():
 
             await page.route("**/api/users/me/settings", refuse_writes)
 
-            await page.locator(".lobby-header .language-picker-trigger").click()
+            await page.locator(".lobby-header .picker-trigger").click()
             await page.get_by_role("option", name=re.compile("Deutsch")).click()
 
             notice = page.locator(".app-toast.error")

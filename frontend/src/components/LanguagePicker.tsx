@@ -1,5 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useId } from "react";
 
 import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon, PlusIcon } from "./icons";
 import {
@@ -8,7 +7,7 @@ import {
   promptLanguageEndonym,
   promptLanguageLabel,
 } from "../lib/promptLanguages";
-import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
+import { usePickerPopup } from "../hooks/usePickerPopup";
 import type { PromptListLanguage, RoomLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
 
@@ -49,9 +48,9 @@ interface LanguagePickerProps {
  * drawn by the operating system rather than by the game, which is exactly the
  * seam the redesign spent its effort removing.
  *
- * So this is the room menu's mechanism (`LobbyPlayerMenu`) wearing the setup
- * form's clothes (`toggle-chip`): one trigger, arrow keys through the list,
- * Escape closes and hands focus back. Each row is a flag and the language's
+ * So this is the picker every other choice is made with (`ui/Picker`,
+ * `usePickerPopup`) wearing a face of its own: one trigger, arrow keys through
+ * the list, Escape closes and hands focus back. Each row is a flag and the language's
  * name as that language writes it — `Deutsch`, not `German` — because the
  * person looking for it is, by definition, looking for the word they use.
  * The name in the reader's own interface language rides along for screen
@@ -70,109 +69,15 @@ export function LanguagePicker({
   addLabel,
 }: LanguagePickerProps) {
   const listId = useId();
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEscapeLayer(open, () => {
-    setOpen(false);
-    triggerRef.current?.focus();
+  // An add button stands at the end of its row, so its list hangs from its
+  // right edge; a choice's list from its left.
+  const { open, toggle, close, triggerRef, listRef, rootRef, handleListKeyDown } = usePickerPopup({
+    alignEnd: addLabel !== undefined,
   });
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  // Placed in the window, not in whatever holds the trigger: a picker inside a
-  // dialog's scrolling body was clipped by it and scrolled it both ways. Under
-  // the trigger where it fits, over it where there is more room above, and
-  // held inside the window's edges - its right edge on the trigger's when the
-  // trigger sits at the end of a row. Placed before paint, and again as
-  // anything scrolls or the window changes size. Written to the list itself,
-  // which goes when the list closes.
-  useLayoutEffect(() => {
-    if (!open) return;
-    function place() {
-      const trigger = triggerRef.current?.getBoundingClientRect();
-      const list = listRef.current;
-      if (!trigger || !list) return;
-      const margin = 8;
-      const gap = 6;
-      const viewportWidth = document.documentElement.clientWidth;
-      const viewportHeight = window.innerHeight;
-      const below = viewportHeight - trigger.bottom - gap - margin;
-      const above = trigger.top - gap - margin;
-      // At the height it will have, and only then measured, so its width is
-      // the one it is drawn at.
-      list.style.top = "0px";
-      list.style.left = "0px";
-      list.style.right = "auto";
-      list.style.bottom = "auto";
-      list.style.minWidth = `${trigger.width}px`;
-      list.style.maxHeight = "";
-      const natural = list.scrollHeight;
-      const upward = natural > below && above > below;
-      list.style.maxHeight = `${Math.max(120, Math.min(360, upward ? above : below))}px`;
-      const width = Math.max(list.offsetWidth, trigger.width);
-      // An add button stands at the end of its row, so its list hangs from
-      // its right edge; a choice's list from its left, unless that runs out.
-      let left = addLabel !== undefined ? trigger.right - width : trigger.left;
-      if (left + width > viewportWidth - margin) left = trigger.right - width;
-      left = Math.max(margin, Math.min(left, viewportWidth - margin - width));
-      Object.assign(list.style, {
-        left: `${left}px`,
-        top: upward ? "auto" : `${trigger.bottom + gap}px`,
-        bottom: upward ? `${viewportHeight - trigger.top + gap}px` : "auto",
-      });
-    }
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open, addLabel]);
-
-  // The chosen row takes focus on open, so the list starts where the reader
-  // already is rather than at the top of eight.
-  useEffect(() => {
-    if (!open || !listRef.current) return;
-    const selected = listRef.current.querySelector<HTMLElement>('[aria-selected="true"]');
-    (selected ?? getFocusableElements(listRef.current)[0])?.focus();
-  }, [open]);
 
   function choose(next: LanguageChoice) {
     onChange(next);
-    setOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  function handleListKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    const items = listRef.current ? getFocusableElements(listRef.current) : [];
-    if (!items.length) return;
-    const index = items.indexOf(document.activeElement as HTMLElement);
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      items[(index + 1) % items.length]?.focus();
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      items[(index - 1 + items.length) % items.length]?.focus();
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      items[0]?.focus();
-    } else if (event.key === "End") {
-      event.preventDefault();
-      items[items.length - 1]?.focus();
-    }
+    close();
   }
 
   const choices: LanguageChoice[] = includeAny ? [ANY_LANGUAGE, ...options] : [...options];
@@ -191,24 +96,24 @@ export function LanguagePicker({
 
   return (
     <div
-      className={`language-picker${compact ? " is-compact" : ""}${flagOnly ? " is-flag-only" : ""}${small ? " is-small" : ""}`}
+      className={`picker language-picker${compact ? " is-compact" : ""}${flagOnly ? " is-flag-only" : ""}${small ? " is-small" : ""}${open ? " is-open" : ""}`}
       ref={rootRef}
     >
       <button
         ref={triggerRef}
         type="button"
-        className="language-picker-trigger"
+        className="picker-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={
           value === undefined
             ? label
-            : ui.languagePicker.currentChoice({ label, value: accessibleName(value) })
+            : ui.picker.currentChoice({ label, value: accessibleName(value) })
         }
         title={flagOnly && value !== undefined ? `${label}: ${accessibleName(value)}` : undefined}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggle}
       >
         {value === undefined ? (
           <span className="language-picker-add">
@@ -218,7 +123,11 @@ export function LanguagePicker({
         ) : (
           <>
             <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
-            {!flagOnly && <ChevronDownIcon size={14} />}
+            {!flagOnly && (
+              <span className="picker-chevron" aria-hidden="true">
+                <ChevronDownIcon size={14} />
+              </span>
+            )}
           </>
         )}
       </button>
@@ -227,7 +136,7 @@ export function LanguagePicker({
         <div
           id={listId}
           ref={listRef}
-          className="language-picker-list"
+          className="picker-list"
           role="listbox"
           aria-label={label}
           onKeyDown={handleListKeyDown}
@@ -241,11 +150,11 @@ export function LanguagePicker({
                 role="option"
                 aria-selected={selected}
                 data-language={choice}
-                className={`language-picker-option${selected ? " is-selected" : ""}`}
+                className={`picker-option${selected ? " is-selected" : ""}`}
                 onClick={() => choose(choice)}
               >
                 <LanguageFace value={choice} />
-                <span className="language-picker-check" aria-hidden="true">
+                <span className="picker-check" aria-hidden="true">
                   {selected && <CheckIcon size={13} />}
                 </span>
               </button>
