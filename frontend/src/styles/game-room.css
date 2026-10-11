@@ -1880,7 +1880,7 @@
     box-shadow: none;
     /* The verdict hangs above the composer, outside this box. `hidden` here is
        what made it invisible: it clipped 21px off a 36px chip. Nothing can
-       overflow now that the feed is display:none. */
+       overflow now that the feed is clipped out of sight. */
     overflow: visible;
   }
 

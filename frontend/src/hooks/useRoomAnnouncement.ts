@@ -5,7 +5,13 @@ interface RoomAnnouncerState {
   sentence: string;
   say: (text: string) => void;
   clear: () => void;
+  /** Take `text` back if it is still the one waiting or said: its card has
+      gone, and the sentence should not outlive it - read later by somebody
+      going through the page line by line - or be said after it. */
+  withdraw: (text: string) => void;
 }
+
+let waiting: string | null = null;
 
 let pending: ReturnType<typeof setTimeout> | null = null;
 
@@ -22,15 +28,26 @@ export const useRoomAnnouncer = create<RoomAnnouncerState>((set) => ({
   say: (text) => {
     if (pending !== null) clearTimeout(pending);
     set({ sentence: "" });
+    waiting = text;
     pending = setTimeout(() => {
       pending = null;
+      waiting = null;
       set({ sentence: text });
     }, 50);
   },
   clear: () => {
     if (pending !== null) clearTimeout(pending);
     pending = null;
+    waiting = null;
     set({ sentence: "" });
+  },
+  withdraw: (text) => {
+    if (waiting === text && pending !== null) {
+      clearTimeout(pending);
+      pending = null;
+      waiting = null;
+    }
+    set((state) => (state.sentence === text ? { sentence: "" } : state));
   },
 }));
 
@@ -38,7 +55,10 @@ export const useRoomAnnouncer = create<RoomAnnouncerState>((set) => ({
     `null` says nothing. */
 export function useRoomAnnouncement(text: string | null): void {
   const say = useRoomAnnouncer((state) => state.say);
+  const withdraw = useRoomAnnouncer((state) => state.withdraw);
   useEffect(() => {
-    if (text) say(text);
-  }, [text, say]);
+    if (!text) return;
+    say(text);
+    return () => withdraw(text);
+  }, [text, say, withdraw]);
 }
