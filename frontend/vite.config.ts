@@ -96,8 +96,10 @@ inserted before them, the room's preloads starved vendor and the paint came
 later (2,680 ms, measured). Each language's list carries its static imports
 (the shared format chunk among them, without which the gain disappeared),
 less what the entry already preloads. The room's stylesheets are preloaded
-too: Vite's own loader holds the page's import until they have arrived, and
-asked for from the entry they were one more round trip before the paint. The inline script's hash is read by
+too: Vite's own loader holds the page's import until they arrive, and asked
+for from the entry they were one more round trip before the paint. With
+`crossorigin`, as the loader's own links have it: a preload in another
+credentials mode is not reused, and the file is fetched three times. The inline script's hash is read by
 the server at startup for its CSP (`security_headers.inline_script_hashes`). */
 function preloadReaderChunks(): Plugin {
   return {
@@ -156,7 +158,7 @@ function preloadReaderChunks(): Plugin {
           `for(var j=0;j<f.length;j++){var k=document.createElement("link");` +
           `k.rel="modulepreload";k.crossOrigin="";k.href="/"+f[j];document.head.appendChild(k);}` +
           `for(var n=0;n<c.length;n++){var y=document.createElement("link");` +
-          `y.rel="preload";y.as="style";y.href="/"+c[n];document.head.appendChild(y);}` +
+          `y.rel="preload";y.as="style";y.crossOrigin="";y.href="/"+c[n];document.head.appendChild(y);}` +
           `}catch(e){}})();`
         return html.replace('</head>', `  <script>${script}</script>\n  </head>`)
       },

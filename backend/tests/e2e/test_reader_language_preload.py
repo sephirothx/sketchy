@@ -23,6 +23,8 @@ async def test_a_french_reader_gets_french_first_and_no_english():
         context = await browser.new_context(locale="fr-FR")
         page = await context.new_page()
         fetched: list[str] = []
+        urls: list[str] = []
+        page.on("request", lambda request: urls.append(request.url))
         page.on(
             "request",
             lambda request: fetched.append(CATALOGUE.search(request.url).group(1))
@@ -43,11 +45,16 @@ async def test_a_french_reader_gets_french_first_and_no_english():
             await page.goto(BASE_URL)
             await expect(page.locator("html")).to_have_attribute("lang", "fr")
             assert "fr" in fetched and "en" not in fetched, fetched
+            urls.clear()
             await page.goto(f"{BASE_URL}/room/NOPE42")
             await expect(page.locator(f'head link[rel="modulepreload"][href="/{plan["room"][0]}"]')).to_have_count(1)
             # And its stylesheets: Vite's loader holds the page's import for them.
             assert any("GameRoomPage-" in path and path.endswith(".css") for path in plan["roomCss"]), plan["roomCss"]
-            await expect(page.locator(f'head link[rel="preload"][as="style"][href="/{plan["roomCss"][0]}"]')).to_have_count(1)
+            await expect(page.locator(f'head link[rel="preload"][as="style"][crossorigin][href="/{plan["roomCss"][0]}"]')).to_have_count(1)
+            # Once: Vite's loader reuses the preload rather than asking again.
+            sheet = next(path for path in plan["roomCss"] if "GameRoomPage-" in path)
+            await expect(page.locator(f'link[rel="stylesheet"][href$="/{sheet}"]')).to_have_count(1)
+            assert sum(url.endswith("/" + sheet) for url in urls) == 1, [u for u in urls if u.endswith(".css")]
             assert "en" not in fetched, fetched
         finally:
             await context.close()
@@ -70,8 +77,9 @@ async def test_a_language_that_stalls_paints_in_english_and_then_switches():
         await page.route(re.compile(r"/assets/fr-[\w-]+\.js$"), stall)
         try:
             await page.goto(BASE_URL)
-            await expect(page.locator("html")).to_have_attribute("lang", "en", timeout=6000)
-            await expect(page.locator("#root")).not_to_be_empty()
+            # Painted, in English, while French is still on its way.
+            await expect(page.locator("#root")).not_to_be_empty(timeout=6000)
+            await expect(page.locator("html")).to_have_attribute("lang", "en")
             release.set()
             await expect(page.locator("html")).to_have_attribute("lang", "fr")
         finally:
