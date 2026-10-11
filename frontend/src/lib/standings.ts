@@ -42,7 +42,7 @@ export const MAX_NAMED_WINNERS = 3;
  * on purpose: it turns up rarely, at random, and only in a real game, which
  * makes it the branch most likely to be wrong and least likely to be noticed.
  */
-export function crownOutcome(
+export function winOutcome(
   winnerCount: number,
 ): "room" | "one" | "shared" | "many" {
   if (winnerCount <= 0) return "room";

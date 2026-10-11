@@ -1093,11 +1093,11 @@ export const NL: Catalogue = {
     drawings: "Tekeningen",
     stayHere: "Hier blijven",
     aGreatGameOfDrawing: "Een geweldig tekenspel",
-    theRoomTakesTheCrown: "De hele kamer pakt de kroon!",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `${p.winnersCount} spelers delen de kroon!`,
-    takesTheCrown: " pakt de kroon!",
-    shareTheCrown: " delen de kroon!",
+    theRoomWins: "De hele kamer wint!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} spelers delen de overwinning!`,
+    wins: " wint!",
+    shareTheWin: " delen de overwinning!",
   },
 
   gameHighlightsPanel: {
@@ -1622,8 +1622,8 @@ export const NL: Catalogue = {
       `Dat is niet gelukt: ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Kies een leeg vakje om het te onthullen · ${counted(p.cost, { one: "punt", other: "punten" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Totaal: ${counted(p.spent, { one: "punt", other: "punten" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Hints: −${counted(p.spent, { one: "punt", other: "punten" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `„${p.letter}” kopen voor ${counted(p.price, { one: "punt", other: "punten" })}`,
     maskedPrompt: (p: { shape: string }) => `Verborgen woord, ${p.shape} letters`,
@@ -2621,8 +2621,8 @@ export const NL: Catalogue = {
       `${p.drawerNickname} kiest een woord…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Het woord was ‘${p.prompt}’`,
-    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
-      `${p.nickname} heeft het geraden · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; guess: string | null; time: string; points: number | null }) =>
+      `${p.nickname} heeft het geraden${p.guess === null ? "" : ` — ${p.guess}`} · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} is weer verbonden`,
     playerDisconnected: (p: { nickname: string }) =>

@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import suppress
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -463,16 +464,17 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     # Guesser1 guesses correctly ("panda")
     answer = await guess("guesser1-sid", {"text": "panda"})
     assert guesser1.id in room.game.correct_guessers
-    correct_chat_emits = [
+    # The prompt-aware room - the drawer and the guesser - reads the guess in
+    # the announcement itself; nobody gets it as a chat line (#1421).
+    assert not any(call.args[0] == "chat_message" for call in sio.emit.await_args_list)
+    with_guess = [
         call
         for call in sio.emit.await_args_list
-        if call.args[0] == "chat_message" and call.args[1].get("correct") is True
+        if call.args[0] == "correct_guess" and "text" in call.args[1]
     ]
-    # The prompt-aware room gets the line; the guesser's own copy rides the
-    # answer to their guess (#884).
-    assert len(correct_chat_emits) == 1
-    assert correct_chat_emits[0].kwargs["to"] == ["drawer-sid"]
-    assert answer["line"]["correct"] is True and answer["line"]["text"] == "panda"
+    assert len(with_guess) == 1 and with_guess[0].args[1]["text"] == "panda"
+    assert with_guess[0].kwargs["to"] == ["drawer-sid", "guesser1-sid"]
+    assert "line" not in answer
 
     sio.emit.reset_mock()
 
@@ -664,7 +666,9 @@ async def test_correct_guess_carries_the_server_time_every_surface_shows():
     await sio.handlers["/"]["guess"]("Guesser-sid", {"text": "panda"})
 
     broadcast = next(
-        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "correct_guess"
+        call.args[1]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "correct_guess" and call.kwargs.get("room") == room.id
     )
     assert broadcast == {
         "playerId": guesser.id,
@@ -985,9 +989,11 @@ async def test_a_player_who_joins_mid_turn_may_still_guess():
         if call.args[0] == "correct_guess"
         and call.args[1]["playerId"] == latecomer.id
     ]
-    assert len(correct) == 1
-    # Announced to the room, not whispered to the prompt-aware few.
-    assert correct[0].kwargs.get("room") == room.id
+    # Announced to the room, not whispered to the prompt-aware few: they get
+    # it with the guess in it (#1421), and everybody else without.
+    assert [call.kwargs.get("room") for call in correct] == [None, room.id]
+    assert correct[0].args[1]["text"] == "volleyball" and "text" not in correct[1].args[1]
+    assert correct[1].kwargs["skip_sid"] == correct[0].kwargs["to"]
     # And the seat that has not guessed yet still holds the turn open.
     assert room.game.phase.value == "drawing"
 
@@ -1387,23 +1393,21 @@ async def test_a_guess_echo_reaches_spectators_only_where_they_see_the_prompt(
     sio.emit = AsyncMock()
     guess = sio.handlers["/"]["guess"]
 
-    def echoes(kind: str) -> list[list[str]]:
-        return [
-            call.kwargs["to"]
-            for call in sio.emit.await_args_list
-            if call.args[0] == "chat_message" and call.args[1].get(kind)
-        ]
-
     await guess("guesser-sid", {"text": "helmer"})
     close = [
         call.kwargs["to"] for call in sio.emit.await_args_list if call.args[0] == "chat_message"
     ]
     await guess("guesser-sid", {"text": "helmet"})
-    correct = echoes("correct")
+    # A correct guess's echo is the guess inside `correct_guess` (#1421).
+    correct = [
+        call.kwargs["to"]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "correct_guess" and "text" in call.args[1]
+    ]
 
     expected = ["drawer-sid", "spec-sid"] if spectators_see_prompt else ["drawer-sid"]
     assert close == [expected]
-    assert correct == [expected]
+    assert correct == [[*expected, "guesser-sid"]]
     # Who got it still reaches the whole room, spectators included.
     assert any(
         call.args[0] == "correct_guess" and call.kwargs.get("room") == room.id
@@ -1511,3 +1515,69 @@ async def test_a_32_character_answer_typed_longer_scores(typed):
     assert guesser.id in game.correct_guessers
     assert typed not in to_room
     assert answer["correct"]
+
+
+def _received(sio, sid: str) -> list[tuple[str, dict]]:
+    """What one socket was sent, in order: emits addressed to it, and room
+    broadcasts it was not skipped from."""
+    received = []
+    for call in sio.emit.await_args_list:
+        to = call.kwargs.get("to")
+        targets = to if isinstance(to, list) else [to] if to else []
+        skipped = call.kwargs.get("skip_sid") or []
+        skipped = skipped if isinstance(skipped, list) else [skipped]
+        broadcast = call.kwargs.get("room") is not None and sid not in skipped
+        if sid in targets or broadcast:
+            received.append((call.args[0], call.args[1]))
+    return received
+
+
+async def test_a_correct_guess_is_one_line_per_reader_with_the_guess_where_it_may_be_read():
+    """#1421: the prompt-aware room used to read "Guesser got it · 3.6s" and
+    then "Guesser: panda" - the result before its cause, two lines a guess.
+    Now every seat gets one `correct_guess`; those the guess may reach get it
+    with the guess in it. A seat that blocked the guesser still hears who got
+    it, and not the words; the guess is retained with exactly its readers."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer", user_id="drawer-user")
+    earlier = room_manager.add_player(room, "Earlier", user_id="earlier-user")
+    guesser = room_manager.add_player(room, "Guesser", user_id="guesser-user")
+    other = room_manager.add_player(room, "Other", user_id="other-user")
+    for player in (drawer, earlier, guesser, other):
+        player.sid = f"{player.nickname}-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, earlier.id, guesser.id, other.id], prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    assert room.game.submit_guess(earlier.id, "panda")[0]
+    # The drawer blocked the guesser.
+    block_service = SimpleNamespace(blockers_of=AsyncMock(return_value=frozenset({"drawer-user"})))
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(sio, room_manager, block_service=block_service)
+    context.message_retention = SimpleNamespace(record=AsyncMock())
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+
+    answer = await sio.handlers["/"]["guess"]("Guesser-sid", {"text": "panda"})
+
+    assert answer["correct"]["prompt"] == "panda" and "line" not in answer
+    for sid, guess in (
+        ("Earlier-sid", "panda"),
+        ("Guesser-sid", "panda"),
+        ("Drawer-sid", None),
+        ("Other-sid", None),
+    ):
+        received = _received(sio, sid)
+        assert [event for event, _ in received] == ["correct_guess"], (sid, received)
+        assert received[0][1].get("text") == guess, sid
+        assert received[0][1]["playerId"] == guesser.id
+    retained = context.message_retention.record.await_args.kwargs
+    assert retained["text"] == "panda" and retained["message_kind"] == "correct_guess"
+    assert retained["recipient_sids"] == ["Earlier-sid", "Guesser-sid"]
+    timer = context.timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer

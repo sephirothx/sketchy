@@ -2611,7 +2611,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    prompt (`_ _ _ _`) and guesses in the chat. A guess one typo away, or the answer beside
    one other word ("der Hund", "l'arbre"), scores nothing and is marked *very close* for its
    author; neither it nor any longer message holding the answer reaches the other guessers,
-   only the drawer and those who already know the word. Registered guessers can also react to the
+   only the drawer and those who already know the word. A correct guess is one line in the chat:
+   "Ada got it · 9.1s", with the guess in it ("Ada got it — banana · 9.1s") for those who already
+   know the word. Registered guessers can also react to the
    drawing with one emoji from the corner of the canvas. The turn ends early once
    everyone's guessed correctly. Somebody who joins while the drawing is underway guesses in that turn too -
    the canvas and the masked prompt are already on their screen - and the turn waits for

@@ -256,7 +256,7 @@ export function PromptDisplay({
               title={ui.promptDisplay.hintSpendComesOutOfTurnPoints}
               aria-hidden={hintSpend > 0 ? undefined : true}
             >
-              {ui.promptDisplay.hintSpendTotal({ spent: hintSpend })}
+              {ui.promptDisplay.hintSpend({ spent: hintSpend })}
             </span>
           )}
         </p>

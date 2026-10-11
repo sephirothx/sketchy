@@ -1093,11 +1093,11 @@ export const FR: Catalogue = {
     drawings: "Dessins",
     stayHere: "Rester ici",
     aGreatGameOfDrawing: "Une belle partie de dessin",
-    theRoomTakesTheCrown: "Tout le salon remporte la couronne !",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `${p.winnersCount} joueurs se partagent la couronne !`,
-    takesTheCrown: " remporte la couronne !",
-    shareTheCrown: " se partagent la couronne !",
+    theRoomWins: "Tout le salon gagne !",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} joueurs se partagent la victoire !`,
+    wins: " gagne !",
+    shareTheWin: " se partagent la victoire !",
   },
 
   gameHighlightsPanel: {
@@ -1622,8 +1622,8 @@ export const FR: Catalogue = {
       `Impossible ${/^[aeiouyhàâéèêîôû]/i.test(p.action) ? "d’" : "de "}${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Choisis une case pour la révéler · ${counted(p.cost, { one: "point", other: "points" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Total : ${counted(p.spent, { one: "point", other: "points" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Indices : −${counted(p.spent, { one: "point", other: "points" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Acheter « ${p.letter} » pour ${counted(p.price, { one: "point", other: "points" })}`,
     maskedPrompt: (p: { shape: string }) => `Mot masqué, ${p.shape} lettres`,
@@ -2623,8 +2623,8 @@ export const FR: Catalogue = {
       `${p.drawerNickname} choisit un mot…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Le mot était « ${p.prompt} »`,
-    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
-      `${p.nickname} a trouvé · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; guess: string | null; time: string; points: number | null }) =>
+      `${p.nickname} a trouvé${p.guess === null ? "" : ` — ${p.guess}`} · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} s’est reconnecté`,
     playerDisconnected: (p: { nickname: string }) =>

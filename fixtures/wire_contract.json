@@ -2988,7 +2988,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 66,
+ "protocolVersion": 67,
  "refusal": {
   "codes": [
    "invalid_payload",

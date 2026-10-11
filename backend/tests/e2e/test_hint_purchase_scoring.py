@@ -77,7 +77,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await guesser.locator(".hint-blank").first.click()
             spend_line = guesser.locator(".hint-spend-total")
             await spend_line.wait_for()
-            assert (await spend_line.inner_text()).strip() == "Total: 12 points"
+            assert (await spend_line.inner_text()).strip() == "Hints: −12 points"
             # On credit (R-SCORE-06): the spend comes out of this turn's
             # points, never out of the running score.
             assert await spend_line.get_attribute("title") == (

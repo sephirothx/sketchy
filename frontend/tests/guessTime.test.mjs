@@ -27,12 +27,19 @@ test("a guess time rounds once, so it never reads 60 seconds", () => {
 
 test("the got-it line carries the server's time, formatted like the results card", () => {
   assert.equal(
-    ui.useGameSocketListeners.gotIt({ nickname: "Ada", time: formatGuessTime(3.6), points: 120 }),
+    ui.useGameSocketListeners.gotIt({ nickname: "Ada", guess: null, time: formatGuessTime(3.6), points: 120 }),
     "Ada got it · 3.6s (+120)",
   );
   assert.equal(
-    ui.useGameSocketListeners.gotIt({ nickname: "Ada", time: formatGuessTime(3.6), points: null }),
+    ui.useGameSocketListeners.gotIt({ nickname: "Ada", guess: null, time: formatGuessTime(3.6), points: null }),
     "Ada got it · 3.6s",
+  );
+});
+
+test("a reader who knows the prompt gets the guess in the same line, before the time (#1421)", () => {
+  assert.equal(
+    ui.useGameSocketListeners.gotIt({ nickname: "Ada", guess: "banana", time: formatGuessTime(9.1), points: 268 }),
+    "Ada got it — banana · 9.1s (+268)",
   );
 });
 

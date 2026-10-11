@@ -399,7 +399,7 @@ export const GameOverPage = roomPage(roomHeader() + roomGrid(
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 18px; box-shadow: ${T.shadowRaised}; max-width: 560px; width: 100%; padding: 26px 30px; text-align: center">
       ${confettiDots}
       ${sectionLabel('Game over')}
-      <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px; font-family: ${T.display}; font-weight: 600; font-size: 30px; color: ${T.ink}; margin: 6px 0 2px"><span style="display: inline-flex; color: #E3A008">${icon.crown(26)}</span>Bruno takes the crown!</h1>
+      <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px; font-family: ${T.display}; font-weight: 600; font-size: 30px; color: ${T.ink}; margin: 6px 0 2px"><span style="display: inline-flex; color: #E3A008">${icon.trophy(26)}</span>Bruno wins!</h1>
       <p style="color: ${T.muted}; font-size: 14px; font-weight: 700; margin-bottom: 18px">You finished <strong style="color: ${T.ink}">3rd</strong> with 980 points.</p>
       <div style="display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin-bottom: 16px">
         ${podiumCol(P.yuki, 2, 1180, 74, '#9AA1AC')}

@@ -301,7 +301,9 @@ def messages_to(sio, room, sid: str) -> list[str]:
     for call in sio.emit.await_args_list:
         to = call.kwargs.get("to")
         targets = to if isinstance(to, list) else [to] if to else []
-        broadcast = call.kwargs.get("room") == room.id and call.kwargs.get("skip_sid") != sid
+        skipped = call.kwargs.get("skip_sid")
+        skipped = skipped if isinstance(skipped, list) else [skipped]
+        broadcast = call.kwargs.get("room") == room.id and sid not in skipped
         if sid in targets or broadcast:
             received.append(call.args[0])
     return received

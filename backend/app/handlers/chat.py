@@ -65,6 +65,29 @@ async def _emit_player_chat(
     evidence), and a UUIDv7's random half was 39% of a viewer's wire bytes
     (#869). Only lobby lines carry one, because a lobby report cites the line.
     """
+    visible_to, filtered = await _readers(ctx, room, player, recipients)
+    await _retain(
+        ctx,
+        room,
+        player,
+        payload["text"],
+        message_kind=message_kind,
+        audience=audience,
+        recipient_sids=[*visible_to, *(additional_audience_sids or [])],
+        near_miss_kind=near_miss_kind,
+    )
+    if recipients is None and not filtered:
+        await ctx.sio.emit("chat_message", payload, room=room.id)
+    elif visible_to:
+        await ctx.sio.emit("chat_message", payload, to=visible_to)
+
+
+async def _readers(
+    ctx: HandlerContext, room, player, recipients: list[str] | None
+) -> tuple[list[str], bool]:
+    """Who may read `player`'s words: `recipients` (the connected room when
+    None) minus every seat that blocked the author, who always reads their
+    own. The flag says whether anybody was left out for blocking."""
     blockers = (
         await ctx.block_service.blockers_of(player.user_id)
         if ctx.block_service is not None
@@ -93,9 +116,21 @@ async def _emit_player_chat(
             or players_by_sid.get(candidate_sid) is None
             or players_by_sid[candidate_sid].user_id not in blockers
         ]
-    retention_recipients = list(
-        dict.fromkeys([*visible_to, *(additional_audience_sids or [])])
-    )
+    return visible_to, bool(blockers)
+
+
+async def _retain(
+    ctx: HandlerContext,
+    room,
+    player,
+    text: str,
+    *,
+    message_kind: str,
+    audience: str,
+    recipient_sids: list[str],
+    near_miss_kind: str | None = None,
+) -> None:
+    retention_recipients = list(dict.fromkeys(recipient_sids))
     # Kept only when somebody other than its author received it (#1243): a
     # report cites a line its reporter received, so a line that reached
     # nobody else - alone in a room, or everyone else blocking the author -
@@ -107,16 +142,12 @@ async def _emit_player_chat(
         await ctx.message_retention.record(
             room=room,
             player=player,
-            text=payload["text"],
+            text=text,
             message_kind=message_kind,
             audience=audience,
             recipient_sids=retention_recipients,
             near_miss_kind=near_miss_kind,
         )
-    if recipients is None and not blockers:
-        await ctx.sio.emit("chat_message", payload, room=room.id)
-    elif visible_to:
-        await ctx.sio.emit("chat_message", payload, to=visible_to)
 
 
 async def send_chat(ctx: HandlerContext, sid, data):
@@ -365,28 +396,32 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         return
 
     player.score += points
-    await ctx.sio.emit(
-        "correct_guess", correct_guess_payload(game, player, points), room=room.id
-    )
-    # The receipt and the guesser's own line ride the acknowledgement (#884),
-    # where `you_guessed_correctly` and a chat_message used to follow it. The
-    # line still reaches the prompt-aware room, and is still retained with
-    # the guesser in its audience.
-    line = _chat_line(player, text, correct=True)
-    recipients = ctx.game_flow._privileged_sids(
+    # One line per reader, whoever they are (#1421). The room hears who got
+    # it; the prompt-aware room - the drawer, earlier correct guessers, the
+    # guesser - hears the guess in the same message, where it used to follow
+    # the announcement as a chat line of its own: the result before its
+    # cause, and two lines a guess. Blocking still applies to the words, so a
+    # seat that blocked the guesser hears only who got it. The guess is
+    # retained with exactly the readers it reached.
+    announcement = correct_guess_payload(game, player, points)
+    aware = ctx.game_flow._privileged_sids(
         room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
     )
-    await _emit_player_chat(
+    readers, _ = await _readers(ctx, room, player, [*aware, sid])
+    await _retain(
         ctx,
         room,
         player,
-        line,
-        recipients=recipients,
+        text,
         message_kind="correct_guess",
         audience="prompt_aware",
-        additional_audience_sids=[sid],
+        recipient_sids=readers,
     )
-    answer = {"correct": guessed_receipt(game, player.id), "line": line}
+    await ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers)
+    await ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers)
+    # The receipt rides the acknowledgement (#884), where
+    # `you_guessed_correctly` used to follow the broadcast.
+    answer = {"correct": guessed_receipt(game, player.id)}
 
     await ctx.game_flow._end_turn_if_all_guessed(room)
     return answer
