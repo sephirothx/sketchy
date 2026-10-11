@@ -51,6 +51,8 @@ export const PALETTES = {
     successInk: '#1F7A33',
     successButton: '#2F9E44',      // go-action button fill (Start game)
     successButtonEdge: '#247C34',
+    dangerButton: '#C92A2A',       // the destructive act itself (Suspend…), same in both themes
+    dangerButtonEdge: '#A51D1D',
     warning: '#B45309',
     warningSoft: '#FDF1DC',
     warningEdge: '#EBC98A',
@@ -97,6 +99,8 @@ export const PALETTES = {
     successInk: '#86EFAC',
     successButton: '#2F9E44',      // same in both themes, like primaryEdge
     successButtonEdge: '#247C34',
+    dangerButton: '#C92A2A',       // the destructive act itself (Suspend…), same in both themes
+    dangerButtonEdge: '#A51D1D',
     warning: '#FBBF24',
     warningSoft: 'rgba(251, 191, 36, 0.13)',
     warningEdge: 'rgba(251, 191, 36, 0.4)',
@@ -268,6 +272,8 @@ export const btn = {
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 16px; font-family: ${T.body}; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: ${T.shadow}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   ghost: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: ${T.muted}; border: 0; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 800; min-height: 44px${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
+  danger: (label, opts = {}) =>
+    `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: ${T.dangerButton}; color: #fff; border: 0; border-radius: ${T.radiusSm}; padding: 11px 18px; font-family: ${T.body}; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 ${T.dangerButtonEdge}${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   dangerGhost: (label, opts = {}) =>
     `<button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: ${T.danger}; border: 0; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 800; min-height: 44px${opts.style ? '; ' + opts.style : ''}">${opts.iconL ?? ''}${label}</button>`,
   iconOnly: (svg, label, size = 44) =>

@@ -1312,7 +1312,7 @@ export function ModerationPage() {
                             )
                           }
                         >
-                          Warn player
+                          Warn
                         </button>
                         <button
                           type="button"
