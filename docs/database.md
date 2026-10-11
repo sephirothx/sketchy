@@ -1276,7 +1276,10 @@ produced once lists were deleted outright. The report keeps naming the list it w
 `owner_user_id` (CASCADE) · `concept_id` (CASCADE) · `created_at`. Composite primary key
 on `(owner_user_id, concept_id)`, plus `ix_prompt_takedowns_concept`.
 
-**Which words an owner may not type back in** (R-MOD-11, #1357). A moderator hiding a
+**Which words an owner may not type back in** (R-MOD-11, #1357). A list hidden for its
+words (#1425) writes one row per word it held or showed, for its owner, as if each word
+had been hidden on its own, and its words carry the list's decision byline, so a decision
+reversing the list's reverses them. A moderator hiding a
 prompt writes one row for the owner the report names — whose list may have been deleted
 since — and one for every owner whose lists hold the concept now. A save reads the rows for
 its owner, joined to the hidden versions of those concepts in the languages that share

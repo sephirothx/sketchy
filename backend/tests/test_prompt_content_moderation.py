@@ -1828,3 +1828,117 @@ async def test_a_list_taken_down_through_a_report_drops_its_pending_edition(env)
     assert decided.status_code == 200, decided.text
     async with factory() as session:
         assert UNDER_REVIEW not in await editions_of(session, UUID(created.id))
+
+
+async def test_a_list_hidden_for_its_words_takes_them_down_and_one_hidden_for_its_name_does_not(env):
+    """#1425: hiding a whole list hid the list and no word in it, so its owner
+    pasted the same words into a new list and strangers played them again -
+    the bypass #1020 closed for a single word. The moderator now says what a
+    list is hidden for: its words (the default), which then come back hidden
+    wherever the owner types them, or its name and description, which leaves
+    innocent words theirs to use."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "LBOwner")
+    await register(reporter_http, "LBReporter")
+    moderator = await register(moderator_http, "LBModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+
+    async def hide(prompt_list_id: str, **scope) -> None:
+        report = await reporter_http.post(
+            "/api/prompt-content-reports",
+            json={"promptListId": prompt_list_id, "reason": "hateful_or_abusive", "details": "The list."},
+        )
+        assert report.status_code == 201, report.text
+        decided = await moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+            json={"status": "resolved", "note": "Taken down.", "moderationState": "hidden", **scope},
+        )
+        assert decided.status_code == 200, decided.text
+
+    words = ("slur one", "slur two", "slur three")
+    offensive = await prompts.create_owned(
+        owner["id"], name="Trouble", description="", language="en",
+        prompts=tuple(PromptListEntryInput(answer=word) for word in words),
+    )
+    await published(factory, offensive.id)
+    await hide(offensive.id)  # for its words: the default
+
+    again = await prompts.create_owned(
+        owner["id"], name="Totally new", description="", language="en",
+        prompts=(*(PromptListEntryInput(answer=word) for word in words), PromptListEntryInput(answer="kitten")),
+    )
+    assert {p.answer: p.moderation_state for p in again.prompts} == {
+        "slur one": "hidden", "slur two": "hidden", "slur three": "hidden", "kitten": "active",
+    }
+
+    # Hidden for its title: the words were never the problem.
+    innocent = await prompts.create_owned(
+        owner["id"], name="An offensive title", description="", language="en",
+        prompts=(PromptListEntryInput(answer="teapot"), PromptListEntryInput(answer="garden")),
+    )
+    await published(factory, innocent.id)
+    await hide(innocent.id, scope="presentation")
+    renamed = await prompts.create_owned(
+        owner["id"], name="Kitchen", description="", language="en",
+        prompts=(PromptListEntryInput(answer="teapot"), PromptListEntryInput(answer="garden")),
+    )
+    assert {p.moderation_state for p in renamed.prompts} == {"active"}
+
+
+async def test_a_held_list_hidden_for_its_words_takes_down_the_words_it_showed_too(env):
+    """#1425 from the review queue: the words a held edition showed are taken
+    down even after the owner took them out of the working copy - the
+    edition is what the moderator read - and the queue can hide for the name
+    alone."""
+    new_client, factory, prompts = env
+    owner_http, moderator_http = new_client(), new_client()
+    owner = await register(owner_http, "HeldWordsOwner")
+    moderator = await register(moderator_http, "HeldWordsMod")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    prompt_list = await prompts.create_owned(
+        owner["id"], name="Not fine", description="", language="en",
+        prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="badger")),
+    )
+    held = await prompts.set_owned_publication(owner["id"], prompt_list.id, published=True, under_review=True)
+    # Taken out of the working copy while the edition waits.
+    await prompts.update_owned(
+        owner["id"], prompt_list.id, expected_version=held.version, name="Not fine",
+        description="", prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    current = await moderator_http.get(f"/api/moderation/prompt-lists/{prompt_list.id}")
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{prompt_list.id}",
+        json={"state": "hidden", "note": "Against the rules.", "expectedVersion": current.json()["version"]},
+    )
+    assert decision.status_code == 200, decision.text
+
+    again = await prompts.create_owned(
+        owner["id"], name="Fine now", description="", language="en",
+        prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="badger")),
+    )
+    assert {p.answer: p.moderation_state for p in again.prompts} == {"otter": "hidden", "badger": "hidden"}
+
+    named = await prompts.create_owned(
+        owner["id"], name="A bad name", description="", language="en",
+        prompts=(PromptListEntryInput(answer="heron"),),
+    )
+    held_name = await prompts.set_owned_publication(owner["id"], named.id, published=True, under_review=True)
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{named.id}",
+        json={"state": "hidden", "note": "The name.", "expectedVersion": held_name.version, "scope": "presentation"},
+    )
+    assert decision.status_code == 200, decision.text
+    reused = await prompts.create_owned(
+        owner["id"], name="Birds", description="", language="en",
+        prompts=(PromptListEntryInput(answer="heron"),),
+    )
+    assert reused.prompts[0].moderation_state == "active"
