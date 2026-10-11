@@ -50,7 +50,8 @@ import {
   Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
-import type { OpenPlayerVote } from "../lib/playerVotes";
+import { votesAwaitingMe, type OpenPlayerVote } from "../lib/playerVotes";
+import { useOpenPlayerVotes } from "../hooks/useOpenPlayerVotes";
 import { useFriendInviteStore, type RoomExit } from "../store/friendInviteStore";
 import type { FriendInvite } from "../lib/friends";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -448,11 +449,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   // A vote this seat can still answer keeps the room bar up while the phone's
   // keyboard is: the bar is where the vote lives, and a guesser who typed
-  // through its twenty seconds never saw it (review of #1316).
-  const voteAwaitsMe = roomView === "playing"
-    && restartVote !== null
-    && canCastRestartVote(restartVote, me)
-    && myRestartVote(restartVote, me) === null;
+  // through its twenty seconds never saw it (review of #1316). A kick or AFK
+  // vote's chip lives there too (review of #1447).
+  const openVotes = useOpenPlayerVotes();
+  const voteAwaitsMe = roomView === "playing" && (
+    (restartVote !== null
+      && canCastRestartVote(restartVote, me)
+      && myRestartVote(restartVote, me) === null)
+    || votesAwaitingMe(openVotes).length > 0
+  );
   const room = (
     <div
       className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}${voteAwaitsMe ? " vote-awaits-me" : ""}`}

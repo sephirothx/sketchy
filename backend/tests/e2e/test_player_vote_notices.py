@@ -101,8 +101,19 @@ async def test_a_phone_seat_sees_and_answers_a_kick_and_an_afk_vote():
             await expect(about_me).to_contain_text("A vote to kick you from the room is open.")
             await expect(about_me.get_by_role("button")).to_have_count(0)
 
-            # An AFK vote is its own chip and its own question.
+            # An AFK vote is its own chip and its own question. It opens while
+            # the phone is typing a guess: the keyboard hides the room bar, but
+            # not while a vote waits for this seat - the chip lives there
+            # (review of #1447). The question waits for the keyboard to close.
+            if await drawer.locator(".prompt-choices button").count():
+                await drawer.locator(".prompt-choices button").first.click()
+            field = voter.locator(".chat-input input")
+            await field.focus()
+            await voter.locator(".game-room.guess-focused").wait_for()
             await vote_from_the_list(starter, names[afk_target], "afk")
+            await expect(voter.locator(".room-notice-chip", has_text="AFK 1/3")).to_be_visible()
+            await expect(popover).to_be_hidden()
+            await field.blur()
             await expect(popover).to_contain_text(f"Mark {names[afk_target]} AFK?")
             await popover.get_by_role("button", name="Vote AFK").click()
             await expect(voter.locator(".room-notice-chip", has_text="AFK 2/3")).to_be_visible()
