@@ -433,8 +433,10 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
     )
     readers = _visible(room, player, [*aware, sid], blockers)
-    await ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers)
-    await ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers)
+    await _emit_together(
+        ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers),
+        ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers),
+    )
     await _retain(
         ctx,
         room,
@@ -450,6 +452,20 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
 
     await ctx.game_flow._end_turn_if_all_guessed(room)
     return answer
+
+
+async def _emit_together(*emits) -> None:
+    """Queue every emit's fan-out before yielding once (review of #1442).
+
+    `AsyncManager.emit` creates a send task per recipient and then awaits
+    them, so two emits awaited in turn leave a window between the first
+    audience's packets and the second's - and a turn ending in it reached the
+    second audience ahead of the score its `turn_ended` already held. Started
+    eagerly, each emit runs to its first real wait at once, so both
+    audiences' packets are queued before anything else can run, as a single
+    room-wide emit's always were."""
+    tasks = [asyncio.create_task(emit, eager_start=True) for emit in emits]
+    await asyncio.gather(*tasks)
 
 
 async def buy_hint(ctx: HandlerContext, sid, data):

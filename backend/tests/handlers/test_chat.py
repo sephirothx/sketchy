@@ -1683,3 +1683,66 @@ async def test_a_second_guess_waiting_on_the_lookup_is_judged_after_the_first_wa
     assert sum(call.args[0] == "correct_guess" for call in sio.emit.await_args_list) == 2
     context.timers.cancel_phase_timer(room.id)
     await context.timers.close()
+
+
+async def test_both_correct_guess_fan_outs_are_queued_before_a_turn_can_end_in_between():
+    """Review of #1442, on the real emit path: `AsyncManager.emit` creates a
+    send task per recipient and then awaits them, so the second audience's
+    `correct_guess` used to be queued only after the first's were written. A
+    timer ending the turn in that window put `turn_ended` - its scores
+    already holding the award - ahead of `correct_guess` for every seat that
+    is not prompt-aware, and their clients added the award twice."""
+    import json
+    import re
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    other = room_manager.add_player(room, "Other")
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id, other.id], prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    announced = asyncio.Event()
+    received: dict[str, list[str]] = {}
+
+    class EngineSocket:
+        closed = False
+
+        def __init__(self, name):
+            self.name = name
+            received[name] = []
+
+        async def send(self, pkt):
+            match = re.search(r'\["([a-z_]+)"', json.dumps(pkt.data) if not isinstance(pkt.data, str) else pkt.data)
+            if match:
+                received[self.name].append(match.group(1))
+                if match.group(1) == "correct_guess":
+                    announced.set()
+
+    for player in (drawer, guesser, other):
+        eio_sid = f"eio-{player.nickname}"
+        sio.eio.sockets[eio_sid] = EngineSocket(player.nickname)
+        player.sid = await sio.manager.connect(eio_sid, "/")
+        await sio.enter_room(player.sid, room.id)
+
+    async def timer_fires_once_the_first_is_written():
+        await announced.wait()
+        await context.game_flow._end_turn(room)
+
+    ender = asyncio.create_task(timer_fires_once_the_first_is_written())
+    await sio.handlers["/"]["guess"](guesser.sid, {"text": "panda"})
+    await asyncio.wait_for(ender, 1)
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+    for name, events in received.items():
+        assert "correct_guess" in events and "turn_ended" in events, (name, events)
+        assert events.index("correct_guess") < events.index("turn_ended"), (name, events)
+    context.timers.cancel_phase_timer(room.id)
+    await context.timers.close()
