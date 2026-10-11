@@ -64,7 +64,7 @@
 }
 
 .turn-results-score-change.rank-up {
-  color: var(--success);
+  color: var(--success-ink);
 }
 
 .turn-results-score-change.rank-down {
@@ -98,7 +98,7 @@
    that number is a gain. */
 .turn-results-score-brush {
   display: inline-flex;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .turn-results-score-delta.positive {

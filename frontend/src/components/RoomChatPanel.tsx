@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { MAX_PROMPT_LENGTH } from "../lib/customPrompts";
-import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -94,7 +93,6 @@ export function RoomChatPanel({
   const [prevMessagesCount, setPrevMessagesCount] = useState(messages.length);
   const [guessFlash, setGuessFlash] = useState<GuessFlash | null>(null);
   const [flashSourceId, setFlashSourceId] = useState<string | null>(null);
-  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const draftTextRef = useRef("");
   const listRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -183,8 +181,6 @@ export function RoomChatPanel({
   const newestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
   if (newestMessage && newestMessage.id !== flashSourceId) {
     setFlashSourceId(newestMessage.id);
-    const announcement = chatAnnouncement(newestMessage);
-    if (announcement) setLiveAnnouncement(announcement);
     if (mode === "playing" && canGuess) {
       let flash: GuessFlash | null = null;
       if (newestMessage.close) {
@@ -380,9 +376,6 @@ export function RoomChatPanel({
           </button>
         )}
       </div>
-      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-testid="chat-announcer">
-        {liveAnnouncement}
-      </div>
 
       {(error ?? deliveryError) && (
         <p className="waiting-chat-error" role="alert">{error ?? deliveryError}</p>
@@ -407,10 +400,12 @@ export function RoomChatPanel({
           onSubmit={(event) => void handleSubmit(event)}
         >
           {guessFlash && (
+            // What the flash says is already a line in the log, which a
+            // screen reader reads as it arrives: said again here, every wrong
+            // guess was heard twice (#1423).
             <p
               className={`guess-focus-flash guess-focus-flash-${guessFlash.kind}`}
-              role="status"
-              aria-live="polite"
+              aria-hidden="true"
               data-testid="guess-focus-flash"
             >
               {/* The chip's padding stays outside the text, so a phone can

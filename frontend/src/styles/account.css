@@ -160,7 +160,7 @@
   border: none;
   background: none;
   padding: 0;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 700;
   text-decoration: underline;
@@ -669,7 +669,7 @@
 }
 
 .first-run-guest-row input::placeholder {
-  color: #a29883;
+  color: #776f60;
   font-weight: 500;
 }
 

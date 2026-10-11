@@ -179,12 +179,17 @@ export function PromptDisplay({
         <div className="prompt-choice-card">
           <p className="section-label">{ui.promptDisplay.yourTurn}</p>
           <h2 className="prompt-choice-title">{ui.promptDisplay.pickSomethingDraw}</h2>
+          {/* What a screen reader hears when the turn comes (#1423): the card
+              itself is not live, and nothing said it was this seat's turn. */}
+          <p className="visually-hidden" role="status">
+            {ui.promptDisplay.yourTurnPickAPrompt({ count: promptChoices.length })}
+          </p>
           <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
             {/* Chosen by position, not by text (#1181): the text is how the
                 drawer's language spells the offer. */}
             {promptChoices.map((prompt, index) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
+              <button key={prompt} ref={index === 0 ? focusFirstChoice : undefined} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
                 {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
@@ -305,4 +310,17 @@ export function PromptDisplay({
       )}
     </div>
   );
+}
+
+/** The first prompt takes the focus when the turn comes, on a desktop whose
+    focus is nowhere in particular (#1423): a keyboard player otherwise
+    tabbed from the top of the page to reach a choice with a timer running.
+    Not where the focus is somewhere - typing in the chat - and not on a touch
+    screen, where a focused button raises nothing and steals nothing. */
+function focusFirstChoice(button: HTMLButtonElement | null) {
+  if (!button) return;
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
+  if (window.matchMedia?.("(pointer: coarse)").matches) return;
+  button.focus();
 }

@@ -1634,6 +1634,8 @@ export const PT: Catalogue = {
       counted(p.count, { one: "letra", other: "letras" }),
     yourTurn: "É a tua vez",
     pickSomethingDraw: "Escolhe algo para desenhar",
+    yourTurnPickAPrompt: (p: { count: number }) =>
+      plural(p.count, { one: "É a tua vez: escolhe a tua palavra.", other: `É a tua vez: escolhe uma de ${p.count} palavras.` }),
     autoPicksWhenTimeRunsOut: "Escolhe sozinho quando o tempo acabar.",
     hintSpendLimitReached: "Limite de gasto em pistas atingido",
     hintSpendComesOutOfTurnPoints: "É descontado dos pontos desta vez se adivinhares a palavra.",
@@ -2303,6 +2305,8 @@ export const PT: Catalogue = {
     nextTurn: "Ronda seguinte",
     turnResults: "Resultados da vez",
     turnComplete: "Vez terminada",
+    youScoredThisTurn: (p: { points: number }) =>
+      `Marcaste ${counted(p.points, { one: "ponto", other: "pontos" })}.`,
   },
 
   twoFactorDialog: {
@@ -2571,10 +2575,6 @@ export const PT: Catalogue = {
   timer: {
     n10SecondsRemaining: "Faltam 10 segundos",
     timeIsUp: "Acabou o tempo",
-  },
-  chatAnnouncements: {
-    nicknameGuessedThePrompt: (p: { nickname: string }) =>
-      `${p.nickname} adivinhou a palavra.`,
   },
   canvasSnapshot: {
     drawingOfDownloadPrompt: (p: { downloadPrompt: string }) =>

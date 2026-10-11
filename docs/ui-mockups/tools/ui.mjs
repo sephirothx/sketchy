@@ -26,7 +26,7 @@ export const PALETTES = {
     field: '#FFFFFF',      // text inputs (recessed to the page ground in dark)
     ink: '#292520',          // warm near-black
     muted: '#6F6759',
-    faint: '#A29883',
+    faint: '#776F60',
     line: '#E7DFD2',
     lineStrong: '#D3C8B4',
     flagEdge: 'rgba(41, 37, 32, 0.18)',   // hairline around a flag
@@ -74,7 +74,7 @@ export const PALETTES = {
     field: '#0F172A',      // shipped dark input background (theme-overrides.css)
     ink: '#F8FAFC',
     muted: '#94A3B8',
-    faint: '#64748B',
+    faint: '#8292A7',
     line: '#334155',
     lineStrong: '#475569',
     flagEdge: 'rgba(226, 232, 240, 0.32)',

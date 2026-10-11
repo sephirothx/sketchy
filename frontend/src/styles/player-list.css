@@ -130,7 +130,7 @@
 }
 
 .player-status-drawing {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .player-status-afk {

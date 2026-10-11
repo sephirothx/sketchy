@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { announcementText, chatLineText } from "../src/lib/announcements.ts";
-import { chatAnnouncement } from "../src/lib/chatAnnouncements.ts";
 
 const line = (code, params) => ({
   id: "1",
@@ -79,9 +78,7 @@ test("a code from a newer server renders nothing rather than a broken sentence",
 });
 
 test("a screen reader hears the room's line in the same words", () => {
-  // R-A11Y-03: the live region reads the rendered sentence, not the code.
-  assert.equal(
-    chatAnnouncement(line("joined_as_player", { nickname: "Ada" })),
-    "Ada joined as a player.",
-  );
+  // R-A11Y-03: the chat log is the live region (#1423), and it reads the
+  // rendered sentence, not the code.
+  assert.equal(chatLineText(line("joined_as_player", { nickname: "Ada" })), "Ada joined as a player.");
 });

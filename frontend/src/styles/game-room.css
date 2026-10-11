@@ -859,7 +859,7 @@
 }
 .waiting-custom-prompts > summary {
   align-items: center;
-  color: var(--primary);
+  color: var(--primary-text);
   cursor: pointer;
   display: flex;
   font-size: 14px;
@@ -2317,7 +2317,7 @@
 }
 
 .hint-price {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .hint-price-warning {
@@ -2423,7 +2423,7 @@
   border: 1.5px solid var(--primary-edge-soft);
   border-radius: var(--radius-xs);
   background: var(--card);
-  color: var(--primary);
+  color: var(--primary-text);
   cursor: pointer;
   line-height: 1;
 }
@@ -2585,7 +2585,7 @@
 }
 
 .choosing-prompt-kicker {
-  color: var(--primary);
+  color: var(--primary-text);
   margin: 0 0 6px;
 }
 

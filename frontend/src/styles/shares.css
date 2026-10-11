@@ -33,7 +33,7 @@
 }
 
 .share-pill.has-mine .share-pill-icon {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Its drawer took it out: still there, so the tooltip can say why. */

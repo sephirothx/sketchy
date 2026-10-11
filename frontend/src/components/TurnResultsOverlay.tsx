@@ -130,11 +130,17 @@ export function TurnResultsOverlay({
   return (
     <div
       className="turn-results-overlay"
-      role="status"
-      aria-live="polite"
       aria-labelledby="turn-results-title"
       data-testid="turn-results-overlay"
     >
+      {/* One sentence, not the card: the log already says what the prompt
+          was, and the whole card - every row's place, name and points - was
+          read out after it (#1423). */}
+      <p className="visually-hidden" role="status">
+        {showScores && mine
+          ? `${ui.turnResultsOverlay.turnComplete}. ${ui.turnResultsOverlay.youScoredThisTurn({ points: mine.delta })}`
+          : `${ui.turnResultsOverlay.turnComplete}.`}
+      </p>
       <div className="turn-results-panel">
         <h3 id="turn-results-title" className="section-label">{showScores ? ui.turnResultsOverlay.turnResults : ui.turnResultsOverlay.turnComplete}</h3>
         <p className="turn-results-prompt">

@@ -521,7 +521,7 @@ details.form-section > .form-section-body {
 
 .choice-card-check {
   display: inline-flex;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .choice-card-desc {
@@ -628,7 +628,7 @@ details.form-section > .form-section-body {
   cursor: pointer;
 }
 .m3-switch-hint-link:hover > .m3-switch-hint {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 .m3-switch-label.is-disabled .m3-switch-hint-wrap {
   opacity: 1;

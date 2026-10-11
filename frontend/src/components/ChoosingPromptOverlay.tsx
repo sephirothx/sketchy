@@ -18,9 +18,9 @@ export function ChoosingPromptOverlay({
     <div
       className="choosing-prompt-overlay"
       data-testid="choosing-prompt-status"
-      role="status"
-      aria-live="polite"
     >
+      {/* Not a live region: the chat log says "X is choosing a prompt" as the
+          line arrives, and this card said it a second time (#1423). */}
       <div className="choosing-prompt-card">
         <div className="choosing-prompt-dots" aria-hidden="true">
           <span />

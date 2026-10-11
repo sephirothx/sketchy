@@ -123,7 +123,7 @@
   background: var(--card);
 }
 
-.inbox-kind.is-primary { color: var(--primary); }
+.inbox-kind.is-primary { color: var(--primary-text); }
 .inbox-kind.is-success { color: var(--success-ink); }
 .inbox-kind.is-danger { color: var(--danger); }
 .inbox-kind.is-warm { color: var(--warm-ink); }
