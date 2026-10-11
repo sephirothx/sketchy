@@ -1,6 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
 import { ReportedDrawing } from "../components/ReportedDrawing";
@@ -516,8 +516,16 @@ export function ModerationPage() {
     );
   }, []);
 
+  // Which load is the latest. Each answers for the filter and page it was
+  // asked under, and two can be in flight: one switch of queue, then another,
+  // before the first returns. The older one's answer arriving last put the
+  // open queue under a pressed Closed - and kept it there, since nothing loads
+  // again until the moderator acts. So only the latest load may land.
+  const latestLoad = useRef(0);
+
   const load = useCallback(() => {
     if (!allowed) return;
+    const thisLoad = ++latestLoad.current;
     // The open queues are the pending work, whatever is being viewed: the
     // "N open" chip counts them even while a closed page is on screen.
     const pending = Promise.all([
@@ -548,6 +556,7 @@ export function ModerationPage() {
       showsRecentDecisions ? listClosedCases({ limit: RECENT_DECISIONS, offset: 0 }) : null,
     ])
       .then(([caseResult, banResult, pendingResult, heldResult, galleryResult, recentResult]) => {
+        if (thisLoad !== latestLoad.current) return;
         if (recentResult) setRecent({ players: recentResult.players, content: recentResult.content });
         setIncidents(caseResult.players);
         setContent(caseResult.content);
@@ -568,10 +577,21 @@ export function ModerationPage() {
         );
         setError(null);
       })
-      .catch(fail);
+      .catch((problem) => {
+        if (thisLoad === latestLoad.current) fail(problem);
+      });
   }, [allowed, showingClosed, page, fail, showsRecentDecisions]);
 
   useEffect(load, [load]);
+  // The load a finished decision asks for: the one for the queue on screen
+  // when it finishes, not the one pressed when it began. A decision's
+  // closure keeps the `load` of the render it was clicked in, and a queue
+  // switched meanwhile would have that stale load start last - the one load
+  // allowed to land.
+  const latestLoadFn = useRef(load);
+  useEffect(() => {
+    latestLoadFn.current = load;
+  }, [load]);
 
   // A page is a position in the closed stream and means nothing elsewhere.
   function changeFilter(next: Filter) {
@@ -776,7 +796,7 @@ export function ModerationPage() {
       if (outcome === STEP_UP_ABANDONED) return;
       setMessage(typeof done === "string" ? done : done(outcome));
       setNote((current) => ({ ...current, [id]: "" }));
-      load();
+      latestLoadFn.current();
     } catch (problem) {
       fail(problem);
     } finally {
@@ -916,7 +936,7 @@ export function ModerationPage() {
           // are reading.
           setHeldDetail((current) => (current?.id === id ? null : current));
           setHeldStale((count) => count + 1);
-          load();
+          latestLoadFn.current();
         }
         throw problem;
       }
