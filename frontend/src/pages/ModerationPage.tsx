@@ -755,11 +755,12 @@ export function ModerationPage() {
     done: string | ((outcome: unknown) => string),
     // The note `run` will send, when the caller composed one rather than
     // taking it from the box - the required-note rule is about what reaches
-    // the ledger, not about which field it was typed into.
-    composed?: string,
+    // the ledger, not about which field it was typed into. `false` for a
+    // decision that sends none: hiding a lobby line (#1435, owner's decision).
+    composed?: string | false,
   ) {
     if (busy) return;
-    if (!(composed ?? note[id] ?? "").trim()) {
+    if (composed !== false && !(composed ?? note[id] ?? "").trim()) {
       setError("A note is required, so the decision is not anonymous.");
       return;
     }
@@ -810,7 +811,7 @@ export function ModerationPage() {
     line.sourceAvailable &&
     Boolean(playerCase?.reportedUserId) &&
     line.senderUserId === playerCase?.reportedUserId;
-  const lineNoteKey = playerCase ? `lines:${playerCase.id}` : "lines";
+  const lineKey = playerCase ? `lines:${playerCase.id}` : "lines";
   // The drawing a case is about, while there is one left to erase: the turn
   // a report named, or the one its attached canvas was copied from.
   const erasableReport = playerCase?.reports.find(
@@ -1108,20 +1109,8 @@ export function ModerationPage() {
                           line on its own is often unreadable; the
                           conversation is what a moderator judges. */}
                       {/* The reported player's own lobby lines can be hidden
-                          from every lobby, and shown again (#1435): one note
-                          for the ledger, then a button on each line. */}
-                      {playerCase.evidence.some(hideable) && (
-                        <label className="mod-note mod-line-note">
-                          To hide or show a lobby line again: why (for the ledger)
-                          <input
-                            type="text"
-                            value={note[lineNoteKey] ?? ""}
-                            onChange={(change) =>
-                              setNote((current) => ({ ...current, [lineNoteKey]: change.target.value }))
-                            }
-                          />
-                        </label>
-                      )}
+                          from every lobby, and shown again (#1435): a button
+                          on each line, nothing to fill in first. */}
                       <blockquote className="mod-evidence">
                         {playerCase.evidence.map((line) => (
                           <EvidenceLine
@@ -1134,19 +1123,15 @@ export function ModerationPage() {
                                   type="button"
                                   className="mod-line-toggle"
                                   data-testid="mod-line-toggle"
-                                  disabled={busy === lineNoteKey || !(note[lineNoteKey] ?? "").trim()}
+                                  disabled={busy === lineKey}
                                   onClick={() =>
                                     void act(
-                                      lineNoteKey,
-                                      () =>
-                                        decideLobbyLine(
-                                          line.sourceMessageId,
-                                          !line.hidden,
-                                          (note[lineNoteKey] ?? "").trim(),
-                                        ),
+                                      lineKey,
+                                      () => decideLobbyLine(line.sourceMessageId, !line.hidden),
                                       line.hidden
                                         ? "Shown again in the lobby."
                                         : "Hidden: the lobby shows \"This message was deleted\".",
+                                      false,
                                     )
                                   }
                                 >

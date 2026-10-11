@@ -739,16 +739,14 @@ export function decideGalleryDrawing(
 }
 
 /** Hide a lobby line from every lobby, or show it again (#1435). Only the
-    reported player's own lines in a case; reversible, with a note for the
-    ledger. */
+    reported player's own lines in a case; reversible, and audited. */
 export function decideLobbyLine(
   messageId: string,
   hidden: boolean,
-  note: string,
 ): Promise<{ messageId: string; hidden: boolean }> {
   return apiRequest(`/api/moderation/lobby-messages/${encodeURIComponent(messageId)}`, {
     method: "PATCH",
-    body: { hidden, note },
+    body: { hidden },
   });
 }
 

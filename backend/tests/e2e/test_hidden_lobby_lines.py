@@ -47,7 +47,6 @@ async def test_a_moderator_hides_a_reported_lobby_line_and_shows_it_again():
             await set_role(f"HMod{tag}", UserRole.MODERATOR.value)
             await moderator.goto(f"{BASE_URL}/moderation")
             await moderator.locator(".mod-queue-item", has_text=f"HSpeak{tag}").click()
-            await moderator.locator(".mod-line-note input").fill("Abusive in the lobby")
             toggle = moderator.get_by_test_id("mod-evidence-line").filter(has_text=said).get_by_test_id(
                 "mod-line-toggle"
             )
@@ -65,10 +64,9 @@ async def test_a_moderator_hides_a_reported_lobby_line_and_shows_it_again():
                 assert await placeholder.evaluate("el => getComputedStyle(el).fontStyle") == "italic"
                 await expect(page.locator(".lobby-chat-line", has_text=said)).to_have_count(0)
 
-            # Shown again, with its own note - each decision is ledgered with
-            # why: the words come back where they were.
+            # Shown again, with nothing to fill in: the words come back
+            # where they were.
             await expect(toggle).to_have_text("Show again")
-            await moderator.locator(".mod-line-note input").fill("Hidden by mistake")
             await toggle.click()
             await expect(reporter.locator(".lobby-chat-line", has_text=said)).to_be_visible(timeout=SETTLE_MS)
             await expect(

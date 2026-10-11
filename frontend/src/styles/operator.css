@@ -922,10 +922,6 @@
   cursor: default;
 }
 
-.mod-line-note {
-  margin-bottom: 8px;
-}
-
 .mod-evidence-caption {
   color: var(--faint);
   font-size: 12.5px;

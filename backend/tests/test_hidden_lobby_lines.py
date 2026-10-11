@@ -102,8 +102,8 @@ async def test_a_moderator_hides_the_reported_players_line_and_can_show_it_again
     moderator_http, _, target, theirs, context = await _reported_lobby_line(new_client, factory)
     path = f"/api/moderation/lobby-messages/{theirs.id}"
 
-    assert (await moderator_http.patch(path, json={"hidden": True, "note": " "})).status_code == 422
-    hidden = await moderator_http.patch(path, json={"hidden": True, "note": "Abusive"})
+    # No note asked for (owner's decision): the decision is the whole body.
+    hidden = await moderator_http.patch(path, json={"hidden": True})
     assert hidden.status_code == 200, hidden.text
     assert hidden.json() == {"messageId": str(theirs.id), "hidden": True}
     assert new_client.told == [(str(theirs.id), target["id"], True, None)], "no words go out"
@@ -116,10 +116,10 @@ async def test_a_moderator_hides_the_reported_players_line_and_can_show_it_again
     ]
 
     # Asked twice, it is one decision: nothing more said, nothing more ledgered.
-    assert (await moderator_http.patch(path, json={"hidden": True, "note": "again"})).status_code == 200
+    assert (await moderator_http.patch(path, json={"hidden": True})).status_code == 200
     assert len(new_client.told) == 1
 
-    shown = await moderator_http.patch(path, json={"hidden": False, "note": "A mistake"})
+    shown = await moderator_http.patch(path, json={"hidden": False})
     assert shown.status_code == 200
     assert new_client.told[-1] == (str(theirs.id), target["id"], False, "Something nasty")
     async with factory() as session:
@@ -134,7 +134,7 @@ async def test_a_moderator_hides_the_reported_players_line_and_can_show_it_again
 
     # The context line is somebody else's words: this report cannot hide it.
     other = await moderator_http.patch(
-        f"/api/moderation/lobby-messages/{context.id}", json={"hidden": True, "note": "x"}
+        f"/api/moderation/lobby-messages/{context.id}", json={"hidden": True}
     )
     assert other.status_code == 404
 
@@ -143,7 +143,7 @@ async def test_hiding_is_refused_to_players_without_a_step_up_and_for_ones_own_l
     new_client, factory = env
     moderator_http, reporter_http, _, theirs, _ = await _reported_lobby_line(new_client, factory)
     path = f"/api/moderation/lobby-messages/{theirs.id}"
-    body = {"hidden": True, "note": "x"}
+    body = {"hidden": True}
     assert (await reporter_http.patch(path, json=body)).status_code == 403, "not staff"
 
     # A moderator with no step-up (R-AUTH-21).
@@ -212,8 +212,8 @@ async def test_showing_a_merged_guests_line_again_is_filtered_by_the_account_it_
     )
     assert filed.status_code == 201, filed.text
     path = f"/api/moderation/lobby-messages/{line.id}"
-    assert (await moderator_http.patch(path, json={"hidden": True, "note": "x"})).status_code == 200
+    assert (await moderator_http.patch(path, json={"hidden": True})).status_code == 200
 
     await SqlAlchemyUserRepository(factory).merge_guest_into_account(str(guest_id), account["id"])
-    assert (await moderator_http.patch(path, json={"hidden": False, "note": "y"})).status_code == 200
+    assert (await moderator_http.patch(path, json={"hidden": False})).status_code == 200
     assert new_client.told[-1] == (str(line.id), account["id"], False, "said as a guest")

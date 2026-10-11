@@ -217,21 +217,13 @@ class GalleryReportBody(ControlFreeModel):
 
 
 class LobbyLineDecisionBody(ControlFreeModel):
-    """Hide a lobby line, or show it again (#1435), with a note for the
-    ledger that nobody else reads."""
+    """Hide a lobby line, or show it again (#1435). No note: the line is the
+    reason, the case beside it says why, and a field to fill before every
+    click was friction for nothing (owner's decision)."""
 
     model_config = ConfigDict(extra="forbid")
 
     hidden: bool
-    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
-
-    @field_validator("note")
-    @classmethod
-    def clean_note(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("A decision needs a note.")
-        return cleaned
 
 
 class EraseDrawingBody(ControlFreeModel):
@@ -3780,7 +3772,6 @@ def create_moderation_router(
                             target_id=str(message_id),
                             request_id=request_id,
                             ip_hash=ip_hash,
-                            details={"note": body.note},
                             created_at=now,
                         )
                     )
