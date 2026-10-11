@@ -23,8 +23,6 @@ async def test_a_french_reader_gets_french_first_and_no_english():
         context = await browser.new_context(locale="fr-FR")
         page = await context.new_page()
         fetched: list[str] = []
-        urls: list[str] = []
-        page.on("request", lambda request: urls.append(request.url))
         page.on(
             "request",
             lambda request: fetched.append(CATALOGUE.search(request.url).group(1))
@@ -45,17 +43,25 @@ async def test_a_french_reader_gets_french_first_and_no_english():
             await page.goto(BASE_URL)
             await expect(page.locator("html")).to_have_attribute("lang", "fr")
             assert "fr" in fetched and "en" not in fetched, fetched
-            urls.clear()
-            await page.goto(f"{BASE_URL}/room/NOPE42")
-            await expect(page.locator(f'head link[rel="modulepreload"][href="/{plan["room"][0]}"]')).to_have_count(1)
+
+            # An invite link, opened by somebody arriving fresh: a context of
+            # its own, so nothing the lobby fetched while idle is in its cache
+            # or lands in its count.
+            invited = await browser.new_context(locale="fr-FR")
+            room = await invited.new_page()
+            urls: list[str] = []
+            room.on("request", lambda request: urls.append(request.url))
+            await room.goto(f"{BASE_URL}/room/NOPE42")
+            await expect(room.locator(f'head link[rel="modulepreload"][href="/{plan["room"][0]}"]')).to_have_count(1)
             # And its stylesheets: Vite's loader holds the page's import for them.
             assert any("GameRoomPage-" in path and path.endswith(".css") for path in plan["roomCss"]), plan["roomCss"]
-            await expect(page.locator(f'head link[rel="preload"][as="style"][crossorigin][href="/{plan["roomCss"][0]}"]')).to_have_count(1)
+            await expect(room.locator(f'head link[rel="preload"][as="style"][crossorigin][href="/{plan["roomCss"][0]}"]')).to_have_count(1)
             # Once: Vite's loader reuses the preload rather than asking again.
             sheet = next(path for path in plan["roomCss"] if "GameRoomPage-" in path)
-            await expect(page.locator(f'link[rel="stylesheet"][href$="/{sheet}"]')).to_have_count(1)
+            await expect(room.locator(f'link[rel="stylesheet"][href$="/{sheet}"]')).to_have_count(1)
             assert sum(url.endswith("/" + sheet) for url in urls) == 1, [u for u in urls if u.endswith(".css")]
-            assert "en" not in fetched, fetched
+            assert not any(CATALOGUE.search(url) and "/en-" in url for url in urls), urls
+            await invited.close()
         finally:
             await context.close()
             await browser.close()
