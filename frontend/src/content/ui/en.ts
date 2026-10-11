@@ -1113,11 +1113,11 @@ export const EN = {
     drawings: "Drawings",
     stayHere: "Stay here",
     aGreatGameOfDrawing: "A great game of drawing",
-    theRoomTakesTheCrown: "The room takes the crown!",
-    winnersCountPlayersShareTheCrown:
-      (p: { winnersCount: number }) => `${p.winnersCount} players share the crown!`,
-    takesTheCrown: " takes the crown!",
-    shareTheCrown: " share the crown!",
+    theRoomWins: "The room wins!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} players share the win!`,
+    wins: " wins!",
+    shareTheWin: " share the win!",
   },
 
   gameHighlightsPanel: {
@@ -1643,8 +1643,8 @@ export const EN = {
     couldNotDoAction: (p: { action: string }) => `Could not ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Pick an empty tile to reveal it · ${counted(p.cost, { one: "point", other: "points" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Total: ${counted(p.spent, { one: "point", other: "points" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Hints: −${counted(p.spent, { one: "point", other: "points" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Buy "${p.letter}" for ${counted(p.price, { one: "point", other: "points" })}`,
     maskedPrompt: (p: { shape: string }) => `Masked prompt, ${p.shape} letters`,

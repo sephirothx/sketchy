@@ -1093,11 +1093,11 @@ export const PT: Catalogue = {
     drawings: "Desenhos",
     stayHere: "Ficar aqui",
     aGreatGameOfDrawing: "Um grande jogo de desenho",
-    theRoomTakesTheCrown: "A sala inteira fica com a coroa!",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `${p.winnersCount} jogadores partilham a coroa!`,
-    takesTheCrown: " fica com a coroa!",
-    shareTheCrown: " partilham a coroa!",
+    theRoomWins: "A sala inteira ganha!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} jogadores partilham a vitória!`,
+    wins: " ganha!",
+    shareTheWin: " partilham a vitória!",
   },
 
   gameHighlightsPanel: {
@@ -1621,8 +1621,8 @@ export const PT: Catalogue = {
     couldNotDoAction: (p: { action: string }) => `Não foi possível ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Escolhe uma casa para a revelar · ${counted(p.cost, { one: "ponto", other: "pontos" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Total: ${counted(p.spent, { one: "ponto", other: "pontos" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Pistas: −${counted(p.spent, { one: "ponto", other: "pontos" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Comprar «${p.letter}» por ${counted(p.price, { one: "ponto", other: "pontos" })}`,
     maskedPrompt: (p: { shape: string }) => `Palavra escondida, ${p.shape} letras`,

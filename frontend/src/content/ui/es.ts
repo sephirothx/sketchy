@@ -1093,11 +1093,11 @@ export const ES: Catalogue = {
     drawings: "Dibujos",
     stayHere: "Quedarme aquí",
     aGreatGameOfDrawing: "Una gran partida de dibujo",
-    theRoomTakesTheCrown: "¡La sala se lleva la corona!",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `¡${p.winnersCount} jugadores comparten la corona!`,
-    takesTheCrown: " se lleva la corona!",
-    shareTheCrown: " comparten la corona!",
+    theRoomWins: "¡Gana toda la sala!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `¡${p.winnersCount} jugadores comparten la victoria!`,
+    wins: " gana!",
+    shareTheWin: " comparten la victoria!",
   },
 
   gameHighlightsPanel: {
@@ -1621,8 +1621,8 @@ export const ES: Catalogue = {
     couldNotDoAction: (p: { action: string }) => `No se pudo ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Elige una casilla para revelarla · ${counted(p.cost, { one: "punto", other: "puntos" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Total: ${counted(p.spent, { one: "punto", other: "puntos" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Pistas: −${counted(p.spent, { one: "punto", other: "puntos" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Comprar «${p.letter}» por ${counted(p.price, { one: "punto", other: "puntos" })}`,
     maskedPrompt: (p: { shape: string }) => `Palabra oculta, ${p.shape} letras`,
