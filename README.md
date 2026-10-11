@@ -2073,7 +2073,8 @@ longer search, started by hand, whose failures print a `@reproduce_failure` blob
 `test_live_drawing_differential.py` runs the client's live-drawing decoder in Node
 beside the server's (R-ENG-20), so the backend suite needs `node` (22.12+, as the
 frontend does) on `PATH`; it imports the frontend source directly and needs no
-`npm install`.
+`npm install`. `handlers/test_handler_state_machine.py` plays four people against
+every socket handler, with the game's deadlines on a virtual clock (R-ENG-21).
 
 With `TEST_OWNER_DATABASE_URL` set as well, the suite runs as the application
 role that `TEST_DATABASE_URL` names against a schema the owner migrated - what CI
@@ -2105,7 +2106,7 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python ../scripts/check-coverage.py coverage.json
 
 # A longer, random search through the generated-input suites
-FUZZ_SCALE=20 .venv/bin/pytest -q tests/test_live_drawing_differential.py
+FUZZ_SCALE=20 .venv/bin/pytest -q tests/test_live_drawing_differential.py tests/handlers/test_handler_state_machine.py
 
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
 .venv/bin/ruff check app tests

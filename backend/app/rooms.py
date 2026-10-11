@@ -1161,6 +1161,14 @@ class RoomManager:
         active_players = room.seated_players()
         if not is_spectator and len(active_players) >= room.max_players:
             raise RoomFullError("Room is full")
+        takes_host = not is_spectator and len(active_players) == 0
+        if takes_host:
+            # A spectator holds the role only while nobody seated is left
+            # (`_promote_new_host_if_needed`), and cannot start a game. The
+            # first seat taken after that takes the role over - and off the
+            # spectator, or the room has two hosts (R-ROOM-16).
+            for other in room.players.values():
+                other.is_host = False
         player_id = str(uuid.uuid4())
         player = Player(
             id=player_id,
@@ -1174,7 +1182,7 @@ class RoomManager:
             ),
             avatar_key=None if is_anonymous else avatar_key,
             score=0,
-            is_host=not is_spectator and len(active_players) == 0,
+            is_host=takes_host,
             is_spectator=is_spectator,
             colorblind_safe_colors=colorblind_safe_colors,
             prompt_language=prompt_language,

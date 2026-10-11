@@ -69,6 +69,24 @@ def test_add_player_first_is_host():
     assert p2.is_host is False
 
 
+def test_a_seat_taken_after_a_spectator_inherited_the_room_takes_the_host_role_over():
+    """R-ROOM-16. The last seated player leaving hands the role to a
+    spectator; the next player to sit down takes it from them rather than
+    beside them. Found by the handler state machine (#1465)."""
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    host = rm.add_player(room, "Bob")
+    watcher = rm.add_player(room, "Ann", is_spectator=True)
+    rm.remove_player(room, host.id)
+    assert watcher.is_host is True
+
+    arrival = rm.add_player(room, "Cy")
+
+    assert arrival.is_host is True
+    assert watcher.is_host is False
+    assert [p.nickname for p in room.players.values() if p.is_host] == ["Cy"]
+
+
 def test_registered_player_uses_requested_name_color_or_random_default():
     rm = RoomManager()
     room = rm.create_room(name="Room")

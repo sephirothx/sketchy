@@ -27,8 +27,8 @@ _COMMON = dict(
     # slow machine for being slow.
     deadline=None,
     print_blob=True,
-    # The suites generate deliberately skewed input - mostly malformed frames -
-    # and that is the point, not a smell.
+    # The suites generate deliberately skewed input - mostly malformed frames,
+    # mostly refused commands - and that is the point, not a smell.
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
 )
 
