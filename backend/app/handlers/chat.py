@@ -65,41 +65,11 @@ async def _emit_player_chat(
     evidence), and a UUIDv7's random half was 39% of a viewer's wire bytes
     (#869). Only lobby lines carry one, because a lobby report cites the line.
     """
-    visible_to, filtered = await _readers(ctx, room, player, recipients)
-    await _retain(
-        ctx,
-        room,
-        player,
-        payload["text"],
-        message_kind=message_kind,
-        audience=audience,
-        recipient_sids=[*visible_to, *(additional_audience_sids or [])],
-        near_miss_kind=near_miss_kind,
+    blockers = (
+        await ctx.block_service.blockers_of(player.user_id)
+        if ctx.block_service is not None
+        else frozenset()
     )
-    if recipients is None and not filtered:
-        await ctx.sio.emit("chat_message", payload, room=room.id)
-    elif visible_to:
-        await ctx.sio.emit("chat_message", payload, to=visible_to)
-
-
-async def _readers(
-    ctx: HandlerContext, room, player, recipients: list[str] | None
-) -> tuple[list[str], bool]:
-    """Who may read `player`'s words, and whether anybody was left out for
-    blocking. See `_visible`."""
-    blockers = await _blockers(ctx, player)
-    return _visible(room, player, recipients, blockers), bool(blockers)
-
-
-async def _blockers(ctx: HandlerContext, player) -> frozenset:
-    if ctx.block_service is None:
-        return frozenset()
-    return await ctx.block_service.blockers_of(player.user_id)
-
-
-def _visible(room, player, recipients: list[str] | None, blockers: frozenset) -> list[str]:
-    """`recipients` (the connected room when None) minus every seat that
-    blocked `player`, who always reads their own words."""
     candidate_sids = (
         recipients
         if recipients is not None
@@ -123,21 +93,9 @@ def _visible(room, player, recipients: list[str] | None, blockers: frozenset) ->
             or players_by_sid.get(candidate_sid) is None
             or players_by_sid[candidate_sid].user_id not in blockers
         ]
-    return visible_to
-
-
-async def _retain(
-    ctx: HandlerContext,
-    room,
-    player,
-    text: str,
-    *,
-    message_kind: str,
-    audience: str,
-    recipient_sids: list[str],
-    near_miss_kind: str | None = None,
-) -> None:
-    retention_recipients = list(dict.fromkeys(recipient_sids))
+    retention_recipients = list(
+        dict.fromkeys([*visible_to, *(additional_audience_sids or [])])
+    )
     # Kept only when somebody other than its author received it (#1243): a
     # report cites a line its reporter received, so a line that reached
     # nobody else - alone in a room, or everyone else blocking the author -
@@ -149,12 +107,16 @@ async def _retain(
         await ctx.message_retention.record(
             room=room,
             player=player,
-            text=text,
+            text=payload["text"],
             message_kind=message_kind,
             audience=audience,
             recipient_sids=retention_recipients,
             near_miss_kind=near_miss_kind,
         )
+    if recipients is None and not blockers:
+        await ctx.sio.emit("chat_message", payload, room=room.id)
+    elif visible_to:
+        await ctx.sio.emit("chat_message", payload, to=visible_to)
 
 
 async def send_chat(ctx: HandlerContext, sid, data):
@@ -297,24 +259,6 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
 
     game = room.game
 
-    # Who blocked the guesser, asked before anything is judged (review of
-    # #1442): on a cache miss the lookup waits up to two seconds, and a turn
-    # that ended meanwhile had already counted a correct guess's points in
-    # `turn_ended` when the late `correct_guess` made every client add them
-    # again. So the guess is judged against the seat and the turn as they
-    # stand after the wait - gone with the turn if it moved on, chat if
-    # another guess of this seat's was right meanwhile - and a correct one is
-    # scored and announced with no wait in between.
-    turn_id, phase = game.current_turn_id, game.phase
-    blockers = await _blockers(ctx, player)
-    if (
-        room.game is not game
-        or game.current_turn_id != turn_id
-        or game.phase != phase
-        or room.players.get(player.id) is not player
-    ):
-        return None
-
     # Once a player has already found the prompt this turn, anything else
     # they type could spoil it for players who haven't guessed yet (or
     # just be confusing out-of-context chatter). Keep the rest of their
@@ -421,51 +365,31 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         return
 
     player.score += points
-    # One line per reader, whoever they are (#1421). The room hears who got
-    # it; the prompt-aware room - the drawer, earlier correct guessers, the
-    # guesser - hears the guess in the same message, where it used to follow
-    # the announcement as a chat line of its own: the result before its
-    # cause, and two lines a guess. Blocking still applies to the words, so a
-    # seat that blocked the guesser hears only who got it. The guess is
-    # retained with exactly the readers it reached, after it was announced.
-    announcement = correct_guess_payload(game, player, points)
-    aware = ctx.game_flow._privileged_sids(
+    await ctx.sio.emit(
+        "correct_guess", correct_guess_payload(game, player, points), room=room.id
+    )
+    # The receipt and the guesser's own line ride the acknowledgement (#884),
+    # where `you_guessed_correctly` and a chat_message used to follow it. The
+    # line still reaches the prompt-aware room, and is still retained with
+    # the guesser in its audience.
+    line = _chat_line(player, text, correct=True)
+    recipients = ctx.game_flow._privileged_sids(
         room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
     )
-    readers = _visible(room, player, [*aware, sid], blockers)
-    await _emit_together(
-        ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers),
-        ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers),
-    )
-    await _retain(
+    await _emit_player_chat(
         ctx,
         room,
         player,
-        text,
+        line,
+        recipients=recipients,
         message_kind="correct_guess",
         audience="prompt_aware",
-        recipient_sids=readers,
+        additional_audience_sids=[sid],
     )
-    # The receipt rides the acknowledgement (#884), where
-    # `you_guessed_correctly` used to follow the broadcast.
-    answer = {"correct": guessed_receipt(game, player.id)}
+    answer = {"correct": guessed_receipt(game, player.id), "line": line}
 
     await ctx.game_flow._end_turn_if_all_guessed(room)
     return answer
-
-
-async def _emit_together(*emits) -> None:
-    """Queue every emit's fan-out before yielding once (review of #1442).
-
-    `AsyncManager.emit` creates a send task per recipient and then awaits
-    them, so two emits awaited in turn leave a window between the first
-    audience's packets and the second's - and a turn ending in it reached the
-    second audience ahead of the score its `turn_ended` already held. Started
-    eagerly, each emit runs to its first real wait at once, so both
-    audiences' packets are queued before anything else can run, as a single
-    room-wide emit's always were."""
-    tasks = [asyncio.create_task(emit, eager_start=True) for emit in emits]
-    await asyncio.gather(*tasks)
 
 
 async def buy_hint(ctx: HandlerContext, sid, data):

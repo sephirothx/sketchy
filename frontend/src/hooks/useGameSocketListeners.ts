@@ -156,18 +156,11 @@ export function useGameSocketListeners() {
       store.getState().recordCorrectGuess(payload.playerId, payload.seconds);
       const time = formatGuessTime(payload.seconds);
       const points = store.getState().scoringMode !== "none" ? payload.points : null;
-      // `correct` styles the line as the green got-it event card. A reader
-      // who knows the prompt gets the guess in it: one line, not the result
-      // and then its cause (#1421).
+      // `correct` styles the line as the green got-it event card.
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: ui.useGameSocketListeners.gotIt({
-          nickname: payload.nickname,
-          guess: payload.text ?? null,
-          time,
-          points,
-        }),
+        text: ui.useGameSocketListeners.gotIt({ nickname: payload.nickname, time, points }),
         correct: true,
         system: true,
       });

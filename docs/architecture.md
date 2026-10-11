@@ -1671,9 +1671,9 @@ drawer: draw / undo_stroke      (binary; see wire-protocol.md)
 
 guessers: guess          (volatile, acknowledged; a retry carrying a seen id stops here)
   └─ handlers/chat.py  →  Game.submit_guess
-       ├─ correct  → emit correct_guess (room), with the server's guess time -
-       │             carrying the guess to the prompt-aware seats, one line
-       │             each (#1421); the receipt rides the acknowledgement (#884)
+       ├─ correct  → emit correct_guess (room), with the server's guess time;
+       │             the receipt and the guesser's own line ride the
+       │             guess's acknowledgement (#884)
        ├─ near miss→ the line reaches the prompt-aware seats; the guesser's own
        │             line and the verdict ride the acknowledgement (#884) -
        │             the prompt beside one other word is one; among more, the

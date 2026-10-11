@@ -450,14 +450,12 @@ export interface TurnEndedPayload {
 
 /** `correct_guess`: one seat guessed the prompt. `points` are net of the hints
     it bought; `seconds` is how far into the drawing it guessed, timed by the
-    server — the same number `sync_game` and `turn_ended` carry for it.
-    `text` is the guess, sent only to readers who know the prompt (#1421). */
+    server — the same number `sync_game` and `turn_ended` carry for it. */
 export interface CorrectGuessPayload {
   playerId: string;
   nickname: string;
   points: number;
   seconds: number;
-  text?: string;
 }
 
 /**

@@ -2636,8 +2636,8 @@ export const PL: Catalogue = {
     drawerNicknameIsChoosingAPrompt:
       (p: { drawerNickname: string }) => `${p.drawerNickname} wybiera hasło…`,
     thePromptWasPrompt: (p: { prompt: string }) => `Hasło brzmiało „${p.prompt}”`,
-    gotIt: (p: { nickname: string; guess: string | null; time: string; points: number | null }) =>
-      `${p.nickname} trafia${p.guess === null ? "" : ` — ${p.guess}`} · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} trafia · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} łączy się ponownie`,
     playerDisconnected: (p: { nickname: string }) =>

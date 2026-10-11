@@ -501,9 +501,8 @@ authorization or mutation runs. A parser may name a more specific code.
   momentary *and* confirmed, and the acknowledgement's first job is "it arrived"
   (§ Client-side delivery guarantees). When the guess has a result only the guesser
   sees, it rides the receipt (#884): a correct guess `{correct: {prompt, points,
-  basePoints, hintSpend}}` — what `you_guessed_correctly` used to say; the guess itself
-  reaches its author in `correct_guess`, as it reaches every reader who knows the prompt
-  (#1421, protocol 67) — and a near miss `{line, verdict}`, the guesser's own line and
+  basePoints, hintSpend}, line}` — what `you_guessed_correctly` and the guesser's own
+  chat line used to say — and a near miss `{line, verdict}`, the guesser's own line and
   the room's announcement on it: `guess_very_close`, `guess_some_words_correct`, or - in a
   mixed-language room, where the guess spells the drawing in another seat's language and
   means a different prompt in the guesser's own (#1367, protocol 53) -
@@ -639,12 +638,7 @@ these paths that means a second room, or a game started twice. Instead:
   scored and delivered as a guess whichever event carried it, so chat is never a way
   to put the prompt in front of the other guessers. A guess's own echo - correct, or
   close - reaches spectators only in a room that shows them the prompt (R-SPEC-03,
-  #1281); `correct_guess` still tells the whole room who got it. A correct guess is
-  one message per reader (#1421, protocol 67): the readers its echo may reach - minus
-  any who blocked the guesser, plus the guesser - get `correct_guess` with the guess in
-  `text`, and everyone else gets it without. It used to be the announcement and then
-  the guess as a `chat_message` of its own: the result before its cause, two lines a
-  guess for the drawer and every correct guesser, fourteen a turn with eight players.
+  #1281); `correct_guess` still tells the whole room who got it.
 
   The retry is sent only inside the **scope** the first attempt captured — the same
   connection (`socket.id`), the same room and the same turn — and abandoned otherwise
@@ -1095,7 +1089,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `drawing_shared` | `{turnId, shares, shareWithdrawn}` — one drawing's whole share state after a change (#1430): its sharers by seat token, first first, and whether its drawer took it out, so a client that missed an earlier event converges. It names no actor, because the change may not have come from the room: a share written from history, a pin or the Gallery reaches the room whose recap shows that drawing too. A recorded seat the room cannot place is named by its seat id, which credits nobody by name | room, the drawer included |
 | `drawing_removed` | `{turnId, highlight}` — an administrator erased a drawing this room's recap shows (#1419, R-MOD-22): the client marks the entry `available: false, removed: true`, drops its reactions and shares, and replaces the most-reacted card with `highlight` (`null` when none is left), as a reaction carries it (#871). A recap fetch of it answers `drawing_not_kept` | room |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
-| `correct_guess` | `{playerId, nickname, points, seconds, text?}` — `text` is the guess, sent only to the readers its echo may reach (the drawer, correct guessers, the guesser, spectators where the room shows them the prompt; never a seat that blocked the guesser), each of whom reads one got-it line with the guess in it (#1421). `points` net of the hints the seat bought; `seconds` how far into the drawing it guessed, timed by the server and rounded to tenths ([`presenters.guess_seconds`](../backend/app/presenters.py)). The same number `sync_game`'s `correctGuessers` and `turn_ended`'s `guesses[]` carry for that seat, and the `fastest_guess` and `quickest_average` highlights on `game_ended` are rounded the same way, so the chat line, the players panel, the results card and the highlights agree: each client used to time this event on its own clock, in whole seconds, and one guess read 0:04 in chat and 3.6s on the results card (R-CONN-13) | room |
+| `correct_guess` | `{playerId, nickname, points, seconds}` — `points` net of the hints the seat bought; `seconds` how far into the drawing it guessed, timed by the server and rounded to tenths ([`presenters.guess_seconds`](../backend/app/presenters.py)). The same number `sync_game`'s `correctGuessers` and `turn_ended`'s `guesses[]` carry for that seat, and the `fastest_guess` and `quickest_average` highlights on `game_ended` are rounded the same way, so the chat line, the players panel, the results card and the highlights agree: each client used to time this event on its own clock, in whole seconds, and one guess read 0:04 in chat and 3.6s on the results card (R-CONN-13) | room |
 | `hint_revealed` | `{maskedPrompt, turnId}` — a **timed** checkpoint hint, which answers no command; a bought hint answers in its own acknowledgement (#884) and names no turn, being an answer to something the player just did. `turnId` is the turn the hint belongs to: the loop emits one per seat and the turn can end between two of them, so a client drops a hint for a turn it has already ended rather than re-masking the prompt `turn_ended` revealed (#883) | **per socket**, each seat its own masked prompt |
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
@@ -2635,7 +2629,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (67) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (66) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
