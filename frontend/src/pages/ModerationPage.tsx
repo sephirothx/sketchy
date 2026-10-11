@@ -1290,7 +1290,7 @@ export function ModerationPage() {
                       <>
                         <button
                           type="button"
-                          className="btn btn-secondary"
+                          className="btn btn-warm"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
@@ -1316,7 +1316,7 @@ export function ModerationPage() {
                         </button>
                         <button
                           type="button"
-                          className="mod-danger-button"
+                          className="btn btn-danger"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
