@@ -152,8 +152,9 @@ async def _database():
 
 async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
     """The ring is memory, but the lines were retained: the most recent
-    fifty come back, oldest first, minus what expired, what was said in a
-    room, and what a suspended account said."""
+    fifty come back, oldest first, minus what expired and what was said in
+    a room. What a suspended account said comes back too: a suspension hides
+    nothing on its own (owner's decision on #1435, R-LCHAT-09)."""
     engine, factory = await _database()
     ada, bob, banned = UUID(int=1), UUID(int=2), UUID(int=3)
     try:
@@ -181,10 +182,10 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
         assert await restore_lobby_backlog(log, factory) == LOBBY_CHAT_BACKLOG
 
         held = log.backlog_for()
-        assert [line.text for line in held] == [f"line {i}" for i in range(10, 60)]
+        assert [line.text for line in held] == [f"line {i}" for i in range(11, 60)] + ["still suspended"]
         assert [line.seq for line in held] == list(range(1, LOBBY_CHAT_BACKLOG + 1))
         assert held[0].user_id == str(ada)
-        assert held[0].sent_at == RECENT + timedelta(minutes=10)
+        assert held[0].sent_at == RECENT + timedelta(minutes=11)
         # Every restored line can still be cited: it is the retained row.
         async with factory() as session:
             rows = await recent_lobby_lines(session)
@@ -232,3 +233,43 @@ def test_a_retained_row_with_no_account_behind_it_is_not_restored():
     orphan.sender_user_id = None
     assert log.restore([orphan]) == 0
     assert log.backlog_for() == [] and log.last_seq == 0
+
+
+def test_a_hidden_line_is_sent_without_its_words_and_can_be_shown_again():
+    """A moderator hid it (#1435): it keeps its place and its number, and the
+    wire carries `hidden` and no text - to everybody, its author included."""
+    log = LobbyChatLog()
+    said = say(log, "ada", "something they regret", retained_message_id="msg-1")
+    say(log, "bob", "unrelated", retained_message_id="msg-2")
+
+    assert log.set_hidden("msg-1", True) is True
+    hidden, other = log.backlog_for()
+    assert (hidden.seq, hidden.hidden) == (said.seq, True)
+    assert hidden.payload()["text"] == "" and hidden.payload()["hidden"] is True
+    assert "hidden" not in other.payload()
+
+    assert log.set_hidden("msg-1", False) is True
+    shown = log.backlog_for()[0]
+    assert shown.payload()["text"] == "something they regret" and "hidden" not in shown.payload()
+    assert log.set_hidden("long-gone", True) is False, "only in the clients that kept it"
+
+
+async def test_a_hidden_line_is_still_hidden_after_a_restart():
+    engine, factory = await _database()
+    ada = UUID(int=1)
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=ada, display_name="Ada"))
+            async with session.begin():
+                kept = retained(ada, "fine", at=RECENT)
+                gone = retained(ada, "not fine", at=RECENT + timedelta(minutes=1))
+                gone.hidden_at = RECENT + timedelta(minutes=5)
+                session.add_all([kept, gone])
+        log = LobbyChatLog()
+        assert await restore_lobby_backlog(log, factory) == 2
+        first, second = log.backlog_for()
+        assert (first.hidden, second.hidden) == (False, True)
+        assert second.payload()["text"] == "" and second.retained_message_id == str(gone.id)
+    finally:
+        await engine.dispose()

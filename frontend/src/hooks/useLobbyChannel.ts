@@ -129,14 +129,20 @@ export function useLobbyChannel(): void {
         baseline = true;
         attempt = 0;
         const revisionOf = (value: unknown) => (typeof value === "number" ? value : 0);
-        for (const held of pending.drain({
+        const drained = pending.drain({
           presence: revisionOf(answer.revision),
           rooms: revisionOf(answer.roomsRevision),
           chatSeq: revisionOf(answer.chatSeq),
-        })) {
+        });
+        for (const held of drained) {
           if (held.feed === "presence") usePresenceStore.getState().receiveDelta(held.payload);
           else if (held.feed === "rooms") useRoomsStore.getState().receiveDelta(held.payload);
-          else useLobbyChatStore.getState().receiveLine(held.payload);
+          else if (held.feed === "chat") useLobbyChatStore.getState().receiveLine(held.payload);
+        }
+        // After the lines, so a hide held here finds the line it names
+        // (#1435); only those newer than the baseline survived the drain.
+        for (const held of drained) {
+          if (held.feed === "chatVisibility") useLobbyChatStore.getState().receiveLineChange(held.payload);
         }
         if (
           usePresenceStore.getState().presence.needsResync
@@ -176,7 +182,10 @@ export function useLobbyChannel(): void {
 
     // Held while the baseline is pending; past the buffer's cap a fresh
     // baseline is asked for, since what was held no longer joins onto anything.
-    const holdOrResubscribe = (feed: "presence" | "rooms" | "chat", payload: unknown) => {
+    const holdOrResubscribe = (
+      feed: "presence" | "rooms" | "chat" | "chatVisibility",
+      payload: unknown,
+    ) => {
       if (!pending.hold(feed, payload)) void subscribe();
     };
 
@@ -205,6 +214,18 @@ export function useLobbyChannel(): void {
     // A line before the baseline is usually in the backlog the answer carries;
     // one said after the backlog was read is not, so it is held like the rest
     // and the store's sequence numbers drop the duplicates.
+    // Held while any subscription is in flight (#1435) - the first or a
+    // resync: applied at once, a hide that beat the answer's continuation was
+    // either lost on an empty store or replaced by the older answer. Replayed
+    // after the answer, each against its line's own revision.
+    const onChatLineChanged = (payload: unknown) => {
+      if (cancelled) return;
+      if (!baseline || asking) {
+        holdOrResubscribe("chatVisibility", payload);
+        return;
+      }
+      useLobbyChatStore.getState().receiveLineChange(payload);
+    };
     const onChat = (payload: unknown) => {
       if (cancelled) return;
       if (!baseline) {
@@ -245,6 +266,7 @@ export function useLobbyChannel(): void {
     socket.on("lobby_presence_changed", onPresence);
     socket.on("lobby_rooms_changed", onRooms);
     socket.on("lobby_chat_message", onChat);
+    socket.on("lobby_chat_line_changed", onChatLineChanged);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     document.addEventListener("visibilitychange", onVisibility);
@@ -261,6 +283,7 @@ export function useLobbyChannel(): void {
       socket.off("lobby_presence_changed", onPresence);
       socket.off("lobby_rooms_changed", onRooms);
       socket.off("lobby_chat_message", onChat);
+      socket.off("lobby_chat_line_changed", onChatLineChanged);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       document.removeEventListener("visibilitychange", onVisibility);

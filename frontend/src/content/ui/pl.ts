@@ -1104,11 +1104,11 @@ export const PL: Catalogue = {
     drawings: "Rysunki",
     stayHere: "Zostań tutaj",
     aGreatGameOfDrawing: "Świetna rysunkowa rozgrywka",
-    theRoomTakesTheCrown: "Korona dla całego pokoju!",
-    winnersCountPlayersShareTheCrown:
-      (p: { winnersCount: number }) => `${p.winnersCount} graczy dzieli się koroną!`,
-    takesTheCrown: " zdobywa koronę!",
-    shareTheCrown: " dzielą się koroną!",
+    theRoomWins: "Wygrywa cały pokój!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} graczy dzieli się zwycięstwem!`,
+    wins: " wygrywa!",
+    shareTheWin: " dzielą się zwycięstwem!",
   },
 
   gameHighlightsPanel: {
@@ -1212,6 +1212,7 @@ export const PL: Catalogue = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "Ta wiadomość została usunięta.",
     reportThisLine: (p: { name: string }) => `Zgłoś tę wiadomość (${p.name})`,
     couldNotSendThat: "Nie udało się tego wysłać.",
     chat: "Czat",
@@ -1633,8 +1634,8 @@ export const PL: Catalogue = {
     couldNotDoAction: (p: { action: string }) => `Nie udało się: ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Wybierz puste pole, aby je odsłonić · ${counted(p.cost, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Razem: ${counted(p.spent, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Podpowiedzi: −${counted(p.spent, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Kup „${p.letter}” za ${counted(p.price, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
     maskedPrompt: (p: { shape: string }) => `Ukryte hasło, liczba liter: ${p.shape}`,
@@ -1873,7 +1874,7 @@ export const PL: Catalogue = {
     theLastPlayerSeatWasTaken: "Ostatnie miejsce dla gracza właśnie zostało zajęte, ale nadal możesz oglądać.",
     joinAsASpectator: "dołączenie jako widz",
     joinThisRoom: "dołączenie do tego pokoju",
-    nicknameRule: "Od 3 do 16 znaków: litery, cyfry, łączniki lub podkreślenia. Bez spacji.",
+    nicknameRule: "Od 3 do 16 znaków: litery A–Z, cyfry, łączniki lub podkreślenia. Bez spacji.",
   },
 
   roomFacts: {

@@ -255,6 +255,7 @@ async def test_report_pins_only_messages_the_reporter_received(env):
             "audience": "prompt_aware",
             "nearMissKind": None,
             "role": "cited",
+            "hidden": False,
             "text": "Selected abusive message",
             "messageCreatedAt": now.isoformat(),
             "copiedAt": evidence[0]["copiedAt"],

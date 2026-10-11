@@ -1,6 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
 import { ReportedDrawing } from "../components/ReportedDrawing";
@@ -14,6 +14,7 @@ import {
   createUserBan,
   createUserWarning,
   decideGalleryDrawing,
+  decideLobbyLine,
   eraseDrawing,
   fetchModerationGalleryDrawing,
   fetchReportDrawing,
@@ -423,14 +424,24 @@ the count of reports on its own cannot show. */
 function EvidenceLine({
   line,
   reporterCount,
+  control,
 }: {
   line: IncidentEvidence;
   reporterCount: number;
+  /** Hide or show again, on a lobby line of the reported player's (#1435). */
+  control?: ReactNode;
 }) {
   const cited = line.citedBy?.length ?? 0;
   return (
-    <span className={`mod-evidence-line is-${line.role}`} data-role={line.role}>
-      <strong>{line.senderDisplayName}:</strong> {line.text}
+    <span
+      className={`mod-evidence-line is-${line.role}`}
+      data-role={line.role}
+      data-testid="mod-evidence-line"
+    >
+      <strong>{line.senderDisplayName}:</strong>{" "}
+      <span className={line.hidden ? "mod-evidence-text is-hidden" : "mod-evidence-text"}>{line.text}</span>
+      {line.hidden && <em className="mod-evidence-hidden"> — hidden from the lobby</em>}
+      {control}
       {reporterCount > 1 && cited > 0 && (
         <span className="mod-evidence-cites" data-testid="mod-evidence-cites">
           {cited === reporterCount
@@ -755,11 +766,12 @@ export function ModerationPage() {
     done: string | ((outcome: unknown) => string),
     // The note `run` will send, when the caller composed one rather than
     // taking it from the box - the required-note rule is about what reaches
-    // the ledger, not about which field it was typed into.
-    composed?: string,
+    // the ledger, not about which field it was typed into. `false` for a
+    // decision that sends none: hiding a lobby line (#1435, owner's decision).
+    composed?: string | false,
   ) {
     if (busy) return;
-    if (!(composed ?? note[id] ?? "").trim()) {
+    if (composed !== false && !(composed ?? note[id] ?? "").trim()) {
       setError("A note is required, so the decision is not anonymous.");
       return;
     }
@@ -803,6 +815,14 @@ export function ModerationPage() {
   // Gallery is then a third answer beside warning and suspending, because
   // the drawing may still be on show whatever is decided about the drawer.
   const isAdmin = user?.role === "admin";
+  // A lobby line a moderator may hide or show again (#1435): the reported
+  // player's own, and still kept - an expired line has nothing to hide.
+  const hideable = (line: IncidentEvidence) =>
+    line.audience === "lobby" &&
+    line.sourceAvailable &&
+    Boolean(playerCase?.reportedUserId) &&
+    line.senderUserId === playerCase?.reportedUserId;
+  const lineKey = playerCase ? `lines:${playerCase.id}` : "lines";
   // The drawing a case is about, while there is one left to erase: the turn
   // a report named, or the one its attached canvas was copied from.
   const erasableReport = playerCase?.reports.find(
@@ -1099,12 +1119,37 @@ export function ModerationPage() {
                           and around them what everyone else said, dimmed. A
                           line on its own is often unreadable; the
                           conversation is what a moderator judges. */}
+                      {/* The reported player's own lobby lines can be hidden
+                          from every lobby, and shown again (#1435): a button
+                          on each line, nothing to fill in first. */}
                       <blockquote className="mod-evidence">
                         {playerCase.evidence.map((line) => (
                           <EvidenceLine
                             key={line.sourceMessageId}
                             line={line}
                             reporterCount={playerCase.reporterCount}
+                            control={
+                              hideable(line) ? (
+                                <button
+                                  type="button"
+                                  className="mod-line-toggle"
+                                  data-testid="mod-line-toggle"
+                                  disabled={busy === lineKey}
+                                  onClick={() =>
+                                    void act(
+                                      lineKey,
+                                      () => decideLobbyLine(line.sourceMessageId, !line.hidden),
+                                      line.hidden
+                                        ? "Shown again in the lobby."
+                                        : "Hidden: the lobby shows \"This message was deleted\".",
+                                      false,
+                                    )
+                                  }
+                                >
+                                  {line.hidden ? "Show again" : "Hide"}
+                                </button>
+                              ) : undefined
+                            }
                           />
                         ))}
                       </blockquote>
@@ -1301,7 +1346,7 @@ export function ModerationPage() {
                       <>
                         <button
                           type="button"
-                          className="btn btn-secondary"
+                          className="btn btn-warm"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
@@ -1323,11 +1368,11 @@ export function ModerationPage() {
                             )
                           }
                         >
-                          Warn player
+                          Warn
                         </button>
                         <button
                           type="button"
-                          className="mod-danger-button"
+                          className="btn btn-danger"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
@@ -1378,7 +1423,7 @@ export function ModerationPage() {
                     {reportedGalleryTurnId && (
                       <button
                         type="button"
-                        className="mod-danger-button"
+                        className="btn btn-danger"
                         disabled={busy === playerCase.id}
                         data-testid="gallery-hide-from-report"
                         onClick={() =>
@@ -1425,7 +1470,7 @@ export function ModerationPage() {
                   </label>
                   <button
                     type="button"
-                    className="mod-danger-button"
+                    className="btn btn-danger"
                     disabled={busy === eraseNoteKey || !(note[eraseNoteKey] ?? "").trim()}
                     onClick={() => setConfirmErase(erasableTurnId)}
                   >
@@ -1554,7 +1599,7 @@ export function ModerationPage() {
                     </button>
                     <button
                       type="button"
-                      className="mod-danger-button"
+                      className="btn btn-danger"
                       disabled={busy === contentCase.id}
                       onClick={() =>
                         act(
@@ -1671,7 +1716,7 @@ export function ModerationPage() {
                   </button>
                   <button
                     type="button"
-                    className="mod-danger-button"
+                    className="btn btn-danger"
                     disabled={busy === heldCase.id}
                     onClick={() =>
                       act(
@@ -1766,7 +1811,7 @@ export function ModerationPage() {
                 </button>
                 <button
                   type="button"
-                  className="mod-danger-button"
+                  className="btn btn-danger"
                   disabled={busy === galleryCase.turnId}
                   data-testid="gallery-hide"
                   onClick={() =>
@@ -1838,7 +1883,7 @@ export function ModerationPage() {
                   <div className="mod-actions">
                     <button
                       type="button"
-                      className="mod-danger-button"
+                      className="btn btn-success"
                       disabled={busy === banCase.id}
                       onClick={() =>
                         act(

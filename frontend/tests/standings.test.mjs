@@ -7,7 +7,7 @@ import {
   MAX_NAMED_WINNERS,
   competitionRanks,
   ENTRANCE_STAGGER_MS,
-  crownOutcome,
+  winOutcome,
   entranceDelays,
   hasPreviousOrder,
   placementLabel,
@@ -55,19 +55,19 @@ test("the client agrees with the server's recorded places", () => {
   assert.deepEqual(competitionRanks([400, 300, 300, 100]), [1, 2, 2, 4]);
 });
 
-test("one winner is crowned, several share the crown", () => {
-  assert.equal(crownOutcome(1), "one");
-  assert.equal(crownOutcome(2), "shared");
-  assert.equal(crownOutcome(MAX_NAMED_WINNERS), "shared");
+test("one winner wins, several share the win", () => {
+  assert.equal(winOutcome(1), "one");
+  assert.equal(winOutcome(2), "shared");
+  assert.equal(winOutcome(MAX_NAMED_WINNERS), "shared");
 });
 
 test("past a few winners the headline counts them instead of listing them", () => {
-  assert.equal(crownOutcome(MAX_NAMED_WINNERS + 1), "many");
-  assert.equal(crownOutcome(16), "many");
+  assert.equal(winOutcome(MAX_NAMED_WINNERS + 1), "many");
+  assert.equal(winOutcome(16), "many");
 });
 
-test("a game with nobody to crown falls back to the room", () => {
-  assert.equal(crownOutcome(0), "room");
+test("a game with no winner falls back to the room", () => {
+  assert.equal(winOutcome(0), "room");
 });
 
 test("the first turn of a game moves no rows, though everyone ranked first", () => {

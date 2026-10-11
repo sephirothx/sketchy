@@ -4,6 +4,7 @@ import {
   EMPTY_LOBBY_CHAT,
   applyChatBacklog,
   applyChatLine,
+  applyLineVisibility,
   type LobbyChatState,
 } from "../lib/lobbyChat";
 
@@ -14,6 +15,8 @@ interface LobbyChatStore {
   receiveBacklog: (payload: unknown, owner: string | null) => void;
   /** Append one line the channel delivered, unless it is one we hold. */
   receiveLine: (payload: unknown) => void;
+  /** A moderator hid a line or showed it again (#1435). */
+  receiveLineChange: (payload: unknown) => void;
   /** Back to nothing, on leaving the lobby. Not on losing the socket: the
   lines are history, and stay drawn until a new answer replaces them. */
   reset: () => void;
@@ -32,6 +35,11 @@ export const useLobbyChatStore = create<LobbyChatStore>((set) => ({
   receiveLine: (payload) =>
     set((state) => {
       const next = applyChatLine(state.chat, payload);
+      return next === state.chat ? state : { chat: next };
+    }),
+  receiveLineChange: (payload) =>
+    set((state) => {
+      const next = applyLineVisibility(state.chat, payload);
       return next === state.chat ? state : { chat: next };
     }),
   reset: () => set({ chat: EMPTY_LOBBY_CHAT }),

@@ -4,10 +4,10 @@ import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import type { ScoreEntry, ScoringMode } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import { competitionRanks, crownOutcome } from "../lib/standings";
+import { competitionRanks, winOutcome } from "../lib/standings";
 import { Avatar } from "./ui/Avatar";
 import { SectionLabel } from "./ui/Card";
-import { BrushIcon, CrownIcon, TimerRing, TrophyIcon } from "./icons";
+import { BrushIcon, TimerRing, TrophyIcon } from "./icons";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -79,10 +79,10 @@ export function GameEndOverlay({
   const myIndex = scores.findIndex((score) => score.playerId === myPlayerId);
   const placement = myIndex >= 0 ? ranks[myIndex] : 1;
   const myScore = myIndex >= 0 ? scores[myIndex].score : null;
-  // A shared first has no single winner to crown, and saying otherwise would
+  // A shared first has no single winner to name, and saying otherwise would
   // contradict the two golds in the standings directly below.
   const winners = scores.filter((_score, index) => ranks[index] === 1);
-  const crown = crownOutcome(winners.length);
+  const win = winOutcome(winners.length);
   const podium = scores.slice(0, 3);
   // Silver · gold · bronze, the classic arrangement.
   const podiumOrder = podium.length === 3 ? [1, 0, 2] : podium.length === 2 ? [1, 0] : [0];
@@ -95,16 +95,18 @@ export function GameEndOverlay({
       <SectionLabel>{ui.gameEndOverlay.gameOver}</SectionLabel>
       <h1 id="game-end-title">
         {scoringMode !== "none" && (
-          <span className="game-end-crown" aria-hidden="true">
-            <CrownIcon size={26} />
+          // The trophy the Highlights use, not a crown: the gold crown is the
+          // host's mark wherever players are listed (#1421, GLOSSARY).
+          <span className="game-end-trophy" aria-hidden="true">
+            <TrophyIcon size={26} />
           </span>
         )}
         {scoringMode === "none"
           ? ui.gameEndOverlay.aGreatGameOfDrawing
-          : crown === "room"
-            ? ui.gameEndOverlay.theRoomTakesTheCrown
-            : crown === "many"
-              ? ui.gameEndOverlay.winnersCountPlayersShareTheCrown({ winnersCount: winners.length })
+          : win === "room"
+            ? ui.gameEndOverlay.theRoomWins
+            : win === "many"
+              ? ui.gameEndOverlay.winnersCountPlayersShareTheWin({ winnersCount: winners.length })
               : <>
                   {winners.map((winner, index) => (
                     <span key={winner.playerId}>
@@ -117,7 +119,7 @@ export function GameEndOverlay({
                       </span>
                     </span>
                   ))}
-                  {crown === "one" ? ui.gameEndOverlay.takesTheCrown : ui.gameEndOverlay.shareTheCrown}
+                  {win === "one" ? ui.gameEndOverlay.wins : ui.gameEndOverlay.shareTheWin}
                 </>}
       </h1>
       {scoringMode !== "none" ? (

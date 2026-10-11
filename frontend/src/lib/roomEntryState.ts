@@ -26,27 +26,33 @@ const NICKNAME_CHARACTER = /^[a-zA-Z0-9_-]$/;
  * the characters kept before it, so it stays after what was just typed rather
  * than jumping to the end. Past the length limit it is the characters just
  * inserted - those before the caret - that give way, as with `maxLength`,
- * rather than the end of a name that was already there.
+ * rather than the end of a name that was already there. A letter that folds
+ * to two gives way whole: half of "ß" is not the letter, and keeping "s" would
+ * make the name depend on how it was entered (review of #1441).
  */
 export function keepNameCharacters(raw: string, caret: number = raw.length): { value: string; caret: number } {
-  let kept = "";
-  let keptBeforeCaret = 0;
+  // Each source letter's fold, so the limit removes letters, not halves.
+  const before: string[] = [];
+  const after: string[] = [];
   for (let index = 0; index < raw.length; index += 1) {
-    const character = raw[index];
-    if (!NICKNAME_CHARACTER.test(character)) continue;
-    kept += character;
-    if (index < caret) keptBeforeCaret = kept.length;
+    const folded = foldNameCharacter(raw[index]);
+    if (folded) (index < caret ? before : after).push(folded);
   }
-  const excess = kept.length - MAX_NICKNAME_LENGTH;
-  if (excess <= 0) return { value: kept, caret: keptBeforeCaret };
+  const length = (pieces: string[]) => pieces.reduce((sum, piece) => sum + piece.length, 0);
+  const keptBeforeCaret = length(before);
+  let excess = keptBeforeCaret + length(after) - MAX_NICKNAME_LENGTH;
+  if (excess <= 0) return { value: before.join("") + after.join(""), caret: keptBeforeCaret };
   if (keptBeforeCaret < excess) {
-    const value = kept.slice(0, MAX_NICKNAME_LENGTH);
+    let value = "";
+    for (const piece of [...before, ...after]) {
+      if (value.length + piece.length > MAX_NICKNAME_LENGTH) break;
+      value += piece;
+    }
     return { value, caret: Math.min(keptBeforeCaret, value.length) };
   }
-  return {
-    value: kept.slice(0, keptBeforeCaret - excess) + kept.slice(keptBeforeCaret),
-    caret: keptBeforeCaret - excess,
-  };
+  while (excess > 0) excess -= before.pop()!.length;
+  const kept = before.join("");
+  return { value: kept + after.join(""), caret: kept.length };
 }
 
 /**
@@ -59,10 +65,44 @@ export function keepNameCharacters(raw: string, caret: number = raw.length): { v
 export function nameCharactersToInsert(data: string, room: number): string {
   let kept = "";
   for (const character of data) {
-    if (kept.length >= room) break;
-    if (NICKNAME_CHARACTER.test(character)) kept += character;
+    const folded = foldNameCharacter(character);
+    // Whole or not at all: "ß" is "ss", and half of it is not the letter.
+    if (kept.length + folded.length > room) break;
+    kept += folded;
   }
   return kept;
+}
+
+/** Letters the decomposition below cannot reach: they are letters of their
+    own, not a base letter with a mark on it, so each is written the way its
+    language writes it in plain letters. */
+const FOLDED_LETTERS: Record<string, string> = {
+  "ł": "l", "Ł": "L",
+  "ß": "ss", "ẞ": "SS",
+  "ø": "o", "Ø": "O",
+  "æ": "ae", "Æ": "AE",
+  "œ": "oe", "Œ": "OE",
+  "đ": "d", "Đ": "D",
+  "ı": "i",
+};
+
+/**
+ * One character of a name, as the name rule's letters (#1420): itself if it
+ * is one already; a letter with an accent as its letter ("é" → "e", "Ł" →
+ * "L"); "ß" as "ss" and the like; anything else as nothing. The rule stays
+ * plain ASCII - presence, mentions and the reserved names all compare on it -
+ * but "Łukasz" typed on a Polish keyboard was "ukasz", with nothing said.
+ * A combining mark typed on its own, after its letter, is the nothing.
+ */
+export function foldNameCharacter(character: string): string {
+  if (NICKNAME_CHARACTER.test(character)) return character;
+  const named = FOLDED_LETTERS[character];
+  if (named) return named;
+  let folded = "";
+  for (const part of character.normalize("NFD")) {
+    if (NICKNAME_CHARACTER.test(part)) folded += part;
+  }
+  return folded;
 }
 
 /** Mirrors the server rule so the form can object before a round trip. */

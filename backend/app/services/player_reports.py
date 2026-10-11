@@ -17,6 +17,8 @@ construction. What is left in common is the writing, which is what lives here
 """
 from __future__ import annotations
 
+import os
+
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -54,7 +56,23 @@ from app.rooms import Room
 # would have buried every genuine report behind them. The address bucket is
 # the one REST always charged; the account bucket is what an address that
 # changes cannot reset.
-REPORTS_PER_ADDRESS = 10
+def _address_limit() -> int:
+    """Reports per address per hour: `REPORT_ADDRESS_LIMIT`, 10 unset.
+
+    Configurable like the profile and auth limits, for their reason: every
+    browser of a test harness is one loopback address, and the end-to-end
+    suite files more reports in an hour than one household would. The
+    account bucket stays fixed - it is the one an address that changes
+    cannot reset, and each test reports from accounts of its own."""
+    raw = os.environ.get("REPORT_ADDRESS_LIMIT", "").strip()
+    try:
+        value = int(raw) if raw else 10
+    except ValueError:
+        return 10
+    return value if value > 0 else 10
+
+
+REPORTS_PER_ADDRESS = _address_limit()
 REPORTS_PER_ACCOUNT = 10
 REPORT_WINDOW_SECONDS = 3600
 

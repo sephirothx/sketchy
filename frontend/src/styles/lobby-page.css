@@ -1123,6 +1123,13 @@
 
 /* A margin note, not part of the message: small, quiet, and out at the edge
    so a long line wraps under the name rather than under the time. */
+/* A line a moderator hid (#1435): the app's words, not a player's - italic
+   and muted, so it cannot pass for somebody typing "This message was deleted". */
+.lobby-chat-deleted {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .lobby-chat-time {
   flex: 0 0 auto;
   margin-left: auto;

@@ -1093,11 +1093,11 @@ export const NL: Catalogue = {
     drawings: "Tekeningen",
     stayHere: "Hier blijven",
     aGreatGameOfDrawing: "Een geweldig tekenspel",
-    theRoomTakesTheCrown: "De hele kamer pakt de kroon!",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `${p.winnersCount} spelers delen de kroon!`,
-    takesTheCrown: " pakt de kroon!",
-    shareTheCrown: " delen de kroon!",
+    theRoomWins: "De hele kamer wint!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} spelers delen de overwinning!`,
+    wins: " wint!",
+    shareTheWin: " delen de overwinning!",
   },
 
   gameHighlightsPanel: {
@@ -1197,6 +1197,7 @@ export const NL: Catalogue = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "Dit bericht is verwijderd.",
     reportThisLine: (p: { name: string }) => `Deze regel van ${p.name} melden`,
     couldNotSendThat: "Dat kon niet verstuurd worden.",
     chat: "Chat",
@@ -1621,8 +1622,8 @@ export const NL: Catalogue = {
       `Dat is niet gelukt: ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Kies een leeg vakje om het te onthullen · ${counted(p.cost, { one: "punt", other: "punten" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Totaal: ${counted(p.spent, { one: "punt", other: "punten" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Hints: −${counted(p.spent, { one: "punt", other: "punten" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `„${p.letter}” kopen voor ${counted(p.price, { one: "punt", other: "punten" })}`,
     maskedPrompt: (p: { shape: string }) => `Verborgen woord, ${p.shape} letters`,
@@ -1865,7 +1866,7 @@ export const NL: Catalogue = {
     theLastPlayerSeatWasTaken: "De laatste spelersplek is net bezet, maar je kunt nog kijken.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinThisRoom: "deze kamer in gaan",
-    nicknameRule: "Gebruik 3–16 tekens: letters, cijfers, streepjes of lage streepjes. Geen spaties.",
+    nicknameRule: "Gebruik 3–16 tekens: letters A–Z, cijfers, streepjes of lage streepjes. Geen spaties.",
   },
 
   roomFacts: {

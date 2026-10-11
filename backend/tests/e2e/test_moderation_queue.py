@@ -169,10 +169,11 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await moderator_page.locator(
                 '.mod-filter-pill[aria-pressed="true"]', has_text="Closed"
             ).wait_for()
-            await moderator_page.locator('[data-testid="mod-decision"]').wait_for()
-            # Retried, not sampled (R-ENG-09): the decision on screen when the
-            # wait returns may still be the one the click left there.
+            # Waited for, not read once: the queue is the whole server's, and
+            # a case another test just decided can still be on screen - with
+            # a decision of its own - when this one's is asked for.
             await expect(moderator_page.locator(".mod-case h1")).to_have_text(names[drawer])
+            await expect(moderator_page.locator('[data-testid="mod-decision"]')).to_be_visible()
         finally:
             for context in contexts:
                 await context.close()

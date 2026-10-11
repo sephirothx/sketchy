@@ -83,6 +83,7 @@ from app.security_headers import (
     public_origin,
 )
 from app.handlers import register_all_handlers
+from app.handlers.lobby import announce_lobby_line_visibility
 from app.handlers.shares import erase_from_recaps, refresh_recaps
 from app.logging_config import configure_logging
 from app.auth.retention import (
@@ -669,9 +670,9 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
 
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
-    # What they said in the lobby goes with the account, the way their seat
-    # does; the retained copy stays for the report that may have caused this.
-    handler_context.lobby_chat.drop_author(user_id)
+    # What they said in the lobby stays (owner's decision, #1435): a moderator
+    # hides lines one at a time, case by case, and a suspension does not take
+    # every line its account ever said with it (R-LCHAT-09).
     # Marked before even reading what to tell them: that read is an await like
     # any other, and the account is banned already by the time this is called.
     with handler_context.ending(_sockets_of(user_id)) as sids:
@@ -722,6 +723,20 @@ async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
     """A share written from history, a pin or the Gallery reaches the room
     whose recap shows that drawing (R-SHARE-07)."""
     await refresh_recaps(handler_context, turn_ids)
+
+
+async def announce_lobby_line_changed(
+    message_id: str, author_user_id: str, hidden: bool, text: str | None
+) -> None:
+    """A moderator hid a lobby line or showed it again; every open lobby
+    replaces it in place (#1435, R-LCHAT-09)."""
+    await announce_lobby_line_visibility(
+        handler_context,
+        retained_message_id=message_id,
+        author_user_id=author_user_id,
+        hidden=hidden,
+        text=text,
+    )
 
 
 async def erase_from_live_recaps(turn_id: str) -> None:
@@ -1119,6 +1134,7 @@ api.include_router(
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
         on_drawing_erased=erase_from_live_recaps,
+        on_lobby_line_changed=announce_lobby_line_changed,
         flush_retained_messages=(
             handler_context.message_retention.flush
             if handler_context.message_retention is not None

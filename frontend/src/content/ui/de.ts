@@ -1093,11 +1093,11 @@ export const DE: Catalogue = {
     drawings: "Zeichnungen",
     stayHere: "Hierbleiben",
     aGreatGameOfDrawing: "Ein tolles Zeichenspiel",
-    theRoomTakesTheCrown: "Der ganze Raum holt sich die Krone!",
-    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
-      `${p.winnersCount} Spieler teilen sich die Krone!`,
-    takesTheCrown: " holt sich die Krone!",
-    shareTheCrown: " teilen sich die Krone!",
+    theRoomWins: "Der ganze Raum gewinnt!",
+    winnersCountPlayersShareTheWin: (p: { winnersCount: number }) =>
+      `${p.winnersCount} Spieler teilen sich den Sieg!`,
+    wins: " gewinnt!",
+    shareTheWin: " teilen sich den Sieg!",
   },
 
   gameHighlightsPanel: {
@@ -1197,6 +1197,7 @@ export const DE: Catalogue = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "Diese Nachricht wurde gelöscht.",
     reportThisLine: (p: { name: string }) => `Diese Zeile von ${p.name} melden`,
     couldNotSendThat: "Das konnte nicht gesendet werden.",
     chat: "Chat",
@@ -1621,8 +1622,8 @@ export const DE: Catalogue = {
       `Das hat nicht geklappt: ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
       `Wähle ein leeres Feld zum Aufdecken · ${counted(p.cost, { one: "Punkt", other: "Punkte" })}`,
-    hintSpendTotal: (p: { spent: number }) =>
-      `Gesamt: ${counted(p.spent, { one: "Punkt", other: "Punkte" })}`,
+    hintSpend: (p: { spent: number }) =>
+      `Hinweise: −${counted(p.spent, { one: "Punkt", other: "Punkte" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `„${p.letter}“ für ${counted(p.price, { one: "Punkt", other: "Punkte" })} kaufen`,
     maskedPrompt: (p: { shape: string }) => `Verdeckter Begriff, ${p.shape} Buchstaben`,
@@ -1865,7 +1866,7 @@ export const DE: Catalogue = {
     theLastPlayerSeatWasTaken: "Der letzte Spielerplatz wurde gerade vergeben, aber du kannst noch zuschauen.",
     joinAsASpectator: "als Zuschauer beitreten",
     joinThisRoom: "diesem Raum beitreten",
-    nicknameRule: "Nutze 3–16 Zeichen: Buchstaben, Ziffern, Bindestriche oder Unterstriche. Keine Leerzeichen.",
+    nicknameRule: "Nutze 3–16 Zeichen: Buchstaben A–Z, Ziffern, Bindestriche oder Unterstriche. Keine Leerzeichen.",
   },
 
   roomFacts: {

@@ -749,9 +749,9 @@ export const ModerationPage = `
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
         ${btn.ghost('Back to operations', { iconL: icon.back(14) })}
         <div style="display: flex; align-items: center; gap: 8px">
-          ${btn.ghost('Dismiss')}
-          ${btn.secondary('Warn player')}
-          <button type="button" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.danger}; border-radius: ${T.radiusSm}; color: ${T.danger}; font-family: ${T.body}; font-size: 14px; font-weight: 800; padding: 10px 16px; min-height: 44px">Suspend…</button>
+          ${btn.success('Dismiss')}
+          ${btn.warm('Warn')}
+          ${btn.danger('Suspend…')}
         </div>
       </div>
     </main>

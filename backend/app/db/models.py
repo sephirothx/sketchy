@@ -846,7 +846,7 @@ class AuditEvent(Base):
         CheckConstraint(
             "target_type IS NULL OR target_type IN "
             "('user', 'prompt_list', 'prompt_version', 'room', 'app_config', "
-            "'bug_report', 'drawing')",
+            "'bug_report', 'drawing', 'lobby_message')",
             name="ck_audit_events_target_type",
         ),
         Index("ix_audit_events_target", "target_type", "target_id"),
@@ -1099,6 +1099,11 @@ class RoomMessage(Base):
             "audience <> 'lobby' OR message_kind = 'chat'",
             name="ck_room_messages_lobby_is_chat",
         ),
+        # Only a lobby line can be hidden: room chat ends with its room.
+        CheckConstraint(
+            "hidden_at IS NULL OR audience = 'lobby'",
+            name="ck_room_messages_hidden_lobby_only",
+        ),
         Index("ix_room_messages_expires_at", "expires_at"),
         # No index on (game_id, turn_id): no read filters messages by game or
         # turn, and neither is a foreign key a delete would walk. It was the
@@ -1166,6 +1171,11 @@ class RoomMessage(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # A moderator hid this lobby line (#1435, R-LCHAT-09): every lobby shows
+    # "This message was deleted" in its place, and nobody is sent its text -
+    # the author included. Reversible, which is why it is a stamp and not a
+    # deletion; the text stays for the report and its thirty days.
+    hidden_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class PlayerReportMessageEvidence(Base):

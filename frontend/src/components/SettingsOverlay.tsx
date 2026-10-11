@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { emitWithAck, socket } from "../lib/socket";
-import { MAX_NICKNAME_LENGTH, nicknameError, typedNameError } from "../lib/roomEntryState";
+import { nicknameError, typedNameError } from "../lib/roomEntryState";
 import { useNameField } from "../hooks/useNameField";
 import { flushSettingsSync, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail } from "../lib/accountRecovery";
@@ -529,6 +529,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
   const [draftName, setDraftName] = useState(user?.displayName ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
+  // The name tag's rule for a guest's rename too (#1420, R-UX-13): it took
+  // "José" as typed, for the server to refuse.
+  const { ref: displayNameRef, onChange: onDisplayNameChange } = useNameField((value) => {
+    setDraftName(value);
+    setNameError(null);
+  });
   const [pictureBusy, setPictureBusy] = useState(false);
   const [pictureError, setPictureError] = useState<string | null>(null);
   // A chosen file opens the crop dialog; the dialog uploads what was framed.
@@ -774,18 +780,15 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                 <>
                   <input
                     id="settings-display-name"
+                    ref={displayNameRef}
                     type="search"
                     inputMode="text"
                     value={draftName}
                     autoFocus
-                    onChange={(event) => {
-                      setDraftName(event.target.value);
-                      setNameError(null);
-                    }}
+                    onChange={onDisplayNameChange}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") void saveDisplayName();
                     }}
-                    maxLength={MAX_NICKNAME_LENGTH}
                     autoComplete="nickname"
                     autoCapitalize="off"
                     autoCorrect="off"
