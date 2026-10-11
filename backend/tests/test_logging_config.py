@@ -237,10 +237,15 @@ def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
         # What a dual-stack listener reports for an IPv4 client, and NAT64.
         "::ffff:10.0.0.6:0 - accepted",
         "64:ff9b::192.0.2.33 connected",
+        # Followed by a colon, as `address: reason` is written.
+        "Blocked 2001:db8::1: too many",
+        "connect to 2001:db8::1:443: refused",
+        "::ffff:203.0.113.9: refused",
+        "[2001:db8::1]: closed",
     ):
         masked = redact(text)
         assert "[address]" in masked, masked
-        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b")), masked
+        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b", ".113", "]]")), masked
     for text in (
         "took 12:34:56",
         "version 1.2.3",

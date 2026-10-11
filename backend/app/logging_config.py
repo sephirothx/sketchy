@@ -116,8 +116,10 @@ _IPV4 = re.compile(r"(?<![\w.])(?P<ip>(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?(?!\w
 # Bracketed or bare, ending in hex or - IPv4-mapped (::ffff:a.b.c.d, what a
 # dual-stack listener reports for an IPv4 client) or NAT64 - a dotted quad.
 _IPV6 = re.compile(
-    r"(?<![\w:.])\[?(?P<ip>(?:[0-9A-Fa-f]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{0,4}))"
-    r"(?:%[\w.]+)?\]?(?::\d{1,5})?(?![\w:])"
+    # The last group is empty only after `::`, and a colon may follow unless
+    # hex does: `2001:db8::1: refused` is an address and then its reason.
+    r"(?<![\w:.])\[?(?P<ip>(?:[0-9A-Fa-f]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{1,4}|(?<=::)))"
+    r"(?:%[\w.]+)?\]?(?::\d{1,5})?(?!\w|:[0-9A-Fa-f]|\.\d)"
 )
 
 
@@ -245,7 +247,7 @@ def configure_logging(level: str | None = None, *, fmt: str | None = None) -> No
     if chosen == TEXT_FORMAT and is_production():
         # Allowed - an operator may want the console - but nothing in text
         # mode is redacted: uvicorn's own access log prints every client's
-        # address, and the console transport's links carry their tokens.
+        # address, and nothing masks credentials or e-mail addresses.
         logging.getLogger("app.logging_config").warning(
             "LOG_FORMAT=text in production: lines are not redacted, so client "
             "addresses and tokens reach the log (R-RATE-02); JSON is the default"
