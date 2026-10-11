@@ -6,6 +6,7 @@ import { NotFoundPage } from "./NotFoundPage";
 import { ReportedDrawing } from "../components/ReportedDrawing";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { Chip, type ChipKind } from "../components/ui/Chip";
+import { Picker } from "../components/ui/Picker";
 import { SectionLabel } from "../components/ui/Card";
 
 import { ApiError } from "../lib/api";
@@ -832,34 +833,33 @@ export function ModerationPage() {
       : null;
 
   const categoryField = (id: string) => (
-    <label className="mod-note mod-category">
-      What was it (optional)
-      <select
+    <div className="mod-note mod-category">
+      <label htmlFor={`mod-category-${id}`}>What was it (optional)</label>
+      <Picker<ReportReason | "">
+        id={`mod-category-${id}`}
+        label="What was it"
+        options={[
+          { value: "", label: "Not recorded" },
+          ...REPORT_REASONS.map((reason) => ({ value: reason, label: humanize(reason) })),
+        ]}
         value={category[id] ?? ""}
-        onChange={(change) =>
+        onChange={(value) =>
           setCategory((current) => {
             const next = { ...current };
-            if (change.target.value) {
-              next[id] = change.target.value as ReportReason;
+            if (value) {
+              next[id] = value;
             } else {
               delete next[id];
             }
             return next;
           })
         }
-      >
-        <option value="">Not recorded</option>
-        {REPORT_REASONS.map((reason) => (
-          <option key={reason} value={reason}>
-            {humanize(reason)}
-          </option>
-        ))}
-      </select>
+      />
       <span className="mod-note-hint">
         Your finding, shown to the player with the decision. Never the
         reporters&rsquo; words.
       </span>
-    </label>
+    </div>
   );
 
   const noteField = (id: string) => (
@@ -1390,23 +1390,18 @@ export function ModerationPage() {
                         >
                           Suspend…
                         </button>
-                        <select
-                          aria-label="How long the suspension lasts"
-                          className="ops-select"
+                        <Picker
+                          label="How long the suspension lasts"
+                          variant="compact"
+                          options={SUSPENSION_DURATIONS}
                           value={duration[playerCase.id] ?? "24h"}
-                          onChange={(change) =>
+                          onChange={(value) =>
                             setDuration((current) => ({
                               ...current,
-                              [playerCase.id]: change.target.value,
+                              [playerCase.id]: value,
                             }))
                           }
-                        >
-                          {SUSPENSION_DURATIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </>
                     )}
                     {reportedGalleryTurnId && (

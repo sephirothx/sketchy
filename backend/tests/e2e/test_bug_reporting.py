@@ -70,9 +70,8 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             await context_rows.nth(4).wait_for()
             assert await context_rows.count() >= 5
 
-            await guest_page.select_option("select#" + await guest_page.get_attribute(
-                ".bug-report-dialog select", "id"
-            ), "connection_and_sync")
+            await guest_page.locator(".bug-report-dialog .picker-trigger").first.click()
+            await guest_page.locator('.picker-option[data-value="connection_and_sync"]').click()
             await guest_page.fill(
                 '.bug-report-dialog input[type="text"]',
                 "Reconnect leaves two seats for one player",
