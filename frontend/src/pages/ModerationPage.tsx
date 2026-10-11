@@ -1335,7 +1335,7 @@ export function ModerationPage() {
                       <>
                         <button
                           type="button"
-                          className="btn btn-secondary"
+                          className="btn btn-warm"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
@@ -1357,11 +1357,11 @@ export function ModerationPage() {
                             )
                           }
                         >
-                          Warn player
+                          Warn
                         </button>
                         <button
                           type="button"
-                          className="mod-danger-button"
+                          className="btn btn-danger"
                           disabled={busy === playerCase.id}
                           onClick={() =>
                             act(
@@ -1412,7 +1412,7 @@ export function ModerationPage() {
                     {reportedGalleryTurnId && (
                       <button
                         type="button"
-                        className="mod-danger-button"
+                        className="btn btn-danger"
                         disabled={busy === playerCase.id}
                         data-testid="gallery-hide-from-report"
                         onClick={() =>
@@ -1459,7 +1459,7 @@ export function ModerationPage() {
                   </label>
                   <button
                     type="button"
-                    className="mod-danger-button"
+                    className="btn btn-danger"
                     disabled={busy === eraseNoteKey || !(note[eraseNoteKey] ?? "").trim()}
                     onClick={() => setConfirmErase(erasableTurnId)}
                   >
@@ -1588,7 +1588,7 @@ export function ModerationPage() {
                     </button>
                     <button
                       type="button"
-                      className="mod-danger-button"
+                      className="btn btn-danger"
                       disabled={busy === contentCase.id}
                       onClick={() =>
                         act(
@@ -1705,7 +1705,7 @@ export function ModerationPage() {
                   </button>
                   <button
                     type="button"
-                    className="mod-danger-button"
+                    className="btn btn-danger"
                     disabled={busy === heldCase.id}
                     onClick={() =>
                       act(
@@ -1800,7 +1800,7 @@ export function ModerationPage() {
                 </button>
                 <button
                   type="button"
-                  className="mod-danger-button"
+                  className="btn btn-danger"
                   disabled={busy === galleryCase.turnId}
                   data-testid="gallery-hide"
                   onClick={() =>
@@ -1872,7 +1872,7 @@ export function ModerationPage() {
                   <div className="mod-actions">
                     <button
                       type="button"
-                      className="mod-danger-button"
+                      className="btn btn-success"
                       disabled={busy === banCase.id}
                       onClick={() =>
                         act(
