@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 
+import pytest
 from playwright.async_api import async_playwright, expect
 
 
@@ -109,5 +110,40 @@ async def test_a_page_with_no_language_at_all_says_so_rather_than_going_blank():
             await expect(notice).to_be_visible(timeout=10000)
             await expect(notice.get_by_role("button", name="Reload")).to_be_visible()
         finally:
+            await context.close()
+            await browser.close()
+
+
+@pytest.mark.parametrize("english", ["fails", "stalls"])
+async def test_a_slow_language_still_paints_when_english_cannot(english):
+    """Review of #1451: past the bound the paint waited for English alone, so
+    French landing meanwhile could not end the wait - a stalled English left
+    the page blank, and a failed one showed the could-not-load page with
+    French ready."""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True)
+        context = await browser.new_context(locale="fr-FR")
+        page = await context.new_page()
+        release = asyncio.Event()
+
+        async def late_french(route):
+            await asyncio.sleep(3)
+            await route.continue_()
+
+        async def no_english(route):
+            if english == "fails":
+                await route.abort()
+            else:
+                await release.wait()
+
+        await page.route(re.compile(r"/assets/fr-[\w-]+\.js$"), late_french)
+        await page.route(re.compile(r"/assets/en-[\w-]+\.js$"), no_english)
+        try:
+            await page.goto(BASE_URL)
+            await expect(page.locator("html")).to_have_attribute("lang", "fr", timeout=10000)
+            await expect(page.locator("#root")).not_to_be_empty()
+            await expect(page.locator("#no-words")).to_be_hidden()
+        finally:
+            release.set()
             await context.close()
             await browser.close()

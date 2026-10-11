@@ -546,30 +546,37 @@ export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale, f
 export const LOCALE_WAIT_MS = 2000;
 
 /** Settles with whether there are words to paint with: the reader's language
-    within `LOCALE_WAIT_MS`, or else English, fetched again if it failed the
-    first time (#1426). False only when English cannot be fetched either, and
-    `main.tsx` then shows the shell's own page that needs no catalogue. */
+    within `LOCALE_WAIT_MS`, or else whichever comes first of it and English,
+    fetched again if it failed the first time (#1426). Waiting for English
+    alone left a page blank with French already here, or showed the
+    could-not-load page over it (review of #1451). False only when neither
+    can be fetched, and `main.tsx` then shows the shell's own page that needs
+    no catalogue. */
 export const firstPaintWords: Promise<boolean> = new Promise<void>((resolve) => {
   const timer = setTimeout(resolve, LOCALE_WAIT_MS);
   void initialLocaleReady.catch(() => undefined).then(() => {
     clearTimeout(timer);
     resolve();
   });
-}).then(async () => {
+}).then(() => {
   if (hasCatalogue()) return true;
-  try {
-    await loadCatalogue(FALLBACK_LOCALE);
-  } catch {
-    return false;
-  }
-  // The reader's own language may have landed meanwhile; English stands in
-  // only where there is still nothing.
-  if (!hasCatalogue()) {
-    const inForce = setCatalogue(FALLBACK_LOCALE);
-    applyDocumentLocale(inForce);
-    setClockLocale(inForce);
-  }
-  return true;
+  return new Promise<boolean>((resolve) => {
+    let waiting = 2;
+    const settled = () => {
+      if (hasCatalogue()) resolve(true);
+      else if (--waiting === 0) resolve(false);
+    };
+    initialLocaleReady.then(settled, settled);
+    loadCatalogue(FALLBACK_LOCALE).then(() => {
+      // English stands in only where there is still nothing.
+      if (!hasCatalogue()) {
+        const inForce = setCatalogue(FALLBACK_LOCALE);
+        applyDocumentLocale(inForce);
+        setClockLocale(inForce);
+      }
+      settled();
+    }, settled);
+  });
 });
 
 if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
