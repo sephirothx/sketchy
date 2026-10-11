@@ -19,6 +19,7 @@ an undo accepted, and no resync of either shape out.
 """
 import asyncio
 
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
@@ -70,6 +71,70 @@ class FrameLog:
             # A bare TimeoutError names neither the event nor the mark.
             raise AssertionError(
                 f"none of {events} arrived after frame {since} within 5 s"
+            ) from timeout
+
+
+# Every event the page's socket receives, recorded by the socket itself the
+# moment the diagnostics build installs it. A setter rather than a poll, so
+# nothing that arrives first is missed.
+_RECORD_SOCKET_EVENTS = """
+(() => {
+  const events = window.__socketEvents = [];
+  let socket;
+  Object.defineProperty(window, "__SKETCHY_SOCKET__", {
+    configurable: true,
+    get: () => socket,
+    set: (value) => {
+      socket = value;
+      value.onAny((event) => events.push(event));
+    },
+  });
+})();
+"""
+
+
+class SocketEventLog:
+    """Every Socket.IO event one page receives, by name, in order - over
+    whichever transport carried it.
+
+    `FrameLog` sees WebSocket frames only, and a session is not always on a
+    WebSocket: a connection attempt that errors or stalls opens on long-polling
+    (#601), as a reconnect can on a loaded runner. Its tail then arrives over
+    HTTP within milliseconds of the new socket connecting, and a wait on
+    WebSocket frames gives up five seconds later - the flake a refused
+    WebSocket reproduces every time. Read off the socket instead. Needs the
+    diagnostics build, which exposes the socket.
+    """
+
+    def __init__(self, page):
+        self._page = page
+
+    @classmethod
+    async def attach(cls, page) -> "SocketEventLog":
+        """Before the page's first navigation: the recorder rides every load."""
+        await page.add_init_script(_RECORD_SOCKET_EVENTS)
+        return cls(page)
+
+    async def mark(self) -> int:
+        """The point from which the next assertions read."""
+        return await self._page.evaluate("() => window.__socketEvents.length")
+
+    async def since(self, mark: int) -> list[str]:
+        return await self._page.evaluate("(mark) => window.__socketEvents.slice(mark)", mark)
+
+    async def wait_for(self, *events: str, since: int) -> None:
+        """Until any of `events` arrives at or after the mark `since` - with
+        `FrameLog.wait_for`'s bound, and for its reason."""
+        try:
+            await self._page.wait_for_function(
+                "([since, events]) => window.__socketEvents.slice(since).some((e) => events.includes(e))",
+                arg=[since, list(events)],
+                polling=50,
+                timeout=5_000,
+            )
+        except PlaywrightTimeoutError as timeout:
+            raise AssertionError(
+                f"none of {events} arrived after event {since} within 5 s"
             ) from timeout
 
 
