@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
+import random
+import re
+import time
 
 import pytest
 
@@ -126,6 +129,9 @@ def test_the_text_format_is_the_development_console_verbatim():
         ("refused o'brien@example.test", "refused ***@example.test"),
         ("refused foo@a.b", "refused ***@a.b"),
         ("refused a=b#c{d}@example.test", "refused ***@example.test"),
+        # Two addresses with nothing between them but local-part characters:
+        # the second starts where the first one's domain ended.
+        ("a@b.c!d@e.f and g@h.i", "***@b.c***@e.f and ***@h.i"),
         # And the lines it must still leave legible.
         ("postgresql+asyncpg://sketchy:pa55@db.internal:5432/x", "postgresql+asyncpg://sketchy:***@db.internal:5432/x"),
         ("array[i]@list is not an address", "array[i]@list is not an address"),
@@ -135,6 +141,46 @@ def test_the_text_format_is_the_development_console_verbatim():
 )
 def test_secrets_and_addresses_never_reach_the_line(text, expected):
     assert redact(text) == expected
+
+
+# The address rule as it was written before it was made linear: one regular
+# expression whose local part could start anywhere. What it masked is the
+# specification; the rewrite has to agree with it on every line.
+_QUADRATIC_ADDRESS = re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)""")
+
+
+def test_addresses_are_masked_exactly_as_the_single_pattern_masked_them():
+    rng = random.Random(472)
+    # Short lines built from the pieces that decide where an address starts and
+    # ends - single characters alone almost never spell an address: characters
+    # allowed in a local part but not a domain, in both, the delimiters, the
+    # quote, and whole domains, so addresses abut, nest in quotes and run on.
+    pieces = ["a", "1", "-", ".", "!", "'", "+", '"', "@", " ", ":", "/", ",", "[", "\\", "b.c", "@d.e"]
+    for _ in range(20_000):
+        line = "".join(rng.choice(pieces) for _ in range(rng.randrange(1, 16)))
+        assert redact(line) == _QUADRATIC_ADDRESS.sub(r"***@\1", line), line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "1.2." * 3000,  # no `@` at all
+        "a" * 12_000 + "@",  # one `@`, and no domain after it
+    ],
+    ids=["no-at", "one-trailing-at"],
+)
+def test_a_long_line_redacts_in_linear_time(line):
+    """`redact` runs on the event loop for every JSON line, and a line can carry
+    client text: a pattern that retries a run from each of its characters took
+    half a second on 12 KB, which stalls every room on the server."""
+    elapsed = min(_timed(redact, line) for _ in range(3))
+    assert elapsed < 0.05, f"{elapsed * 1000:.0f} ms"
+
+
+def _timed(fn, arg) -> float:
+    start = time.perf_counter()
+    fn(arg)
+    return time.perf_counter() - start
 
 
 # --- wiring ------------------------------------------------------------------------

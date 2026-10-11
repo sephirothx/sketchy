@@ -71,38 +71,60 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     # A database or relay URL with credentials in it.
     (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
-    # The local part of an address is the personal half; the domain says
-    # which relay or provider was involved, which is what a failure needs.
-    #
-    # Wider than a tidy address grammar, because the addresses this service
-    # stores are: `auth.email.normalize_email` asks only for a non-blank
-    # local part, an `@`, and a domain with a dot in it, so `foo!bar@x.test`,
-    # `"foo"@x.test` and `foo@a.b` are all storable and all used to survive a
-    # pattern built around `[\w.+-]` and a two-character final label. The
-    # local part is therefore anything up to the `@` that is not whitespace
-    # or a delimiter, plus a quoted string as its own alternative; `:` and
-    # `/` are excluded so a database URL keeps its scheme and username, both
-    # of which the rule above has already made safe, and `"` because the
-    # quoted alternative is what a quoted local part is for. An apostrophe
-    # is *not* excluded: `o'brien@example.test` is a storable address and a
-    # real name, and eating the opening quote of `'alice@example.test'` in
-    # some other line is the cheaper mistake by far.
-    #
-    # This is the net for an address nobody handed us. Where the address is
-    # known - a delivery failure names the row's own recipient - it is masked
-    # by splitting it rather than by finding it (`auth.mail`), which needs no
-    # grammar at all.
-    (
-        re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)"""),
-        r"***@\1",
-    ),
 )
+
+# The local part of an address is the personal half; the domain says
+# which relay or provider was involved, which is what a failure needs.
+#
+# Wider than a tidy address grammar, because the addresses this service
+# stores are: `auth.email.normalize_email` asks only for a non-blank
+# local part, an `@`, and a domain with a dot in it, so `foo!bar@x.test`,
+# `"foo"@x.test` and `foo@a.b` are all storable and all used to survive a
+# pattern built around `[\w.+-]` and a two-character final label. The
+# local part is therefore anything up to the `@` that is not whitespace
+# or a delimiter, plus a quoted string as its own alternative; `:` and
+# `/` are excluded so a database URL keeps its scheme and username, both
+# of which the rule above has already made safe, and `"` because the
+# quoted alternative is what a quoted local part is for. An apostrophe
+# is *not* excluded: `o'brien@example.test` is a storable address and a
+# real name, and eating the opening quote of `'alice@example.test'` in
+# some other line is the cheaper mistake by far.
+#
+# This is the net for an address nobody handed us. Where the address is
+# known - a delivery failure names the row's own recipient - it is masked
+# by splitting it rather than by finding it (`auth.mail`), which needs no
+# grammar at all.
+_LOCAL_CHAR = r"""[^\s@,;:/<>()\[\]\\"]"""
+_AT_DOMAIN = r"@((?:[\w-]+\.)+[\w-]+)"
+# An unquoted local part starts only where a run of local-part characters
+# starts. Left free to start anywhere, the engine walked the rest of the run
+# from each of its characters looking for an `@`, so a 12 KB line with no
+# address in it took half a second - on the event loop, in production, from
+# text a client can put into a line. Anchored, each run is walked once.
+_ADDRESS = re.compile(rf"""(?:"[^"\s]*"|(?<!{_LOCAL_CHAR}){_LOCAL_CHAR}+){_AT_DOMAIN}""")
+# The one place a free start did reach that the anchor does not: the scan
+# resumes where the last address ended, which can be inside a run - the
+# `!d` of `a@b.c!d@e.f` - and an address starting right there was masked.
+# Tried at that one position only, so it costs one run as well.
+_ADJOINING = re.compile(rf"{_LOCAL_CHAR}+{_AT_DOMAIN}")
+
+
+def _mask_addresses(text: str) -> str:
+    if "@" not in text:
+        return text
+    parts = []
+    pos = 0
+    while match := (pos and _ADJOINING.match(text, pos)) or _ADDRESS.search(text, pos):
+        parts += (text[pos : match.start()], "***@", match[1])
+        pos = match.end()
+    parts.append(text[pos:])
+    return "".join(parts)
 
 
 def redact(text: str) -> str:
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
-    return text
+    return _mask_addresses(text)
 
 
 def log_format(environ: dict[str, str] | None = None) -> str:
