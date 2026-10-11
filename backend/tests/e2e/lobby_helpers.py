@@ -161,14 +161,22 @@ PLAY_LANGUAGE_SCRIPT = """() => {
 }"""
 
 
+async def pick(page, trigger: str, value: str) -> None:
+    """Choose `value` in the picker whose trigger `trigger` selects (ui/Picker):
+    what `select_option` did while these were native selects."""
+    await page.click(trigger)
+    await page.click(f'.picker-option[data-value="{value}"]')
+    await page.locator(trigger).and_(page.locator('[aria-expanded="false"]')).wait_for()
+
+
 async def choose_room_language(page, language: str | None = None) -> None:
     """Choose the room's prompt language on the setup form by its code - `en`,
     `de`, `mul` for Mixed - or, by default, the language the page plays in."""
     if language is None:
         language = await page.evaluate(PLAY_LANGUAGE_SCRIPT)
-    trigger = page.locator(".create-room-language-field .language-picker-trigger")
+    trigger = page.locator(".create-room-language-field .picker-trigger")
     await trigger.click()
-    await page.locator(f'.language-picker-option[data-language="{language}"]').click()
+    await page.locator(f'.picker-option[data-language="{language}"]').click()
     await trigger.and_(page.locator('[aria-expanded="false"]')).wait_for()
 
 

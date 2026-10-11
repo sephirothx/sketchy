@@ -9,6 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from playwright.async_api import async_playwright, expect
+from tests.e2e.test_canvas_commit_fanout import SocketEventLog
 from tests.e2e.lobby_helpers import (
     join_by_code,
     leave_room,
@@ -815,19 +816,12 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
         announcer = target.get_by_test_id("friend-request-announcer")
 
         # Everything the target says to the server while `listening` holds:
-        # HTTP writes to the friends API, and every Socket.IO event it emits.
+        # HTTP writes to the friends API, and every Socket.IO event it emits -
+        # read off the socket, which sees an event over long-polling (#601)
+        # as well as over a WebSocket.
         listening: list[bool] = []
         writes: list[str] = []
-        emitted: list[str] = []
-
-        def on_frame(payload) -> None:
-            # "42" is an event, "45" a binary one. The health report is the
-            # socket's own minute timer and says nothing about anybody.
-            if (listening and isinstance(payload, str) and payload[:2] in ("42", "45")
-                    and "client_health" not in payload):
-                emitted.append(payload)
-
-        target.on("websocket", lambda ws: ws.on("framesent", on_frame))
+        target_events = await SocketEventLog.attach(target)
         target.on(
             "request",
             lambda request: writes.append(request.url)
@@ -857,11 +851,18 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
             await expect(chip).to_be_visible(timeout=SETTLE_MS)
             await chip.click()
             listening.append(True)
+            sent_from = await target_events.sent_mark()
             await popover.get_by_role("button", name="Not now").click()
             await expect(chip).to_have_count(0)
             # Long enough for anything the click set off to have gone out.
             await target.wait_for_timeout(1000)
             listening.clear()
+            # The health report is the socket's own minute timer and says
+            # nothing about anybody.
+            emitted = [
+                event for event in await target_events.sent(sent_from)
+                if event != "client_health"
+            ]
             assert writes == [], writes
             assert emitted == [], emitted
             # Still waiting, under its badge, where it is answered.

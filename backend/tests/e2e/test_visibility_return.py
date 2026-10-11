@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
-from tests.e2e.test_canvas_commit_fanout import FrameLog
+from tests.e2e.test_canvas_commit_fanout import SocketEventLog
 
 BASE_URL = "http://localhost:8000"
 
@@ -37,20 +37,8 @@ SHOW = """
 """
 
 
-def sent(log, event: str) -> list:
-    return [frame for frame in log.sent if isinstance(frame, str) and f'"{event}"' in frame]
-
-
-class SentLog(FrameLog):
-    """`FrameLog` records what arrives; this also records what goes out."""
-
-    def __init__(self, page):
-        self.sent: list = []
-        super().__init__(page)
-
-    def _watch(self, websocket) -> None:
-        super()._watch(websocket)
-        websocket.on("framesent", lambda frame: self.sent.append(frame))
+async def joins(log) -> int:
+    return (await log.sent()).count("join_room")
 
 
 async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
@@ -59,7 +47,7 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         pages = [await (await browser.new_context()).new_page() for _ in range(3)]
         host, guest, late = pages
-        guest_log = SentLog(guest)
+        guest_log = await SocketEventLog.attach(guest)
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, f"VisHost{tag}")
@@ -82,8 +70,8 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
             # Away, and something authoritative lands meanwhile: a third
             # player arriving is a `room_state` for everyone in the room.
             await asyncio.sleep(0.5)
-            before = len(sent(guest_log, "join_room"))
-            away_from = guest_log.mark()
+            before = await joins(guest_log)
+            away_from = await guest_log.mark()
             await guest.evaluate(HIDE)
             await late.goto(BASE_URL)
             await use_guest_name(late, f"VisLate{tag}")
@@ -92,7 +80,7 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
             await guest_log.wait_for("room_state", since=away_from)
             await guest.evaluate(SHOW)
             await asyncio.sleep(1)
-            assert len(sent(guest_log, "join_room")) == before, (
+            assert await joins(guest_log) == before, (
                 "a short return with a phase event in it asked the server again"
             )
 
@@ -102,10 +90,10 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
             await asyncio.sleep(0.5)
             await guest.evaluate(SHOW)
             for _ in range(50):
-                if len(sent(guest_log, "join_room")) > before:
+                if await joins(guest_log) > before:
                     break
                 await asyncio.sleep(0.1)
-            assert len(sent(guest_log, "join_room")) == before + 1, (
+            assert await joins(guest_log) == before + 1, (
                 "a return after a quiet spell re-binds the seat, once"
             )
         finally:
