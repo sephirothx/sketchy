@@ -582,6 +582,15 @@ export function ModerationPage() {
   }, [allowed, showingClosed, page, fail, showsRecentDecisions]);
 
   useEffect(load, [load]);
+  // The load a finished decision asks for: the one for the queue on screen
+  // when it finishes, not the one pressed when it began. A decision's
+  // closure keeps the `load` of the render it was clicked in, and a queue
+  // switched meanwhile would have that stale load start last - the one load
+  // allowed to land.
+  const latestLoadFn = useRef(load);
+  useEffect(() => {
+    latestLoadFn.current = load;
+  }, [load]);
 
   // A page is a position in the closed stream and means nothing elsewhere.
   function changeFilter(next: Filter) {
@@ -786,7 +795,7 @@ export function ModerationPage() {
       if (outcome === STEP_UP_ABANDONED) return;
       setMessage(typeof done === "string" ? done : done(outcome));
       setNote((current) => ({ ...current, [id]: "" }));
-      load();
+      latestLoadFn.current();
     } catch (problem) {
       fail(problem);
     } finally {
@@ -927,7 +936,7 @@ export function ModerationPage() {
           // are reading.
           setHeldDetail((current) => (current?.id === id ? null : current));
           setHeldStale((count) => count + 1);
-          load();
+          latestLoadFn.current();
         }
         throw problem;
       }
