@@ -401,8 +401,9 @@ export function RoomChatPanel({
         >
           {guessFlash && (
             // What the flash says is already a line in the log, which a
-            // screen reader reads as it arrives: said again here, every wrong
-            // guess was heard twice (#1423).
+            // screen reader reads as it arrives - on a phone with the keyboard
+            // up too, where the feed is clipped out of sight rather than
+            // removed (game-room.css) - so the flash is for the eyes (#1423).
             <p
               className={`guess-focus-flash guess-focus-flash-${guessFlash.kind}`}
               aria-hidden="true"

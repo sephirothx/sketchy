@@ -33,10 +33,12 @@ RECORD_LIVE_REGIONS = """
 (() => {
   window.__live = [];
   const LIVE = '[role="log"], [role="status"], [role="alert"], [aria-live]:not([aria-live="off"])';
-  const spoken = (el) => el && !el.closest('[aria-hidden="true"]');
-  const record = (text, where) => {
+  // Not rendered - display: none on it or a parent - is not spoken either;
+  // clipped out of sight (.visually-hidden) still is.
+  const spoken = (el) => el && !el.closest('[aria-hidden="true"]') && (!el.checkVisibility || el.checkVisibility());
+  const record = (text, where, inserted = false) => {
     const said = (text || "").replace(/\\s+/g, " ").trim();
-    if (said) window.__live.push({ said, where });
+    if (said) window.__live.push({ said, where, inserted });
   };
   const name = (el) => el.getAttribute("data-testid") || el.getAttribute("role") || el.tagName.toLowerCase();
   new MutationObserver((records) => {
@@ -59,7 +61,7 @@ RECORD_LIVE_REGIONS = """
         }
         // A live region inserted whole, its text already in it.
         const regions = node.matches(LIVE) ? [node] : [...node.querySelectorAll(LIVE)];
-        for (const inserted of regions) if (spoken(inserted)) record(inserted.textContent, name(inserted));
+        for (const inserted of regions) if (spoken(inserted)) record(inserted.textContent, name(inserted), true);
       }
     }
   }).observe(document, { subtree: true, childList: true, characterData: true });
@@ -127,6 +129,10 @@ async def test_one_turn_and_the_game_over_say_each_thing_once():
             said = [normal(entry["said"]) for entry in turn]
             repeated = sorted({line for line in said if said.count(line) > 1})
             assert not repeated, f"said more than once in one turn: {repeated}\n{turn}"
+            # Every sentence arrives as a change in a region already on the
+            # page: one inserted with its text is announced unreliably.
+            inserted = [entry for entry in turn if entry["inserted"]]
+            assert not inserted, f"live regions inserted with their text: {inserted}"
 
             # The drawer is told it is their turn, and how to take it.
             assert any(normal(line).startswith("your turn: pick") for line in drawer_heard), drawer_heard
@@ -146,6 +152,56 @@ async def test_one_turn_and_the_game_over_say_each_thing_once():
             assert len(over) == 1, f"the game over should be one sentence: {ended}"
             ticks = [line for line in ended if re.fullmatch(r"\d+", line)]
             assert not ticks, f"the countdown was read out: {ended}"
+        finally:
+            for context in contexts:
+                await context.close()
+            await browser.close()
+
+
+async def test_a_phone_guesser_typing_still_hears_the_room():
+    """Review of #1423: with the keyboard up a phone hides the feed, and it was
+    display: none - so the log, the one live region left carrying the room's
+    lines once the duplicate announcer went, said nothing while they typed. It
+    is clipped out of sight instead, and keeps speaking."""
+    tag = uuid4().hex[:5]
+    phone = {"viewport": {"width": 390, "height": 844}, "is_mobile": True, "has_touch": True}
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(**phone) for _ in range(3)]
+        for context in contexts:
+            await context.add_init_script(RECORD_LIVE_REGIONS)
+        pages = [await context.new_page() for context in contexts]
+        host = pages[0]
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"TypeHost{tag}")
+            await open_new_room(host)
+            code = await room_code(host)
+            for index, page in enumerate(pages[1:]):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, f"Typer{index}{tag}")
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_room_settings(host)
+            await host.get_by_role("spinbutton", name="Rounds").fill("1")
+            await open_settings_section(host, "Prompts")
+            await host.locator("#custom-prompts").fill("elephant")
+            await host.get_by_label("Only use custom prompts").check()
+            await save_room_settings(host)
+            await host.get_by_role("button", name="Start game").click()
+            drawer = await drawer_among(pages)
+            await drawer.locator(".prompt-choices button").first.click()
+            typist, scorer = [page for page in pages if page is not drawer]
+            field = typist.locator(".chat-input input")
+            await field.wait_for()
+            await field.focus()
+            await typist.locator(".game-room.guess-focused").wait_for()
+            await typist.evaluate("() => { window.__live = []; }")
+            await scorer.locator(".chat-input input").fill("elephant")
+            await scorer.locator(".chat-input input").press("Enter")
+            await typist.wait_for_timeout(1500)
+            heard = [entry["said"] for entry in await typist.evaluate("() => window.__live")]
+            assert any(" got it" in line for line in heard), heard
         finally:
             for context in contexts:
                 await context.close()

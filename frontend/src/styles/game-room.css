@@ -1803,9 +1803,27 @@
   /* Everything that is not the drawing or the box you type into goes. The feed,
      the pips and the clock are all read *between* guesses, not during one, and
      while the keyboard is up the canvas is what the typing is about. */
-  .game-room.guess-focused .chat-messages-container,
   .game-room.guess-focused .guess-pips {
     display: none;
+  }
+
+  /* The feed is out of sight, not out of the page: it is the chat log a
+     screen reader reads lines from as they arrive, and display: none silenced
+     it for as long as a phone guesser typed - their own verdicts, other
+     players' guesses, the room's lines (review of #1423). The
+     `.visually-hidden` declarations (a11y.css), copied for the same reason as
+     the waiting room's head above: a class cannot be switched on by a state. */
+  .game-room.guess-focused .chat-messages-container {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 
   .game-room.guess-focused .room-shell-chat {

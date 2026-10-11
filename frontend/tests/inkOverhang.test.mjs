@@ -43,6 +43,10 @@ const ROOT = "src/styles";
 const TEXT_BEARING = /name|author|byline|credit|prompt|chat|crumb/;
 
 const REVIEWED = {
+  // Clipped out of sight on purpose: the .visually-hidden pattern, read by a
+  // screen reader and seen by nobody, so no ink can show past it.
+  "game-room.css: .game-room.guess-focused .chat-messages-container":
+    "the feed while a phone guesser types: 1px and clipped, for the screen reader's log (#1423)",
   // Boxes whose text sits inside padding of their own, well over 0.22em.
   "community-lists.css: .community-catalogue-prompt": "a prompt chip, padded 10px either side",
   "community-lists.css: .community-prompts-dialog-body": "the dialog's body, padded 20px",

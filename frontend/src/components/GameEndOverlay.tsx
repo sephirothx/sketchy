@@ -10,6 +10,7 @@ import { SectionLabel } from "./ui/Card";
 import { BrushIcon, TimerRing, TrophyIcon } from "./icons";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import { ui } from "../content/ui/index.ts";
+import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 import { fill } from "../content/ui/slots.tsx";
 
 interface GameEndOverlayProps {
@@ -97,9 +98,9 @@ export function GameEndOverlay({
       ui.format.ordinal({ value: Math.max(1, placement) }),
     )}`
     : `${ui.gameEndOverlay.gameOver}.`;
+  useRoomAnnouncement(announcement);
 
   return <main className="game-end-overlay" aria-labelledby="game-end-title" data-testid="game-end-overlay">
-    <p className="visually-hidden" role="status">{announcement}</p>
     <section className="game-end-podium">
       <ConfettiDots />
       <SectionLabel>{ui.gameEndOverlay.gameOver}</SectionLabel>

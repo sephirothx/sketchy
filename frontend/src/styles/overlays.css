@@ -265,6 +265,13 @@
   font-weight: 800;
 }
 
+/* On the reader's own row, tinted indigo, --faint is under 4.5:1 (4.35:1
+   light, 3.81:1 dark): its rank and "you" step up to --muted (#1423). */
+.game-end-standings li.is-you .game-end-standing-rank,
+.game-end-standings li.is-you .game-end-you {
+  color: var(--muted);
+}
+
 .game-end-standing-name {
   display: inline-flex;
   align-items: center;

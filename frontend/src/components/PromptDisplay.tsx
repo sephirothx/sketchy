@@ -10,6 +10,7 @@ import type { AckResponse, HintMode } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { applyPrivateResult } from "../lib/privateResults.ts";
 import { ui } from "../content/ui/index.ts";
+import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 
 interface PromptDisplayProps {
   isDrawer: boolean;
@@ -125,6 +126,13 @@ export function PromptDisplay({
 }: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  // What a screen reader hears when the turn comes (#1423): the choice card
+  // is not live, and nothing said it was this seat's turn.
+  useRoomAnnouncement(
+    isDrawer && promptChoices.length > 0 && !myPrompt
+      ? ui.promptDisplay.yourTurnPickAPrompt({ count: promptChoices.length })
+      : null,
+  );
   // Sideways, the wheel's 26 keys above the canvas left a guesser 18% of the
   // drawing (170 x 126 at 844 x 390): there they wait behind "Buy a letter",
   // over the canvas, and go once a letter is bought (#1267).
@@ -179,11 +187,6 @@ export function PromptDisplay({
         <div className="prompt-choice-card">
           <p className="section-label">{ui.promptDisplay.yourTurn}</p>
           <h2 className="prompt-choice-title">{ui.promptDisplay.pickSomethingDraw}</h2>
-          {/* What a screen reader hears when the turn comes (#1423): the card
-              itself is not live, and nothing said it was this seat's turn. */}
-          <p className="visually-hidden" role="status">
-            {ui.promptDisplay.yourTurnPickAPrompt({ count: promptChoices.length })}
-          </p>
           <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
             {/* Chosen by position, not by text (#1181): the text is how the

@@ -249,7 +249,7 @@
   --primary: #6369e2;
   --primary-soft: rgba(102, 108, 228, 0.17);
   --primary-ink: #c7cbfa;
-  --primary-text: #8388ea;
+  --primary-text: #9498ee;
   --primary-edge: #3b41b5;
   --primary-edge-soft: rgba(102, 108, 228, 0.5);
   --focus-ring: color-mix(in srgb, var(--primary) 70%, #ffffff);

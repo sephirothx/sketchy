@@ -1080,7 +1080,7 @@ export const IT: Catalogue = {
     nameListAnd: " e ",
     continueLabel: "Continua",
     youFinished: (p: { points: number }) =>
-      `Sei arrivato {place} con ${counted(p.points, { one: "punto", other: "punti" })}.`,
+      `Piazzamento finale: {place}, con ${counted(p.points, { one: "punto", other: "punti" })}.`,
     continueToWaitingRoom: "Vai alla sala d’attesa",
     continueWithCountdown: (p: { seconds: number }) =>
       `Vai alla sala d’attesa, ${counted(p.seconds, { one: "secondo", other: "secondi" })} rimasti`,

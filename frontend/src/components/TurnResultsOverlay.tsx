@@ -14,6 +14,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { barTransform } from "../lib/countdownBar";
 import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
+import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 import "../styles/lazy/reactions.css";
 import "../styles/lazy/game-results.css";
 
@@ -84,6 +85,15 @@ export function TurnResultsOverlay({
   const delays = entranceDelays(sorted.length);
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
+  // One sentence, not the card: the log already says what the prompt was,
+  // and the whole card - every row's place, name and points - was read out
+  // after it (#1423).
+  useRoomAnnouncement(
+    showScores && mine
+      ? `${ui.turnResultsOverlay.turnComplete}. ${ui.turnResultsOverlay.youScoredThisTurn({ points: mine.delta })}`
+      : `${ui.turnResultsOverlay.turnComplete}.`,
+  );
+
   const [settled, setSettled] = useState(false);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   // Read once, as the card appears: a sync later in the phase rebases
@@ -133,14 +143,7 @@ export function TurnResultsOverlay({
       aria-labelledby="turn-results-title"
       data-testid="turn-results-overlay"
     >
-      {/* One sentence, not the card: the log already says what the prompt
-          was, and the whole card - every row's place, name and points - was
-          read out after it (#1423). */}
-      <p className="visually-hidden" role="status">
-        {showScores && mine
-          ? `${ui.turnResultsOverlay.turnComplete}. ${ui.turnResultsOverlay.youScoredThisTurn({ points: mine.delta })}`
-          : `${ui.turnResultsOverlay.turnComplete}.`}
-      </p>
+
       <div className="turn-results-panel">
         <h3 id="turn-results-title" className="section-label">{showScores ? ui.turnResultsOverlay.turnResults : ui.turnResultsOverlay.turnComplete}</h3>
         <p className="turn-results-prompt">

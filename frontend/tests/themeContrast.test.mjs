@@ -147,6 +147,8 @@ const TEXT_PAIRS = [
   ["--faint", "--card", "tertiary text on a card"],
   ["--primary-text", "--paper", "indigo text - links, the hint price, the drawing status - on the page"],
   ["--primary-text", "--card", "indigo text on a card"],
+  ["--primary-text", "--primary-soft", "\"Drawing\" and a shortcut badge on an indigo-tinted row or tool"],
+  ["--muted", "--primary-soft", "a rank or \"you\" on the reader's or the drawer's tinted row"],
   ["--success-ink", "--paper", "green text - a correct letter, a rank gained - on the page"],
   ["--success-ink", "--card", "green text on a card"],
   ["--on-primary", "--primary", "label on an indigo button, badge or toast action"],
