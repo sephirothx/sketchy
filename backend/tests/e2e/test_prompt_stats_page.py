@@ -2,7 +2,7 @@
 import re
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import pick, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -24,7 +24,8 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # It opens on the Standard list of the language this reader plays
             # in, not on whichever list sorts first by name ("Deutsch -
             # Erweitert" for an English guest, before).
-            selected = await page.locator("#prompt-stats-list").input_value()
+            list_picker = page.locator("#prompt-stats-list")
+            selected = await list_picker.get_attribute("data-value")
             assert selected == "english_standard", f"opened on {selected}"
 
             # Every prompt in the list is reachable, not just the ranked ones.
@@ -44,9 +45,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             rows = page.locator(
                 ".prompt-stats-plain li" if plain else ".prompt-stats-table tbody tr"
             )
-            label = await page.locator(
-                f"#prompt-stats-list option[value='{selected}']"
-            ).inner_text()
+            label = await list_picker.inner_text()
             # Locale-formatted since #1424: "1,036".
             expected = int(re.search(r"\(([\d,]+)\)\s*$", label).group(1).replace(",", ""))
 
@@ -80,31 +79,33 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
 
             # The sort is in the URL, so a chosen view can be linked to.
             #
-            # `expect` rather than a bare `input_value`, because the URL leads
+            # `expect` rather than a bare `inner_text`, because the URL leads
             # the control rather than following it: react-router writes history
             # synchronously and commits the re-render in a transition, so for a
             # frame or more `location` already says `most-picked` while the
-            # controlled select is still held at the old value. `wait_for_url`
+            # controlled picker is still held at the old value. `wait_for_url`
             # returns at the *start* of that window. It is one frame on an idle
             # machine and eight under load, which is why this only ever failed
             # on CI.
-            # The selector groups the lists by language, the reader's first
-            # (#1424): 136 options in one column was no way to find one.
-            first_group = page.locator("#prompt-stats-list optgroup").first
-            assert await first_group.get_attribute("label") == "English"
+            # The list picker groups the lists by language, the reader's
+            # first (#1424): 136 options in one column was no way to find one.
+            await list_picker.click()
+            first_group = page.get_by_role("listbox").get_by_role("group").first
+            await expect(first_group).to_have_attribute("aria-label", "English")
+            await page.keyboard.press("Escape")
             asked: list[str] = []
             page.on("request", lambda request: asked.append(request.url) if "/prompt-stats" in request.url else None)
 
-            await page.select_option("#prompt-stats-sort", "most-picked")
+            await pick(page, "#prompt-stats-sort", "most-picked")
             await page.wait_for_url("**sort=most-picked")
-            await expect(page.locator("#prompt-stats-sort")).to_have_value("most-picked")
+            await expect(page.locator("#prompt-stats-sort")).to_contain_text("Most picked")
             # Sorted here: the same counts in another order are not a request.
             await page.wait_for_timeout(300)
             assert asked == [], asked
 
             # Facts can be sliced without resetting or rewriting them. The
             # chosen period and rule dimensions remain linkable in the URL.
-            await page.select_option("#prompt-stats-window", "30d")
+            await pick(page, "#prompt-stats-window", "30d")
             await page.wait_for_url("**window=30d*")
             # The period by name, which the server caches by - not a timestamp.
             for _ in range(50):
@@ -113,9 +114,9 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
                 await page.wait_for_timeout(100)
             assert any("window=30d" in url for url in asked), asked
             assert not any("from=" in url for url in asked), asked
-            await page.select_option("#prompt-stats-scoring", "pressure")
+            await pick(page, "#prompt-stats-scoring", "pressure")
             await page.wait_for_url("**scoringMode=pressure*")
-            await page.select_option("#prompt-stats-hints", "wheel")
+            await pick(page, "#prompt-stats-hints", "wheel")
             await page.wait_for_url("**hintMode=wheel*")
             await listing.first.wait_for()
 
@@ -147,11 +148,15 @@ async def test_the_language_headings_follow_the_interface_language():
             await page.goto(BASE_URL)
             await use_guest_name(page, f"Heads{uuid4().hex[:6]}")
             await page.goto(f"{BASE_URL}/prompt-lists")
-            first_group = page.locator("#prompt-stats-list optgroup").first
-            await expect(first_group).to_have_attribute("label", "English")
-            await page.locator(".language-picker-trigger").first.click()
+            list_picker = page.locator("#prompt-stats-list")
+            first_group = page.get_by_role("listbox").get_by_role("group").first
+            await list_picker.click()
+            await expect(first_group).to_have_attribute("aria-label", "English")
+            await page.keyboard.press("Escape")
+            await page.locator(".language-picker .picker-trigger").first.click()
             await page.get_by_role("listbox").get_by_role("option", name=re.compile("Deutsch")).click()
             await page.wait_for_function("() => document.documentElement.lang === 'de'")
-            await expect(first_group).to_have_attribute("label", "Englisch")
+            await list_picker.click()
+            await expect(first_group).to_have_attribute("aria-label", "Englisch")
         finally:
             await browser.close()

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ModalShell } from "./ui/ModalShell";
+import { Picker } from "./ui/Picker";
 import { BugIcon, ImageIcon } from "./icons";
 import {
   BUG_AREAS,
@@ -192,15 +193,11 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
       <div className="bug-report-row">
         <div>
           <label htmlFor={areaId}>{ui.bugReportDialog.where}</label>
-          <select id={areaId} className="settings-select" value={area} onChange={(event) => setArea(event.target.value as BugReportArea)}>
-            {BUG_AREAS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
+          <Picker id={areaId} label={ui.bugReportDialog.where} options={BUG_AREAS} value={area} onChange={setArea} />
         </div>
         <div>
           <label htmlFor={severityId}>{ui.bugReportDialog.howBad}</label>
-          <select id={severityId} className="settings-select" value={severity} onChange={(event) => setSeverity(event.target.value as BugReportSeverity)}>
-            {BUG_SEVERITIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
+          <Picker id={severityId} label={ui.bugReportDialog.howBad} options={BUG_SEVERITIES} value={severity} onChange={setSeverity} />
         </div>
       </div>
 

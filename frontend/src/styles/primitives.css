@@ -721,22 +721,29 @@ input:focus-visible ~ .switch-track {
   stroke: currentColor;
 }
 
-/* ------------------------------------------------------- language picker
+/* ---------------------------------------------------------------- pickers
 
-   The one control that picks a language, wherever it is picked: the create
-   form, the room's rules, the settings overlay and the lobby's filter. Built
-   out of the pieces already here — the setup form's field for the trigger,
-   the lobby menu's floating panel for the list — because a language is not a
-   new kind of choice and should not look like one.
+   One choice from a short list, wherever one is made (#1433): a report's
+   reason, a filter's period, the preset to start from, a room's language.
+   Built out of the pieces already here — the setup form's field for the
+   trigger, the lobby menu's floating panel for the list — because a choice
+   is not a new kind of control and should not look like one.
 
-   A native <select> cannot do this job: its popup is the platform's, so the
-   flag and the endonym stop at the closed field and never reach the list. */
-.language-picker {
+   A native <select> cannot do this job: its popup is the platform's, a grey
+   system menu in the middle of a form of warm paper — the one thing on the
+   screen the operating system drew rather than the game. For a language it
+   was worse still: the flag and the endonym stopped at the closed field and
+   never reached the list. */
+/* Never wider than the row it stands in: a preset is named by its owner,
+   up to 64 characters, and a trigger sized to that pushed a phone's page
+   sideways. The value ellipsizes; the list shows the whole name. */
+.picker {
   display: inline-flex;
+  max-width: 100%;
   position: relative;
 }
 
-.language-picker-trigger {
+.picker-trigger {
   align-items: center;
   background: var(--field);
   border: 1.5px solid var(--line-strong);
@@ -749,16 +756,212 @@ input:focus-visible ~ .switch-track {
   font-weight: 700;
   gap: 10px;
   justify-content: space-between;
+  max-width: 100%;
   min-height: 44px;
   min-width: 190px;
   padding: 8px 12px;
+  text-align: left;
+  transition: border-color var(--dur-fast);
 }
+
+/* A form's row: as wide as the fields around it. */
+.picker.is-field,
+.picker.is-field .picker-trigger {
+  min-width: 0;
+  width: 100%;
+}
+
+/* Beside its label in a row of controls, sized to its word. */
+.picker.is-compact .picker-trigger {
+  font-size: 13.5px;
+  min-height: 42px;
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+.picker-trigger:hover:not(:disabled),
+.picker.is-open .picker-trigger {
+  border-color: var(--primary);
+}
+
+.picker-trigger:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.picker-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
+}
+
+/* The chevron turns over while the list is open, the way a disclosure's
+   does: the one sign on the trigger that the list below is its own. */
+.picker-chevron {
+  color: var(--faint);
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
+  transition: rotate var(--dur);
+}
+
+.picker.is-open .picker-chevron {
+  rotate: 180deg;
+}
+
+/* One of a bar's filters: a chip rather than a field, since the bar is a row
+   of chips (the lobby's filters, the setup form's toggle chips) and a field
+   among them read as somewhere to type. It names the filter before the
+   choice - "Period · Last 30 days" - and tints indigo while the choice is not
+   the filter's rest, so the filters in force show at a glance. */
+.picker.is-pill .picker-trigger {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 5px 10px 5px 14px;
+}
+
+.picker.is-pill .picker-value {
+  color: var(--ink);
+}
+
+.picker.is-pill .picker-trigger:hover:not(:disabled),
+.picker.is-pill.is-open .picker-trigger {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.picker.is-pill .picker-trigger.is-set {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge-soft);
+}
+
+.picker.is-pill .picker-trigger.is-set .picker-value,
+.picker.is-pill .picker-trigger:hover:not(:disabled) .picker-value,
+.picker.is-pill.is-open .picker-value {
+  color: var(--primary-ink);
+}
+
+.picker-prefix {
+  color: var(--muted);
+}
+
+/* The same ink as the value, not a lighter one: at 13px the label has to
+   keep 4.5:1 on the tint (R-A11Y-05), which a wash of the ink would not. */
+.picker.is-pill .picker-trigger.is-set .picker-prefix,
+.picker.is-pill.is-open .picker-prefix {
+  color: inherit;
+}
+
+/* A raised card rather than the inverted popover the seat menus use: this one
+   opens inside a form, among white fields on paper, and a black panel in the
+   middle of that reads as a different application. `--card` is white on paper
+   and elevated slate in the dark theme, so the panel follows the page it
+   belongs to instead of fighting it. */
+.picker-list {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  left: 0;
+  /* Nine rows fit - the language picker's Mixed or All, then the eight
+     languages; a longer list scrolls rather than running off the bottom of a
+     phone. */
+  max-height: min(360px, 60vh);
+  min-width: 100%;
+  overflow-y: auto;
+  padding: 6px;
+  /* In the window from its first frame, placed beside its trigger before it
+     is painted (usePickerPopup): laid out where the trigger is, even for a
+     frame, it overflowed a dialog's scrolling body, which grew a scrollbar
+     and scrolled - and moved the trigger it was being placed against. */
+  position: fixed;
+  top: 0;
+  z-index: var(--z-popover);
+}
+
+.picker-option {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+/* A long label wraps inside the window's width (usePickerPopup caps the
+   list to it) rather than running off the screen, where two names that
+   differ only at their ends would read as one. */
+.picker-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A run's heading (#1424): the `.section-label` eyebrow, set in as far as the
+   rows' own text. */
+.picker-group + .picker-group {
+  border-top: 1.5px solid var(--line);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.picker-group-label {
+  padding: 6px 10px 4px;
+}
+
+.picker-option:hover,
+.picker-option:focus-visible {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.picker-option.is-selected {
+  background: var(--primary-soft);
+}
+
+/* The tick keeps its slot whether or not it is drawn, so the labels stay in
+   one column and the list does not shift as the choice moves. */
+.picker-check {
+  color: var(--primary-text);
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  line-height: 0;
+  width: 13px;
+}
+
+/* ------------------------------------------------------- language picker
+
+   The picker above, wherever a language is picked: the create form, the
+   room's rules, the settings overlay and the lobby's filter. Each row is a
+   flag and the language's own name for itself (LanguagePicker); the rules
+   here are the face, since the mechanism is the picker's. */
 
 /* Flag alone, where the row it sits in says what it is: the list still names
    every language, and the button carries the name for a screen reader. The
    flag nearly fills its frame - shrunk to a chip beside a chevron it stops
    being a picture of anything at all. */
-.language-picker.is-flag-only .language-picker-trigger {
+.language-picker.is-flag-only .picker-trigger {
   /* Exactly as tall as the segmented control it stands beside - 43px is what
      that control comes to (a 4px track around a 35px segment), and matching
      it by number is what keeps the two the same object in the row. The width
@@ -776,8 +979,8 @@ input:focus-visible ~ .switch-track {
    and the flag needs none of its own. Scoped to the trigger: unscoped, this
    also caught every row of the open list, where it turned each face into a
    block and dropped the name onto a second line under its flag. */
-.language-picker.is-flag-only .language-picker-trigger .language-picker-face,
-.language-picker.is-flag-only .language-picker-trigger .language-picker-flag {
+.language-picker.is-flag-only .picker-trigger .language-picker-face,
+.language-picker.is-flag-only .picker-trigger .language-picker-flag {
   display: block;
   height: 100%;
   width: 100%;
@@ -785,30 +988,9 @@ input:focus-visible ~ .switch-track {
 
 /* The header's size: as tall as the buttons beside it (`btn-compact`, 38px),
    at the same 18:13 the full-size flag keeps. */
-.language-picker.is-flag-only.is-small .language-picker-trigger {
+.language-picker.is-flag-only.is-small .picker-trigger {
   height: 38px;
   width: 52px;
-}
-
-.language-picker.is-compact .language-picker-trigger {
-  font-size: 13.5px;
-  min-height: 42px;
-  min-width: 0;
-  padding: 7px 10px;
-}
-
-.language-picker-trigger:hover:not(:disabled) {
-  border-color: var(--primary);
-}
-
-.language-picker-trigger:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
-.language-picker-trigger svg:last-child {
-  color: var(--faint);
-  flex: none;
 }
 
 /* The one-choice and locked forms: the face without the mechanism. */
@@ -841,74 +1023,6 @@ input:focus-visible ~ .switch-track {
   white-space: nowrap;
   padding-inline: var(--ink-overhang);
   margin-inline: calc(-1 * var(--ink-overhang));
-}
-
-/* A raised card rather than the inverted popover the seat menus use: this one
-   opens inside a form, among white fields on paper, and a black panel in the
-   middle of that reads as a different application. `--card` is white on paper
-   and elevated slate in the dark theme, so the panel follows the page it
-   belongs to instead of fighting it. */
-.language-picker-list {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-raised);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  left: 0;
-  /* Nine rows fit - Mixed or All, then the eight languages; a language added
-     later scrolls rather than running off the bottom of a phone. */
-  max-height: min(360px, 60vh);
-  min-width: 100%;
-  overflow-y: auto;
-  padding: 6px;
-  /* In the window from its first frame, placed beside its trigger before it
-     is painted (LanguagePicker): laid out where the trigger is, even for a
-     frame, it overflowed a dialog's scrolling body, which grew a scrollbar
-     and scrolled - and moved the trigger it was being placed against. */
-  position: fixed;
-  top: 0;
-  z-index: var(--z-popover);
-}
-
-.language-picker-option {
-  align-items: center;
-  background: none;
-  border: 0;
-  border-radius: var(--radius-xs);
-  color: var(--ink);
-  cursor: pointer;
-  display: flex;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 700;
-  gap: 10px;
-  justify-content: space-between;
-  padding: 8px 10px;
-  text-align: left;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.language-picker-option:hover,
-.language-picker-option:focus-visible {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-.language-picker-option.is-selected {
-  background: var(--primary-soft);
-}
-
-/* The tick keeps its slot whether or not it is drawn, so the names stay in
-   one column and the list does not shift as the choice moves. */
-.language-picker-check {
-  color: var(--primary-text);
-  display: inline-flex;
-  flex: none;
-  justify-content: center;
-  line-height: 0;
-  width: 13px;
 }
 
 /* ── A room's six facts ─────────────────────────────────────────────────────
