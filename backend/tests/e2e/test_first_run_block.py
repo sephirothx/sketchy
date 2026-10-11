@@ -80,7 +80,7 @@ async def test_the_line_changes_language_with_the_page():
             await heading.wait_for()
             assert (await heading.inner_text()).strip() in LINES
 
-            await page.click(".lobby-header .language-picker-trigger")
+            await page.click(".lobby-header .picker-trigger")
             await page.get_by_role("option", name=re.compile("italiano", re.IGNORECASE)).click()
             await page.wait_for_function("() => document.documentElement.lang === 'it'")
 

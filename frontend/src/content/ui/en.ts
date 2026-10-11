@@ -1164,8 +1164,13 @@ export const EN = {
     invite: "Invite",
   },
 
-  languagePicker: {
+  /** The picker every choice is made with (ui/Picker): a trigger's
+  accessible name is what is chosen and the choice - "Reason: Spam". */
+  picker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
+  },
+
+  languagePicker: {
     everyLanguage: "Every language",
     /** A prompt list in no language (#821): played in a room of any
     language (GLOSSARY: Any language). */

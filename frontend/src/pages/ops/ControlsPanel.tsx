@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Chip } from "../../components/ui/Chip";
+import { Picker } from "../../components/ui/Picker";
 import { useAdmissionNotices } from "../../hooks/useAdmissionNotices";
 import { ApiError } from "../../lib/api";
 import {
@@ -653,17 +654,17 @@ export function ControlsPanel() {
             )}
           </span>
           <label htmlFor="ops-role">Role</label>
-          <select
+          <Picker
             id="ops-role"
-            className="ops-select"
+            label="Role"
+            variant="compact"
+            options={[
+              { value: "moderator", label: "moderator" },
+              { value: "user", label: "user" },
+            ]}
             value={role}
-            onChange={(change) =>
-              setRole(change.target.value === "user" ? "user" : "moderator")
-            }
-          >
-            <option value="moderator">moderator</option>
-            <option value="user">user</option>
-          </select>
+            onChange={setRole}
+          />
           <label htmlFor="ops-role-reason">Reason</label>
           <input
             id="ops-role-reason"

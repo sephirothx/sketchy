@@ -235,7 +235,7 @@ async def test_a_report_about_the_drawer_carries_the_drawing():
             include = dialog.get_by_label("Include their drawing")
             await include.wait_for()
             assert await include.is_checked()
-            assert await dialog.locator("select").input_value() == "offensive_drawing"
+            assert await dialog.locator(".picker-trigger").get_attribute("data-value") == "offensive_drawing"
             # Nothing typed: the drawing is the complaint, and the details
             # are optional wherever the server attaches the evidence itself.
             await dialog.get_by_role("button", name="Send report").click()
