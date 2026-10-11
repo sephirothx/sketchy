@@ -166,7 +166,12 @@ def test_production_refuses_an_unencrypted_relay_with_a_password():
         )
     # A relay on the same host needs no password, and is allowed.
     validate_mail_configuration(
-        {"SKETCHY_ENV": "production", "SMTP_HOST": "localhost", "SMTP_SECURITY": "none"}
+        {
+            "SKETCHY_ENV": "production",
+            "SMTP_HOST": "localhost",
+            "SMTP_SECURITY": "none",
+            "SMTP_FROM": "Sketchy <hello@sketchy.games>",
+        }
     )
     # Outside production the choice is the operator's.
     validate_mail_configuration(

@@ -49,6 +49,26 @@ def test_a_budget_change_moves_what_the_guard_will_read():
 # ------------------------------------------------------------------ ceilings
 
 
+async def test_the_guest_day_ceiling_moves_without_a_restart():
+    """#1418: env-only, raising it needed a restart that ends every game."""
+    from app.auth.routes import GLOBAL_PROVISION_KEY, guest_day_ceiling
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        limiter = guest_day_ceiling(factory)
+        settings = a_registry(guests_per_day=limiter)
+        settings.set("guests.daily_limit", 100)
+        for _ in range(100):
+            assert await limiter.check(GLOBAL_PROVISION_KEY)
+        assert not await limiter.check(GLOBAL_PROVISION_KEY)
+        settings.set("guests.daily_limit", 101)
+        assert await limiter.check(GLOBAL_PROVISION_KEY)
+    finally:
+        await engine.dispose()
+
+
+
 def test_the_global_room_ceiling_refuses_at_its_new_value():
     rooms = RoomManager()
     quotas = RoomQuotaService(rooms)

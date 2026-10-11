@@ -599,6 +599,8 @@ class BoundedEngineServer(engineio.AsyncServer):
 
     def _refuse_handshake(self, reason: str, address: str) -> dict:
         telemetry.note_socket_admission_refused(reason)
+        if reason == "server":
+            telemetry.note_capacity_refusal("sockets")
         now = self._clock()
         if now - self._refusal_logged_at >= REFUSAL_LOG_SECONDS:
             self._refusal_logged_at = now

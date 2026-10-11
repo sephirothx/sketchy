@@ -192,6 +192,56 @@ def test_every_recording_rule_is_used_by_an_alert():
     assert recorded <= used, recorded - used
 
 
+# Series the server emits only on some deployments: the data-volume gauges are
+# absent on PostgreSQL, where the disk is the database host's.
+SOMETIMES_EXPOSED = {"sketchy_data_disk_free_bytes", "sketchy_data_disk_total_bytes"}
+
+
+def test_every_page_fires_when_the_series_it_reads_is_missing():
+    """A comparison with a series that is not there is not false, it is nothing (#1418).
+
+    `up{job="sketchy"} == 0` said nothing about a job renamed `sketchy-nas`, and
+    `sketchy:disk_free_ratio < 0.10` nothing about a PostgreSQL data directory
+    the scrape's relabel did not name. So a page either counts an increase -
+    where no series means nothing happened - or carries its own `absent()`, or
+    reads only series another page guards with one: the server's own by the
+    scrape guard, the probe's by the probe's, anything else by name.
+    """
+    rules = all_rules()
+    pages = [rule for rule in rules if "alert" in rule and rule["labels"]["severity"] == "page"]
+    guarded = {
+        series
+        for rule in pages
+        for series in re.findall(r"absent\(\s*([a-z_:]+(?:\{[^}]*\})?)", rule["expr"])
+    }
+    assert 'up{job="sketchy"}' in guarded, guarded
+    recorded = {rule["record"]: rule["expr"] for rule in rules if "record" in rule}
+    server = exposed_names() - set(PROBE_METRIC_NAMES) - SOMETIMES_EXPOSED - {"up"}
+    probe_guarded = any(name in guarded for name in PROBE_METRIC_NAMES)
+
+    def watched(series: str) -> bool:
+        if series in guarded:
+            return True
+        if series in recorded:
+            sources = METRIC.findall(recorded[series]) + EXTERNAL_METRIC.findall(recorded[series])
+            return all(watched(source) for source in sources)
+        if series in PROBE_METRIC_NAMES:
+            return probe_guarded
+        return series in server
+
+    unguarded = {}
+    for rule in pages:
+        expr = " ".join(rule["expr"].split())
+        if re.fullmatch(r"increase\([^()]*\) > 0", expr) or "absent(" in expr:
+            continue
+        series = METRIC.findall(expr) + EXTERNAL_METRIC.findall(expr)
+        series += ['up{job="sketchy"}'] if re.search(r'\bup\{job="sketchy"\}', expr) else []
+        missing = [name for name in series if not watched(name)]
+        if missing or not series:
+            unguarded[rule["alert"]] = missing
+    assert unguarded == {}, unguarded
+
+
 def test_the_slo_document_names_every_alert():
     """The objectives and the rules must not drift apart."""
     slo = (RULES.parents[2] / "docs" / "slo.md").read_text(encoding="utf-8")

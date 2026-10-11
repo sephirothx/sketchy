@@ -13,7 +13,7 @@ exposes) and a server on ``http://localhost:8000``, where the E2E helpers it
 borrows to name players and join rooms expect one:
 
     (cd frontend && VITE_RENDER_DIAGNOSTICS=true npm run build)
-    (cd backend && HOST=:: PORT=8000 GUEST_PROVISION_LIMIT=1000 .venv/bin/python -m app.server) &
+    (cd backend && HOST=:: PORT=8000 GUEST_PROVISION_LIMIT=1000 GUEST_PROVISION_PREFIX_DAILY_LIMIT=100000 .venv/bin/python -m app.server) &
     backend/.venv/bin/python benchmarks/join_to_drawing.py --base-url http://localhost:8000
 """
 from __future__ import annotations

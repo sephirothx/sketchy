@@ -99,10 +99,31 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+# A client's address (#1418). Uvicorn's WebSocket accept line - `10.0.0.6:0 -
+# "WebSocket /socket.io/?..." [accepted]` - wrote the forwarded address on
+# every connect in JSON mode, the format production runs, though raw
+# addresses are never to be stored (R-RATE-02) and are hashed everywhere the
+# application keeps one. Masked whole, port and all: the hash is what the
+# application correlates on, so the address is worth nothing here.
+_IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
+# IPv6, bracketed or bare. Told from a clock reading (12:34:56) and other
+# colon-separated numbers by needing `::` or a hex letter or six groups.
+_IPV6 = re.compile(r"(?<![\w:.])\[?(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?:%[\w.]+)?\]?(?::\d{1,5})?(?![\w:])")
+
+
+def _mask_ipv6(match: re.Match[str]) -> str:
+    text = match.group(0)
+    core = text.strip("[]").split("]")[0]
+    if "::" in core or re.search(r"[A-Fa-f]", core) or core.count(":") >= 5:
+        return "[address]"
+    return text
+
+
 def redact(text: str) -> str:
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
-    return text
+    text = _IPV6.sub(_mask_ipv6, text)
+    return _IPV4.sub("[address]", text)
 
 
 def log_format(environ: dict[str, str] | None = None) -> str:

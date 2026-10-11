@@ -255,7 +255,7 @@ class PersistentRateLimiter:
         """Change the ceiling. The stored buckets are counted, not capped, so
         a new limit applies to every window already open rather than only to
         the ones opened after it."""
-        self._limit = value
+        self._limit = int(value)
 
     async def _hash_secret(self) -> str:
         self._secret = await get_ip_hash_secret(
@@ -505,6 +505,30 @@ def client_key(request: Request) -> str:
     """
     client = request.client
     return address_key(client.host if client else None)
+
+
+def prefix_key(host: str | None) -> str:
+    """The network an address belongs to: an IPv4 /24, or an IPv6 /48.
+
+    Wider than `address_key` on purpose, for the few limits that bound a
+    network rather than a subscriber. A routed /48 holds 65,536 /64s, each its
+    own address bucket, and measured: 90 of them spent the deployment's whole
+    day of guests in 34 seconds (#1418). A /48 is what one site is handed, and
+    a /24 the IPv4 equivalent - which is also where a mobile carrier's NAT pool
+    or a cloud's neighbouring addresses sit, so a limit keyed here is a share
+    of a ceiling, never the only bound.
+    """
+    if not host:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    if isinstance(address, ipaddress.IPv6Address):
+        return str(ipaddress.IPv6Network((int(address) >> 80 << 80, 48)))
+    return str(ipaddress.IPv4Network((int(address) >> 8 << 8, 24)))
 
 
 def address_key(host: str | None) -> str:

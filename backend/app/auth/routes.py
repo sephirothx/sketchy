@@ -83,7 +83,7 @@ from app.api.user_settings import settings_of_registered_account
 from app.services.guest_names import online_guest_holding
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
-from app.auth.rate_limit import PersistentRateLimiter, client_key
+from app.auth.rate_limit import PersistentRateLimiter, client_key, prefix_key
 from app.auth.login_guard import LoginGuard
 from app.auth.passkeys import (
     LastFactorError,
@@ -113,6 +113,7 @@ from app.repositories.interfaces import (
     UsernameTakenError,
     UserRepository,
 )
+from app.services.telemetry import telemetry
 
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,31 @@ def login_touch_is_due(last_login_at, min_interval_seconds: float) -> bool:
 # the service rather than of whoever happens to be calling. The bucket is a
 # database row, so replicas share the number rather than each getting one.
 GLOBAL_PROVISION_KEY = "all"
+
+#: Guests the whole deployment provisions in a day: the backstop that still
+#: holds behind a proxy every caller shares, and against a botnet.
+DEFAULT_GUESTS_PER_DAY = 5000
+#: The day's guests one network (`prefix_key`) may take. A tenth of the
+#: default ceiling: one /48 spent the whole of it in 34 s (#1418), and a
+#: school or an office behind one address meets the hourly address limit
+#: long before this.
+DEFAULT_GUESTS_PER_PREFIX_DAY = 500
+
+
+def guest_day_ceiling(session_factory) -> PersistentRateLimiter:
+    """The deployment's daily guest ceiling.
+
+    Built by the application rather than the router so the operations panel
+    can move it (`guests.daily_limit`, `services/tunables.py`): raising it is
+    the remedy when it turns real visitors away, and the environment variable
+    alone needed a restart that ends every live game (N-02).
+    """
+    return PersistentRateLimiter(
+        session_factory,
+        scope="guest_provision_day",
+        limit=_limit("GUEST_PROVISION_DAILY_LIMIT", DEFAULT_GUESTS_PER_DAY),
+        window_seconds=86400,
+    )
 
 
 
@@ -336,6 +362,9 @@ def create_auth_router(
     # rule then has nobody to hold a name against.
     presence: PresenceRegistry | None = None,
     presence_identities: PresenceIdentityCache | None = None,
+    # The daily guest ceiling the operations panel moves; built here when no
+    # application passes one (the router's own tests).
+    guests_per_day: PersistentRateLimiter | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -356,8 +385,10 @@ def create_auth_router(
         window_seconds=60,
     )
     # Provisioning is the one unauthenticated call that writes rows - a
-    # `users` row and an `auth_sessions` row - so it is bounded twice. The
-    # address key is what a single flooding client meets; the daily ceiling is
+    # `users` row and an `auth_sessions` row - so it is bounded three times.
+    # The address key is what a single flooding client meets; the network's
+    # share of the day is what one site with a routed /48 meets, which is a
+    # different client to every address key (#1418); and the daily ceiling is
     # what still holds behind a reverse proxy, where every caller presents the
     # proxy, and against a botnet, where no address key means anything.
     provision_limiter = PersistentRateLimiter(
@@ -366,12 +397,13 @@ def create_auth_router(
         limit=_limit("GUEST_PROVISION_LIMIT", 60),
         window_seconds=3600,
     )
-    daily_provision_limiter = PersistentRateLimiter(
+    prefix_provision_limiter = PersistentRateLimiter(
         session_factory,
-        scope="guest_provision_day",
-        limit=_limit("GUEST_PROVISION_DAILY_LIMIT", 5000),
+        scope="guest_provision_prefix_day",
+        limit=_limit("GUEST_PROVISION_PREFIX_DAILY_LIMIT", DEFAULT_GUESTS_PER_PREFIX_DAY),
         window_seconds=86400,
     )
+    daily_provision_limiter = guests_per_day or guest_day_ceiling(session_factory)
     # Guessing six digits is worth throttling on its own account, and an
     # enrolment page reloading in a loop should not mint secrets forever.
     # Tighter than login because nobody legitimately does this often.
@@ -600,6 +632,15 @@ def create_auth_router(
                 session_factory, session_id=session_id, user_id=user_id
             )
         return []
+
+    def not_taking_visitors() -> Refusal:
+        # The same answer for the network's share and the whole day's: which
+        # one ran out is the operator's to know, not the caller's.
+        return Refusal(
+            429,
+            ErrorCode.NOT_TAKING_VISITORS,
+            "Sketchy is not taking new visitors right now. Please try again later.",
+        )
 
     async def throttle(limiter: PersistentRateLimiter, request: Request) -> None:
         if not await limiter.check(client_key(request)):
@@ -881,26 +922,29 @@ def create_auth_router(
             await refuse_a_registered_name(name)
             await refuse_a_name_in_use(name, None)
             await throttle(provision_limiter, request)
+            address = client_key(request)
+            network = prefix_key(request.client.host if request.client else None)
+            # A refusal gives back what the caller had already spent: the
+            # ceiling lifts, and a caller who bought nothing would otherwise
+            # still be blocked by an allowance they never used.
+            if not await prefix_provision_limiter.check(network):
+                logger.warning("guest provisioning is at one network's daily share")
+                telemetry.note_capacity_refusal("guests_per_prefix")
+                await provision_limiter.refund(address)
+                raise not_taking_visitors()
             if not await daily_provision_limiter.check(GLOBAL_PROVISION_KEY):
                 logger.warning("guest provisioning is at its daily ceiling")
-                # The day refused them, so the hour is still theirs: the
-                # ceiling lifts and a caller who bought nothing would
-                # otherwise still be blocked by an allowance they never spent.
-                await provision_limiter.refund(client_key(request))
-                raise Refusal(
-                    429,
-                    ErrorCode.NOT_TAKING_VISITORS,
-                    (
-                        "Sketchy is not taking new visitors right now. "
-                        "Please try again later."
-                    ),
-                )
+                telemetry.note_capacity_refusal("guests_per_day")
+                await provision_limiter.refund(address)
+                await prefix_provision_limiter.refund(network)
+                raise not_taking_visitors()
             try:
                 user = await user_repo.create_anonymous(display_name=name)
             except Exception:
                 # An allowance buys an account; one that bought nothing is
                 # given back, the same way a refused room gives back its own.
-                await provision_limiter.refund(client_key(request))
+                await provision_limiter.refund(address)
+                await prefix_provision_limiter.refund(network)
                 await daily_provision_limiter.refund(GLOBAL_PROVISION_KEY)
                 raise
             # A freshly provisioned guest, so the role is known without asking.

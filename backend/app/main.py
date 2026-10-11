@@ -56,7 +56,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket_origins
 from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
-from app.auth.routes import create_auth_router
+from app.auth.routes import create_auth_router, guest_day_ceiling
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.models import AuthSession
 from app.db.seed import seed_prompt_lists
@@ -70,6 +70,8 @@ from app.deployment import (
     validate_contact_address,
     validate_database_configuration,
     validate_mail_configuration,
+    validate_frontend_build,
+    api_documentation_urls,
     validate_public_base_url,
     validate_python_runtime,
     validate_worker_topology,
@@ -398,8 +400,10 @@ telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).ge
 # Built here rather than at import so it can reach the live policy objects the
 # handlers consult: a change has to move the value the next command reads, not
 # a copy of it.
+guests_per_day = guest_day_ceiling(async_session_factory)
 runtime_settings = build_runtime_settings(
     budgets=handler_context.command_budgets,
+    guests_per_day=guests_per_day,
     quotas=handler_context.room_quotas,
     capacity=handler_context.room_capacity,
     flow=flow_timing,
@@ -890,6 +894,8 @@ async def lifespan(_app: FastAPI):
         validate_mail_configuration()
         # The privacy notice and the terms send players here (#1417).
         validate_contact_address()
+        # The game is the page as much as the API (#1418).
+        validate_frontend_build(_frontend_dist / "index.html")
         await init_db()
         if is_production():
             # Beside the revision check: the process answering anonymous
@@ -1024,7 +1030,7 @@ async def lifespan(_app: FastAPI):
         await async_engine.dispose()
 
 
-api = FastAPI(title="Sketchy", lifespan=lifespan)
+api = FastAPI(title="Sketchy", lifespan=lifespan, **api_documentation_urls())
 # A refusal that names its reason renders with its code in the body; anything
 # still raising a plain HTTPException keeps FastAPI's own shape (#760).
 install_refusal_handler(api)
@@ -1063,6 +1069,7 @@ api.include_router(
         on_sessions_revoked=close_sockets_of_revoked_sessions,
         presence=handler_context.presence,
         presence_identities=handler_context.presence_identities,
+        guests_per_day=guests_per_day,
     )
 )
 api.include_router(

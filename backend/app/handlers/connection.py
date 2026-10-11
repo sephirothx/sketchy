@@ -84,6 +84,8 @@ async def _reap_account_ghosts(ctx: HandlerContext, user_id: str | None) -> int:
 
 async def _turn_away(ctx: HandlerContext, sid, *, limit: str) -> None:
     """Tell a socket it is past a ceiling, then close it once the notice lands."""
+    if limit == "server":
+        telemetry.note_capacity_refusal("sockets")
     await ctx.sio.emit(
         "server_full",
         {"reason": TURNED_AWAY_REASONS[limit], "limit": limit},

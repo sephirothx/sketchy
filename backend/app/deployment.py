@@ -1,10 +1,14 @@
 """Deployment invariants that must fail before application startup mutates state."""
 
 from collections.abc import Mapping
+from email.utils import parseaddr
 import ipaddress
+import logging
 import os
 import sys
 from urllib.parse import urlsplit
+
+logger = logging.getLogger(__name__)
 
 
 MINIMUM_PYTHON_VERSION = (3, 14)
@@ -227,6 +231,53 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
             "An unencrypted relay is for a server on the same host or a "
             "private network, which needs no password."
         )
+    _validate_sender(values)
+
+
+def _validate_sender(values: Mapping[str, str]) -> None:
+    """The From address production mail goes out under (#1418).
+
+    `SMTP_FROM` defaulted to `sketchy@localhost`, and a relay with a host and
+    a password accepted it and sent: every confirmation and reset link went
+    out From a domain DMARC fails, into the spam folder or nowhere. Required
+    in production, on a domain somebody can receive mail at; a domain that is
+    not the site's own is allowed - a mail provider's sending domain is
+    ordinary - but said, since alignment is the usual cause of a bounce."""
+    raw = values.get("SMTP_FROM", "").strip()
+    if not raw:
+        raise RuntimeError(
+            f"SMTP_FROM is required when {ENVIRONMENT_VARIABLE}={PRODUCTION}: the "
+            "default, sketchy@localhost, is a domain no receiving server accepts, "
+            "so every confirmation and reset link would be rejected or filed as spam."
+        )
+    address = parseaddr(raw)[1]
+    problem = _contact_problem(address) if address else "it is not one email address"
+    if problem is not None:
+        raise RuntimeError(f"SMTP_FROM must name one email address; got {raw!r}, and {problem}.")
+    domain = address.rpartition("@")[2].lower()
+    if _unreachable(domain):
+        raise RuntimeError(
+            f"SMTP_FROM sends from a domain nobody receives mail at ({domain}); set "
+            f"the address the relay is allowed to send from when {ENVIRONMENT_VARIABLE}={PRODUCTION}."
+        )
+    site = (urlsplit(public_base_url(values)).hostname or "").lower()
+    if site and not (site == domain or site.endswith("." + domain) or domain.endswith("." + site)):
+        logger.warning(
+            "SMTP_FROM's domain (%s) is not the site's (%s): receiving servers check "
+            "that the sender's domain is aligned with its SPF and DKIM, and a "
+            "mismatch is the usual reason a message lands in spam.",
+            domain,
+            site,
+        )
+
+
+def _unreachable(domain: str) -> bool:
+    """A domain nobody can send mail to: a placeholder that reached production."""
+    return (
+        domain in _UNREACHABLE_DOMAINS
+        or domain.endswith(_UNREACHABLE_SUFFIXES)
+        or any(domain.endswith("." + reserved) for reserved in _UNREACHABLE_DOMAINS)
+    )
 
 
 CONTACT_ADDRESS_VARIABLE = "CONTACT_ADDRESS"
@@ -307,14 +358,40 @@ def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:
             "to reach the operator, and a public notice must not name nobody."
         )
     domain = address.rpartition("@")[2].lower()
-    if domain in _UNREACHABLE_DOMAINS or domain.endswith(_UNREACHABLE_SUFFIXES) or any(
-        domain.endswith("." + reserved) for reserved in _UNREACHABLE_DOMAINS
-    ):
+    if _unreachable(domain):
         raise RuntimeError(
             f"{CONTACT_ADDRESS_VARIABLE} names a domain no player can write to "
             f"({domain}); set the operator's real address when "
             f"{ENVIRONMENT_VARIABLE}={PRODUCTION}."
         )
+
+
+def validate_frontend_build(index_html, environ: Mapping[str, str] | None = None) -> None:
+    """Refuse a production process with no frontend build to serve (#1418).
+
+    The build is mounted only when present, which is what lets a backend
+    developer run the API alone. In production the same leniency served
+    `/api/*` and the socket while every page - `/`, `/room/CODE` - was a 404,
+    and readiness answered 200 throughout: nothing said the game was gone."""
+    values = os.environ if environ is None else environ
+    if is_production(values) and not index_html.is_file():
+        raise RuntimeError(
+            f"No frontend build at {index_html} when {ENVIRONMENT_VARIABLE}={PRODUCTION}: "
+            "every page would be a 404 while the API and readiness answered. "
+            "Build it (npm run build in frontend/) before starting."
+        )
+
+
+def api_documentation_urls(environ: Mapping[str, str] | None = None) -> dict[str, str | None]:
+    """Where FastAPI serves its interactive documentation, or nowhere (#1418).
+
+    Its defaults published `/docs`, `/redoc` and `/openapi.json` in
+    production: 121 paths with their schemas, 33 of them under
+    `/api/admin/*` and `/api/moderation/*` - a map of every staff action for
+    anybody to read. They stay for development, where they are useful."""
+    if is_production(environ):
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
 
 
 def validate_python_runtime(version: tuple[int, ...] | None = None) -> None:

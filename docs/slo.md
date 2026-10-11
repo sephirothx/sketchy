@@ -19,7 +19,7 @@ resets every in-memory series; Prometheus keeps the history.
 | # | Objective | Measured by | Window | Alert |
 | --- | --- | --- | --- | --- |
 | **SLO-1** | A game can be played: guest, create, join, start, draw, leave all succeed within 20 s - and the probe itself keeps running | `sketchy_probe_success` and `sketchy_probe_last_run_timestamp_seconds` from `python -m app.probe` (textfile collector) | ≥ 99.5 % of probe runs over 30 days | `SketchyProbeFailing` (page, 5 m); `SketchyProbeStale` (page, 5 m) when the last run is over five minutes old or the series is absent |
-| **SLO-2** | The process is up and can reach its database | `up{job="sketchy"}`, `sketchy_db_ready` (refreshed by the scrape, so it needs no `/api/ready` caller) | ≥ 99.9 % over 30 days | `SketchyDown`, `SketchyDatabaseUnreachable` (page, 2 m) |
+| **SLO-2** | The process is up and can reach its database | `up{job="sketchy"}`, `sketchy_db_ready` (refreshed by the scrape, so it needs no `/api/ready` caller) | ≥ 99.9 % over 30 days | `SketchyDown`, `SketchyDatabaseUnreachable` (page, 2 m); `SketchyNotScraped` (page, 15 m) when there is no target to compare |
 | **SLO-3** | API requests succeed | `sketchy:http_error_ratio:5m` | < 1 % 5xx over any 5 m | `SketchyHighErrorRate` (page) |
 | **SLO-4** | Client commands do not raise | `sketchy:socket_error_ratio:5m` | < 0.5 % `outcome="error"` over any 5 m | `SketchySocketErrors` (page) |
 | **SLO-5** | The event loop keeps time | `sketchy:loop_lag_p95_seconds:5m` | p95 < 250 ms | `SketchyLoopLag` (page, 5 m) |
@@ -43,6 +43,15 @@ Saturation signals - pool fill, statement p95, disk, memory - are not objectives
 warnings, because each one is a cause the objectives above would show the effect of:
 `SketchyPoolSaturated`, `SketchySlowQueries`, `SketchyDiskLow` (page: a full disk is
 data loss), `SketchyMemoryHigh`.
+
+The deployment-wide ceilings - the day's new guests, live rooms, open sockets - are
+not saturation either: past one, a visitor who did nothing wrong is turned away.
+`SketchyTurningVisitorsAway` pages on any increase of
+`sketchy_capacity_refusals_total` for those three, because one /48 was measured
+spending the whole day of guests in 34 seconds and nothing but a log line said so
+(#1418); each ceiling moves on `/admin/operations` without a restart.
+`SketchyGuestShareSpent` warns when one network (an IPv6 /48, an IPv4 /24) has spent
+its share of the day - a flood held off everybody else, or a NAT that needs more.
 
 The connection has four of those warnings (#881), each a network or proxy problem a
 player feels as lag or a stuck canvas before any objective moves:
@@ -82,6 +91,8 @@ On PostgreSQL the disk is the database host's: the application does not emit
 mount on that host; the scrape labels the data directory's mount `volume="database"`
 ([`scrape-example.yml`](../ops/prometheus/scrape-example.yml)) and the disk rules read
 only that series, so a full root or backup disk does not page as a full database.
+A data directory on a mount the relabel does not name leaves the ratio absent rather
+than low, so `SketchyDiskUnwatched` pages after 15 minutes without it (#1418).
 
 The database's own view of itself comes from postgres_exporter
 ([`sketchy-postgres.yml`](../ops/prometheus/rules/sketchy-postgres.yml), #889). None of
@@ -159,6 +170,11 @@ shipping features and look at what spent it.
   textfile path, or a textfile job nobody scraped all look the same as an outage,
   because for the purpose of knowing whether a game can be played they are one. The
   scrape example carries the node_exporter job for this reason.
+- A rule comparing a series is silent while the series is missing, not firing. Every
+  page therefore either counts an increase, carries its own `absent()`, or reads only
+  series some page guards with one: `SketchyNotScraped` (no `up{job="sketchy"}` for 15
+  minutes) for the server's, `SketchyProbeStale` for the probe's, `SketchyDiskUnwatched`
+  for the disk ratio. `backend/tests/test_alert_rules.py` holds every page to that (#1418).
 - Counters reset on restart; `rate()` and `increase()` handle that, plain comparisons
   do not.
 - The dashboards ([`ops/grafana/`](../ops/grafana/), #968) read the recording rule for

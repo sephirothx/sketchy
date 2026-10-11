@@ -31,6 +31,7 @@ import argparse
 import asyncio
 import base64
 import json
+import re
 import struct
 import sys
 import threading
@@ -57,7 +58,10 @@ PROBE_METRIC_NAMES = (
     PROBE_LAST_RUN_METRIC,
 )
 
-STEPS = ("guest", "connect", "create", "join", "start", "prompt", "draw", "leave")
+# `page` first (#1418): the game is the page as much as the socket, and a
+# deployment with no frontend build answered every API step and every socket
+# event while `/` was a 404 - readiness and this probe both green.
+STEPS = ("page", "guest", "connect", "create", "join", "start", "prompt", "draw", "leave")
 DEFAULT_STATE_PATH = Path.home() / ".cache" / "sketchy" / "probe-sessions.json"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 STEP_TIMEOUT_SECONDS = 8.0
@@ -483,6 +487,21 @@ class ProbeResult:
         return "\n".join(lines) + "\n"
 
 
+async def _page(base_url: str, transport: Transport) -> None:
+    """The page a player opens, and the first script it loads (#1418)."""
+    root = base_url.rstrip("/")
+    page = await transport("GET", f"{root}/", None, {"Accept": "text/html"})
+    if page.status != 200:
+        raise ProbeError("page", f"/ answered {page.status}")
+    html = page.body.decode("utf-8", "replace")
+    script = re.search(r'src="(/assets/[\w.-]+\.js)"', html)
+    if script is None:
+        raise ProbeError("page", "/ names no /assets/ script: is the frontend built?")
+    asset = await transport("GET", f"{root}{script.group(1)}", None, {"Accept": "*/*"})
+    if asset.status != 200:
+        raise ProbeError("page", f"{script.group(1)} answered {asset.status}")
+
+
 async def _guest(base_url: str, transport: Transport, name: str) -> str:
     """A guest session's cookie, the way the lobby's name box makes one."""
     body = json.dumps({"displayName": name}).encode("utf-8")
@@ -612,6 +631,8 @@ async def run_probe(
         step_started = now
 
     async def flow() -> None:
+        await _page(base_url, transport)
+        done("page")
         host_cookie, guest_cookie, result.provisioned = await _sessions(
             base_url, transport, state_path, name_prefix
         )

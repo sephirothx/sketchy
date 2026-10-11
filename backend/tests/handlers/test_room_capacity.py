@@ -5,6 +5,8 @@ spectators, and every one of them was another recipient of every broadcast.
 """
 from __future__ import annotations
 
+from app.services.telemetry import telemetry
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -107,7 +109,9 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
 
     for sid in ("first", "second"):
         await sio.handlers["/"]["connect"](sid, {}, None)
+    before = telemetry.capacity_refusals.get(("sockets",))
     await sio.handlers["/"]["connect"]("third", {}, None)
+    assert telemetry.capacity_refusals.get(("sockets",)) == before + 1
 
     refusals = [
         call.args

@@ -393,6 +393,12 @@ class SampleRing:
 # --- families ----------------------------------------------------------------
 
 
+#: The ceilings `sketchy_capacity_refusals_total` counts. Every one but the
+#: per-prefix share is shared by everybody, so a refusal there turns away a
+#: visitor who did nothing wrong, and pages; the share refuses one network.
+CAPACITY_CEILINGS = ("guests_per_day", "guests_per_prefix", "rooms", "sockets")
+
+
 class LabelledCounter:
     """A monotonic counter per label tuple, bounded in how many tuples it keeps."""
 
@@ -891,6 +897,17 @@ class Telemetry:
             "Engine.IO handshakes refused before a transport was allocated, by the ceiling that refused them (address or server).",
             ("reason",),
         )
+        # The deployment-wide ceilings, each one the front door closing on
+        # somebody who did nothing wrong (#1418): measured, the guests' day
+        # was spent in 34 s and the only trace was a WARNING line. Seeded at
+        # zero so the first refusal after a restart is an increase too.
+        self.capacity_refusals = LabelledCounter(
+            "sketchy_capacity_refusals_total",
+            "Visitors turned away by a deployment-wide ceiling, by which one (guests_per_day, guests_per_prefix, rooms, sockets).",
+            ("ceiling",),
+        )
+        for ceiling in CAPACITY_CEILINGS:
+            self.capacity_refusals.inc((ceiling,), by=0)
         self.socket_backlog_closures = LabelledCounter(
             "sketchy_socket_backlog_closures_total",
             "Sockets closed for an outbound backlog past the budget, by which bound (age or bytes).",
@@ -1272,6 +1289,11 @@ class Telemetry:
     def note_lobby_baseline(self, size: int) -> None:
         self.lobby_baseline_bytes.observe(float(size), now=self._clock())
 
+    def note_capacity_refusal(self, ceiling: str) -> None:
+        if ceiling not in CAPACITY_CEILINGS:
+            raise ValueError(f"unknown capacity ceiling: {ceiling}")
+        self.capacity_refusals.inc((ceiling,))
+
     def note_socket_backlog_closed(self, reason: str) -> None:
         self.socket_backlog_closures.inc((reason,))
 
@@ -1580,6 +1602,7 @@ class Telemetry:
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
         lines += self.socket_admissions_refused.lines()
+        lines += self.capacity_refusals.lines()
         lines += self.socket_backlog_closures.lines()
         lines += self.socket_backlog_bytes.lines()
         lines += self.socket_backlog_age.lines()

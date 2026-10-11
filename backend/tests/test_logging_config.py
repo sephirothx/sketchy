@@ -210,3 +210,32 @@ def test_an_exception_already_rendered_as_text_is_carried_as_the_exc_field():
     record.exc_text = "Traceback: login failed password=hunter2 for x"
     payload = json.loads(JsonFormatter().format(record))
     assert payload["exc"] == "Traceback: login failed password=*** for x"
+
+
+def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
+    """#1418: in JSON mode uvicorn's WebSocket accept line wrote the forwarded
+    address on every connect, though raw addresses are never stored
+    (R-RATE-02). IPv4 and IPv6 are masked, ports included; times and
+    version numbers are left alone."""
+    import json
+    import logging
+
+    from app.logging_config import JsonFormatter, redact
+
+    record = logging.LogRecord(
+        "uvicorn.error", logging.INFO, __file__, 1,
+        '%s - "WebSocket %s" [accepted]', ("10.0.0.6:0", "/socket.io/?EIO=4"), None,
+    )
+    line = json.loads(JsonFormatter().format(record))["msg"]
+    assert "10.0.0.6" not in line and "[accepted]" in line
+    for text in (
+        "client 203.0.113.9 connected",
+        "client 2001:db8::1 connected",
+        "[2001:db8:85a3::8a2e:370:7334]:443 opened",
+        "::1:52114 closed",
+        "fe80::1%en0 bound",
+    ):
+        masked = redact(text)
+        assert "[address]" in masked and not any(part in masked for part in ("203.0", "2001:", "::1", "fe80")), masked
+    for text in ("took 12:34:56", "version 1.2.3", "at 2026-10-11T12:34:56.123Z", "ratio 0.25:1"):
+        assert redact(text) == text

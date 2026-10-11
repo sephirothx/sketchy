@@ -18,6 +18,12 @@ kinds are kept off it on purpose:
   changing one side alone makes the two disagree rather than making the server
   configurable.
 
+The deployment's daily guest ceiling is on it although it guards an
+unauthenticated write, because it is not a per-caller limit: it is the front
+door, and when it closes on real visitors raising it is the remedy, which the
+environment variable alone could only apply with a restart that ends every
+live game (#1418). The per-address and per-network bounds beneath it stay off.
+
 A tunable is also not a test setting. E2E fast-forwards the page's own clock
 (R-ENG-10) and must never reach for one of these to make itself faster.
 """
@@ -26,6 +32,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from functools import partial
 
+from app.auth.rate_limit import PersistentRateLimiter
+from app.auth.routes import DEFAULT_GUESTS_PER_DAY
 from app.client_config import ClientConfig
 from app.deployment import DEFAULT_SHUTDOWN_DRAIN_SECONDS, MAX_SHUTDOWN_DRAIN_SECONDS
 from app.flow_timing import FlowTiming
@@ -260,6 +268,24 @@ def ceiling_tunables(
     ]
 
 
+def guest_tunables(guests_per_day: PersistentRateLimiter) -> list[Tunable]:
+    """How many new guests the whole deployment takes in a day."""
+    return [
+        _number(
+            guests_per_day, "limit",
+            name="guests.daily_limit", default=DEFAULT_GUESTS_PER_DAY,
+            minimum=100, maximum=1_000_000, unit="guests per day",
+            env_var="GUEST_PROVISION_DAILY_LIMIT",
+            description=(
+                "New guests the whole deployment provisions in 24 hours, "
+                "whoever asks. Past it every first visit is told Sketchy is not "
+                "taking new visitors, and SketchyTurningVisitorsAway pages; "
+                "raise it when that is real people rather than a flood."
+            ),
+        ),
+    ]
+
+
 def flow_tunables(flow: FlowTiming) -> list[Tunable]:
     """How long each phase of a turn waits.
 
@@ -468,6 +494,7 @@ def build_runtime_settings(
     flow: FlowTiming | None = None,
     client: ClientConfig | None = None,
     shutdown: ShutdownCoordinator | None = None,
+    guests_per_day: PersistentRateLimiter | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> RuntimeSettings:
     """Every tunable this process offers, wired to what actually holds it.
@@ -487,6 +514,8 @@ def build_runtime_settings(
     tunables.extend(budget_tunables(budgets))
     if quotas is not None and capacity is not None:
         tunables.extend(ceiling_tunables(quotas, capacity))
+    if guests_per_day is not None:
+        tunables.extend(guest_tunables(guests_per_day))
     if flow is not None:
         tunables.extend(flow_tunables(flow))
     if shutdown is not None:
