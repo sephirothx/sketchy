@@ -207,6 +207,7 @@ from app.repositories.interfaces import (
     PromptListSummary,
     OwnedLiveEdition,
     OwnedPromptList,
+    PROMPT_STATS_WINDOWS,
     PromptStatsSummary,
     PromptUsage,
     ResolvedPromptSelection,
@@ -4363,6 +4364,58 @@ CATALOGUE_RANKING_TTL_SECONDS = 60.0
 CATALOGUE_RANKING_KEYS = 256
 
 
+# How long one aggregate serves the public Prompt stats read, when the
+# application asks for a cache at all (`PROMPT_STATS_TTL_SECONDS`), and how
+# many reads - list, window, scoring and hint filters - are kept at once.
+PROMPT_STATS_TTL_SECONDS = 300.0
+PROMPT_STATS_KEYS = 512
+
+
+class _PromptStatsCache:
+    """The public Prompt stats read, aggregated at most once per TTL per
+    list and filters and shared by every reader (#1424).
+
+    The read is anonymous and limited only per client, and it aggregates
+    every usage fact the list has ever had - facts are kept forever
+    (R-PRIV-05) - so its cost grew with every game played and any number of
+    clients could ask for it at once. Stats are a few minutes stale at most,
+    which nobody reading difficulty ratios can tell. Concurrent misses on one
+    key wait for the first rather than each running the aggregate.
+    """
+
+    def __init__(self, ttl_seconds: float, clock: Callable[[], float] = time.monotonic) -> None:
+        self.ttl_seconds = ttl_seconds
+        self._clock = clock
+        self._entries: OrderedDict[tuple, tuple[float, tuple[PromptStatsSummary, ...]]] = OrderedDict()
+        self._lock = asyncio.Lock()
+
+    def _fresh(self, key: tuple) -> tuple[PromptStatsSummary, ...] | None:
+        entry = self._entries.get(key)
+        if entry is None or self._clock() - entry[0] >= self.ttl_seconds:
+            return None
+        self._entries.move_to_end(key)
+        return entry[1]
+
+    async def get(
+        self, key: tuple, read: Callable[[], Awaitable[tuple[PromptStatsSummary, ...]]]
+    ) -> tuple[PromptStatsSummary, ...]:
+        if self.ttl_seconds <= 0:
+            return await read()
+        found = self._fresh(key)
+        if found is not None:
+            return found
+        async with self._lock:
+            found = self._fresh(key)
+            if found is not None:
+                return found
+            summaries = await read()
+            self._entries[key] = (self._clock(), summaries)
+            self._entries.move_to_end(key)
+            while len(self._entries) > PROMPT_STATS_KEYS:
+                self._entries.popitem(last=False)
+            return summaries
+
+
 class _CatalogueRanking:
     """The community catalogue's star order, computed at most once per TTL
     per filter and shared by every reader (#901).
@@ -4737,12 +4790,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         session_factory: async_sessionmaker[AsyncSession],
         *,
         catalogue_ranking_ttl_seconds: float = 0.0,
+        prompt_stats_ttl_seconds: float = 0.0,
     ) -> None:
         self._session_factory = session_factory
         # Off unless asked for: the application sets it (60 s by default,
         # `CATALOGUE_RANKING_TTL_SECONDS`); a test that writes and reads back
         # at once gets the uncached order it expects.
         self._ranking = _CatalogueRanking(catalogue_ranking_ttl_seconds)
+        # The public Prompt stats read (#1424), off unless asked for in the
+        # same way: the application sets `PROMPT_STATS_TTL_SECONDS`.
+        self._prompt_stats = _PromptStatsCache(prompt_stats_ttl_seconds)
         # What authorizing a selection concluded (#1237), by the lists it
         # pinned and their versions and the fold they were checked under, with the moderation
         # fingerprint it was concluded at. See `authorize_selection`.
@@ -8186,11 +8243,35 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         self,
         prompt_list_slug: str,
         *,
-        from_time: datetime | None = None,
-        to_time: datetime | None = None,
+        window: str = "all",
         scoring_mode: str | None = None,
         hint_mode: str | None = None,
     ) -> list[PromptStatsSummary]:
+        """A bundled list's prompts with what their usage facts add up to.
+
+        Served from `_PromptStatsCache` within its TTL (#1424): the read is
+        anonymous, opens on all time, and its cost grows with every game
+        played, since facts are kept forever (R-PRIV-05)."""
+        if window not in PROMPT_STATS_WINDOWS:
+            raise ValueError(f"unknown prompt stats window: {window}")
+        key = (prompt_list_slug, window, scoring_mode, hint_mode)
+        return list(
+            await self._prompt_stats.get(
+                key,
+                lambda: self._read_prompt_stats(
+                    prompt_list_slug, window=window, scoring_mode=scoring_mode, hint_mode=hint_mode
+                ),
+            )
+        )
+
+    async def _read_prompt_stats(
+        self,
+        prompt_list_slug: str,
+        *,
+        window: str,
+        scoring_mode: str | None,
+        hint_mode: str | None,
+    ) -> tuple[PromptStatsSummary, ...]:
         async with self._session_factory() as session:
             prompt_list = await session.scalar(
                 select(PromptList).where(
@@ -8201,7 +8282,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             )
             if prompt_list is None:
-                return []
+                return ()
             prompts = (
                 await session.scalars(
                     select(Prompt)
@@ -8211,30 +8292,45 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             ).all()
 
             fact_filters = [PromptUsageFact.prompt_list_id == prompt_list.id]
-            if from_time is not None:
-                fact_filters.append(PromptUsageFact.occurred_at >= from_time)
-            if to_time is not None:
-                fact_filters.append(PromptUsageFact.occurred_at < to_time)
+            days = PROMPT_STATS_WINDOWS[window]
+            if days is not None:
+                fact_filters.append(
+                    PromptUsageFact.occurred_at >= datetime.now(timezone.utc) - timedelta(days=days)
+                )
             if scoring_mode is not None:
                 fact_filters.append(PromptUsageFact.scoring_mode == scoring_mode)
             if hint_mode is not None:
                 fact_filters.append(PromptUsageFact.hint_mode == hint_mode)
+            # Summed per prompt version first, and only those rows - about one
+            # per prompt - joined to their versions and summed per concept
+            # (#1424). Joining every fact the list ever had to its version
+            # before grouping carried the whole history through the join:
+            # 111 ms at 2.1M facts, against 81 ms this way
+            # (benchmarks/prompt_stats_query.py).
+            per_version = (
+                select(
+                    PromptUsageFact.prompt_version_id.label("version_id"),
+                    func.sum(PromptUsageFact.offer_count).label("offers"),
+                    func.sum(PromptUsageFact.pick_count).label("picks"),
+                    func.sum(PromptUsageFact.correct_guess_count).label("correct"),
+                    func.sum(PromptUsageFact.total_guesser_count).label("guessers"),
+                )
+                .where(*fact_filters)
+                .group_by(PromptUsageFact.prompt_version_id)
+                .subquery()
+            )
             aggregates = {
-                concept_id: (offers, picks, correct, guessers)
+                concept_id: (int(offers), int(picks), int(correct), int(guessers))
                 for concept_id, offers, picks, correct, guessers in (
                     await session.execute(
                         select(
                             PromptVersion.concept_id,
-                            func.sum(PromptUsageFact.offer_count),
-                            func.sum(PromptUsageFact.pick_count),
-                            func.sum(PromptUsageFact.correct_guess_count),
-                            func.sum(PromptUsageFact.total_guesser_count),
+                            func.sum(per_version.c.offers),
+                            func.sum(per_version.c.picks),
+                            func.sum(per_version.c.correct),
+                            func.sum(per_version.c.guessers),
                         )
-                        .join(
-                            PromptUsageFact,
-                            PromptUsageFact.prompt_version_id == PromptVersion.id,
-                        )
-                        .where(*fact_filters)
+                        .join(per_version, per_version.c.version_id == PromptVersion.id)
                         .group_by(PromptVersion.concept_id)
                     )
                 ).all()
@@ -8258,4 +8354,4 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         correct_guess_ratio=round(ratio, 4),
                     )
                 )
-            return summaries
+            return tuple(summaries)

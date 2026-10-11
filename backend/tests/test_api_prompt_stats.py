@@ -214,14 +214,19 @@ async def test_most_picked_ranks_on_how_often_an_offer_was_taken(env):
     ).json()
 
     assert [p["text"] for p in body["prompts"]] == ["popular", "ignored"]
-    assert body["prompts"][0]["pickRate"] > body["prompts"][1]["pickRate"]
+    # The ratios are the client's to divide (#1424); the counts are all here.
+    assert "pickRate" not in body["prompts"][0] and "correctGuessRatio" not in body["prompts"][0]
+    popular, ignored = body["prompts"]
+    assert popular["pickCount"] / popular["offerCount"] > ignored["pickCount"] / ignored["offerCount"]
 
 
 async def test_stats_can_be_windowed_and_segmented_by_game_rules(env):
     http, prompts = env
     await seed(prompts, "apple")
-    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    recent = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    # A named window rather than timestamps (#1424): the last 30 days.
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=200)
+    recent = now - timedelta(days=10)
     await play(
         prompts,
         "apple",
@@ -244,8 +249,7 @@ async def test_stats_can_be_windowed_and_segmented_by_game_rules(env):
     response = await http.get(
         "/api/prompt-lists/standard/prompt-stats",
         params={
-            "from": (recent - timedelta(days=1)).isoformat(),
-            "to": (recent + timedelta(days=1)).isoformat(),
+            "window": "30d",
             "scoringMode": "pressure",
             "hintMode": "wheel",
         },
@@ -265,9 +269,14 @@ async def test_stats_can_be_windowed_and_segmented_by_game_rules(env):
     assert (
         await http.get(
             "/api/prompt-lists/standard/prompt-stats",
-            params={"from": recent.isoformat(), "to": old.isoformat()},
+            params={"window": "7d"},
         )
     ).status_code == 422
+    # All time takes both games in.
+    everything = (
+        await http.get("/api/prompt-lists/standard/prompt-stats", params={"window": "all"})
+    ).json()["prompts"][0]
+    assert everything["totalGuesserCount"] == 10
 
 
 async def test_the_limit_bounds_the_page_and_is_itself_bounded(env):

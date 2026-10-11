@@ -349,8 +349,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
     return `„${tag}” nie należy do tagów, które może mieć lista.`;
   },
   unknown_sort: "Nie można sortować według tego kryterium.",
-  timezone_required: "Podaj strefę czasową razem z tą datą.",
-  range_reversed: "Początek zakresu musi poprzedzać jego koniec.",
 
   // Room presets
   room_preset_not_found: "Nie znaleziono szablonu pokoju.",

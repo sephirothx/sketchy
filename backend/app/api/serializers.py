@@ -331,6 +331,8 @@ def prompt_stats_payload(stats: PromptStatsSummary) -> dict:
         "pickCount": stats.pick_count,
         "correctGuessCount": stats.correct_guess_count,
         "totalGuesserCount": stats.total_guesser_count,
-        "pickRate": stats.pick_rate,
-        "correctGuessRatio": stats.correct_guess_ratio,
+        # No ratios (#1424): each is a quotient of two counts in the same row,
+        # a full-precision double deflate cannot shrink, and they were half
+        # the response (36.8 KB gzipped for Standard; 17.7 KB without). The
+        # client divides (lib/promptStats.ts).
     }

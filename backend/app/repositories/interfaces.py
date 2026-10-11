@@ -886,6 +886,13 @@ class BundledPromptDefinition:
     tags: tuple[str, ...] = ()
 
 
+# The periods the public Prompt stats read can be asked for, by name, with
+# their length in days (None: all time). A name rather than free timestamps
+# (#1424): any `from` made every request a cache miss and a full aggregate,
+# and the page only ever offered these three.
+PROMPT_STATS_WINDOWS: dict[str, int | None] = {"all": None, "30d": 30, "90d": 90}
+
+
 @dataclass(frozen=True)
 class PromptStatsSummary:
     """Detailed statistics and derived difficulty metrics for a prompt."""
@@ -1629,10 +1636,12 @@ class PromptListRepository(ABC):
         self,
         prompt_list_slug: str,
         *,
-        from_time: datetime | None = None,
-        to_time: datetime | None = None,
+        window: str = "all",
         scoring_mode: str | None = None,
         hint_mode: str | None = None,
     ) -> list[PromptStatsSummary]:
-        """Derive windowed/dimensioned statistics from immutable usage facts."""
+        """Derive windowed/dimensioned statistics from immutable usage facts.
+
+        `window` is one of `PROMPT_STATS_WINDOWS`: all time, or the last 30 or
+        90 days (#1424)."""
         ...

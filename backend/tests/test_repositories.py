@@ -1,6 +1,8 @@
 """Unit tests for repository implementations."""
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -1347,7 +1349,8 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
         await _seed_two_lists(repo)
         selection = await repo.resolve_selection(["alpha"])
         apple_id = selection.prompt_version_ids["apple"]
-        occurred_at = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        # Between the two windows shorter than all time (#1424).
+        occurred_at = datetime.now(timezone.utc) - timedelta(days=60)
         usage = PromptUsage(
             offers={apple_id: 1},
             sources=_sources(selection),
@@ -1380,19 +1383,59 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
         assert facts[0].hint_mode == "wheel"
 
         included = await repo.get_prompt_stats(
-            "alpha",
-            from_time=occurred_at - timedelta(seconds=1),
-            to_time=occurred_at + timedelta(seconds=1),
-            scoring_mode="pressure",
-            hint_mode="wheel",
+            "alpha", window="all", scoring_mode="pressure", hint_mode="wheel"
         )
         assert _stat(included, "apple").pick_count == 1
-        excluded = await repo.get_prompt_stats(
-            "alpha", from_time=occurred_at + timedelta(seconds=1)
-        )
-        assert _stat(excluded, "apple").pick_count == 0
+        assert _stat(await repo.get_prompt_stats("alpha", window="90d"), "apple").pick_count == 1
+        assert _stat(await repo.get_prompt_stats("alpha", window="30d"), "apple").pick_count == 0
         wrong_mode = await repo.get_prompt_stats("alpha", scoring_mode="default")
         assert _stat(wrong_mode, "apple").pick_count == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_a_repeat_prompt_stats_read_within_its_ttl_runs_no_aggregate():
+    """#1424: the public read aggregated every fact the list ever had on
+    every request. Within the TTL a repeat, and a concurrent miss, are served
+    from the first aggregate; another filter, or the TTL running out, reads
+    again."""
+    from sqlalchemy import event
+
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory, prompt_stats_ttl_seconds=300)
+        now = [1000.0]
+        repo._prompt_stats._clock = lambda: now[0]
+        await _seed_two_lists(repo)
+        selection = await repo.resolve_selection(["alpha"])
+        apple_id = selection.prompt_version_ids["apple"]
+        await repo.record_prompt_usage(
+            selection.list_ids,
+            PromptUsage(
+                offers={apple_id: 1},
+                sources=_sources(selection),
+                picks={apple_id: PromptPickTotals(picks=1, correct_guesses=1, total_guessers=2)},
+                batch_id=str(generate_uuid()),
+            ),
+        )
+        statements: list[str] = []
+        sync_engine = engine.sync_engine
+        event.listen(sync_engine, "before_cursor_execute", lambda *args: statements.append(args[2]))
+
+        first, second = await asyncio.gather(
+            repo.get_prompt_stats("alpha"), repo.get_prompt_stats("alpha")
+        )
+        assert _stat(first, "apple").pick_count == 1 and first == second
+        read_once = len(statements)
+        assert read_once > 0
+        assert _stat(await repo.get_prompt_stats("alpha"), "apple").pick_count == 1
+        assert len(statements) == read_once, "a repeat within the TTL ran a query"
+        await repo.get_prompt_stats("alpha", window="30d")
+        assert len(statements) > read_once
+        after_filter = len(statements)
+        now[0] += 301
+        await repo.get_prompt_stats("alpha")
+        assert len(statements) > after_filter
     finally:
         await engine.dispose()
 

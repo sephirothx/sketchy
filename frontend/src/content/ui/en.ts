@@ -361,8 +361,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
     return `"${tag}" is not one of the tags a list can carry.`;
   },
   unknown_sort: "Sketchy cannot sort by that.",
-  timezone_required: "Include a timezone with that date.",
-  range_reversed: "The start of the range must come before its end.",
 
   // Room presets
   room_preset_not_found: "Room preset not found.",

@@ -38,6 +38,7 @@ SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "index_write_cost": ("--sessions", "200", "--messages", "500"),
     "owned_list_io": ("--prompts", "20", "--aliases", "2", "--burst", "2"),
     "pool_checkout_ping": ("--sessions", "20"),
+    "prompt_stats_query": ("--facts", "2000", "--samples", "2"),
     "reaction_write": ("--reactions", "10", "--samples", "3"),
     "recipient_array_sizes": (),
     "retention_churn": ("--rows", "500", "--row-budget", "100", "--batch", "50", "--insert-batch", "100"),

@@ -119,6 +119,7 @@ from app.socket_server import BoundedSocketServer, socket_transports
 from app.services.telemetry import start_lag_sampler, stop_lag_sampler, telemetry
 from app.repositories.sqlalchemy import (
     CATALOGUE_RANKING_TTL_SECONDS,
+    PROMPT_STATS_TTL_SECONDS,
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
     SqlAlchemyPromptListRepository,
@@ -261,8 +262,22 @@ def _catalogue_ranking_ttl_seconds() -> float:
     return value if value >= 0 else CATALOGUE_RANKING_TTL_SECONDS
 
 
+def _prompt_stats_ttl_seconds() -> float:
+    """How long one aggregate serves the public Prompt stats read (#1424).
+    Tunable so the end-to-end runner sees a game it just played; a
+    deployment keeps the default."""
+    raw = os.environ.get("PROMPT_STATS_TTL_SECONDS", "").strip()
+    try:
+        value = float(raw) if raw else PROMPT_STATS_TTL_SECONDS
+    except ValueError:
+        return PROMPT_STATS_TTL_SECONDS
+    return value if value >= 0 else PROMPT_STATS_TTL_SECONDS
+
+
 prompt_list_repo = SqlAlchemyPromptListRepository(
-    async_session_factory, catalogue_ranking_ttl_seconds=_catalogue_ranking_ttl_seconds()
+    async_session_factory,
+    catalogue_ranking_ttl_seconds=_catalogue_ranking_ttl_seconds(),
+    prompt_stats_ttl_seconds=_prompt_stats_ttl_seconds(),
 )
 block_service = BlockService(async_session_factory)
 async def push_friends_changed(user_id: str) -> None:

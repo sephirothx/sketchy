@@ -1,4 +1,5 @@
-import type { PromptStats, PromptStatsSort } from "../types";
+import type { PromptListSummary, PromptStats, PromptStatsSort } from "../types";
+import { promptLanguageLabel } from "./promptLanguages.ts";
 import { ui } from "../content/ui/index.ts";
 
 export const PROMPT_STATS_SORTS: { value: PromptStatsSort; label: string }[] = [
@@ -78,9 +79,10 @@ export function searchNote(query: string, matches: number): string | null {
 export function statsRows(prompts: PromptStats[]) {
   return prompts.map((prompt) => ({
     ...prompt,
-    guessedLabel: prompt.isRated ? ratioLabel(prompt.correctGuessRatio) : "—",
-    band: prompt.isRated ? difficultyBand(prompt.correctGuessRatio) : ui.promptStats.notPlayedEnough,
-    pickedLabel: prompt.isRated ? ratioLabel(prompt.pickRate) : "—",
+    correctGuessRatio: correctGuessRatio(prompt),
+    guessedLabel: prompt.isRated ? ratioLabel(correctGuessRatio(prompt)) : "—",
+    band: prompt.isRated ? difficultyBand(correctGuessRatio(prompt)) : ui.promptStats.notPlayedEnough,
+    pickedLabel: prompt.isRated ? ratioLabel(pickRate(prompt)) : "—",
     drawnLabel: String(prompt.pickCount),
   }));
 }
@@ -124,4 +126,65 @@ export function searchExample(prompts: PromptStats[], language: string): string 
   if (prompts.length === 0) return null;
   const names = plainPromptNames(prompts, language);
   return names[Math.floor(names.length / 2)];
+}
+
+/** How often a prompt was picked when offered (#1424): the server sends the
+    counts and no longer the quotient, which cost half the response. */
+export function pickRate(prompt: PromptStats): number {
+  return prompt.offerCount > 0 ? prompt.pickCount / prompt.offerCount : 0;
+}
+
+/** The share of the guessers who faced a prompt that guessed it. */
+export function correctGuessRatio(prompt: PromptStats): number {
+  return prompt.totalGuesserCount > 0 ? prompt.correctGuessCount / prompt.totalGuesserCount : 0;
+}
+
+/** Code-point order, as the server sorts its text (Python's `<`). */
+function byText(a: PromptStats, b: PromptStats): number {
+  return a.text < b.text ? -1 : a.text > b.text ? 1 : 0;
+}
+
+/** The prompts in the order the server ranks them (`_ordered` in
+    api/prompt_lists.py): rated ones by the sort, the rest alphabetically
+    after them. Done here, so changing the sort is not another request for
+    the same counts (#1424). */
+export function sortPromptStats(prompts: readonly PromptStats[], sort: PromptStatsSort): PromptStats[] {
+  const rated = prompts.filter((prompt) => prompt.isRated);
+  const unrated = prompts.filter((prompt) => !prompt.isRated).sort(byText);
+  const order: (a: PromptStats, b: PromptStats) => number =
+    sort === "most-picked"
+      ? (a, b) => pickRate(b) - pickRate(a) || b.pickCount - a.pickCount || byText(a, b)
+      : sort === "easiest"
+        ? (a, b) => correctGuessRatio(b) - correctGuessRatio(a) || byText(a, b)
+        : (a, b) => correctGuessRatio(a) - correctGuessRatio(b) || byText(a, b);
+  return [...rated.sort(order), ...unrated];
+}
+
+export interface ListLanguageGroup {
+  language: string;
+  label: string;
+  lists: PromptListSummary[];
+}
+
+/** The lists grouped by language, the reader's play languages first in their
+    order and the rest by name (#1424): 136 options in one column, thirty
+    labels written twice - eight "League of Legends (173)" - was no way to
+    find one. */
+export function listsByLanguage(
+  lists: readonly PromptListSummary[],
+  playLanguages: readonly string[],
+): ListLanguageGroup[] {
+  const groups = new Map<string, PromptListSummary[]>();
+  for (const list of lists) {
+    const group = groups.get(list.language) ?? [];
+    group.push(list);
+    groups.set(list.language, group);
+  }
+  const rank = (language: string) => {
+    const index = playLanguages.indexOf(language);
+    return index === -1 ? playLanguages.length : index;
+  };
+  return [...groups.entries()]
+    .map(([language, members]) => ({ language, label: promptLanguageLabel(language), lists: members }))
+    .sort((a, b) => rank(a.language) - rank(b.language) || a.label.localeCompare(b.label));
 }
