@@ -157,6 +157,12 @@ function reactionTotal(entry: GalleryEntry): number {
   return Object.values(entry.reactionCounts).reduce((sum, count) => sum + count, 0);
 }
 
+function describeProblem(problem: unknown): string {
+  return problem instanceof ApiError
+    ? problem.message
+    : "Could not reach the moderation queue.";
+}
+
 function humanize(value: string): string {
   const spaced = value.replace(/_/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
@@ -502,25 +508,21 @@ export function ModerationPage() {
   // The turn an administrator is being asked to confirm erasing (#1419).
   const [confirmErase, setConfirmErase] = useState<string | null>(null);
   const { guard, dialog: stepUpDialog } = useStepUp();
-  // Who put the error up. A read that succeeds takes down only what a read
-  // put up: a refused decision starts a reload of its own (`decideHeld`), and
-  // clearing it there took the refusal off screen a moment after it landed,
-  // so the moderator never saw why their decision did not take. A decision's
-  // error stays until the next decision.
-  const [error, setError] = useState<{ text: string; from: "read" | "decision" } | null>(null);
+  // Two lines, because they end differently. A read's error goes when a
+  // read next succeeds; a decision's stays until the moderator acts again -
+  // another decision, or another queue or case. They shared one line, and
+  // the reload a refused decision starts (`decideHeld`) cleared the refusal
+  // a moment after it landed, or replaced it with its own failure, so the
+  // moderator never saw why their decision did not take.
+  const [readError, setReadError] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const allowed = hasResolved && canModerate(user?.role);
   const showingClosed = filter === "closed";
 
-  const fail = useCallback((problem: unknown, from: "read" | "decision" = "read") => {
-    setError({
-      text:
-        problem instanceof ApiError
-          ? problem.message
-          : "Could not reach the moderation queue.",
-      from,
-    });
+  const fail = useCallback((problem: unknown) => {
+    setReadError(describeProblem(problem));
   }, []);
 
   // Which load is the latest. Each answers for the filter and page it was
@@ -582,7 +584,7 @@ export function ModerationPage() {
             // And so is a shelf candidate: the front page waits on it.
             + galleryResult.waiting,
         );
-        setError((current) => (current?.from === "read" ? null : current));
+        setReadError(null);
       })
       .catch((problem) => {
         if (thisLoad === latestLoad.current) fail(problem);
@@ -604,6 +606,7 @@ export function ModerationPage() {
   function changeFilter(next: Filter) {
     setFilter(next);
     setPage(0);
+    setDecisionError(null);
   }
 
   const queue = useMemo<QueueEntry[]>(() => {
@@ -763,7 +766,9 @@ export function ModerationPage() {
     // The queue carries a name and a count; a decision needs the words.
     void readHeldPublication(heldId)
       .then((detail) => { if (!cancelled) setHeldDetail(detail); })
-      .catch(fail);
+      // A list that left the queue meanwhile is refused here too, and that
+      // refusal says nothing the queue has not already shown.
+      .catch((problem) => { if (!cancelled) fail(problem); });
     return () => { cancelled = true; };
   }, [heldId, heldVersion, heldStale, fail]);
 
@@ -789,14 +794,11 @@ export function ModerationPage() {
   ) {
     if (busy) return;
     if (composed !== false && !(composed ?? note[id] ?? "").trim()) {
-      setError({
-        text: "A note is required, so the decision is not anonymous.",
-        from: "decision",
-      });
+      setDecisionError("A note is required, so the decision is not anonymous.");
       return;
     }
     setBusy(id);
-    setError(null);
+    setDecisionError(null);
     try {
       // Every decision here is destructive, so each one may be met with
       // R-AUTH-21's "prove it again" - which `guard` turns into a prompt and
@@ -808,7 +810,7 @@ export function ModerationPage() {
       setNote((current) => ({ ...current, [id]: "" }));
       latestLoadFn.current();
     } catch (problem) {
-      fail(problem, "decision");
+      setDecisionError(describeProblem(problem));
     } finally {
       setBusy(null);
     }
@@ -957,9 +959,14 @@ export function ModerationPage() {
       <AppHeader backLabel="Back to lobby" languageSwitch={false} />
       {stepUpDialog}
 
-      {error && (
+      {decisionError && (
         <p className="auth-error" role="alert">
-          {error.text}
+          {decisionError}
+        </p>
+      )}
+      {readError && (
+        <p className="auth-error" role="alert">
+          {readError}
         </p>
       )}
       {message && (
@@ -1017,7 +1024,10 @@ export function ModerationPage() {
                   type="button"
                   className={`mod-queue-item${isSelected ? " is-selected" : ""}`}
                   aria-current={isSelected || undefined}
-                  onClick={() => setSelected({ kind: entry.kind, id: entry.id })}
+                  onClick={() => {
+                    setSelected({ kind: entry.kind, id: entry.id });
+                    setDecisionError(null);
+                  }}
                 >
                   <span
                     className={`mod-queue-dot${

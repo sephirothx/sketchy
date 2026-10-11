@@ -49,7 +49,7 @@ async def hold_for_review(prompt_list_id: str) -> None:
     engine = create_async_engine(database_url())
     try:
         async with engine.begin() as connection:
-            await connection.execute(
+            held = await connection.execute(
                 update(PromptListEdition)
                 .where(
                     PromptListEdition.prompt_list_id == UUID(prompt_list_id),
@@ -57,5 +57,8 @@ async def hold_for_review(prompt_list_id: str) -> None:
                 )
                 .values(state="under_review")
             )
+            # Nothing live means nothing was held, and a test going on from
+            # here would fail later, somewhere that does not say why.
+            assert held.rowcount == 1, f"list {prompt_list_id} has no live edition to hold"
     finally:
         await engine.dispose()
