@@ -19,6 +19,8 @@ export type AnnouncementCode =
   | "joined_as_player"
   | "kicked_by_vote"
   | "marked_afk_by_vote"
+  | "kick_vote_started"
+  | "afk_vote_started"
   | "restart_vote_started"
   | "restart_vote_passed"
   | "restart_vote_rejected"

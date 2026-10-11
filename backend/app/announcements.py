@@ -39,6 +39,10 @@ class Announcement(StrEnum):
     JOINED_AS_PLAYER = "joined_as_player"  # nickname
     KICKED_BY_VOTE = "kicked_by_vote"  # nickname
     MARKED_AFK_BY_VOTE = "marked_afk_by_vote"  # nickname
+    # A kick or AFK vote that has just been opened, named by its target, so
+    # a seat without the players list - a phone's - hears of it (#1422).
+    KICK_VOTE_STARTED = "kick_vote_started"  # nickname
+    AFK_VOTE_STARTED = "afk_vote_started"  # nickname
 
     # Restart votes
     RESTART_VOTE_STARTED = "restart_vote_started"  # nickname

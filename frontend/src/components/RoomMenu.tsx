@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useOpenPlayerVotes } from "../hooks/useOpenPlayerVotes";
 import { BottomSheet } from "./ui/BottomSheet";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useBackCloses } from "../hooks/useRoomHistory";
@@ -64,6 +65,9 @@ function RoomMenuRows({ actions, run, asMenu }: {
     code, isPlaying, isAfk, canProposeRestart, restartBusy, restartCooldownUntil,
   } = actions;
   const restartCooldownSeconds = useCooldownSeconds(restartCooldownUntil);
+  // Kick and AFK votes open in the room: the players list is where each is
+  // tallied, so its row says so (#1422).
+  const openVoteCount = useOpenPlayerVotes().length;
   return (
     <ul className="sheet-menu" role={asMenu ? "none" : undefined}>
       {isPlaying && actions.onOpenPlayers && (
@@ -71,6 +75,11 @@ function RoomMenuRows({ actions, run, asMenu }: {
           <button type="button" role={role} className="sheet-menu-item" onClick={run(actions.onOpenPlayers)}>
             <UsersIcon size={19} />
             <span>{ui.roomMenuSheet.playersScores}</span>
+            {openVoteCount > 0 && (
+              <span className="chip chip-warm sheet-menu-badge" data-testid="players-vote-badge">
+                {ui.playerVoteNotice.votesOpen({ count: openVoteCount })}
+              </span>
+            )}
           </button>
         </li>
       )}

@@ -150,6 +150,13 @@
   min-height: 42px;
 }
 
+/* A kick or AFK vote open in the room, on the row that leads to its tally
+   (#1422): pushed to the row's end, where it reads as the row's status. */
+.sheet-menu-badge {
+  margin-left: auto;
+  font-size: 12px;
+}
+
 /* The code the invite link carries, beside the row that copies it. */
 .room-menu-code {
   font-variant-numeric: tabular-nums;

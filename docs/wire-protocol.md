@@ -838,7 +838,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `buy_hint` | `HintPayload` | ✓ `{cost, hintSpend, maskedPrompt, hintCost}` — what it revealed (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_wheel_letter` | `WheelLetterPayload` | ✓ `{cost, found, hintSpend, maskedPrompt, letterPrices, line}` — what it revealed and the `hint_letter_found` / `hint_letter_missing` line (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
-| `vote_player` | `VotePayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
+| `vote_player` | `VotePayload` | — — a ballot is a toggle; the first one of a kick or AFK vote on a seat is said to the room as `kick_vote_started` / `afk_vote_started` `{nickname}`, riding `room_state`'s causes, at most once a minute per seat and kind so a toggled ballot cannot fill the chat (#1422, protocol 67) | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
@@ -2629,7 +2629,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (66) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (67) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

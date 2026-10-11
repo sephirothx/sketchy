@@ -37,6 +37,11 @@ class FlowTiming:
     # How long after a vote before another may be called, so a losing side
     # cannot simply call it again.
     restart_vote_cooldown_seconds: float = 60
+    # How long after a kick or AFK vote on a seat is announced before
+    # another vote of that kind on that seat is announced again: a vote is a
+    # toggle, and withdrawing and recasting it must not be a way to fill the
+    # chat (#1422). The vote itself is counted either way.
+    player_vote_announce_cooldown_seconds: float = 60
     # The pause between a passed vote and the restart, so the room can read
     # what happened before the board clears.
     restart_delay_seconds: float = 3

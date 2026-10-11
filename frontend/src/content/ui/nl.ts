@@ -402,6 +402,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   joined_as_player: (p) => `${text(p.nickname)} doet mee als speler.`,
   kicked_by_vote: (p) => `${text(p.nickname)} is er door een stemming uit gezet.`,
   marked_afk_by_vote: (p) => `${text(p.nickname)} is door een stemming als AFK gemarkeerd.`,
+  kick_vote_started: (p) => `Er is een stemming gestart om ${text(p.nickname)} eruit te zetten.`,
+  afk_vote_started: (p) => `Er is een stemming gestart om ${text(p.nickname)} als AFK te markeren.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} is een stemming over een herstart begonnen.`,
@@ -1908,6 +1910,20 @@ export const NL: Catalogue = {
     friendRequest: (p: { count: number }) =>
       plural(p.count, { one: "Vriendschapsverzoek", other: "Vriendschapsverzoeken" }),
     serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
+  },
+
+  playerVoteNotice: {
+    kickQuestion: (p: { nickname: string }) => `${p.nickname} uit de kamer zetten?`,
+    afkQuestion: (p: { nickname: string }) => `${p.nickname} als AFK markeren?`,
+    kickAboutYou: "Er loopt een stemming om je uit de kamer te zetten.",
+    afkAboutYou: "Er loopt een stemming om je als AFK te markeren.",
+    tally: (p: { count: number; required: number }) => `${p.count} van ${p.required} stemmen`,
+    voteKick: "Stem eruit",
+    voteAfk: "Stem AFK",
+    withdraw: "Stem intrekken",
+    onlyPlayersCanVote: "Alleen wie meespeelt, kan stemmen.",
+    votesOpen: (p: { count: number }) =>
+      plural(p.count, { one: "1 stemming loopt", other: `${p.count} stemmingen lopen` }),
   },
 
   roomPlayersPanel: {

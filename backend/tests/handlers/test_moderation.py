@@ -12,7 +12,7 @@ from app.refusals import ErrorCode
 from app.rooms import RoomManager
 
 from tests.dbfixtures import create_test_db
-from tests.handlers.helpers import SessionStore
+from tests.handlers.helpers import SessionStore, room_lines
 
 
 async def test_toggle_afk_socket_handler_and_not_waited_for():
@@ -1369,3 +1369,49 @@ async def test_a_kick_landing_while_a_second_tab_rebinds_does_not_seat_a_ghost(m
     assert answer["errorCode"] == ErrorCode.KICKED_FROM_ROOM
     assert room_manager.get_player_by_user_id(room, "user-two") is None
     assert not any(call.args[0] == "two-tab-2" for call in sio.enter_room.await_args_list)
+
+
+async def test_a_kick_or_afk_vote_is_announced_once_when_it_opens():
+    """#1422: the tally lived only on the target's row in the players list,
+    which a phone folds away, so a vote there went unseen and never reached
+    its majority. The first ballot is said in the room's voice; later ones,
+    and a withdrawn vote cast again inside the cooldown, are not."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    seats = [room_manager.add_player(room, f"P{n}") for n in range(1, 5)]
+    for seat in seats:
+        seat.sid = f"{seat.nickname.lower()}-sid"
+    p1, p2, p3, p4 = seats
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sessions = {seat.sid: {"room_id": room.id, "player_id": seat.id} for seat in seats}
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    vote_player = sio.handlers["/"]["vote_player"]
+
+    def started() -> list[tuple[str, dict]]:
+        # Said as a chat_message or riding room_state as its cause (#880).
+        return [
+            (line["code"], line["params"])
+            for line in room_lines(sio.emit)
+            if line.get("code", "").endswith("_vote_started")
+        ]
+
+    assert (await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "kick"}))["executed"] is False
+    assert started() == [("kick_vote_started", {"nickname": "P2"})]
+    # A second ballot is the same vote: nothing more said.
+    await vote_player("p3-sid", {"targetPlayerId": p2.id, "action": "kick"})
+    assert len(started()) == 1
+    # Withdrawn by both and cast again: it opens again, inside the cooldown.
+    await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "kick"})
+    await vote_player("p3-sid", {"targetPlayerId": p2.id, "action": "kick"})
+    assert not p2.kick_votes
+    await vote_player("p4-sid", {"targetPlayerId": p2.id, "action": "kick"})
+    assert len(started()) == 1
+    # An AFK vote is its own vote, and another target is too.
+    await vote_player("p1-sid", {"targetPlayerId": p2.id, "action": "afk"})
+    await vote_player("p2-sid", {"targetPlayerId": p3.id, "action": "kick"})
+    assert started()[1:] == [
+        ("afk_vote_started", {"nickname": "P2"}),
+        ("kick_vote_started", {"nickname": "P3"}),
+    ]

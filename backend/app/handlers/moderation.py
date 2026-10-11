@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import partial
 import logging
+import time
 from uuid import UUID
 
 from app.announcements import Announcement
@@ -22,6 +23,7 @@ from app.auth.rate_limit import address_key
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import User
 from app.domain_values import ReportReason, ReportScope
+from app.flow_timing import timing
 from app.rooms import majority_of
 from app.services.player_reports import (
     canonical_user_id,
@@ -99,6 +101,9 @@ async def vote_player(ctx: HandlerContext, sid, data):
     target.afk_votes.intersection_update(eligible_voter_ids)
     required_votes = majority_of(len(eligible_voter_ids))
 
+    votes = target.kick_votes if action == "kick" else target.afk_votes
+    opened = not votes and voter.id not in votes
+
     if action == "kick":
         if voter.id in target.kick_votes:
             target.kick_votes.remove(voter.id)
@@ -148,8 +153,29 @@ async def vote_player(ctx: HandlerContext, sid, data):
             await ctx.game_flow._emit_room_state(room)
             return {"ok": True, "action": "afk", "executed": True}
 
+    if opened and votes and _may_announce_vote(target, action):
+        # The vote's first ballot, said to the room in words: the tally lives
+        # on the target's row in the players list, which a phone folds away,
+        # and an unseen vote never reaches its majority (#1422).
+        await ctx.game_flow.announce(
+            room,
+            Announcement.KICK_VOTE_STARTED if action == "kick" else Announcement.AFK_VOTE_STARTED,
+            {"nickname": target.nickname},
+        )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True, "action": action, "executed": False}
+
+
+def _may_announce_vote(target, action: str) -> bool:
+    """Whether a vote of this kind on this seat may be announced now, noting
+    that it was. A vote is a toggle: withdrawn and cast again it opens again,
+    and each reopening is not news (#1422)."""
+    now = time.monotonic()
+    last = target.vote_announced_at.get(action)
+    if last is not None and now - last < timing.player_vote_announce_cooldown_seconds:
+        return False
+    target.vote_announced_at[action] = now
+    return True
 
 
 async def report_player(ctx: HandlerContext, sid, data):

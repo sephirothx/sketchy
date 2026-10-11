@@ -414,6 +414,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   joined_as_player: (p) => `${text(p.nickname)} joined as a player.`,
   kicked_by_vote: (p) => `${text(p.nickname)} was kicked by vote.`,
   marked_afk_by_vote: (p) => `${text(p.nickname)} was marked AFK by vote.`,
+  kick_vote_started: (p) => `A vote to kick ${text(p.nickname)} has started.`,
+  afk_vote_started: (p) => `A vote to mark ${text(p.nickname)} AFK has started.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} started a vote to restart the game.`,
@@ -1925,6 +1927,20 @@ export const EN = {
     friendRequest: (p: { count: number }) =>
       plural(p.count, { one: "Friend request", other: "Friend requests" }),
     serverUpdateStarted: "Server update in progress. This game will end soon.",
+  },
+
+  playerVoteNotice: {
+    kickQuestion: (p: { nickname: string }) => `Kick ${p.nickname} from the room?`,
+    afkQuestion: (p: { nickname: string }) => `Mark ${p.nickname} AFK?`,
+    kickAboutYou: "A vote to kick you from the room is open.",
+    afkAboutYou: "A vote to mark you AFK is open.",
+    tally: (p: { count: number; required: number }) => `${p.count} of ${p.required} votes`,
+    voteKick: "Vote to kick",
+    voteAfk: "Vote AFK",
+    withdraw: "Withdraw my vote",
+    onlyPlayersCanVote: "Only players in the game can vote.",
+    votesOpen: (p: { count: number }) =>
+      plural(p.count, { one: "1 vote open", other: `${p.count} votes open` }),
   },
 
   roomPlayersPanel: {
