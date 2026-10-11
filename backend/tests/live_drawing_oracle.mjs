@@ -17,6 +17,10 @@
 
 import { createInterface } from "node:readline";
 
+// stdout carries the answers and nothing else: a stray log line in the decoder
+// would otherwise be read as one, and every answer after it misaligned.
+console.log = console.info = console.debug = (...args) => console.error(...args);
+
 const { decodeLiveDrawing } = await import("../../frontend/src/lib/liveDrawing.ts");
 
 function point(value) {

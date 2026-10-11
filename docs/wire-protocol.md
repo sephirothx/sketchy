@@ -1798,11 +1798,13 @@ rejects, before anything is recorded or rebroadcast:
 - Any frame whose length does not exactly match its tag's layout.
 - A brush width outside 1 – 64, an unknown shape id, a fill point outside the canvas.
 - A width keyframe that is misplaced (above), and any coordinate packed to −32768.
-- More than 256 points in one frame, or offset records that walk a coordinate off the
-  packed range — from the frame's first point, or for a relative frame from the open
-  path's last point.
-- A base64 string that is not strictly valid base64 (padding included) or is longer than
-  the largest frame needs.
+- More than 256 points in one frame, or delta records that walk a coordinate off the
+  packed range from the frame's first point. (A relative frame's walk from the open
+  path's last point is checked by `resolve_relative_points`, which the handler calls
+  before recording.)
+- A base64 string with a character outside the alphabet (whitespace included), missing
+  or excess padding, or longer than the largest frame needs. Non-zero padding bits are
+  accepted.
 
 The server forwards the drawer's own bytes rather than re-encoding them, so every frame it
 accepts has to decode in the client's `decodeLiveDrawing`

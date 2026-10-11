@@ -43,7 +43,7 @@ import queue
 import shutil
 import subprocess
 import threading
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
 
 import pytest
@@ -77,9 +77,10 @@ from tests.fuzzing import budget
 
 ORACLE = Path(__file__).with_name("live_drawing_oracle.mjs")
 # Far beyond any real answer, which takes well under a millisecond. A decoder
-# that loops forever on some frame fails here with the frame named, rather
-# than holding the CI job until the runner gives up hours later.
+# that loops forever on some frame fails with the frame named, rather than
+# holding the CI job until the runner gives up hours later.
 ANSWER_SECONDS = 3
+STARTUP_SECONDS = 60
 TAGS = {
     PATH_START_TAG: "path_start",
     PATH_POINTS_TAG: "path_points",
@@ -95,6 +96,12 @@ TAGS = {
 # --- The client, as a process ----------------------------------------------------
 
 
+class OracleFailure(Exception):
+    """The client's process failed to answer: it hung, exited or wrote
+    something that is not an answer. A finding about the frame that caused it,
+    not a disagreement to shrink."""
+
+
 class Oracle:
     def __init__(self) -> None:
         self._node = shutil.which("node")
@@ -105,11 +112,12 @@ class Oracle:
             pytest.fail("node is not on PATH; the live-drawing differential needs Node 22.12+")
         self._start()
         # One request before any frame, so a Node that cannot run the module
-        # fails once, with its own error, instead of as a broken pipe inside
-        # the first generated example.
+        # fails once, with its own error, instead of inside the first generated
+        # example. Given longer than a frame: this one includes starting Node
+        # and stripping the module's types on a busy CI runner.
         try:
-            self.decode([{"int": 0x12, "previous": None}], what="the start-up check")
-        except RuntimeError as error:
+            self.decode([{"int": 0x12, "previous": None}], what="the start-up check", seconds=STARTUP_SECONDS)
+        except OracleFailure as error:
             self.close()
             pytest.fail(str(error))
 
@@ -122,40 +130,51 @@ class Oracle:
             stderr=subprocess.PIPE,
             text=True,
         )
-        # Lines are read on a thread so every answer can be waited for with a
-        # deadline; a pipe read on its own would wait forever.
-        answers: queue.Queue[str] = queue.Queue()
-        self._answers = answers
-        threading.Thread(target=self._read, args=(self._process, answers), daemon=True).start()
+        # Both pipes are read on threads: stdout so every answer can be waited
+        # for with a deadline, stderr so a decoder that writes to it cannot
+        # fill the pipe and block (Node writes pipes synchronously on Linux),
+        # and so a crash can be reported with what it said. A process gets its
+        # own queue, so nothing a replaced one wrote late is read as an answer.
+        self._answers: queue.Queue[str] = queue.Queue()
+        self._stderr: deque[str] = deque(maxlen=40)
+        threading.Thread(target=self._pump, args=(self._process.stdout, self._answers.put, True), daemon=True).start()
+        threading.Thread(target=self._pump, args=(self._process.stderr, self._stderr.append, False), daemon=True).start()
 
     @staticmethod
-    def _read(process: subprocess.Popen, answers: queue.Queue) -> None:
-        assert process.stdout
-        for line in process.stdout:
-            answers.put(line)
-        answers.put("")
+    def _pump(stream, sink, mark_end: bool) -> None:
+        for line in stream:
+            sink(line)
+        if mark_end:
+            sink("")
 
-    def decode(self, requests: list[dict], *, what: str) -> list[dict]:
+    def _replace(self, reason: str) -> OracleFailure:
+        """Put a fresh process in place of a failed one, and say what failed."""
+        if self._process.poll() is None:
+            self._process.kill()
+        self._process.wait()
+        said = "".join(self._stderr).strip()
+        self._start()
+        return OracleFailure(f"{reason}{': ' + said if said else ''}")
+
+    def decode(self, requests: list[dict], *, what: str, seconds: float = ANSWER_SECONDS) -> list[dict]:
         assert self._process.stdin
         try:
             self._process.stdin.write(json.dumps(requests) + "\n")
             self._process.stdin.flush()
-            line = self._answers.get(timeout=ANSWER_SECONDS)
+            line = self._answers.get(timeout=seconds)
         except BrokenPipeError:
             line = ""
         except queue.Empty:
-            # Stuck, not slow: replaced, so the examples Hypothesis tries
-            # while shrinking are answered by a decoder that is not still
-            # spinning on this one.
-            self._process.kill()
-            self._process.wait()
-            self._start()
-            raise RuntimeError(f"the Node decoder gave no answer in {ANSWER_SECONDS} s for {what}") from None
+            raise self._replace(f"the Node decoder gave no answer in {seconds} s for {what}") from None
         if not line:
-            self._process.wait(timeout=5)
-            stderr = self._process.stderr.read() if self._process.stderr else ""
-            raise RuntimeError(f"the Node decoder exited on {what}: {stderr.strip()}")
-        return json.loads(line)
+            raise self._replace(f"the Node decoder exited on {what}")
+        try:
+            answers = json.loads(line)
+        except json.JSONDecodeError:
+            raise self._replace(f"the Node decoder wrote something that is not an answer for {what}: {line[:200]!r}") from None
+        if len(answers) != len(requests):
+            raise self._replace(f"the Node decoder gave {len(answers)} answers to {len(requests)} requests for {what}")
+        return answers
 
     def close(self) -> None:
         try:
@@ -375,6 +394,10 @@ def _shapes(frame: bytes) -> list[tuple[str, object, dict, bool]]:
 
 def test_both_decoders_agree_on_every_generated_frame(oracle):
     seen: Counter = Counter()
+    # The first frame the client's process failed on, if any. Kept out of
+    # Hypothesis on purpose: shrinking it would cost a timeout or a restart
+    # per attempt - minutes, for a hang - and the frame is already exact.
+    broke: list[str] = []
 
     @settings(max_examples=budget(3000))
     @example(frame=_EDGE_WALK, previous=(0.5, 0.5))
@@ -382,11 +405,17 @@ def test_both_decoders_agree_on_every_generated_frame(oracle):
     @example(frame=_TWO_WIDTHS, previous=(0.5, 0.5))
     @given(frame=frames(), previous=_previous)
     def check(frame: bytes, previous: tuple[float, float]):
+        if broke:
+            return
         shapes = _shapes(frame)
-        answers = oracle.decode(
-            [{**request, "previous": list(previous)} for _, _, request, _ in shapes],
-            what=f"frame {frame.hex()}",
-        )
+        try:
+            answers = oracle.decode(
+                [{**request, "previous": list(previous)} for _, _, request, _ in shapes],
+                what=f"frame {frame.hex()} from previous {previous}",
+            )
+        except OracleFailure as failure:
+            broke.append(str(failure))
+            return
         for (shape, wire, _, both_ways), answer in zip(shapes, answers, strict=True):
             expected = _python_decode(wire, previous)
             assert "threw" not in answer, (
@@ -409,6 +438,8 @@ def test_both_decoders_agree_on_every_generated_frame(oracle):
                     seen["widths"] += 1
 
     check()
+    if broke:
+        pytest.fail(broke[0])
 
     # A generator that drifts into producing only refused frames would pass
     # the comparison while comparing nothing. Every frame kind has to be
