@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -20,6 +21,7 @@ import { avatarInitial, identityColor } from "../lib/avatar";
 import { SecondFactorRequiredError } from "../lib/api";
 import { passkeysAvailable } from "../lib/passkeys";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { useNameField } from "../hooks/useNameField";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import { operatorEntries } from "../lib/operatorAccess";
 import {
@@ -491,6 +493,21 @@ export function AuthDialog({
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The name rule's own field, as the name tag's (R-UX-13): only its
+  // characters go in, an accented letter as its plain letter (#1420). A
+  // username follows the same rule, so signing in loses nothing by it - "José"
+  // typed is the "Jose" the account was made as.
+  const { ref: nameFieldRef, onChange: onUsernameChange } = useNameField((value) => {
+    setUsername(value);
+    setError(null);
+  });
+  const attachUsername = useCallback(
+    (field: HTMLInputElement | null) => {
+      usernameRef.current = field;
+      return nameFieldRef(field);
+    },
+    [nameFieldRef],
+  );
   // Revealed only once the server has said it wants one, so the field does not
   // appear for the overwhelming majority of accounts that hold no second
   // factor - and so this form never has to guess which accounts are staff.
@@ -640,12 +657,9 @@ export function AuthDialog({
             gets fixed, and where you pick another if yours is taken. */}
         <input
           id={`${fieldId}-username`}
-          ref={usernameRef}
+          ref={attachUsername}
           value={username}
-          onChange={(event) => {
-            setUsername(event.target.value);
-            setError(null);
-          }}
+          onChange={onUsernameChange}
           maxLength={MAX_NICKNAME_LENGTH}
           inputMode="text"
           autoComplete="username"

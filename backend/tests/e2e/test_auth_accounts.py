@@ -136,6 +136,21 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await page.keyboard.insert_text("Zoe\u0308")
             assert await field.input_value() == "Zoe"
 
+            # The account dialog's username follows the same rule, the same way.
+            await field.fill("")
+            await page.click(".first-run-signup")
+            dialog = page.locator(".modal-card").filter(has_text="Password")
+            username = dialog.locator("input").nth(0)
+            await username.fill("")
+            await username.press_sequentially("Łukasz")
+            assert await username.input_value() == "Lukasz"
+            await username.fill("")
+            await username.focus()
+            await page.keyboard.insert_text("José")
+            assert await username.input_value() == "Jose"
+            await page.keyboard.press("Escape")
+            await dialog.wait_for(state="hidden")
+
             # Guest play is one field and one click. Too short is refused in
             # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")
