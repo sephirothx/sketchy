@@ -29,9 +29,12 @@ BASE_URL = "http://localhost:8000"
 # itself the moment the diagnostics build installs it. A setter rather than a
 # poll, so nothing that arrives first is missed. Outgoing events are counted
 # when they leave, so one buffered across a reconnect counts once, when sent.
+# A received event's arguments are kept by reference and serialized only when
+# a test asks for them.
 _RECORD_SOCKET_EVENTS = """
 (() => {
   const received = window.__socketReceived = [];
+  const receivedArgs = window.__socketReceivedArgs = [];
   const sent = window.__socketSent = [];
   let socket;
   Object.defineProperty(window, "__SKETCHY_SOCKET__", {
@@ -39,7 +42,10 @@ _RECORD_SOCKET_EVENTS = """
     get: () => socket,
     set: (value) => {
       socket = value;
-      value.onAny((event) => received.push(event));
+      value.onAny((event, ...args) => {
+        received.push(event);
+        receivedArgs.push(args);
+      });
       value.onAnyOutgoing((event) => sent.push(event));
     },
   });
@@ -76,10 +82,24 @@ class SocketEventLog:
     async def received(self, since: int = 0) -> list[str]:
         return await self._page.evaluate("(since) => window.__socketReceived.slice(since)", since)
 
-    async def sent(self) -> list[str]:
-        return await self._page.evaluate("() => window.__socketSent.slice()")
+    async def payloads(self, event: str, since: int = 0) -> list[list]:
+        """The arguments of each `event` received from `since` on, as JSON."""
+        return await self._page.evaluate(
+            """([event, since]) => window.__socketReceived
+                .map((name, index) => [name, index])
+                .filter(([name, index]) => name === event && index >= since)
+                .map(([, index]) => JSON.parse(JSON.stringify(window.__socketReceivedArgs[index])))""",
+            [event, since],
+        )
 
-    async def wait_for(self, *events: str, since: int) -> None:
+    async def sent_mark(self) -> int:
+        """The point in what goes out from which the next assertions read."""
+        return await self._page.evaluate("() => window.__socketSent.length")
+
+    async def sent(self, since: int = 0) -> list[str]:
+        return await self._page.evaluate("(since) => window.__socketSent.slice(since)", since)
+
+    async def wait_for(self, *events: str, since: int, timeout_s: float = 5) -> None:
         """Until any of `events` arrives at or after the mark `since`.
 
         The mark is required: an event of the same name received earlier -
@@ -87,18 +107,19 @@ class SocketEventLog:
         the wait would prove nothing. Five seconds is for an answer to
         something that has already happened on a live socket; a wait that
         spans a reconnect waits for the new socket first, on its own bound.
+        A caller waiting on something slower than an answer names its own.
         """
         try:
             await self._page.wait_for_function(
                 "([since, events]) => window.__socketReceived.slice(since).some((e) => events.includes(e))",
                 arg=[since, list(events)],
                 polling=50,
-                timeout=5_000,
+                timeout=timeout_s * 1000,
             )
         except PlaywrightTimeoutError as timeout:
             # A bare timeout names neither the event nor the mark.
             raise AssertionError(
-                f"none of {events} arrived after event {since} within 5 s"
+                f"none of {events} arrived after event {since} within {timeout_s:g} s"
             ) from timeout
 
 
