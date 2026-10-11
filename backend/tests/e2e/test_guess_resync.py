@@ -8,6 +8,7 @@ masked prompt showed the answer.
 import asyncio
 
 from playwright.async_api import Page, async_playwright
+from tests.e2e.test_canvas_commit_fanout import SocketEventLog
 from tests.e2e.lobby_helpers import (
     join_by_code,
     open_new_room,
@@ -44,33 +45,17 @@ async def assert_guess_restored(guesser: Page, watcher: Page) -> None:
         assert await page.locator(".player-row.has-guessed").count() == 1
 
 
-def count_syncs(page: Page) -> list[int]:
-    """How many `sync_game` frames this page has received, kept current."""
-    seen = [0]
-
-    def on_frame(payload) -> None:
-        if isinstance(payload, str) and '"sync_game"' in payload:
-            seen[0] += 1
-
-    page.on("websocket", lambda ws: ws.on("framereceived", on_frame))
-    return seen
-
-
-async def show_tab_again(page: Page, syncs: list[int]) -> None:
+async def show_tab_again(page: Page, events: SocketEventLog) -> None:
     """What alt-tabbing back does: the page reports visible and says so, and
     the room answers with a fresh `sync_game`."""
-    before = syncs[0]
+    before = await events.mark()
     await page.evaluate(
         """() => {
           Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
           document.dispatchEvent(new Event('visibilitychange'));
         }"""
     )
-    for _ in range(100):
-        if syncs[0] > before:
-            return
-        await asyncio.sleep(0.05)
-    raise AssertionError("Showing the tab again did not resync the game")
+    await events.wait_for("sync_game", since=before)
 
 
 async def test_a_correct_guess_survives_a_reload_and_a_soft_resync():
@@ -78,7 +63,9 @@ async def test_a_correct_guess_survives_a_reload_and_a_soft_resync():
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         contexts = [await browser.new_context() for _ in range(3)]
         host, second, third = [await context.new_page() for context in contexts]
-        syncs = {page: count_syncs(page) for page in (host, second, third)}
+        # Off the socket, not its WebSocket frames: a session may run on
+        # long-polling (#601), and a frame log then sees no resync at all.
+        syncs = {page: await SocketEventLog.attach(page) for page in (host, second, third)}
 
         try:
             await host.goto(BASE_URL)

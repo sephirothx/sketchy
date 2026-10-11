@@ -154,7 +154,7 @@ async def test_a_new_list_opens_in_the_players_play_language():
             await owner.goto(BASE_URL)
             await register_account(owner, f"Listy{uuid4().hex[:6]}")
             await owner.goto(f"{BASE_URL}/my-prompt-lists")
-            picker = owner.locator(".prompt-list-language .language-picker-trigger")
+            picker = owner.locator(".prompt-list-language .picker-trigger")
             await picker.wait_for()
             assert "Deutsch" in await picker.inner_text()
 
@@ -204,10 +204,10 @@ async def test_signing_in_on_the_page_moves_a_new_list_to_the_accounts_language(
             await inputs.nth(1).fill("a-good-password")
             await sign_in.locator('button[type="submit"]').click()
             await sign_in.wait_for(state="hidden")
-            picker = page.locator(".prompt-list-language .language-picker-trigger")
+            picker = page.locator(".prompt-list-language .picker-trigger")
             await picker.wait_for()
             await page.wait_for_function(
-                "() => document.querySelector('.prompt-list-language .language-picker-trigger')"
+                "() => document.querySelector('.prompt-list-language .picker-trigger')"
                 "?.textContent?.includes('Deutsch')"
             )
         finally:

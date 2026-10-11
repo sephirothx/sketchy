@@ -377,17 +377,6 @@
   margin-top: 4px;
 }
 
-.ops-select {
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  font: inherit;
-  font-size: 16px; /* A field under 16px makes iOS zoom on focus (R-UX-21). */
-  font-weight: 700;
-  padding: 6px 10px;
-}
-
 /* ---------------------------------------------------------- recorder health */
 .ops-health-row {
   align-items: center;
@@ -1715,14 +1704,7 @@
    compete with it. */
 
 /* The category sits above the note and reads as part of the same block. */
-.mod-category select {
-  background: var(--field);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  font: inherit;
-  /* Not the note label's 13.5px: under 16px iOS zooms on focus (R-UX-21). */
-  font-size: 16px;
-  padding: 7px 9px;
-  width: 100%;
+.mod-category .picker-trigger {
+  border-color: var(--line);
+  border-width: 1px;
 }

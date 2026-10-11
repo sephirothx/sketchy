@@ -163,7 +163,9 @@
 
 .prompt-stats-meter > .band-high { background: var(--success); }
 
-.prompt-stats-controls select,
+/* The search is the one field in a bar of pills: the pills name their
+   filter themselves, and this one has its label beside it. Its inner editor
+   clips at its content box, so it indents its text by the ink allowance. */
 .prompt-stats-controls input[type="search"] {
   background: var(--field);
   border: 1.5px solid var(--line-strong);
@@ -174,10 +176,6 @@
   font-weight: 600;
   min-height: 38px;
   padding: 6px 10px;
-}
-
-/* A field's inner editor clips at its content box; a select does not. */
-.prompt-stats-controls input[type="search"] {
   padding-inline-start: calc(10px - var(--ink-overhang));
   text-indent: var(--ink-overhang);
 }
@@ -244,21 +242,16 @@
 
 .prompt-stats-meter { margin-top: 6px; width: 100%; }
 
-.prompt-stats-controls {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-.prompt-stats-control {
+/* The pills wrap as they are; the search takes a row of its own. */
+.prompt-stats-search {
     align-items: stretch;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    width: 100%;
   }
 
-.prompt-stats-control select,
-  .prompt-stats-control input {
+.prompt-stats-search input {
     min-height: 44px;
     width: 100%;
   }

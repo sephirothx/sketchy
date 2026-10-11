@@ -17,8 +17,7 @@ expected, so a viewer that ignored its commits asks for a full resync there.
 This therefore watches the socket rather than the canvas: no commit events in,
 an undo accepted, and no resync of either shape out.
 """
-import asyncio
-
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
@@ -26,33 +25,81 @@ from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, u
 BASE_URL = "http://localhost:8000"
 
 
-def _named(frames, event: str) -> list:
-    return [
-        frame for frame in frames
-        if isinstance(frame, str) and f'"{event}"' in frame
-    ]
+# Every event the page's socket receives and sends, recorded by the socket
+# itself the moment the diagnostics build installs it. A setter rather than a
+# poll, so nothing that arrives first is missed. Outgoing events are counted
+# when they leave, so one buffered across a reconnect counts once, when sent.
+# A received event's arguments are kept by reference and serialized only when
+# a test asks for them.
+_RECORD_SOCKET_EVENTS = """
+(() => {
+  const received = window.__socketReceived = [];
+  const receivedArgs = window.__socketReceivedArgs = [];
+  const sent = window.__socketSent = [];
+  let socket;
+  Object.defineProperty(window, "__SKETCHY_SOCKET__", {
+    configurable: true,
+    get: () => socket,
+    set: (value) => {
+      socket = value;
+      value.onAny((event, ...args) => {
+        received.push(event);
+        receivedArgs.push(args);
+      });
+      value.onAnyOutgoing((event) => sent.push(event));
+    },
+  });
+})();
+"""
 
 
-class FrameLog:
-    """Every Socket.IO frame one page receives, in order."""
+class SocketEventLog:
+    """Every Socket.IO event one page receives or sends, by name, in order -
+    over whichever transport carried it.
+
+    Not its WebSocket frames: a session is not always on a WebSocket. A
+    connection attempt that errors or stalls opens on long-polling (#601), as
+    a reconnect can on a loaded runner, and a log of WebSocket frames then sees
+    nothing - a reconnect's tail arrived over HTTP within milliseconds and the
+    wait for it gave up five seconds later, and an assertion that an event
+    never came passed without having watched. Needs the diagnostics build,
+    which exposes the socket.
+    """
 
     def __init__(self, page):
-        self.frames: list = []
-        self._arrived = asyncio.Event()
-        page.on("websocket", self._watch)
+        self._page = page
 
-    def _watch(self, websocket) -> None:
-        websocket.on("framereceived", self._record)
+    @classmethod
+    async def attach(cls, page) -> "SocketEventLog":
+        """Before the page's first navigation: the recorder rides every load."""
+        await page.add_init_script(_RECORD_SOCKET_EVENTS)
+        return cls(page)
 
-    def _record(self, payload) -> None:
-        self.frames.append(payload)
-        self._arrived.set()
+    async def mark(self) -> int:
+        """The point in what arrives from which the next assertions read."""
+        return await self._page.evaluate("() => window.__socketReceived.length")
 
-    def mark(self) -> int:
-        """The point from which the next assertions read."""
-        return len(self.frames)
+    async def received(self, since: int = 0) -> list[str]:
+        return await self._page.evaluate("(since) => window.__socketReceived.slice(since)", since)
 
-    async def wait_for(self, *events: str, since: int) -> None:
+    async def payloads(self, event: str, since: int = 0) -> list[list]:
+        """The arguments of each `event` received from `since` on, as JSON."""
+        return await self._page.evaluate(
+            """([event, since]) => window.__socketReceived
+                .map((name, index) => [name, index])
+                .filter(([name, index]) => name === event && index >= since)
+                .map(([, index]) => JSON.parse(JSON.stringify(window.__socketReceivedArgs[index])))""",
+            [event, since],
+        )
+
+    async def sent_mark(self) -> int:
+        """The point in what goes out from which the next assertions read."""
+        return await self._page.evaluate("() => window.__socketSent.length")
+
+    async def sent(self, since: int = 0) -> list[str]:
+        return await self._page.evaluate("(since) => window.__socketSent.slice(since)", since)
+
+    async def wait_for(self, *events: str, since: int, timeout_s: float = 5) -> None:
         """Until any of `events` arrives at or after the mark `since`.
 
         The mark is required: an event of the same name received earlier -
@@ -60,16 +107,19 @@ class FrameLog:
         the wait would prove nothing. Five seconds is for an answer to
         something that has already happened on a live socket; a wait that
         spans a reconnect waits for the new socket first, on its own bound.
+        A caller waiting on something slower than an answer names its own.
         """
         try:
-            async with asyncio.timeout(5):
-                while not any(_named(self.frames[since:], event) for event in events):
-                    self._arrived.clear()
-                    await self._arrived.wait()
-        except TimeoutError as timeout:
-            # A bare TimeoutError names neither the event nor the mark.
+            await self._page.wait_for_function(
+                "([since, events]) => window.__socketReceived.slice(since).some((e) => events.includes(e))",
+                arg=[since, list(events)],
+                polling=50,
+                timeout=timeout_s * 1000,
+            )
+        except PlaywrightTimeoutError as timeout:
+            # A bare timeout names neither the event nor the mark.
             raise AssertionError(
-                f"none of {events} arrived after frame {since} within 5 s"
+                f"none of {events} arrived after event {since} within {timeout_s:g} s"
             ) from timeout
 
 
@@ -88,8 +138,8 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
         player_context = await browser.new_context()
         host_page = await host_context.new_page()
         player_page = await player_context.new_page()
-        host_frames = FrameLog(host_page)
-        player_frames = FrameLog(player_page)
+        host_events = await SocketEventLog.attach(host_page)
+        player_events = await SocketEventLog.attach(player_page)
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "CommitHost")
@@ -114,7 +164,7 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             )
             drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
             viewing = player_page if drawing is host_page else host_page
-            viewer_frames = player_frames if viewing is player_page else host_frames
+            viewer_events = player_events if viewing is player_page else host_events
             await drawing.click('.prompt-choices button:first-child')
             # `.drawable`, not just the canvas: the canvas is on screen before
             # `turn_started` makes this seat the drawer, and a stroke begun in
@@ -129,7 +179,7 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
 
             # Everything the viewer received while joining - including the
             # `sync_strokes` every turn start sends it - belongs to the past.
-            watch_from = viewer_frames.mark()
+            watch_from = await viewer_events.mark()
 
             await _draw_stroke(drawing, box, 60)
             await _draw_stroke(drawing, box, 180)
@@ -155,17 +205,17 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             # a viewer two commits behind refuses this and asks for a full
             # resync, while a viewer that read them off the frames accepts it.
             await drawing.click("button.undo-button")
-            await viewer_frames.wait_for("canvas_undo", since=watch_from)
+            await viewer_events.wait_for("canvas_undo", since=watch_from)
             # A resync is requested the moment the undo is refused, so a short
             # settle is enough for one to show up if it is going to. Proving an
             # event *absent* needs a window; this is that window.
             await viewing.wait_for_timeout(750)
 
-            watched = viewer_frames.frames[watch_from:]
-            assert _named(watched, "canvas_undo"), (
+            watched = await viewer_events.received(watch_from)
+            assert "canvas_undo" in watched, (
                 "the undo never reached the viewer, so nothing was proven"
             )
-            assert _named(watched, "canvas_commit") == [], (
+            assert "canvas_commit" not in watched, (
                 "the viewer was still sent a separate commit event"
             )
             # Both shapes of resync, because they are not interchangeable here.
@@ -173,7 +223,7 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             # sequence is stale - so its prefix claim is accepted and it is
             # answered with the incremental tail, not the full dump. Watching
             # only for `sync_strokes` misses exactly the case this guards.
-            resyncs = _named(watched, "sync_strokes") + _named(watched, "sync_strokes_tail")
+            resyncs = [event for event in watched if event in ("sync_strokes", "sync_strokes_tail")]
             assert resyncs == [], (
                 "the viewer's bookkeeping fell behind and it asked for a resync"
             )
