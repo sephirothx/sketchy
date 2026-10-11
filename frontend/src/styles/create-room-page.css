@@ -30,9 +30,18 @@
   font-size: 13px;
   color: var(--muted);
   gap: 10px;
+  /* A flex item's floor is its content, and a preset's name is its owner's,
+     64 characters long if they like: without this the bar grew to the name
+     and took a phone's page sideways with it. */
+  min-width: 0;
 }
 
-.room-preset-bar select,
+/* The preset's name ellipsizes at the width the select used to cap it at;
+   the open list shows the whole of it. */
+.room-preset-bar .picker {
+  max-width: 220px;
+}
+
 .room-preset-bar .room-preset-name {
   background: var(--field);
   border: 1.5px solid var(--line-strong);
@@ -46,8 +55,8 @@
   padding: 6px 10px;
 }
 
-/* The name field's inner editor clips at its content box; the select beside
-   it does not, and an indent would only move its text. */
+/* The name field's inner editor clips at its content box, so it indents its
+   text by the ink allowance and takes it off its padding. */
 .room-preset-bar .room-preset-name {
   padding-inline-start: calc(10px - var(--ink-overhang));
   text-indent: var(--ink-overhang);
@@ -186,7 +195,6 @@ details.form-section > .form-section-body {
 
 .form-section input[type="text"],
 .form-section input[type="search"],
-.form-section select,
 .form-section textarea {
   background: var(--field);
   border: 1.5px solid var(--line-strong);
@@ -199,8 +207,8 @@ details.form-section > .form-section-body {
   padding: 9px 12px;
 }
 
-/* A field's inner editor clips at its content box; a select and a textarea
-   do not, and a textarea would indent only its first line. */
+/* A field's inner editor clips at its content box; a textarea does not, and
+   would indent only its first line. */
 .form-section input[type="text"],
 .form-section input[type="search"] {
   padding-inline-start: calc(12px - var(--ink-overhang));

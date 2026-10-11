@@ -31,7 +31,7 @@ async def test_the_lobby_changes_the_language_you_read_in(viewport):
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
-            trigger = page.locator(".lobby-header .language-picker-trigger")
+            trigger = page.locator(".lobby-header .picker-trigger")
             await trigger.wait_for()
             assert await page.evaluate("document.documentElement.lang") == "en"
 
@@ -43,7 +43,7 @@ async def test_the_lobby_changes_the_language_you_read_in(viewport):
 
             # A choice, not a visit: it is still German after a reload.
             await page.reload()
-            await page.locator(".lobby-header .language-picker-trigger").wait_for()
+            await page.locator(".lobby-header .picker-trigger").wait_for()
             assert await page.evaluate("document.documentElement.lang") == "de"
         finally:
             await context.close()
@@ -71,7 +71,7 @@ async def test_a_language_switch_reaches_the_memoised_lobby_panels():
             card = reader.locator('[title="See who is in this room"]').first
             await card.wait_for()
 
-            await reader.locator(".lobby-header .language-picker-trigger").click()
+            await reader.locator(".lobby-header .picker-trigger").click()
             await reader.get_by_role("option", name=re.compile("Deutsch")).click()
             await reader.wait_for_function("() => document.documentElement.lang === 'de'")
 
@@ -104,7 +104,7 @@ async def test_every_page_outside_a_room_carries_the_flag(width):
             await use_guest_name(page, f"Reader{uuid4().hex[:5]}")
             for path in ("/rules", "/prompt-lists", "/my-prompt-lists", "/profile", "/create", f"/room/{code}", "/no-such-page"):
                 await page.goto(f"{BASE_URL}{path}")
-                flag = page.locator(".lobby-header .language-picker-trigger")
+                flag = page.locator(".lobby-header .picker-trigger")
                 await flag.wait_for(timeout=10_000)
                 overflow = await page.evaluate(
                     "Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)"

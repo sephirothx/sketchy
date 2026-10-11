@@ -37,9 +37,8 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.get_by_role("button", name="Public").click()
 
             # Choosing the preset applies it; there is no separate Apply step.
-            await page.get_by_label("Start from a saved preset").select_option(
-                label="Tournament night"
-            )
+            await page.get_by_label("Start from a saved preset").click()
+            await page.get_by_role("option", name="Tournament night").click()
             await page.get_by_text('Applied "Tournament night".').wait_for()
 
             await expect(page.get_by_label("Room name")).to_have_value("Friday finals")
@@ -52,9 +51,8 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await expect(page.get_by_label("Room name")).to_have_value("Changed")
             assert await page.get_by_role("spinbutton", name="Rounds").input_value() == "1"
 
-            await page.get_by_label("Start from a saved preset").select_option(
-                label="Tournament night"
-            )
+            await page.get_by_label("Start from a saved preset").click()
+            await page.get_by_role("option", name="Tournament night").click()
             await page.get_by_text('Applied "Tournament night".').wait_for()
 
             await page.locator(".create-room-submit").click()

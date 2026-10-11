@@ -1144,8 +1144,13 @@ export const DE: Catalogue = {
     invite: "Einladen",
   },
 
-  languagePicker: {
+  /** The picker every choice is made with (ui/Picker): a trigger's
+  accessible name is what is chosen and the choice - "Reason: Spam". */
+  picker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
+  },
+
+  languagePicker: {
     everyLanguage: "Alle Sprachen",
     anyLanguage: "Sprachunabhängig",
     mixed: "Gemischt",

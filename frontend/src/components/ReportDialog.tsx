@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { ModalShell } from "./ui/ModalShell";
+import { Picker } from "./ui/Picker";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -96,7 +97,7 @@ export function ReportDialog<R extends string>({
   failureText = (problem) => refusalText(problem, ui.reportDialog.couldNotSend),
   onClose,
 }: ReportDialogProps<R>) {
-  const reasonRef = useRef<HTMLSelectElement | null>(null);
+  const reasonRef = useRef<HTMLButtonElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const fieldId = useId();
@@ -185,19 +186,14 @@ export function ReportDialog<R extends string>({
             {reason && picking && (
               <>
                 <label htmlFor={`${fieldId}-reason`}>{reason.label}</label>
-                <select
+                <Picker
                   id={`${fieldId}-reason`}
-                  ref={reasonRef}
-                  className="report-reason"
+                  label={reason.label}
+                  options={reason.choices}
                   value={reason.value}
-                  onChange={(change) => reason.onChange(change.target.value as R)}
-                >
-                  {reason.choices.map((choice) => (
-                    <option key={choice.value} value={choice.value}>
-                      {choice.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={reason.onChange}
+                  triggerRef={reasonRef}
+                />
               </>
             )}
             {reason && !picking && reason.onlyChoice && (
