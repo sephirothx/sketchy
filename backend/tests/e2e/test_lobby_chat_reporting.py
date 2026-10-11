@@ -90,12 +90,15 @@ async def test_a_registered_player_reports_a_lobby_line_by_its_author():
             await expect(dialog.get_by_test_id("report-quoted-line")).to_contain_text(
                 "LineSpeaker"
             )
+            # Every report dialog opens on its choice when it has one.
+            await expect(dialog.locator(".picker-trigger")).to_be_focused()
             # Words, not drawings: the reasons about a picture or play are
             # not on offer.
-            reasons = await dialog.locator("select option").all_inner_texts()
+            await dialog.locator(".picker-trigger").click()
+            reasons = await reporter.locator(".picker-option .picker-option-label").all_inner_texts()
             assert reasons == ["Harassment or abuse", "Spam", "Inappropriate name"]
-            # Every report dialog opens on its choice when it has one.
-            await expect(dialog.locator("select")).to_be_focused()
+            await reporter.keyboard.press("Escape")
+            await expect(dialog.locator(".picker-trigger")).to_be_focused()
 
             # The line is the complaint; nothing more has to be typed.
             await dialog.get_by_role("button", name="Send report").click()
