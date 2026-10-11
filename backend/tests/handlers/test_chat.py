@@ -1581,3 +1581,105 @@ async def test_a_correct_guess_is_one_line_per_reader_with_the_guess_where_it_ma
         timer.cancel()
         with suppress(asyncio.CancelledError):
             await timer
+
+
+async def test_a_correct_guess_is_not_announced_after_the_turn_it_belongs_to_ended():
+    """Review of #1442: the guess was scored, then the block lookup awaited -
+    up to two seconds on a cache miss - before `correct_guess` went out. A
+    timer ending the turn meanwhile sent `turn_ended` with the award already
+    in its scores, and the late `correct_guess` made every client add it
+    again. The lookup now comes before the guess is committed, and a turn that
+    ended during it takes the guess with it."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer", user_id="drawer-user")
+    guesser = room_manager.add_player(room, "Guesser", user_id="guesser-user")
+    other = room_manager.add_player(room, "Other", user_id="other-user")
+    for player in (drawer, guesser, other):
+        player.sid = f"{player.nickname}-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id, other.id], prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    looking_up, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_blockers(_user_id):
+        looking_up.set()
+        await release.wait()
+        return frozenset()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(
+        sio, room_manager, block_service=SimpleNamespace(blockers_of=slow_blockers)
+    )
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    scores_when_ended = {}
+
+    async def emit(event, *args, **kwargs):
+        if event == "turn_ended":
+            scores_when_ended["guesser"] = guesser.score
+
+    sio.emit = AsyncMock(side_effect=emit)
+
+    guessing = asyncio.create_task(sio.handlers["/"]["guess"]("Guesser-sid", {"text": "panda"}))
+    await asyncio.wait_for(looking_up.wait(), 1)
+    await context.game_flow._end_turn(room)
+    release.set()
+    await guessing
+
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "turn_ended" in events
+    ended_at = events.index("turn_ended")
+    assert "correct_guess" not in events[ended_at:], events
+    assert guesser.score == scores_when_ended["guesser"]
+    context.timers.cancel_phase_timer(room.id)
+    await context.timers.close()
+
+
+async def test_a_second_guess_waiting_on_the_lookup_is_judged_after_the_first_was_right():
+    """Review of #1442: with the block lookup ahead of judging, two guesses of
+    one seat can wait on it together. The one that resumes after the other
+    was right is said by a seat that knows the prompt - prompt-aware chat,
+    never a line the guessers still at it can read."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer", user_id="drawer-user")
+    guesser = room_manager.add_player(room, "Guesser", user_id="guesser-user")
+    other = room_manager.add_player(room, "Other", user_id="other-user")
+    for player in (drawer, guesser, other):
+        player.sid = f"{player.nickname}-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id, other.id], prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    release = asyncio.Event()
+
+    async def slow_blockers(_user_id):
+        await release.wait()
+        return frozenset()
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(
+        sio, room_manager, block_service=SimpleNamespace(blockers_of=slow_blockers)
+    )
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+
+    first = asyncio.create_task(guess("Guesser-sid", {"text": "panda", "id": 1}))
+    second = asyncio.create_task(guess("Guesser-sid", {"text": "Panda!", "id": 2}))
+    await asyncio.sleep(0.01)
+    release.set()
+    await first, await second
+
+    assert guesser.id in room.game.correct_guessers
+    for call in sio.emit.await_args_list:
+        if call.args[0] != "chat_message":
+            continue
+        assert call.args[1].get("restricted") is True, call
+        assert "Other-sid" not in (call.kwargs.get("to") or []) and call.kwargs.get("room") is None
+    assert sum(call.args[0] == "correct_guess" for call in sio.emit.await_args_list) == 2
+    context.timers.cancel_phase_timer(room.id)
+    await context.timers.close()

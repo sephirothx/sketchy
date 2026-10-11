@@ -85,14 +85,21 @@ async def _emit_player_chat(
 async def _readers(
     ctx: HandlerContext, room, player, recipients: list[str] | None
 ) -> tuple[list[str], bool]:
-    """Who may read `player`'s words: `recipients` (the connected room when
-    None) minus every seat that blocked the author, who always reads their
-    own. The flag says whether anybody was left out for blocking."""
-    blockers = (
-        await ctx.block_service.blockers_of(player.user_id)
-        if ctx.block_service is not None
-        else frozenset()
-    )
+    """Who may read `player`'s words, and whether anybody was left out for
+    blocking. See `_visible`."""
+    blockers = await _blockers(ctx, player)
+    return _visible(room, player, recipients, blockers), bool(blockers)
+
+
+async def _blockers(ctx: HandlerContext, player) -> frozenset:
+    if ctx.block_service is None:
+        return frozenset()
+    return await ctx.block_service.blockers_of(player.user_id)
+
+
+def _visible(room, player, recipients: list[str] | None, blockers: frozenset) -> list[str]:
+    """`recipients` (the connected room when None) minus every seat that
+    blocked `player`, who always reads their own words."""
     candidate_sids = (
         recipients
         if recipients is not None
@@ -116,7 +123,7 @@ async def _readers(
             or players_by_sid.get(candidate_sid) is None
             or players_by_sid[candidate_sid].user_id not in blockers
         ]
-    return visible_to, bool(blockers)
+    return visible_to
 
 
 async def _retain(
@@ -290,6 +297,24 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
 
     game = room.game
 
+    # Who blocked the guesser, asked before anything is judged (review of
+    # #1442): on a cache miss the lookup waits up to two seconds, and a turn
+    # that ended meanwhile had already counted a correct guess's points in
+    # `turn_ended` when the late `correct_guess` made every client add them
+    # again. So the guess is judged against the seat and the turn as they
+    # stand after the wait - gone with the turn if it moved on, chat if
+    # another guess of this seat's was right meanwhile - and a correct one is
+    # scored and announced with no wait in between.
+    turn_id, phase = game.current_turn_id, game.phase
+    blockers = await _blockers(ctx, player)
+    if (
+        room.game is not game
+        or game.current_turn_id != turn_id
+        or game.phase != phase
+        or room.players.get(player.id) is not player
+    ):
+        return None
+
     # Once a player has already found the prompt this turn, anything else
     # they type could spoil it for players who haven't guessed yet (or
     # just be confusing out-of-context chatter). Keep the rest of their
@@ -402,12 +427,14 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
     # the announcement as a chat line of its own: the result before its
     # cause, and two lines a guess. Blocking still applies to the words, so a
     # seat that blocked the guesser hears only who got it. The guess is
-    # retained with exactly the readers it reached.
+    # retained with exactly the readers it reached, after it was announced.
     announcement = correct_guess_payload(game, player, points)
     aware = ctx.game_flow._privileged_sids(
         room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
     )
-    readers, _ = await _readers(ctx, room, player, [*aware, sid])
+    readers = _visible(room, player, [*aware, sid], blockers)
+    await ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers)
+    await ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers)
     await _retain(
         ctx,
         room,
@@ -417,8 +444,6 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         audience="prompt_aware",
         recipient_sids=readers,
     )
-    await ctx.sio.emit("correct_guess", {**announcement, "text": text}, to=readers)
-    await ctx.sio.emit("correct_guess", announcement, room=room.id, skip_sid=readers)
     # The receipt rides the acknowledgement (#884), where
     # `you_guessed_correctly` used to follow the broadcast.
     answer = {"correct": guessed_receipt(game, player.id)}
