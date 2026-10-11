@@ -1440,6 +1440,47 @@ async def test_a_repeat_prompt_stats_read_within_its_ttl_runs_no_aggregate():
         await engine.dispose()
 
 
+async def test_the_prompt_stats_cache_is_bounded_by_rows_and_shares_reads_per_key():
+    """Review of #1424: the cache counted entries, and a key is the reader's
+    choice, so two clients could park about 200 MB; an unknown slug's empty
+    read evicted real ones; and one lock queued every miss behind every
+    other. Rows are budgeted, empties are not kept, misses on one key share
+    one read that a departing first reader does not cancel."""
+    from app.repositories.sqlalchemy import _PromptStatsCache
+    from app.repositories.interfaces import PromptStatsSummary
+
+    def rows(n: int):
+        return tuple(PromptStatsSummary(f"p{i}", 1, 1, 1, 1, 1.0, 1.0) for i in range(n))
+
+    cache = _PromptStatsCache(300, row_budget=10)
+    reads: list[tuple] = []
+
+    def reader(key, n):
+        async def read():
+            reads.append(key)
+            await asyncio.sleep(0.01)
+            return rows(n)
+        return read
+
+    await cache.get(("a",), reader(("a",), 6))
+    await cache.get(("b",), reader(("b",), 6))  # 12 rows > 10: "a" goes
+    await cache.get(("b",), reader(("b",), 6))
+    await cache.get(("a",), reader(("a",), 6))
+    assert reads == [("a",), ("b",), ("a",)]
+    assert cache._rows <= 10
+
+    assert await cache.get(("nope",), reader(("nope",), 0)) == ()
+    await cache.get(("nope",), reader(("nope",), 0))
+    assert reads[-2:] == [("nope",), ("nope",)], "an empty read is not kept"
+
+    first = asyncio.create_task(cache.get(("c",), reader(("c",), 3)))
+    second = asyncio.create_task(cache.get(("c",), reader(("c",), 3)))
+    await asyncio.sleep(0)
+    first.cancel()
+    assert len(await second) == 3
+    assert reads.count(("c",)) == 1, "one read per key, and the first reader leaving did not end it"
+
+
 async def test_a_list_that_no_longer_exists_does_not_cost_the_others():
     """A list deleted beside a valid one is not fatal: its facts keep its id,
     which has no foreign key (#1362), and credit nobody a reader can find."""

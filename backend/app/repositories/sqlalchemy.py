@@ -4365,10 +4365,17 @@ CATALOGUE_RANKING_KEYS = 256
 
 
 # How long one aggregate serves the public Prompt stats read, when the
-# application asks for a cache at all (`PROMPT_STATS_TTL_SECONDS`), and how
-# many reads - list, window, scoring and hint filters - are kept at once.
+# application asks for a cache at all (`PROMPT_STATS_TTL_SECONDS`).
 PROMPT_STATS_TTL_SECONDS = 300.0
-PROMPT_STATS_KEYS = 512
+# How many prompt rows the cache holds across all its entries, least recently
+# read first out. Rows, not entries: a key is chosen by an anonymous reader
+# (list, window, scoring, hints - sixty per list), and a cap on entries let
+# two clients park 512 thousand-row reads, about 200 MB (#1424 review). 20,000
+# rows is about twenty full lists, a few MB.
+PROMPT_STATS_ROW_BUDGET = 20_000
+# Aggregates running at once across every key: a reader cycling filters keeps
+# the cache cold, and each miss is a full aggregate.
+PROMPT_STATS_CONCURRENT_READS = 2
 
 
 class _PromptStatsCache:
@@ -4379,22 +4386,63 @@ class _PromptStatsCache:
     every usage fact the list has ever had - facts are kept forever
     (R-PRIV-05) - so its cost grew with every game played and any number of
     clients could ask for it at once. Stats are a few minutes stale at most,
-    which nobody reading difficulty ratios can tell. Concurrent misses on one
-    key wait for the first rather than each running the aggregate.
+    which nobody reading difficulty ratios can tell.
+
+    Concurrent misses on one key share one read; misses on different keys
+    run side by side, at most `PROMPT_STATS_CONCURRENT_READS` at a time. The
+    read runs as its own task, so a first reader who goes away does not take
+    it from those waiting on it. A list that does not exist is not kept: an
+    unknown slug must not evict a real one.
     """
 
-    def __init__(self, ttl_seconds: float, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        ttl_seconds: float,
+        clock: Callable[[], float] = time.monotonic,
+        row_budget: int = PROMPT_STATS_ROW_BUDGET,
+    ) -> None:
         self.ttl_seconds = ttl_seconds
         self._clock = clock
+        self._row_budget = row_budget
         self._entries: OrderedDict[tuple, tuple[float, tuple[PromptStatsSummary, ...]]] = OrderedDict()
-        self._lock = asyncio.Lock()
+        self._rows = 0
+        self._reading: dict[tuple, asyncio.Task[tuple[PromptStatsSummary, ...]]] = {}
+        self._reads = asyncio.Semaphore(PROMPT_STATS_CONCURRENT_READS)
 
     def _fresh(self, key: tuple) -> tuple[PromptStatsSummary, ...] | None:
         entry = self._entries.get(key)
-        if entry is None or self._clock() - entry[0] >= self.ttl_seconds:
+        if entry is None:
+            return None
+        if self._clock() - entry[0] >= self.ttl_seconds:
+            self._drop(key)
             return None
         self._entries.move_to_end(key)
         return entry[1]
+
+    def _drop(self, key: tuple) -> None:
+        _, summaries = self._entries.pop(key)
+        self._rows -= len(summaries)
+
+    def _keep(self, key: tuple, summaries: tuple[PromptStatsSummary, ...]) -> None:
+        if not summaries or len(summaries) > self._row_budget:
+            return
+        if key in self._entries:
+            self._drop(key)
+        self._entries[key] = (self._clock(), summaries)
+        self._rows += len(summaries)
+        while self._rows > self._row_budget:
+            self._drop(next(iter(self._entries)))
+
+    async def _fill(
+        self, key: tuple, read: Callable[[], Awaitable[tuple[PromptStatsSummary, ...]]]
+    ) -> tuple[PromptStatsSummary, ...]:
+        try:
+            async with self._reads:
+                summaries = await read()
+            self._keep(key, summaries)
+            return summaries
+        finally:
+            self._reading.pop(key, None)
 
     async def get(
         self, key: tuple, read: Callable[[], Awaitable[tuple[PromptStatsSummary, ...]]]
@@ -4404,16 +4452,16 @@ class _PromptStatsCache:
         found = self._fresh(key)
         if found is not None:
             return found
-        async with self._lock:
-            found = self._fresh(key)
-            if found is not None:
-                return found
-            summaries = await read()
-            self._entries[key] = (self._clock(), summaries)
-            self._entries.move_to_end(key)
-            while len(self._entries) > PROMPT_STATS_KEYS:
-                self._entries.popitem(last=False)
-            return summaries
+        task = self._reading.get(key)
+        if task is None:
+            task = asyncio.create_task(self._fill(key, read))
+            # Seen even when every reader went away, so a failed read is
+            # not reported as never retrieved.
+            task.add_done_callback(lambda done: done.cancelled() or done.exception())
+            self._reading[key] = task
+        # Shielded: a reader cancelled - a client gone - stops waiting, and
+        # the read goes on for everybody else waiting on it.
+        return await asyncio.shield(task)
 
 
 class _CatalogueRanking:
@@ -8305,7 +8353,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             # per prompt - joined to their versions and summed per concept
             # (#1424). Joining every fact the list ever had to its version
             # before grouping carried the whole history through the join:
-            # 111 ms at 2.1M facts, against 81 ms this way
+            # 118.6 ms all-time at 2.1M facts, against 88.6 ms this way
             # (benchmarks/prompt_stats_query.py).
             per_version = (
                 select(

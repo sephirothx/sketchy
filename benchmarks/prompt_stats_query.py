@@ -16,8 +16,8 @@ For each, the median wall time and, from ``EXPLAIN (ANALYZE, BUFFERS)``, the
 temp blocks a sort spilled. ``work_mem`` is set to ``--work-mem`` (the
 issue measured at 8MB).
 
-Measured 2026-10-11, PostgreSQL 17, 2.1M facts, 8MB: all time 110.9 ms
-joined, 80.6 ms by version; 30 days 52.2 ms and 53.6 ms (the window's index
+Measured 2026-10-11, PostgreSQL 17, 2.1M facts, 8MB: all time 118.6 ms
+joined, 88.6 ms by version; 30 days 52.8 ms and 56.1 ms (the window's index
 scan dominates); no temp spill either way on this data - the issue's 85 MB
 spill came from a GroupAggregate plan this planner did not choose here. A
 read within the TTL is a dictionary lookup.

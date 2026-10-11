@@ -139,7 +139,8 @@ export function correctGuessRatio(prompt: PromptStats): number {
   return prompt.totalGuesserCount > 0 ? prompt.correctGuessCount / prompt.totalGuesserCount : 0;
 }
 
-/** Code-point order, as the server sorts its text (Python's `<`). */
+/** Text in plain `<` order: UTF-16 code units, which match the server's
+    code-point order for every prompt outside the astral planes. */
 function byText(a: PromptStats, b: PromptStats): number {
   return a.text < b.text ? -1 : a.text > b.text ? 1 : 0;
 }
