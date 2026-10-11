@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "test": "node --test --test-timeout=30000 --experimental-strip-types tests/*.test.mjs",
+    "test": "node --test --test-timeout=30000 --experimental-strip-types --import ./tests/setup.mjs tests/*.test.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

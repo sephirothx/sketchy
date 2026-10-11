@@ -355,10 +355,14 @@ browser from then on - a guest who changed their browser's language would
 keep the old one for good (R-I18N-06). */
 function switchLocale(locale: string, remember = true): Promise<boolean> {
   wantedLocale = locale;
-  const commit = (): boolean => {
-    if (wantedLocale !== locale || !isCatalogueLoaded(locale)) return false;
-    const inForce = setCatalogue(locale);
-    if (remember) rememberLocale(inForce);
+  // `got` is what loaded: the locale asked for, or English when it could not
+  // be fetched - which, now that English is a chunk too, is what the first
+  // paint has to have rather than nothing (#1426). Not remembered as a
+  // choice: it was nobody's.
+  const commit = (got: string = locale): boolean => {
+    if (wantedLocale !== locale || !isCatalogueLoaded(got)) return false;
+    const inForce = setCatalogue(got);
+    if (remember && got === locale) rememberLocale(inForce);
     applyDocumentLocale(inForce);
     setClockLocale(inForce);
     if (useSettingsStore.getState().locale !== inForce) {
@@ -367,7 +371,7 @@ function switchLocale(locale: string, remember = true): Promise<boolean> {
     return true;
   };
   if (isCatalogueLoaded(locale)) return Promise.resolve(commit());
-  return loadCatalogue(locale).then(commit);
+  return loadCatalogue(locale).then((got) => commit(got));
 }
 
 // Before the first paint, not after it: a page that renders in English and

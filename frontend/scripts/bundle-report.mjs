@@ -9,6 +9,12 @@ other chunk, which is only fetched when something asks for it.
     npm run build && node scripts/bundle-report.mjs [dist] [--json]
     node scripts/bundle-report.mjs dist --budget js=215,css=41
 
+Every reader also downloads one language chunk before the first paint - their
+own, which the page shell asks for (#1426) - so the first-load figure counts
+the largest of them with its imports, read from the plan `index.html` carries.
+English used to be in the entry and counted; the other seven were not, and
+real first loads were about 240 KB against a 215 KB budget.
+
 `--budget` fails the run when the first-load set's gzip size, in KB, is over
 either figure: `npm run bundle:check` is what CI runs after the build, so a
 page that slips back into the entry chunk is caught by the change that did it
@@ -69,9 +75,24 @@ const total = (list) =>
     brotli: sum.brotli + row.brotli,
   }), { raw: 0, gzip: 0, brotli: 0 });
 
+// The page shell's plan of what each reader's language needs (#1426).
+const plan = html.match(/var p=(\{"locales":.*?\});/);
+const languages = plan ? JSON.parse(plan[1]).locales : {};
+const byFile = new Map(rows.map((row) => [row.file, row]));
+const language = Object.entries(languages)
+  .map(([locale, files]) => ({
+    locale,
+    rows: files.map((path) => byFile.get(path.replace(/^assets\//, ""))).filter((row) => row && !row.first),
+  }))
+  .map((entry) => ({ ...entry, size: total(entry.rows) }))
+  .sort((a, b) => b.size.gzip - a.size.gzip)[0];
+for (const row of language?.rows ?? []) row.language = true;
+
 const first = rows.filter((row) => row.first);
+const firstJs = total([...first.filter((r) => r.file.endsWith(".js")), ...(language?.rows ?? [])]);
 const report = {
-  firstLoad: { js: total(first.filter((r) => r.file.endsWith(".js"))), css: total(first.filter((r) => r.file.endsWith(".css"))), all: total(first) },
+  firstLoad: { js: firstJs, css: total(first.filter((r) => r.file.endsWith(".css"))), all: total([...first, ...(language?.rows ?? [])]) },
+  largestLanguage: language ? { locale: language.locale, ...language.size } : null,
   chunks: rows.sort((a, b) => b.raw - a.raw),
 };
 
@@ -83,9 +104,12 @@ if (json) {
   for (const [label, t] of Object.entries(report.firstLoad)) {
     console.log(`  ${label.padEnd(12)}${kb(t.raw)}  ${kb(t.gzip)}  ${kb(t.brotli)}`);
   }
-  console.log("\nchunks (* = first load)");
+  if (report.largestLanguage) {
+    console.log(`  (js includes the largest language, ${report.largestLanguage.locale}: ${kb(report.largestLanguage.gzip).trim()} KB gzip)`);
+  }
+  console.log("\nchunks (* = first load, + = the largest language)");
   for (const row of report.chunks) {
-    console.log(`${row.first ? "*" : " "} ${kb(row.raw)}  ${kb(row.gzip)}  ${kb(row.brotli)}  ${row.file}`);
+    console.log(`${row.first ? "*" : row.language ? "+" : " "} ${kb(row.raw)}  ${kb(row.gzip)}  ${kb(row.brotli)}  ${row.file}`);
   }
 }
 

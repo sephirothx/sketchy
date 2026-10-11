@@ -29,17 +29,23 @@ installScrollHandles()
 
 // The page this address draws is a chunk of its own (#475): fetched now, while
 // the paint waits on the account below, rather than once it is over.
-prefetchRouteFor(window.location.pathname)
+const routeFetched = prefetchRouteFor(window.location.pathname)
 
 // The account's language outranks the browser's (R-I18N-06), and is only
 // known once the account is: so the first paint waits for it, bounded, and
 // App's own lookup finds it already answered (lib/startup.ts). The browser's
 // own language is fetched alongside rather than after (#982), so a guest's
 // paint waits for whichever of the two is slower, not for both in turn.
-void beforeFirstPaint(
-  Promise.all([useAuthStore.getState().fetchMe(), initialLocaleReady]),
-).then(() => {
-prefetchPlayRoutes()
+// Whatever the bound, never without words: English is a chunk like every
+// other language now (#1426), so until one has arrived there is nothing to
+// render with. A shell whose chunks are all gone is reloaded by chunkReload.
+void Promise.all([
+  beforeFirstPaint(Promise.all([useAuthStore.getState().fetchMe(), initialLocaleReady])),
+  initialLocaleReady.catch(() => undefined),
+]).then(() => {
+// On an invite link the room's own chunks come first: the lobby's play routes
+// fetched alongside them competed with the page being opened (#1426).
+void routeFetched.then(prefetchPlayRoutes)
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Outside the router and every provider on purpose: nothing that can

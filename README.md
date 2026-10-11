@@ -1883,8 +1883,8 @@ frontend/
     content/legal/ The privacy notice and the terms of use, one typed module per language
                   (en.ts is the reference); lib/minimumAge.ts holds the age they state
     content/ui/   Every word the interface says, one typed module per language
-                  (en.ts is the reference and ships in the entry chunk; every other
-                  language is its own chunk, fetched by whoever reads it;
+                  (en.ts is the reference; every language, English included, is its
+                  own chunk, preloaded by the page shell for whoever reads it;
                   format.ts holds the Intl formatters)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
@@ -1994,7 +1994,7 @@ Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
 | Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. The range is resolved with the same baseline fallback as the artifact scan, and fails closed rather than falling back to the tree, so a first push or a force-push is not a way around it. Merge diffs are requested explicitly, because `git log -p` emits no patch for a merge commit — a secret introduced only while resolving a conflict, present in neither parent, is otherwise invisible to both scans. One historical finding is carried in `.gitleaks-known.json` — an earlier revision of the artifact scanner named PEM armour in a comment — pinned to its commit, file, rule, and line, holding no secret, and unable to excuse anything else. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
 | Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
 | Wire contract baseline | `fixtures/wire_contract.json` no longer matches the tree, or (a warning until launch) the socket contract differs from the base branch under the same `PROTOCOL_VERSION`. Regenerate with `scripts/check-wire-contract.py --write`; see `docs/wire-protocol.md` §11 |
-| Bundle budget | The first-load set, meaning the entry script and stylesheet plus every chunk they import statically, going over its gzip budget (`npm run bundle:check`, [`frontend/scripts/bundle-report.mjs`](frontend/scripts/bundle-report.mjs)). A page, a language or a stylesheet that slips back into the entry chunk is caught by the change that caused it, not noticed at launch |
+| Bundle budget | The first-load set, meaning the entry script and stylesheet plus every chunk they import statically and the largest language chunk every reader fetches before the first paint, going over its gzip budget (`npm run bundle:check`, [`frontend/scripts/bundle-report.mjs`](frontend/scripts/bundle-report.mjs)). A page, a language or a stylesheet that slips back into the entry chunk is caught by the change that caused it, not noticed at launch |
 | Coverage floors | A risk-critical module dropping below **either** of its two floors in [`scripts/check-coverage.py`](scripts/check-coverage.py) — statements and branches, on authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Both, because either alone can be met without exercising the code: `auth/blocks.py` reads 82% by statements and 50% by branches, so half its conditions have only ever gone one way. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A report produced without `--cov-branch` is refused rather than checked against the wrong number, and a module that vanishes from the report fails too, so a rename cannot retire a floor silently |
 
 The coverage gate has its own tests in
@@ -2159,6 +2159,13 @@ backend/.venv/bin/python benchmarks/lobby_baseline.py --online 100 400
 
 # One page of the community catalogue's star order, ranked per page versus cached (#901)
 backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 120000
+
+# The public Prompt stats read at 2.1M usage facts, joined versus summed per version, and cached (#1424)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/prompt_stats_query.py --facts 2100000
+
+# First contentful paint of a cold visit on a slowed phone: lobby and invite link, English and French (#1426)
+backend/.venv/bin/python benchmarks/first_paint.py --base-url http://localhost:8000
 
 # The score-event ledger's bytes, write time and read cost per game (#552)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \

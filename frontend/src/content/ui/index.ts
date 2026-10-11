@@ -22,7 +22,7 @@ two cannot drift.
 first paint and again whenever the reader changes languages, and every
 component that read `ui.something.key` at render time sees the new words on
 the next render. */
-import { EN } from "./en.ts";
+import type { EN } from "./en.ts";
 
 /** What every locale must provide, member for member.
 
@@ -37,15 +37,17 @@ export type Catalogue = typeof EN;
 
 /** Every language the interface has been finished in, and how to fetch it.
 
-One chunk per language, fetched only by somebody who reads it (#982). They
-were all in the entry chunk once, and six of the seven were 35% of the
-bundle for every visitor - each reader paid for six languages they would
-never see. English stays in the entry chunk: it is the type every other
-locale is written against, and what a reader gets if their language cannot
-be fetched at all. */
+One chunk per language, fetched only by somebody who reads it (#982) -
+English included (#1426). They were all in the entry chunk once, and six of
+the seven were 35% of the bundle for every visitor. English stayed in it,
+the type every other locale is written against, until a French reader was
+measured downloading English and then French, one after the other, before
+the first paint. It is now a chunk like the rest - still the type, and still
+what a reader gets when their own language cannot be fetched - and the page
+shell asks for the reader's chunk before the entry has run (`vite.config.ts`). */
 const LOADERS = {
   de: () => import("./de.ts").then((module) => module.DE),
-  en: () => Promise.resolve(EN),
+  en: () => import("./en.ts").then((module) => module.EN),
   es: () => import("./es.ts").then((module) => module.ES),
   fr: () => import("./fr.ts").then((module) => module.FR),
   it: () => import("./it.ts").then((module) => module.IT),
@@ -65,15 +67,19 @@ export const CATALOGUE_LOCALES = LOCALES;
 
 export const FALLBACK_LOCALE: Locale = "en";
 
-const loaded: Partial<Record<Locale, Catalogue>> = { en: EN };
+const loaded: Partial<Record<Locale, Catalogue>> = {};
 const inFlight: Partial<Record<Locale, Promise<Locale>>> = {};
 
 function asLocale(locale: string): Locale {
   return (locale in LOADERS ? locale : FALLBACK_LOCALE) as Locale;
 }
 
-/** The catalogue the interface reads. Reassigned by `setCatalogue`. */
-export let ui: Catalogue = EN;
+/** The catalogue the interface reads. Reassigned by `setCatalogue`.
+
+Unset until the first catalogue arrives: nothing renders before then -
+`main.tsx` holds the first paint for it - and nothing reads it while modules
+load. The Node tests set English up front (`tests/setup.mjs`). */
+export let ui: Catalogue = undefined as unknown as Catalogue;
 let current: Locale = FALLBACK_LOCALE;
 
 /** The locale `ui` is in - for the few words the platform already knows in
@@ -89,10 +95,11 @@ export function isCatalogueLoaded(locale: string): boolean {
 
 /** Fetch `locale`'s words, once, and say which locale can now be read.
 
-Settles with the fallback rather than rejecting when the chunk cannot be
-fetched - offline, or a shell older than the deploy that renamed its chunks:
-English is a worse page than the reader's language but a far better one than
-none, and the update notice is what tells a stale shell to reload. */
+Settles with the fallback - English, fetched in turn - rather than rejecting
+when the chunk cannot be fetched (offline, or a shell older than the deploy
+that renamed its chunks): English is a worse page than the reader's language
+but a far better one than none, and the update notice is what tells a stale
+shell to reload. Rejects only when English cannot be fetched either. */
 export function loadCatalogue(locale: string): Promise<Locale> {
   const wanted = asLocale(locale);
   if (loaded[wanted]) return Promise.resolve(wanted);
@@ -101,9 +108,12 @@ export function loadCatalogue(locale: string): Promise<Locale> {
       loaded[wanted] = catalogue;
       return wanted;
     },
-    () => {
+    (error: unknown) => {
       delete inFlight[wanted];
-      return FALLBACK_LOCALE;
+      // English is the fallback now that it is a chunk too: fetched in turn,
+      // and a failure there is the stale shell's to reload (chunkReload.ts).
+      if (wanted === FALLBACK_LOCALE) throw error;
+      return loadCatalogue(FALLBACK_LOCALE);
     },
   );
   return inFlight[wanted];
@@ -125,7 +135,7 @@ export function setCatalogue(locale: string): Locale {
 }
 
 /** The catalogue for one locale, without changing what the app is reading -
-or English, for one whose words have not been fetched. */
+or the one in force, for one whose words have not been fetched. */
 export function catalogueFor(locale: string): Catalogue {
-  return loaded[asLocale(locale)] ?? EN;
+  return loaded[asLocale(locale)] ?? ui;
 }
