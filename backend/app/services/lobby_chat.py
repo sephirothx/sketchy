@@ -40,8 +40,7 @@ from typing import Iterable
 from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.bans import active_ban_filter
-from app.db.models import RoomMessage, UserBan
+from app.db.models import RoomMessage
 
 LOBBY_CHAT_BACKLOG = 50
 RESTORE_TIMEOUT_SECONDS = 10
@@ -214,9 +213,11 @@ class LobbyChatLog:
     def drop_author(self, user_id: str) -> None:
         """Forget every line by one account.
 
-        A deletion or a suspension ends the account; its name and its words
-        must not keep being handed to every new arrival for the next fifty
-        lines. The numbers already given stay spent.
+        A deletion erases the account; its name and its words must not keep
+        being handed to every new arrival for the next fifty lines. Not a
+        suspension: what a suspended account said stays until a moderator
+        hides it, line by line (R-LCHAT-09). The numbers already given stay
+        spent.
         """
         kept = [line for line in self._lines if line.user_id != user_id]
         self._lines.clear()
@@ -228,13 +229,12 @@ async def recent_lobby_lines(
 ) -> list[RoomMessage]:
     """The most recent retained lobby lines, oldest first.
 
-    Minus anything expired and anything said by an account that is suspended
-    now - the ban sweep dropped those from the live ring, and a restart must
-    not hand them back to the next fifty arrivals. A deleted account's rows
-    are already gone (`auth/account_data.py`).
+    Minus anything expired. A suspended account's lines come back as the live
+    ring kept them - a suspension hides nothing on its own (R-LCHAT-09) - and
+    a hidden line comes back hidden. A deleted account's rows are already gone
+    (`auth/account_data.py`).
     """
     checked_at = now or datetime.now(timezone.utc)
-    suspended = select(UserBan.user_id).where(*active_ban_filter(checked_at))
     rows = (
         await session.scalars(
             select(RoomMessage)
@@ -244,7 +244,6 @@ async def recent_lobby_lines(
                 RoomMessage.audience == literal("lobby", literal_execute=True),
                 RoomMessage.expires_at > checked_at,
                 RoomMessage.sender_user_id.is_not(None),
-                RoomMessage.sender_user_id.not_in(suspended),
             )
             .order_by(RoomMessage.created_at.desc(), RoomMessage.id.desc())
             .limit(limit)

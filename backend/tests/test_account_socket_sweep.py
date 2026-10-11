@@ -9,7 +9,11 @@ them on it.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
+
+from app.services.lobby_chat import LobbyChatLog
 
 
 class FakeManager:
@@ -74,6 +78,40 @@ async def test_every_socket_of_the_account_is_told_and_then_closed(
 
     assert server.emitted == [(event, payload, "user:doomed")]
     assert server.disconnected == ["seated-sid", unseated]
+
+
+@pytest.mark.parametrize("ending, kept", [("suspension", ["mine", "theirs"]), ("deletion", ["theirs"])])
+async def test_a_suspension_leaves_the_lobby_lines_and_a_deletion_takes_them(monkeypatch, ending, kept):
+    """Owner's decision on #1435: a suspension hides nothing on its own - a
+    moderator hides lines one at a time (R-LCHAT-09). It used to drop every
+    line the account had said from what new arrivals were sent. A deletion
+    still does: the account and its words are erased."""
+    from app import main
+
+    log = LobbyChatLog()
+    for author, text in (("doomed", "mine"), ("other", "theirs")):
+        log.append(
+            user_id=author, display_name=author, name_color=None, is_anonymous=False,
+            text=text, sent_at=datetime(2026, 10, 11, tzinfo=timezone.utc),
+        )
+    monkeypatch.setattr(main.handler_context, "lobby_chat", log)
+    monkeypatch.setattr(main, "sio", FakeServer({}))
+    monkeypatch.setattr(main.block_service, "clear", lambda: None)
+
+    async def no_seats(user_id, *, code, reason, suspension=None):
+        return None
+
+    async def suspension_payload(*_args, **_kwargs):
+        return {"reason": "suspended"}
+
+    monkeypatch.setattr(main, "_remove_account_from_live_rooms", no_seats)
+    monkeypatch.setattr(main, "suspension_payload", suspension_payload)
+    if ending == "suspension":
+        await main.remove_banned_account_from_live_rooms("doomed")
+    else:
+        await main.remove_deleted_account_from_live_rooms("doomed")
+
+    assert [line.text for line in log.backlog_for()] == kept
 
 
 async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):

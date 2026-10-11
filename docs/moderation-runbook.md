@@ -81,8 +81,8 @@ keep seeing**: one that is illegal. When in doubt, hide first and ask an adminis
 
 Report it to the police where it is a crime. Then: erase it if it is a drawing, hide it if
 it is a prompt or list, remove it if it is a picture, and suspend the account. For a
-message, suspending the account takes its lines out of the lobby for new arrivals; taking
-single lines out of every open lobby is #1435.
+lobby message, hide each line from the case (R-LCHAT-09): suspending the account does not
+take its lines out of the lobby.
 
 ## Harassment and everything else
 

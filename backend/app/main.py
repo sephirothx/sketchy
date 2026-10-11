@@ -670,9 +670,9 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
 
 
 async def remove_banned_account_from_live_rooms(user_id: str) -> None:
-    # What they said in the lobby goes with the account, the way their seat
-    # does; the retained copy stays for the report that may have caused this.
-    handler_context.lobby_chat.drop_author(user_id)
+    # What they said in the lobby stays (owner's decision, #1435): a moderator
+    # hides lines one at a time, case by case, and a suspension does not take
+    # every line its account ever said with it (R-LCHAT-09).
     # Marked before even reading what to tell them: that read is an await like
     # any other, and the account is banned already by the time this is called.
     with handler_context.ending(_sockets_of(user_id)) as sids:
