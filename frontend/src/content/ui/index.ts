@@ -134,6 +134,12 @@ export function setCatalogue(locale: string): Locale {
   return chosen;
 }
 
+/** Whether any catalogue is in force yet: false only before the first one
+has loaded, when there are no words to render with at all. */
+export function hasCatalogue(): boolean {
+  return ui !== undefined;
+}
+
 /** The catalogue for one locale, without changing what the app is reading -
 or the one in force, for one whose words have not been fetched. */
 export function catalogueFor(locale: string): Catalogue {

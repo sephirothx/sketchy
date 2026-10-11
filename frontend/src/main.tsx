@@ -16,7 +16,7 @@ import { installScrollHandles } from './lib/scrollHandles.ts'
 import { prefetchPlayRoutes, prefetchRouteFor } from './routeModules.ts'
 import { beforeFirstPaint } from './lib/startup.ts'
 import { useAuthStore } from './store/authStore.ts'
-import { initialLocaleReady } from './store/settingsStore.ts'
+import { firstPaintWords, initialLocaleReady } from './store/settingsStore.ts'
 
 // Before anything renders, so an error thrown during the first paint is still
 // in the buffer if the player goes on to file a bug about it.
@@ -38,11 +38,17 @@ const routeFetched = prefetchRouteFor(window.location.pathname)
 // paint waits for whichever of the two is slower, not for both in turn.
 // Whatever the bound, never without words: English is a chunk like every
 // other language now (#1426), so until one has arrived there is nothing to
-// render with. A shell whose chunks are all gone is reloaded by chunkReload.
+// render with - and when not even English can be fetched, the shell's own
+// page, which needs no catalogue, says so. A shell whose chunks are all gone
+// is reloaded by chunkReload.
 void Promise.all([
   beforeFirstPaint(Promise.all([useAuthStore.getState().fetchMe(), initialLocaleReady])),
-  initialLocaleReady.catch(() => undefined),
-]).then(() => {
+  firstPaintWords,
+]).then(([, words]) => {
+if (!words) {
+  showNoWords()
+  return
+}
 // On an invite link the room's own chunks come first: the lobby's play routes
 // fetched alongside them competed with the page being opened (#1426).
 void routeFetched.then(prefetchPlayRoutes)
@@ -72,3 +78,11 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 })
+
+/** The shell's page for a first visit that could fetch no language at all. */
+function showNoWords() {
+  const page = document.getElementById('no-words')
+  if (!page) return
+  page.hidden = false
+  page.querySelector('button')?.addEventListener('click', () => window.location.reload())
+}

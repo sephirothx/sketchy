@@ -1,7 +1,7 @@
 /** A chunk this tab asked for is gone: reload onto the build being served, once.
 
-Pages, overlays and every language but English are chunks fetched on demand
-(#475, #982). A deploy replaces them - their names carry a content hash - so a
+Pages, overlays and every language are chunks fetched on demand (#475,
+#982, #1426). A deploy replaces them - their names carry a content hash - so a
 tab opened before it asks for files the server no longer has, and the fetch
 fails. The shell is served `no-cache`, so a reload lands on the new build and
 the chunk it names.

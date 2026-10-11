@@ -77,7 +77,9 @@ const total = (list) =>
 
 // The page shell's plan of what each reader's language needs (#1426).
 const plan = html.match(/var p=(\{"locales":.*?\});/);
-const languages = plan ? JSON.parse(plan[1]).locales : {};
+// A shell without one would drop every language out of the budget silently.
+if (!plan) throw new Error(`no language plan in ${join(dist, "index.html")}`);
+const languages = JSON.parse(plan[1]).locales;
 const byFile = new Map(rows.map((row) => [row.file, row]));
 const language = Object.entries(languages)
   .map(([locale, files]) => ({

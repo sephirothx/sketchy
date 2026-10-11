@@ -68,6 +68,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Shown by main.tsx only when no language at all could be fetched
+         (#1426): English is a chunk too, so there are no words to draw the
+         app with, and this needs none. -->
+    <div id="no-words" class="no-words" role="alert" hidden>
+      <p>Sketchy could not finish loading. Check your connection, then reload the page.</p>
+      <button type="button" class="btn btn-primary">Reload</button>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

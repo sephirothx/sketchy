@@ -62,3 +62,17 @@
   margin: 10px 0 0;
   text-align: center;
 }
+
+/* The shell's own page for a first visit that could fetch no language at all
+   (index.html, #1426): without a catalogue there is no app to crash, only this. */
+.no-words {
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.no-words p {
+  color: var(--ink);
+  margin: 0 0 20px;
+}

@@ -21,6 +21,8 @@ import {
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
 import {
+  FALLBACK_LOCALE,
+  hasCatalogue,
   interfaceLocale,
   isCatalogueLoaded,
   loadCatalogue,
@@ -356,11 +358,13 @@ keep the old one for good (R-I18N-06). */
 function switchLocale(locale: string, remember = true): Promise<boolean> {
   wantedLocale = locale;
   // `got` is what loaded: the locale asked for, or English when it could not
-  // be fetched - which, now that English is a chunk too, is what the first
-  // paint has to have rather than nothing (#1426). Not remembered as a
-  // choice: it was nobody's.
+  // be fetched. English stands in only where there are no words at all - the
+  // first paint, now that English is a chunk too (#1426) - and is not
+  // remembered as a choice: it was nobody's. Anywhere else a fallback is a
+  // switch that failed, and the reader keeps what they were reading.
   const commit = (got: string = locale): boolean => {
     if (wantedLocale !== locale || !isCatalogueLoaded(got)) return false;
+    if (got !== locale && hasCatalogue()) return false;
     const inForce = setCatalogue(got);
     if (remember && got === locale) rememberLocale(inForce);
     applyDocumentLocale(inForce);
@@ -368,7 +372,7 @@ function switchLocale(locale: string, remember = true): Promise<boolean> {
     if (useSettingsStore.getState().locale !== inForce) {
       useSettingsStore.setState({ locale: inForce });
     }
-    return true;
+    return got === locale;
   };
   if (isCatalogueLoaded(locale)) return Promise.resolve(commit());
   return loadCatalogue(locale).then((got) => commit(got));
@@ -531,9 +535,42 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
 }));
 
 /** Settles once the reader's language can be read - what `main.tsx` holds
-    the first paint for. Never rejects: a language that cannot be fetched
-    leaves the page in English. */
+    the first paint for. A language that cannot be fetched leaves the page in
+    English; rejects only when English cannot be fetched either, and
+    `main.tsx` then draws a page that needs no words from a catalogue. */
 export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale, false).then(() => undefined);
+
+/** How long the first paint waits for the reader's language before English
+    stands in for it - the bound the paint had while English was in the entry
+    chunk, and the reader's language still arrives as an ordinary switch. */
+export const LOCALE_WAIT_MS = 2000;
+
+/** Settles with whether there are words to paint with: the reader's language
+    within `LOCALE_WAIT_MS`, or else English, fetched again if it failed the
+    first time (#1426). False only when English cannot be fetched either, and
+    `main.tsx` then shows the shell's own page that needs no catalogue. */
+export const firstPaintWords: Promise<boolean> = new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, LOCALE_WAIT_MS);
+  void initialLocaleReady.catch(() => undefined).then(() => {
+    clearTimeout(timer);
+    resolve();
+  });
+}).then(async () => {
+  if (hasCatalogue()) return true;
+  try {
+    await loadCatalogue(FALLBACK_LOCALE);
+  } catch {
+    return false;
+  }
+  // The reader's own language may have landed meanwhile; English stands in
+  // only where there is still nothing.
+  if (!hasCatalogue()) {
+    const inForce = setCatalogue(FALLBACK_LOCALE);
+    applyDocumentLocale(inForce);
+    setClockLocale(inForce);
+  }
+  return true;
+});
 
 if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
   const media = window.matchMedia("(prefers-color-scheme: dark)");

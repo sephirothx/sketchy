@@ -78,12 +78,6 @@ function precompress(): Plugin {
   }
 }
 
-// The API and Socket.IO endpoints are same-origin in every real deployment:
-// the backend serves the built frontend itself (see SPAStaticFiles in
-// backend/app/main.py). The Vite dev server on :5173 is the one exception, so
-// it proxies those two prefixes to the backend to keep the frontend's URLs
-// relative everywhere - which is what lets the session cookie work unchanged in
-// dev, under scripts/serve.sh, in E2E, and through a tunnel.
 /** The reader's language, and on an invite link the room's page, fetched from
     the page shell - before the entry has run (#1426).
 
@@ -101,7 +95,9 @@ Appended after Vite's own tags, so the entry and vendor are asked for first:
 inserted before them, the room's preloads starved vendor and the paint came
 later (2,680 ms, measured). Each language's list carries its static imports
 (the shared format chunk among them, without which the gain disappeared),
-less what the entry already preloads. The inline script's hash is read by
+less what the entry already preloads. The room's stylesheets are preloaded
+too: Vite's own loader holds the page's import until they have arrived, and
+asked for from the entry they were one more round trip before the paint. The inline script's hash is read by
 the server at startup for its CSP (`security_headers.inline_script_hashes`). */
 function preloadReaderChunks(): Plugin {
   return {
@@ -137,21 +133,30 @@ function preloadReaderChunks(): Plugin {
         }
         if (!locales.en) throw new Error('sketchy-preload-reader-chunks: no English catalogue chunk')
         const room = facade(/[\\/]src[\\/]pages[\\/]GameRoomPage\.tsx$/)
-        const plan = { locales, room: room ? own([room.fileName]) : [] }
+        const styles = (files: string[]) =>
+          new Set(files.flatMap((file) => [...(byFile.get(file)?.viteMetadata?.importedCss ?? [])]))
+        const entryStyles = styles([...preloaded])
+        const roomFiles = room ? own([room.fileName]) : []
+        const roomStyles = [...styles(roomFiles)].filter((file) => !entryStyles.has(file))
+        const plan = { locales, room: roomFiles, roomCss: roomStyles }
         const script =
           `(function(){try{var p=${JSON.stringify(plan)};var s=null;` +
           `try{s=localStorage.getItem("sketchy_locale")}catch(e){}` +
-          `var l=p.locales[s]?s:null;` +
+          // Own keys only: a stored "constructor" is not a language.
+          `var h=function(k){return Object.prototype.hasOwnProperty.call(p.locales,k)};` +
+          `var l=h(s)?s:null;` +
           `if(!l){var b=navigator.languages||[navigator.language||""];` +
           `for(var i=0;i<b.length&&!l;i++){var t=String(b[i]).toLowerCase();` +
-          `if(p.locales[t])l=t;else if(p.locales[t.split("-")[0]])l=t.split("-")[0];}}` +
+          `if(h(t))l=t;else if(h(t.split("-")[0]))l=t.split("-")[0];}}` +
           `var f=p.locales[l||"en"];` +
           // The first path segment, not a "/room/" literal: a page's markup is
           // checked for links into rooms (test_gallery.py), and the shell is
           // every page's markup.
-          `if(location.pathname.split("/")[1]==="room")f=f.concat(p.room);` +
+          `var c=[];if(location.pathname.split("/")[1]==="room"){f=f.concat(p.room);c=p.roomCss;}` +
           `for(var j=0;j<f.length;j++){var k=document.createElement("link");` +
           `k.rel="modulepreload";k.crossOrigin="";k.href="/"+f[j];document.head.appendChild(k);}` +
+          `for(var n=0;n<c.length;n++){var y=document.createElement("link");` +
+          `y.rel="preload";y.as="style";y.href="/"+c[n];document.head.appendChild(y);}` +
           `}catch(e){}})();`
         return html.replace('</head>', `  <script>${script}</script>\n  </head>`)
       },
@@ -159,6 +164,12 @@ function preloadReaderChunks(): Plugin {
   }
 }
 
+// The API and Socket.IO endpoints are same-origin in every real deployment:
+// the backend serves the built frontend itself (see SPAStaticFiles in
+// backend/app/main.py). The Vite dev server on :5173 is the one exception, so
+// it proxies those two prefixes to the backend to keep the frontend's URLs
+// relative everywhere - which is what lets the session cookie work unchanged in
+// dev, under scripts/serve.sh, in E2E, and through a tunnel.
 const DEV_BACKEND = 'http://localhost:8000'
 
 // https://vite.dev/config/
