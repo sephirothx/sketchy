@@ -1221,6 +1221,7 @@ export const EN = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "This message was deleted.",
     reportThisLine: (p: { name: string }) => `Report this line by ${p.name}`,
     couldNotSendThat: "Could not send that.",
     chat: "Chat",

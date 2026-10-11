@@ -418,7 +418,10 @@ profile-history endpoint.
 
 Retention is best-effort and does not delay live availability when storage
 fails. Room chat lines never carry their retained id on the wire; lobby lines do,
-as `retainedMessageId`, because a lobby report cites the line.
+as `retainedMessageId`, because a lobby report cites the line. From a lobby report's
+case a moderator can **hide** the reported player's lines: every open lobby shows
+*This message was deleted* in italics in their place at once, the text goes to nobody,
+and the moderator can show a line again if it was a mistake (R-LCHAT-09).
 Expired rows are removed at startup and by bounded hourly cleanup during new
 writes. A report may select up to 20 unexpired `messageIds`, but only when the
 reported player authored them and the reporter was in each stored audience.
@@ -1626,6 +1629,7 @@ your players share one address:
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
 | `PROMPT_LIST_UNPUBLISH_LIMIT` | 30 per hour | Withdrawals of one's own lists from the catalogue, per account (#1241) |
+| `REPORT_ADDRESS_LIMIT` | 10 per hour | Player reports from one address, by every door (socket, `POST /api/reports`, the Gallery); each account is held to 10 an hour whatever this says |
 | `BUG_REPORT_SCREENSHOT_LIMIT` | 3 per day | Bug-report screenshots one account may have kept; past it the report lands without its picture (#1244) |
 | `BUG_REPORT_SCREENSHOT_BYTES_LIMIT` | 1 GiB | Undecided bug-report screenshots kept across the deployment; past it a report lands without its picture |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |

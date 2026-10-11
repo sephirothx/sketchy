@@ -32,7 +32,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import logging
 from typing import Iterable
@@ -40,8 +40,7 @@ from typing import Iterable
 from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.bans import active_ban_filter
-from app.db.models import RoomMessage, UserBan
+from app.db.models import RoomMessage
 
 LOBBY_CHAT_BACKLOG = 50
 RESTORE_TIMEOUT_SECONDS = 10
@@ -59,6 +58,15 @@ class LobbyChatLine:
     text: str
     sent_at: datetime
     retained_message_id: str | None = None
+    # Hidden by a moderator (#1435): sent as "This message was deleted", with
+    # no text, to everybody - the author included. Kept here so un-hiding
+    # needs nothing but the flag.
+    hidden: bool = False
+    # The log's visibility count when this line was last hidden or shown
+    # again; zero for a line never touched. Sent with the line, so a client
+    # holding a later change for it - one that beat this backlog - keeps
+    # that, and an earlier one arriving late cannot undo a later one.
+    visibility: int = 0
 
     def payload(self) -> dict:
         """The wire shape, `LobbyChatMessage` in the wire protocol.
@@ -74,7 +82,8 @@ class LobbyChatLine:
             "displayName": self.display_name,
             "nameColor": self.name_color,
             "isAnonymous": self.is_anonymous,
-            "text": self.text,
+            # Never the words of a hidden line, to anybody (#1435).
+            "text": "" if self.hidden else self.text,
             # Whole seconds since the epoch: the clock beside a line shows
             # minutes, and an ISO string with microseconds was a fifth of a
             # line's weight on the wire (#885).
@@ -82,6 +91,10 @@ class LobbyChatLine:
         }
         if self.retained_message_id is not None:
             payload["retainedMessageId"] = self.retained_message_id
+        if self.hidden:
+            payload["hidden"] = True
+        if self.visibility:
+            payload["visibility"] = self.visibility
         return payload
 
 
@@ -91,6 +104,12 @@ class LobbyChatLog:
     def __init__(self, *, backlog: int = LOBBY_CHAT_BACKLOG) -> None:
         self._lines: deque[LobbyChatLine] = deque(maxlen=backlog)
         self._seq = 0
+        # How many hides and show-agains this process has announced (#1435).
+        # Not a line number: a hide changes a line already numbered, which
+        # the `seq` a returning lobby resumes from cannot see. A lobby that
+        # last saw a smaller count missed one, and is handed the whole
+        # backlog to replace what it holds.
+        self.visibility = 0
         # Which numbering `seq` belongs to. Random rather than a start time:
         # two processes started in the same second must not look like one.
         self.epoch = secrets.token_hex(6)
@@ -110,6 +129,7 @@ class LobbyChatLog:
         text: str,
         sent_at: datetime,
         retained_message_id: str | None = None,
+        hidden: bool = False,
     ) -> LobbyChatLine:
         """Number one accepted line and keep it.
 
@@ -128,6 +148,7 @@ class LobbyChatLog:
             text=text,
             sent_at=sent_at,
             retained_message_id=retained_message_id,
+            hidden=hidden,
         )
         self._lines.append(line)
         return line
@@ -154,6 +175,8 @@ class LobbyChatLog:
                 text=row.text,
                 sent_at=row.created_at,
                 retained_message_id=str(row.id),
+                # Still hidden after a restart, in its place (#1435).
+                hidden=row.hidden_at is not None,
             )
             count += 1
         return count
@@ -175,12 +198,26 @@ class LobbyChatLog:
         arrival needs - only for the lines it will actually be sent."""
         return {line.user_id for line in self._lines if line.seq > after}
 
+    def set_hidden(self, retained_message_id: str, hidden: bool) -> bool:
+        """Hide one line, or show it again (#1435), keeping its place and its
+        number. Counted whether or not the ring still holds it - a line older
+        than the backlog is only in the clients that kept it, and they are
+        the ones the count is for. Answers whether the ring held it."""
+        self.visibility += 1
+        for index, line in enumerate(self._lines):
+            if line.retained_message_id == retained_message_id:
+                self._lines[index] = replace(line, hidden=hidden, visibility=self.visibility)
+                return True
+        return False
+
     def drop_author(self, user_id: str) -> None:
         """Forget every line by one account.
 
-        A deletion or a suspension ends the account; its name and its words
-        must not keep being handed to every new arrival for the next fifty
-        lines. The numbers already given stay spent.
+        A deletion erases the account; its name and its words must not keep
+        being handed to every new arrival for the next fifty lines. Not a
+        suspension: what a suspended account said stays until a moderator
+        hides it, line by line (R-LCHAT-09). The numbers already given stay
+        spent.
         """
         kept = [line for line in self._lines if line.user_id != user_id]
         self._lines.clear()
@@ -192,13 +229,12 @@ async def recent_lobby_lines(
 ) -> list[RoomMessage]:
     """The most recent retained lobby lines, oldest first.
 
-    Minus anything expired and anything said by an account that is suspended
-    now - the ban sweep dropped those from the live ring, and a restart must
-    not hand them back to the next fifty arrivals. A deleted account's rows
-    are already gone (`auth/account_data.py`).
+    Minus anything expired. A suspended account's lines come back as the live
+    ring kept them - a suspension hides nothing on its own (R-LCHAT-09) - and
+    a hidden line comes back hidden. A deleted account's rows are already gone
+    (`auth/account_data.py`).
     """
     checked_at = now or datetime.now(timezone.utc)
-    suspended = select(UserBan.user_id).where(*active_ban_filter(checked_at))
     rows = (
         await session.scalars(
             select(RoomMessage)
@@ -208,7 +244,6 @@ async def recent_lobby_lines(
                 RoomMessage.audience == literal("lobby", literal_execute=True),
                 RoomMessage.expires_at > checked_at,
                 RoomMessage.sender_user_id.is_not(None),
-                RoomMessage.sender_user_id.not_in(suspended),
             )
             .order_by(RoomMessage.created_at.desc(), RoomMessage.id.desc())
             .limit(limit)

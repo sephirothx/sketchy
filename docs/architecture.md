@@ -1007,11 +1007,11 @@ lobby. That read is bounded at ten seconds and cannot fail the start: a
 database that does not answer leaves the ring empty, which is what a first
 ever start has. What keeps this a buffer rather than a transcript is that
 nothing ever reads further back than the fifty — the 30-day copy exists so a
-line can be cited in a report, and N-05 still stands. A deleted or suspended
-account is dropped from the backlog in the same sweep that clears its
-presence, so its name and words are not handed to the next fifty arrivals;
-the restore query excludes a currently suspended author for the same reason,
-and a deleted account's rows are already gone.
+line can be cited in a report, and N-05 still stands. A deleted account is
+dropped from the backlog in the same sweep that clears its presence, so its
+name and words are not handed to the next fifty arrivals, and its rows are
+already gone for the restore. A suspended one is not: a suspension hides
+nothing on its own, and a moderator hides lines one at a time (R-LCHAT-09).
 
 Every line carries the server's `sentAt`, the same instant written to its
 row, and the panel shows an age beside it — "now", "5m", a time of day,

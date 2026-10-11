@@ -236,7 +236,14 @@ const LobbyChatLineRow = memo(function LobbyChatLineRow({
             {line.displayName}:
           </strong>
         )}{" "}
-        {line.text}
+        {/* Hidden by a moderator (#1435): set apart in italics and muted so
+            it reads as the app speaking, never as a player who typed the
+            same words. */}
+        {line.hidden ? (
+          <em className="lobby-chat-deleted">{ui.lobbyChatPanel.thisMessageWasDeleted}</em>
+        ) : (
+          line.text
+        )}
       </span>
       {/* Fresh or stale at a glance; the whole instant on hover. */}
       <time className="lobby-chat-time" dateTime={at.toISOString()} title={formatDateTime(at, timeFormat)}>

@@ -1197,6 +1197,7 @@ export const NL: Catalogue = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "Dit bericht is verwijderd.",
     reportThisLine: (p: { name: string }) => `Deze regel van ${p.name} melden`,
     couldNotSendThat: "Dat kon niet verstuurd worden.",
     chat: "Chat",

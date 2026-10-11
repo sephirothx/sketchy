@@ -556,6 +556,9 @@ class WatchLobbyPayload(RequestModel):
     chat_epoch: str | None = Field(
         default=None, alias="chatEpoch", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
     )
+    # How many hides and show-agains the lobby has seen (#1435); behind the
+    # server's, and it is handed the whole backlog to replace its lines.
+    chat_visibility: int | None = Field(default=None, alias="chatVisibility", ge=0)
 
 
 #: Per report, which the client sends at most once a minute and only when

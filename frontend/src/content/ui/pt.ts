@@ -1197,6 +1197,7 @@ export const PT: Catalogue = {
   },
 
   lobbyChatPanel: {
+    thisMessageWasDeleted: "Esta mensagem foi eliminada.",
     reportThisLine: (p: { name: string }) => `Denunciar esta linha de ${p.name}`,
     couldNotSendThat: "Não foi possível enviar.",
     chat: "Conversa",
