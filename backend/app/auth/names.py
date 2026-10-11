@@ -20,7 +20,7 @@ NAME_PATTERN = re.compile(rf"^[a-zA-Z0-9_-]{{{MIN_NAME_LENGTH},{MAX_NAME_LENGTH}
 RESERVED_NAMES = frozenset({"guest", "system", "admin", "sketchy", "server", "you"})
 
 NAME_RULE_MESSAGE = (
-    f"Use {MIN_NAME_LENGTH}-{MAX_NAME_LENGTH} characters: letters, numbers, "
+    f"Use {MIN_NAME_LENGTH}-{MAX_NAME_LENGTH} characters: letters A-Z, numbers, "
     "hyphens or underscores. No spaces."
 )
 

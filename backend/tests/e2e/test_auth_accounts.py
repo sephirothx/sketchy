@@ -121,6 +121,53 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await page.keyboard.insert_text("Jo Jo")
             assert await field.input_value() == "JoJo"
 
+            # A name in the player's own letters keeps them, plainly (#1420):
+            # "Łukasz" was "ukasz", with nothing said. Typed a key at a time,
+            # pasted whole, and with the accent composed after its letter.
+            await field.fill("")
+            await field.press_sequentially("Łukasz")
+            assert await field.input_value() == "Lukasz"
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Straße")
+            assert await field.input_value() == "Strasse"
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Zoe\u0308")
+            assert await field.input_value() == "Zoe"
+            # Composed with one character left, "ß" is refused whole: "ss"
+            # does not fit, and half of it is not the letter (review of #1441).
+            await field.fill("abcdefghijklmno")
+            await field.focus()
+            ime = await page.context.new_cdp_session(page)
+            await ime.send("Input.imeSetComposition", {"text": "ß", "selectionStart": 1, "selectionEnd": 1})
+            await ime.send("Input.insertText", {"text": "ß"})
+            assert await field.input_value() == "abcdefghijklmno"
+
+            # The account dialog's username follows the same rule, the same way.
+            await field.fill("")
+            await page.click(".first-run-signup")
+            dialog = page.locator(".modal-card").filter(has_text="Password")
+            username = dialog.locator("input").nth(0)
+            await username.fill("")
+            await username.press_sequentially("Łukasz")
+            assert await username.input_value() == "Lukasz"
+            await username.fill("")
+            await username.focus()
+            await page.keyboard.insert_text("José")
+            assert await username.input_value() == "Jose"
+            # The length is capped after the marks are dropped, not before: a
+            # composition 17 characters raw is the 14-letter name it spells
+            # (review of #1441 - the field's own maxLength cut it first).
+            await username.fill("")
+            await username.focus()
+            spelled = "Jose\u0301Jose\u0301Jose\u0301Jo"
+            await ime.send("Input.imeSetComposition", {"text": spelled, "selectionStart": 17, "selectionEnd": 17})
+            await ime.send("Input.insertText", {"text": spelled})
+            assert await username.input_value() == "JoseJoseJoseJo"
+            await page.keyboard.press("Escape")
+            await dialog.wait_for(state="hidden")
+
             # Guest play is one field and one click. Too short is refused in
             # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")
@@ -192,6 +239,11 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             # the server can refuse, so it keeps a Save button of its own
             # where everything else applies at once.
             await guest.click('.settings-you button:has-text("Change")')
+            # The name tag's rule here too (#1420): it took "Zoë" as typed.
+            await guest.fill("#settings-display-name", "")
+            await guest.focus("#settings-display-name")
+            await guest.keyboard.insert_text("Zoë")
+            assert await guest.input_value("#settings-display-name") == "Zoe"
             await guest.fill("#settings-display-name", "takenname")
             await guest.click('.settings-you button:has-text("Save")')
             await guest.wait_for_selector("#settings-name-error")

@@ -6,7 +6,8 @@ import { MAX_NICKNAME_LENGTH, NICKNAME_PATTERN, keepNameCharacters, nameCharacte
 test("only the name rule's characters are entered", () => {
   assert.equal(keepNameCharacters("a b!c").value, "abc");
   assert.equal(keepNameCharacters("Ada_Lovelace-1815").value, "Ada_Lovelace-181");
-  assert.equal(keepNameCharacters("José Ñandú").value, "Josand");
+  // Accented letters are their letters now (#1420), not deleted.
+  assert.equal(keepNameCharacters("José Ñandú").value, "JoseNandu");
   assert.equal(keepNameCharacters("名前🙂").value, "");
 });
 
@@ -47,4 +48,61 @@ test("an insertion keeps its allowed characters, up to the room left", () => {
   assert.equal(nameCharactersToInsert("1 2 3 4", 2), "12");
   assert.equal(nameCharactersToInsert("abc", 0), "");
   assert.equal(nameCharactersToInsert("🙂a", 5), "a");
+});
+
+
+test("a name in any of the eight languages keeps its letters, plainly (#1420)", () => {
+  const names = {
+    "Łukasz": "Lukasz",
+    "Jürgen": "Jurgen",
+    "José": "Jose",
+    "François": "Francois",
+    "Zoë": "Zoe",
+    "Straße": "Strasse",
+    "Przemysław": "Przemyslaw",
+    "Søren": "Soren",
+    "Ærø": "AEro",
+    "Œdipe": "OEdipe",
+    "Đorđe": "Dorde",
+  };
+  for (const [typed, plain] of Object.entries(names)) {
+    // Pasted whole, cleaned up after the fact.
+    assert.equal(keepNameCharacters(typed).value, plain, `pasted ${typed}`);
+    // Typed a key at a time, each insertion filtered before it goes in.
+    let value = "";
+    for (const key of typed) value += nameCharactersToInsert(key, MAX_NICKNAME_LENGTH - value.length);
+    assert.equal(value, plain, `typed ${typed}`);
+    // Composed: the accent as its own combining mark after the letter.
+    assert.equal(keepNameCharacters(typed.normalize("NFD")).value, plain, `composed ${typed}`);
+    assert.ok(NICKNAME_PATTERN.test(plain), plain);
+  }
+});
+
+test("the caret follows a folded letter, two-letter folds included", () => {
+  // "Stra|e" with "ß" composed at the caret: raw "Straß|e" - the caret after "ss".
+  assert.deepEqual(keepNameCharacters("Straße", 5), { value: "Strasse", caret: 6 });
+  // "Jos|" with "é" committed by a dead key: raw "José|".
+  assert.deepEqual(keepNameCharacters("José", 4), { value: "Jose", caret: 4 });
+  // A combining mark typed on its own after the letter is nothing at all.
+  assert.deepEqual(keepNameCharacters("Zoe\u0308", 4), { value: "Zoe", caret: 3 });
+});
+
+test("a two-letter fold goes in whole or not at all", () => {
+  assert.equal(nameCharactersToInsert("ß", 2), "ss");
+  assert.equal(nameCharactersToInsert("ß", 1), "", "half a letter is not the letter");
+  assert.equal(nameCharactersToInsert("aß", 2), "a");
+});
+
+test("at the length limit a letter that folds to two goes whole or not at all (review of #1441)", () => {
+  // A composition committed with one character left: "ß" is "ss", and "s" is
+  // not the letter the player entered.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoß", 16), { value: "abcdefghijklmno", caret: 15 });
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoæ", 16), { value: "abcdefghijklmno", caret: 15 });
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoŒ", 16), { value: "abcdefghijklmno", caret: 15 });
+  // Entered before a suffix that was already there: the suffix stays.
+  assert.deepEqual(keepNameCharacters("abcdefgßhijklmno", 8), { value: "abcdefghijklmno", caret: 7 });
+  // Nothing inserted before the caret to give way: the end is cut at a letter.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnoß", 0), { value: "abcdefghijklmno", caret: 0 });
+  // Room for both halves: kept.
+  assert.deepEqual(keepNameCharacters("abcdefghijklmnß", 15), { value: "abcdefghijklmnss", caret: 16 });
 });
