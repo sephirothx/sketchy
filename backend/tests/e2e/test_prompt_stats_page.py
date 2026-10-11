@@ -132,3 +132,26 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             assert await page.locator(".prompt-list-stats-links").count() == 0
         finally:
             await browser.close()
+
+
+async def test_the_language_headings_follow_the_interface_language():
+    """Review of #1449: the headings were remembered by list and play
+    language only, so switching the interface to German left them English
+    while everything around them changed."""
+    from uuid import uuid4
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Heads{uuid4().hex[:6]}")
+            await page.goto(f"{BASE_URL}/prompt-lists")
+            first_group = page.locator("#prompt-stats-list optgroup").first
+            await expect(first_group).to_have_attribute("label", "English")
+            await page.locator(".language-picker-trigger").first.click()
+            await page.get_by_role("listbox").get_by_role("option", name=re.compile("Deutsch")).click()
+            await page.wait_for_function("() => document.documentElement.lang === 'de'")
+            await expect(first_group).to_have_attribute("label", "Englisch")
+        finally:
+            await browser.close()

@@ -153,9 +153,12 @@ export function PromptStatsPage() {
   }, [slug, windowFilter, scoringMode, hintMode]);
 
   const extraPromptLanguages = useSettingsStore((state) => state.extraPromptLanguages);
+  // The headings are language names in the reader's language, so they are
+  // grouped again when that changes (review of #1449).
+  const interfaceLocale = useSettingsStore((state) => state.locale);
   const listGroups = useMemo(
-    () => listsByLanguage(lists ?? [], [playLanguage, ...extraPromptLanguages]),
-    [lists, playLanguage, extraPromptLanguages],
+    () => listsByLanguage(lists ?? [], [playLanguage, ...extraPromptLanguages], interfaceLocale),
+    [lists, playLanguage, extraPromptLanguages, interfaceLocale],
   );
   // Sorted here: a change of sort is not a request (#1424).
   const sorted = useMemo(

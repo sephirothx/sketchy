@@ -174,6 +174,7 @@ export interface ListLanguageGroup {
 export function listsByLanguage(
   lists: readonly PromptListSummary[],
   playLanguages: readonly string[],
+  interfaceLocale?: string,
 ): ListLanguageGroup[] {
   const groups = new Map<string, PromptListSummary[]>();
   for (const list of lists) {
@@ -187,5 +188,5 @@ export function listsByLanguage(
   };
   return [...groups.entries()]
     .map(([language, members]) => ({ language, label: promptLanguageLabel(language), lists: members }))
-    .sort((a, b) => rank(a.language) - rank(b.language) || a.label.localeCompare(b.label));
+    .sort((a, b) => rank(a.language) - rank(b.language) || a.label.localeCompare(b.label, interfaceLocale));
 }
