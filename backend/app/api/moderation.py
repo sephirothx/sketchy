@@ -2692,6 +2692,24 @@ def create_moderation_router(
                         await _lock_versions(
                             session, PromptVersion.concept_id == target.concept_id
                         )
+                    list_owners: set[UUID] = set()
+                    if report.target_type == "list":
+                        # The accounts, then the list - the order account
+                        # deletion takes them - and the list read again under
+                        # its lock (review of #1425): what is decided below,
+                        # whether this hides or restores and which words, must
+                        # be what is there now. Decided from an unlocked read,
+                        # a takedown from the review queue committed meanwhile
+                        # was overwritten, its words left hidden for good.
+                        list_owners = await _lock_list_owners(
+                            session, target.owner_user_id, report.reported_owner_user_id
+                        )
+                        target = await session.scalar(
+                            select(PromptList)
+                            .where(PromptList.id == target.id)
+                            .with_for_update()
+                            .execution_options(populate_existing=True)
+                        )
                     prior_decision = (
                         target.moderation_state,
                         target.moderated_by_user_id,
@@ -2701,25 +2719,11 @@ def create_moderation_router(
                         report.target_type == "list"
                         and body.moderation_state == PromptContentModerationState.HIDDEN.value
                     )
-                    list_owners: set[UUID] = set()
-                    if hides_list and body.scope == "words":
-                        # The accounts before the list, as for a word.
-                        list_owners = await _lock_list_owners(
-                            session, target.owner_user_id, report.reported_owner_user_id
-                        )
                     restores_list = (
                         report.target_type == "list"
                         and body.moderation_state == PromptContentModerationState.ACTIVE.value
                         and target.moderation_state == PromptContentModerationState.HIDDEN.value
                     )
-                    if restores_list:
-                        # The list before the words its decision reached, the
-                        # order an owner's save takes them in.
-                        await session.execute(
-                            select(PromptList.id)
-                            .where(PromptList.id == target.id)
-                            .with_for_update()
-                        )
                     list_words: set[UUID] = set()
                     if hides_list:
                         # A list taken down drops the edition waiting for
@@ -2727,15 +2731,16 @@ def create_moderation_router(
                         # (R-LIST-13): a hidden list waits for nothing, and
                         # a pending edition beside it would read "under
                         # review" to its owner in a queue that excludes it
-                        # (#1386 review). Locked before anything is written.
-                        await session.execute(
-                            select(PromptList.id)
-                            .where(PromptList.id == target.id)
-                            .with_for_update()
-                        )
+                        # (#1386 review).
                         if body.scope == "words":
-                            # Before the edition under review goes with its words.
+                            # Before the edition under review goes with its
+                            # words, and every version of them locked in one
+                            # ordered batch first: dropping the edition locks
+                            # some, and two sorted batches are not one order.
                             list_words = await _list_words(session, target.id)
+                            await _lock_versions(
+                                session, PromptVersion.concept_id.in_(list_words)
+                            )
                         pending = (await editions_of(session, target.id)).get(
                             EDITION_UNDER_REVIEW
                         )
@@ -3220,6 +3225,10 @@ def create_moderation_router(
                     list_words = (
                         await _list_words(session, prompt_list.id) if body.scope == "words" else set()
                     )
+                    if list_words:
+                        # One ordered batch, before dropping the edition locks
+                        # some of them (see the report path).
+                        await _lock_versions(session, PromptVersion.concept_id.in_(list_words))
                     await drop_editions(session, [pending.id], now=now)
                     if body.scope == "words":
                         await _hide_list_words(

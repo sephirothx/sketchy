@@ -662,15 +662,15 @@ export function listHeldPublications(
   return apiRequest(`/api/moderation/prompt-lists${suffix}`);
 }
 
-/** Release a held list into the community catalogue, or take it down.
-
-Releasing is the ordinary answer and what the queue exists for. Hiding tells
-the owner, the way a takedown from a report does. */
 /** What a list taken down is taken down for (#1425): its words, which then
     come back hidden wherever its owner types them (R-MOD-11), or only its
     name and description, which leaves the words theirs to use. */
 export type ListHideScope = "words" | "presentation";
 
+/** Release a held list into the community catalogue, or take it down.
+
+Releasing is the ordinary answer and what the queue exists for. Hiding tells
+the owner, the way a takedown from a report does. */
 export function reviewHeldPublication(
   promptListId: string,
   state: "active" | "hidden",

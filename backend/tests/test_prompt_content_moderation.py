@@ -20,6 +20,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
     AuditEvent,
+    Prompt,
     PromptContentReport,
     PromptList,
     PromptVersion,
@@ -1942,3 +1943,65 @@ async def test_a_held_list_hidden_for_its_words_takes_down_the_words_it_showed_t
         prompts=(PromptListEntryInput(answer="heron"),),
     )
     assert reused.prompts[0].moderation_state == "active"
+
+
+async def test_a_list_left_up_after_all_brings_back_the_words_its_takedown_hid(env):
+    """Review of #1425: a list hidden for its words from the review queue,
+    then left up from a report that was waiting on it - its words come back,
+    and its owner may type them again. The audit says what it was hidden for."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "RestoreOwner")
+    await register(reporter_http, "RestoreReporter")
+    moderator = await register(moderator_http, "RestoreMod")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    prompt_list = await prompts.create_owned(
+        owner["id"], name="Borderline", description="", language="en",
+        prompts=(PromptListEntryInput(answer="weasel"), PromptListEntryInput(answer="stoat")),
+    )
+    await published(factory, prompt_list.id)
+    report = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": prompt_list.id, "reason": "spam", "details": "Hmm."},
+    )
+    assert report.status_code == 201, report.text
+    await prompts.set_owned_publication(owner["id"], prompt_list.id, published=True, under_review=True)
+    read = (await moderator_http.get(f"/api/moderation/prompt-lists/{prompt_list.id}")).json()
+    hidden = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{prompt_list.id}",
+        json={"state": "hidden", "note": "Its words.", "expectedVersion": read["version"]},
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert {p.moderation_state for p in (await prompts.create_owned(
+        owner["id"], name="Probe", description="", language="en",
+        prompts=(PromptListEntryInput(answer="weasel"),),
+    )).prompts} == {"hidden"}
+
+    left_up = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+        json={"status": "resolved", "note": "Fine after all.", "moderationState": "active"},
+    )
+    assert left_up.status_code == 200, left_up.text
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(prompt_list.id))
+        assert row.moderation_state == "active"
+        states = set((await session.scalars(
+            select(PromptVersion.moderation_state)
+            .join(Prompt, Prompt.concept_id == PromptVersion.concept_id)
+            .where(Prompt.prompt_list_id == row.id)
+        )).all())
+        assert states == {"active"}
+        scope = await session.scalar(
+            select(AuditEvent.details["scope"].as_string())
+            .where(AuditEvent.event_type == "prompt_list.review_hidden")
+        )
+        assert scope == "words"
+    again = await prompts.create_owned(
+        owner["id"], name="Again", description="", language="en",
+        prompts=(PromptListEntryInput(answer="stoat"),),
+    )
+    assert again.prompts[0].moderation_state == "active"
