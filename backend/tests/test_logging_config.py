@@ -143,22 +143,44 @@ def test_secrets_and_addresses_never_reach_the_line(text, expected):
     assert redact(text) == expected
 
 
-# The address rule as it was written before it was made linear: one regular
-# expression whose local part could start anywhere. What it masked is the
-# specification; the rewrite has to agree with it on every line.
-_QUADRATIC_ADDRESS = re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)""")
+# The rules as they were written before two of them were made linear, each a
+# single regular expression: the URL password ran from every `://` to the next
+# `@` or space, and an address's local part could start anywhere. What they
+# masked is the specification; the rewrite has to agree on every line.
+_QUADRATIC_REDACTIONS = (
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+"), r"\1 ***"),
+    (
+        re.compile(
+            r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|"
+            r"[a-z_]*session|cookie)(\s*[:=]\s*)([^\s;,&\"']+)"
+        ),
+        r"\1\2***",
+    ),
+    (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
+    (re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)"""), r"***@\1"),
+)
 
 
-def test_addresses_are_masked_exactly_as_the_single_pattern_masked_them():
+def _quadratic_redact(text: str) -> str:
+    for pattern, replacement in _QUADRATIC_REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
     rng = random.Random(472)
-    # Short lines built from the pieces that decide where an address starts and
-    # ends - single characters alone almost never spell an address: characters
-    # allowed in a local part but not a domain, in both, the delimiters, the
-    # quote, and whole domains, so addresses abut, nest in quotes and run on.
-    pieces = ["a", "1", "-", ".", "!", "'", "+", '"', "@", " ", ":", "/", ",", "[", "\\", "b.c", "@d.e"]
-    for _ in range(20_000):
+    # Short lines built from the pieces that decide where a URL's credentials
+    # or an address start and end - single characters alone almost never spell
+    # either: characters allowed in a local part but not a domain, in both, the
+    # delimiters, the quote, a URL's `://`, and whole domains and addresses, so
+    # they abut, nest in quotes and in URLs, and run on.
+    pieces = [
+        "a", "1", "-", ".", "!", "'", "+", '"', "@", " ", ":", "/", ",", "[", "\\",
+        "b.c", "@d.e", "://", "x@y.z", "password=",
+    ]
+    for _ in range(40_000):
         line = "".join(rng.choice(pieces) for _ in range(rng.randrange(1, 16)))
-        assert redact(line) == _QUADRATIC_ADDRESS.sub(r"***@\1", line), line
+        assert redact(line) == _quadratic_redact(line), line
 
 
 @pytest.mark.parametrize(
@@ -166,8 +188,9 @@ def test_addresses_are_masked_exactly_as_the_single_pattern_masked_them():
     [
         "1.2." * 3000,  # no `@` at all
         "a" * 12_000 + "@",  # one `@`, and no domain after it
+        "://a:" * 2400,  # a URL's start over and over, and no `@` to end a password
     ],
-    ids=["no-at", "one-trailing-at"],
+    ids=["no-at", "one-trailing-at", "userinfo-without-at"],
 )
 def test_a_long_line_redacts_in_linear_time(line):
     """`redact` runs on the event loop for every JSON line, and a line can carry

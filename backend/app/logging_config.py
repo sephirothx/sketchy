@@ -37,6 +37,7 @@ response as `X-Request-ID`; it just is not on every line.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 import json
 import logging
@@ -58,9 +59,29 @@ JSON_FORMAT = "json"
 TEXT_FORMAT = "text"
 FORMATS = (JSON_FORMAT, TEXT_FORMAT)
 
+# A database or relay URL with credentials in it: `scheme://user:password@`.
+#
+# Written as one pattern, `://([^:/@\s]+):([^@\s]+)@`, the password ran from
+# each `://` to the next `@` or space - which can be the whole line, since a
+# password may hold `:`, `/` and further `://` - and a line of `://a:` with no
+# `@` took over 100 ms. That end is the same for every `://` before it, so the
+# scan is done once: find a run with neither `@` nor whitespace in it that an
+# `@` ends (anchored to the run's start, so each run is walked once), and only
+# inside it look for the first `://user:` with a password after it. A run
+# holds at most one such URL, because the password runs to the run's end.
+_USERINFO_RUN = re.compile(r"(?<![^@\s])[^@\s]+@")
+_USERINFO = re.compile(r"://[^:/@\s]+:(?=[^@])")
+
+
+def _mask_userinfo(run: re.Match[str]) -> str:
+    text = run[0]
+    userinfo = _USERINFO.search(text)
+    return text if userinfo is None else text[: userinfo.end()] + "***@"
+
+
 # The order matters: a bearer token inside a URL must be hidden as a token,
 # not left because the URL rule ran first and saw no password.
-_REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
+_REDACTIONS: tuple[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]], ...] = (
     (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+"), r"\1 ***"),
     (
         re.compile(
@@ -69,8 +90,7 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         r"\1\2***",
     ),
-    # A database or relay URL with credentials in it.
-    (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
+    (_USERINFO_RUN, _mask_userinfo),
 )
 
 # The local part of an address is the personal half; the domain says
