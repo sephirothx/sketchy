@@ -1,6 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
 import { ReportedDrawing } from "../components/ReportedDrawing";
@@ -504,8 +504,16 @@ export function ModerationPage() {
     );
   }, []);
 
+  // Which load is the latest. Each answers for the filter and page it was
+  // asked under, and two can be in flight: one switch of queue, then another,
+  // before the first returns. The older one's answer arriving last put the
+  // open queue under a pressed Closed - and kept it there, since nothing loads
+  // again until the moderator acts. So only the latest load may land.
+  const latestLoad = useRef(0);
+
   const load = useCallback(() => {
     if (!allowed) return;
+    const thisLoad = ++latestLoad.current;
     // The open queues are the pending work, whatever is being viewed: the
     // "N open" chip counts them even while a closed page is on screen.
     const pending = Promise.all([
@@ -536,6 +544,7 @@ export function ModerationPage() {
       showsRecentDecisions ? listClosedCases({ limit: RECENT_DECISIONS, offset: 0 }) : null,
     ])
       .then(([caseResult, banResult, pendingResult, heldResult, galleryResult, recentResult]) => {
+        if (thisLoad !== latestLoad.current) return;
         if (recentResult) setRecent({ players: recentResult.players, content: recentResult.content });
         setIncidents(caseResult.players);
         setContent(caseResult.content);
@@ -556,7 +565,9 @@ export function ModerationPage() {
         );
         setError(null);
       })
-      .catch(fail);
+      .catch((problem) => {
+        if (thisLoad === latestLoad.current) fail(problem);
+      });
   }, [allowed, showingClosed, page, fail, showsRecentDecisions]);
 
   useEffect(load, [load]);
