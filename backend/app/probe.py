@@ -4,8 +4,10 @@ Readiness says the process can reach its database. The scrape says what the
 handlers have been doing. Neither says whether a stranger arriving right now
 could open a room, be joined, and draw a line that the other seat sees - the
 one thing the service is for. This does that, from outside, the way a
-browser would: two guest sessions over HTTP, two sockets over Socket.IO, a
-room, a game, one stroke, and a check that the stroke arrived.
+browser would: the page and the first script it names (a server with no
+frontend build answers `/api/*` and nothing else, #1418), two guest sessions
+over HTTP, two sockets over Socket.IO, a room, a game, one stroke, and a
+check that the stroke arrived.
 
 It speaks Socket.IO's long-polling transport with the standard library, so
 it can run from a cron entry or a node_exporter textfile job on a host that

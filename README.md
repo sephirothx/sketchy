@@ -1619,7 +1619,7 @@ your players share one address:
 | `AUTH_RESET_ACCOUNT_LIMIT` | 3 per hour | Reset mails to one account, whatever address asks; past it nothing is sent and the answer is unchanged (#1240) |
 | `AUTH_RESET_ACCOUNT_DAILY_LIMIT` | 10 per day | The same, by the day |
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
-| `GUEST_PROVISION_PREFIX_DAILY_LIMIT` | 500 per day | Guests provisioned per network - an IPv6 /48 or an IPv4 /24 - so one site holding many /64s cannot spend the whole day (#1418) |
+| `GUEST_PROVISION_PREFIX_DAILY_LIMIT` | 500 per day | Guests provisioned per network - an IPv6 /48 or an IPv4 /24 - so one site holding many /64s cannot spend the whole day (#1418). The boot value of `guests.prefix_daily_limit`, which `/admin/operations` moves without a restart |
 | `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling. The boot value of `guests.daily_limit`, which `/admin/operations` moves without a restart |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 per hour | `POST /api/auth/password/reset`, per address — its own bucket, so opening the page does not spend what finishing the reset needs (#975) |
@@ -2892,7 +2892,8 @@ runtime setting on `/admin/operations` - `guests.daily_limit`, `rooms.global_lim
 `rooms.socket_limit` - so raising it needs no restart, and no restart ends a game.
 Raise it when the refusals are people; when they are one network,
 `SketchyGuestShareSpent` will have warned first, and its share
-(`GUEST_PROVISION_PREFIX_DAILY_LIMIT`) is what held. `SketchyNotScraped` and
+(`guests.prefix_daily_limit`) is what held - raise that instead for a school or a
+carrier's NAT. `SketchyNotScraped` and
 `SketchyDiskUnwatched` page when a series is missing rather than bad: the scrape
 job's name or target, or a PostgreSQL data directory on a mount the `postgres-host`
 relabel does not name.

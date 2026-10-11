@@ -81,7 +81,7 @@ groups:
         labels: {severity: warn}
         annotations:
           summary: "One network has spent its day's share of new guests"
-          description: "GUEST_PROVISION_PREFIX_DAILY_LIMIT per IPv6 /48 or IPv4 /24. A flood from one site, or a school or carrier NAT that needs a larger share; everybody else's day is untouched."
+          description: "guests.prefix_daily_limit on /admin/operations, per IPv6 /48 or IPv4 /24. A flood from one site, or a school or carrier NAT that needs a larger share; everybody else's day is untouched."
           runbook: "README.md#on-call"
 
       # --- data already lost ---------------------------------------------------------

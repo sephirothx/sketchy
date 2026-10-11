@@ -18,11 +18,12 @@ kinds are kept off it on purpose:
   changing one side alone makes the two disagree rather than making the server
   configurable.
 
-The deployment's daily guest ceiling is on it although it guards an
-unauthenticated write, because it is not a per-caller limit: it is the front
-door, and when it closes on real visitors raising it is the remedy, which the
-environment variable alone could only apply with a restart that ends every
-live game (#1418). The per-address and per-network bounds beneath it stay off.
+The deployment's daily guest ceiling, and each network's share of it, are on
+it although they guard an unauthenticated write, because neither is a
+per-caller limit: the ceiling is the front door, the share is a school's or a
+carrier's, and when either closes on real visitors raising it is the remedy -
+which the environment variable alone could only apply with a restart that
+ends every live game (#1418). The per-address limit beneath them stays off.
 
 A tunable is also not a test setting. E2E fast-forwards the page's own clock
 (R-ENG-10) and must never reach for one of these to make itself faster.
@@ -33,7 +34,7 @@ from collections.abc import Mapping
 from functools import partial
 
 from app.auth.rate_limit import PersistentRateLimiter
-from app.auth.routes import DEFAULT_GUESTS_PER_DAY
+from app.auth.routes import DEFAULT_GUESTS_PER_DAY, DEFAULT_GUESTS_PER_PREFIX_DAY
 from app.client_config import ClientConfig
 from app.deployment import DEFAULT_SHUTDOWN_DRAIN_SECONDS, MAX_SHUTDOWN_DRAIN_SECONDS
 from app.flow_timing import FlowTiming
@@ -268,13 +269,19 @@ def ceiling_tunables(
     ]
 
 
-def guest_tunables(guests_per_day: PersistentRateLimiter) -> list[Tunable]:
-    """How many new guests the whole deployment takes in a day."""
-    return [
+def guest_tunables(
+    guests_per_day: PersistentRateLimiter, guests_per_network: PersistentRateLimiter | None = None
+) -> list[Tunable]:
+    """How many new guests the whole deployment, and one network, take in a day.
+
+    Any positive number, as the environment variables have always accepted:
+    a closed beta may well want fifty.
+    """
+    tunables = [
         _number(
             guests_per_day, "limit",
             name="guests.daily_limit", default=DEFAULT_GUESTS_PER_DAY,
-            minimum=100, maximum=1_000_000, unit="guests per day",
+            minimum=1, maximum=1_000_000, unit="guests per day",
             env_var="GUEST_PROVISION_DAILY_LIMIT",
             description=(
                 "New guests the whole deployment provisions in 24 hours, "
@@ -284,6 +291,22 @@ def guest_tunables(guests_per_day: PersistentRateLimiter) -> list[Tunable]:
             ),
         ),
     ]
+    if guests_per_network is not None:
+        tunables.append(
+            _number(
+                guests_per_network, "limit",
+                name="guests.prefix_daily_limit", default=DEFAULT_GUESTS_PER_PREFIX_DAY,
+                minimum=1, maximum=1_000_000, unit="guests per day",
+                env_var="GUEST_PROVISION_PREFIX_DAILY_LIMIT",
+                description=(
+                    "New guests one network - an IPv6 /48 or an IPv4 /24 - "
+                    "provisions in 24 hours, so one site cannot spend the whole "
+                    "day. SketchyGuestShareSpent warns when one does; raise it "
+                    "for a school or a carrier's NAT, not for a flood."
+                ),
+            )
+        )
+    return tunables
 
 
 def flow_tunables(flow: FlowTiming) -> list[Tunable]:
@@ -495,6 +518,7 @@ def build_runtime_settings(
     client: ClientConfig | None = None,
     shutdown: ShutdownCoordinator | None = None,
     guests_per_day: PersistentRateLimiter | None = None,
+    guests_per_network: PersistentRateLimiter | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> RuntimeSettings:
     """Every tunable this process offers, wired to what actually holds it.
@@ -515,7 +539,7 @@ def build_runtime_settings(
     if quotas is not None and capacity is not None:
         tunables.extend(ceiling_tunables(quotas, capacity))
     if guests_per_day is not None:
-        tunables.extend(guest_tunables(guests_per_day))
+        tunables.extend(guest_tunables(guests_per_day, guests_per_network))
     if flow is not None:
         tunables.extend(flow_tunables(flow))
     if shutdown is not None:

@@ -56,7 +56,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket_origins
 from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
-from app.auth.routes import create_auth_router, guest_day_ceiling
+from app.auth.routes import create_auth_router, guest_day_ceiling, guest_network_share
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.models import AuthSession
 from app.db.seed import seed_prompt_lists
@@ -401,9 +401,11 @@ telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).ge
 # handlers consult: a change has to move the value the next command reads, not
 # a copy of it.
 guests_per_day = guest_day_ceiling(async_session_factory)
+guests_per_network = guest_network_share(async_session_factory)
 runtime_settings = build_runtime_settings(
     budgets=handler_context.command_budgets,
     guests_per_day=guests_per_day,
+    guests_per_network=guests_per_network,
     quotas=handler_context.room_quotas,
     capacity=handler_context.room_capacity,
     flow=flow_timing,
@@ -1070,6 +1072,7 @@ api.include_router(
         presence=handler_context.presence,
         presence_identities=handler_context.presence_identities,
         guests_per_day=guests_per_day,
+        guests_per_network=guests_per_network,
     )
 )
 api.include_router(

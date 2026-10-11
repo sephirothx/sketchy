@@ -275,6 +275,7 @@ export function tunableGroup(name: string): string {
 const GROUP_LABELS: Record<string, string> = {
   budget: "Command budgets",
   rooms: "Room and connection ceilings",
+  guests: "New guests",
   turn: "Turn timing",
   restart: "Restart votes",
   shutdown: "Planned shutdown",

@@ -230,12 +230,46 @@ def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
     assert "10.0.0.6" not in line and "[accepted]" in line
     for text in (
         "client 203.0.113.9 connected",
+        "refused a socket from 203.0.113.9.",
         "client 2001:db8::1 connected",
         "[2001:db8:85a3::8a2e:370:7334]:443 opened",
-        "::1:52114 closed",
         "fe80::1%en0 bound",
+        # What a dual-stack listener reports for an IPv4 client, and NAT64.
+        "::ffff:10.0.0.6:0 - accepted",
+        "64:ff9b::192.0.2.33 connected",
     ):
         masked = redact(text)
-        assert "[address]" in masked and not any(part in masked for part in ("203.0", "2001:", "::1", "fe80")), masked
-    for text in ("took 12:34:56", "version 1.2.3", "at 2026-10-11T12:34:56.123Z", "ratio 0.25:1"):
+        assert "[address]" in masked, masked
+        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b")), masked
+    for text in (
+        "took 12:34:56",
+        "version 1.2.3",
+        "at 2026-10-11T12:34:56.123Z",
+        "ratio 0.25:1",
+        # Not addresses at all, or none that names a person: a MAC, a
+        # fingerprint, the bind line, a local proxy.
+        "nic 00:1a:2b:3c:4d:5e up",
+        "key SHA256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01",
+        "Uvicorn running on http://0.0.0.0:8000",
+        "Uvicorn running on http://[::]:8000",
+        "from 127.0.0.1:52114",
+        "from [::1]:52114",
+    ):
         assert redact(text) == text
+
+
+def test_text_mode_in_production_says_it_is_not_redacted(monkeypatch, caplog):
+    """Review of #1418: the masking runs in JSON mode only. Text mode stays a
+    choice, but not a silent one."""
+    import logging
+
+    from app.logging_config import configure_logging
+
+    monkeypatch.setenv("SKETCHY_ENV", "production")
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.logging_config"):
+            configure_logging(fmt="text")
+        assert any("not redacted" in record.getMessage() for record in caplog.records)
+    finally:
+        monkeypatch.setenv("SKETCHY_ENV", "test")
+        configure_logging(fmt="text")

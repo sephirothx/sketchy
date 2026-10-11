@@ -232,7 +232,9 @@ def test_every_page_fires_when_the_series_it_reads_is_missing():
     unguarded = {}
     for rule in pages:
         expr = " ".join(rule["expr"].split())
-        if re.fullmatch(r"increase\([^()]*\) > 0", expr) or "absent(" in expr:
+        # An `absent()` guards only what it names: the rest of the expression
+        # is held to the same rule as any other page.
+        if re.fullmatch(r"increase\([^()]*\) > 0", expr):
             continue
         series = METRIC.findall(expr) + EXTERNAL_METRIC.findall(expr)
         series += ['up{job="sketchy"}'] if re.search(r'\bup\{job="sketchy"\}', expr) else []

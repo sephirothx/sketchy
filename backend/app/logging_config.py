@@ -38,6 +38,7 @@ response as `X-Request-ID`; it just is not on every line.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ipaddress
 import json
 import logging
 import os
@@ -105,25 +106,38 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 # addresses are never to be stored (R-RATE-02) and are hashed everywhere the
 # application keeps one. Masked whole, port and all: the hash is what the
 # application correlates on, so the address is worth nothing here.
-_IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
-# IPv6, bracketed or bare. Told from a clock reading (12:34:56) and other
-# colon-separated numbers by needing `::` or a hex letter or six groups.
-_IPV6 = re.compile(r"(?<![\w:.])\[?(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?:%[\w.]+)?\]?(?::\d{1,5})?(?![\w:])")
+#
+# The patterns only find candidates; `ipaddress` decides. A clock reading
+# (12:34:56), a MAC address or a colon-separated fingerprint is not an
+# address and is left as it was. Loopback and unspecified addresses are left
+# too - a local proxy, or the bind line's `0.0.0.0:8000` - since they name no
+# person, and the bind line is what says which port the server is on.
+_IPV4 = re.compile(r"(?<![\w.])(?P<ip>(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?(?!\w|\.\d)")
+# Bracketed or bare, ending in hex or - IPv4-mapped (::ffff:a.b.c.d, what a
+# dual-stack listener reports for an IPv4 client) or NAT64 - a dotted quad.
+_IPV6 = re.compile(
+    r"(?<![\w:.])\[?(?P<ip>(?:[0-9A-Fa-f]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{0,4}))"
+    r"(?:%[\w.]+)?\]?(?::\d{1,5})?(?![\w:])"
+)
 
 
-def _mask_ipv6(match: re.Match[str]) -> str:
-    text = match.group(0)
-    core = text.strip("[]").split("]")[0]
-    if "::" in core or re.search(r"[A-Fa-f]", core) or core.count(":") >= 5:
-        return "[address]"
-    return text
+def _mask_address(match: re.Match[str]) -> str:
+    try:
+        address = ipaddress.ip_address(match.group("ip"))
+    except ValueError:
+        return match.group(0)
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    if address.is_loopback or address.is_unspecified:
+        return match.group(0)
+    return "[address]"
 
 
 def redact(text: str) -> str:
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
-    text = _IPV6.sub(_mask_ipv6, text)
-    return _IPV4.sub("[address]", text)
+    text = _IPV6.sub(_mask_address, text)
+    return _IPV4.sub(_mask_address, text)
 
 
 def log_format(environ: dict[str, str] | None = None) -> str:
@@ -228,3 +242,11 @@ def configure_logging(level: str | None = None, *, fmt: str | None = None) -> No
         # there is no duplicate to avoid - and switching it off would cut these
         # records off from anything that attaches to root later, pytest's
         # caplog included.
+    if chosen == TEXT_FORMAT and is_production():
+        # Allowed - an operator may want the console - but nothing in text
+        # mode is redacted: uvicorn's own access log prints every client's
+        # address, and the console transport's links carry their tokens.
+        logging.getLogger("app.logging_config").warning(
+            "LOG_FORMAT=text in production: lines are not redacted, so client "
+            "addresses and tokens reach the log (R-RATE-02); JSON is the default"
+        )

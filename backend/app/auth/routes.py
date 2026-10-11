@@ -177,6 +177,19 @@ DEFAULT_GUESTS_PER_DAY = 5000
 DEFAULT_GUESTS_PER_PREFIX_DAY = 500
 
 
+def guest_network_share(session_factory) -> PersistentRateLimiter:
+    """The day's guests one network may take (`prefix_key`), movable from the
+    operations panel (`guests.prefix_daily_limit`) for the same reason the
+    ceiling is: a school or a carrier's NAT that needs more should not need a
+    restart that ends every game to get it."""
+    return PersistentRateLimiter(
+        session_factory,
+        scope="guest_provision_prefix_day",
+        limit=_limit("GUEST_PROVISION_PREFIX_DAILY_LIMIT", DEFAULT_GUESTS_PER_PREFIX_DAY),
+        window_seconds=86400,
+    )
+
+
 def guest_day_ceiling(session_factory) -> PersistentRateLimiter:
     """The deployment's daily guest ceiling.
 
@@ -362,9 +375,11 @@ def create_auth_router(
     # rule then has nobody to hold a name against.
     presence: PresenceRegistry | None = None,
     presence_identities: PresenceIdentityCache | None = None,
-    # The daily guest ceiling the operations panel moves; built here when no
-    # application passes one (the router's own tests).
+    # The daily guest ceiling and each network's share of it, which the
+    # operations panel moves; built here when no application passes them (the
+    # router's own tests).
     guests_per_day: PersistentRateLimiter | None = None,
+    guests_per_network: PersistentRateLimiter | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -397,12 +412,7 @@ def create_auth_router(
         limit=_limit("GUEST_PROVISION_LIMIT", 60),
         window_seconds=3600,
     )
-    prefix_provision_limiter = PersistentRateLimiter(
-        session_factory,
-        scope="guest_provision_prefix_day",
-        limit=_limit("GUEST_PROVISION_PREFIX_DAILY_LIMIT", DEFAULT_GUESTS_PER_PREFIX_DAY),
-        window_seconds=86400,
-    )
+    prefix_provision_limiter = guests_per_network or guest_network_share(session_factory)
     daily_provision_limiter = guests_per_day or guest_day_ceiling(session_factory)
     # Guessing six digits is worth throttling on its own account, and an
     # enrolment page reloading in a loop should not mint secrets forever.
