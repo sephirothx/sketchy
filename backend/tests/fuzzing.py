@@ -4,7 +4,7 @@ Two profiles. On every run - CI and a plain local `pytest` - generation is
 **derandomized**: the same inputs every time, so a red build is a fact about the
 change and not about the draw, which is the convention the seeded property tests
 already keep (`test_live_drawing_properties.py`). No example database either, so
-nothing is written beside the tree and a failure reproduces from the test alone.
+a failure reproduces from the test alone rather than from a local replay store.
 
 `FUZZ_SCALE=<n>` switches to the exploratory profile: every budget multiplied by
 `n`, and random generation, so each run looks somewhere new. That is the long
@@ -27,8 +27,8 @@ _COMMON = dict(
     # slow machine for being slow.
     deadline=None,
     print_blob=True,
-    # The suites generate deliberately skewed input (mostly malformed frames,
-    # mostly refused commands); that is the point, not a smell.
+    # The suites generate deliberately skewed input - mostly malformed frames -
+    # and that is the point, not a smell.
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
 )
 

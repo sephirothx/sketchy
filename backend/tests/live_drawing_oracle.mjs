@@ -4,9 +4,10 @@
 // One JSON array of requests per line on stdin, one JSON array of answers per
 // line on stdout, so a single Node process serves every generated frame instead
 // of one process per frame, and one round trip covers every shape of a frame.
-// A request names the frame in the shape it would cross the wire in -
-// `hex` (binary), `b64` (the base64 string the client sends small frames as) or
-// `int` (a bare control byte) - and `previous`, the open path's last point that
+// A request names the frame in the shape it would cross the wire in - `hex`
+// (bytes, as a `Uint8Array`), `buffer` (the same bytes as the `ArrayBuffer`
+// socket.io-client delivers), `b64` (the base64 string small frames travel as)
+// or `int` (a bare control byte) - and `previous`, the open path's last point that
 // a relative frame resolves against. The answer is the decoded packet in the
 // same normalized shape the Python side builds, or null for a refused frame.
 //
@@ -36,6 +37,7 @@ function normalize(packet) {
 function decode(request) {
   let frame;
   if ("hex" in request) frame = Uint8Array.from(Buffer.from(request.hex, "hex"));
+  else if ("buffer" in request) frame = Uint8Array.from(Buffer.from(request.buffer, "hex")).buffer;
   else if ("b64" in request) frame = request.b64;
   else frame = request.int;
   const previous = request.previous ? { x: request.previous[0], y: request.previous[1] } : null;

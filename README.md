@@ -2065,14 +2065,15 @@ CI prints the slowest 50 test phases and saves JUnit reports for seven days in t
 `backend-test-results` and `postgresql-test-results` artifacts; the former also
 contains `coverage.json`. Local JUnit output belongs in `backend/test-results/`.
 
-Two suites generate their input with Hypothesis rather than listing it
+Generated-input suites build their input with Hypothesis rather than listing it
 (`backend/tests/fuzzing.py`). Generation is derandomized, so every run — CI's and
 yours — tries the same inputs and a failure reproduces from the test alone. Set
 `FUZZ_SCALE=<n>` to multiply every budget by `n` and draw at random instead: a
 longer search, started by hand, whose failures print a `@reproduce_failure` blob.
 `test_live_drawing_differential.py` runs the client's live-drawing decoder in Node
-beside the server's (R-ENG-20), so the backend suite needs `node` (22+) on `PATH`;
-it imports the frontend source directly and needs no `npm install`.
+beside the server's (R-ENG-20), so the backend suite needs `node` (22.12+, as the
+frontend does) on `PATH`; it imports the frontend source directly and needs no
+`npm install`.
 
 With `TEST_OWNER_DATABASE_URL` set as well, the suite runs as the application
 role that `TEST_DATABASE_URL` names against a schema the owner migrated - what CI
