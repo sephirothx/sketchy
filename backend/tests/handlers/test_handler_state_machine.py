@@ -97,6 +97,7 @@ from tests.handlers.helpers import (
     StubPromptListRepo,
     contains_secret,
     replay_staged,
+    settle_deferred,
 )
 from tests.fuzzing import budget, stall_guard
 
@@ -418,13 +419,10 @@ class HandlerMachine(RuleBasedStateMachine):
     # --- Calling a command -------------------------------------------------------
 
     async def _settle_cleanups(self) -> None:
-        """Wait for the room teardowns an action handed to tasks, as
-        `settle_deferred` does - keeping what they raised rather than
-        gathering it away."""
-        while self.ctx.room_cleanups:
-            for result in await asyncio.gather(*list(self.ctx.room_cleanups), return_exceptions=True):
-                if isinstance(result, Exception):
-                    self.task_failures.append("".join(traceback.format_exception(result)))
+        """Wait for the room teardowns an action handed to tasks - keeping
+        what they raised rather than gathering it away."""
+        for failure in await settle_deferred(self.ctx):
+            self.task_failures.append("".join(traceback.format_exception(failure)))
 
     def send(self, person: str, command: str, *args):
         if HUNG:
@@ -1075,6 +1073,36 @@ def test_the_machine_plays_a_whole_game():
         _play_a_whole_game()
     assert not HUNG, HUNG[0]
     assert REACHED["games_recorded"] == 1
+
+
+def test_a_teardown_finished_before_the_step_looks_does_not_hold_the_loop():
+    """A teardown task that finished in the turn the step resumed on is still
+    in `room_cleanups` - its done-callback, which removes it, runs a turn
+    later. Settling must take it once and go on. Gathering until the set was
+    empty spun on it without ever yielding, so the callback never ran and the
+    loop was held for good: CI runs hung in `host_leaves` on about half their
+    attempts, depending on which turn an encode thread finished on."""
+    HUNG.clear()
+    machine = HandlerMachine()
+
+    async def finished_before_the_settle():
+        async def teardown():
+            return None
+
+        machine.ctx.defer_cleanup(teardown())
+        # One turn: the teardown runs to its end, and the callback that would
+        # take it out of the set is queued behind this task's own wake-up.
+        await asyncio.sleep(0)
+        (task,) = machine.ctx.room_cleanups
+        assert task.done()
+        await machine._settle_cleanups()
+
+    try:
+        with stall_guard(5):
+            machine.run(finished_before_the_settle(), "settling a finished teardown")
+    finally:
+        machine.teardown()
+    assert not HUNG, HUNG[0]
 
 
 def _play_a_whole_game():
