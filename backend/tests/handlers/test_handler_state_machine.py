@@ -113,10 +113,30 @@ REACHED: Counter = Counter()
 # this long is stuck - waiting on a deadline only `advance_clock` could pass,
 # or on a lock a sleeping timer holds.
 COMMAND_SECONDS = 10
+# Real seconds any one step on the loop may take - a command with what it
+# settles, a clock jump with every timer it fires, a teardown.
+STEP_SECONDS = 60
 # The first stuck command, if any. Kept out of Hypothesis like the decoder
 # oracle's failures: shrinking a hang costs the whole timeout per attempt, so
 # the rest of the run is skipped and the test fails on this one.
 HUNG: list[str] = []
+
+
+class _Stuck(Exception):
+    """A step outlived `STEP_SECONDS`; already recorded in `HUNG`."""
+
+
+def _pending_tasks(loop) -> str:
+    """Where every task still pending on `loop` is waiting - the part of a
+    stall that a cancelled CI job would otherwise never show."""
+    lines = []
+    for task in asyncio.all_tasks(loop):
+        if task.done():
+            continue
+        frames = task.get_stack(limit=4)
+        where = " <- ".join(f"{f.f_code.co_name}:{f.f_lineno}" for f in frames) or "?"
+        lines.append(f"  {task.get_coro().__qualname__}: {where}")
+    return "\n".join(lines[:20]) or "  (none)"
 
 _real_sleep = asyncio.sleep
 
@@ -364,12 +384,22 @@ class HandlerMachine(RuleBasedStateMachine):
         ctx._within_shared_windows = lambda *args, **kwargs: True
         return ctx
 
-    def run(self, coroutine):
-        return self.loop.run_until_complete(coroutine)
+    def run(self, coroutine, what: str = "a step"):
+        """Run `coroutine` on this machine's loop, bounded: nothing in process
+        should take a real minute, so one that does is recorded as stuck with
+        where its tasks were waiting, rather than holding the job forever."""
+        try:
+            return self.loop.run_until_complete(asyncio.wait_for(coroutine, STEP_SECONDS))
+        except TimeoutError:
+            if not HUNG:
+                HUNG.append(f"{what} did not finish in {STEP_SECONDS} s; pending:\n{_pending_tasks(self.loop)}")
+            raise _Stuck() from None
 
     def teardown(self) -> None:
         try:
-            self.run(self._close())
+            self.run(self._close(), "the teardown")
+        except _Stuck:
+            pass
         finally:
             self._undo_set_up()
         # What the final teardowns raised has no invariant after it.
@@ -401,17 +431,24 @@ class HandlerMachine(RuleBasedStateMachine):
             return None
 
         async def call():
-            answer = await asyncio.wait_for(self.sio.handlers["/"][command](self.sids[person], *args), COMMAND_SECONDS)
+            try:
+                answer = await asyncio.wait_for(
+                    self.sio.handlers["/"][command](self.sids[person], *args), COMMAND_SECONDS
+                )
+            except TimeoutError:
+                # The command's own bound, told apart from the step's in `run`.
+                HUNG.append(
+                    f"{command} from {person} never answered in {COMMAND_SECONDS} s; payload {args!r:.300}\n"
+                    f"pending:\n{_pending_tasks(asyncio.get_running_loop())}"
+                )
+                raise _Stuck() from None
             await settle()
             await self._settle_cleanups()
             return answer
 
         try:
-            answer = self.run(call())
-        except TimeoutError:
-            HUNG.append(
-                f"{command} from {person} never answered in {COMMAND_SECONDS} s; payload {args!r:.300}"
-            )
+            answer = self.run(call(), f"{command} from {person}")
+        except _Stuck:
             return None
         if isinstance(answer, dict) and answer.get("ok") is False:
             assert isinstance(answer.get("errorCode"), str), (
@@ -622,7 +659,10 @@ class HandlerMachine(RuleBasedStateMachine):
             await settle()
             await self._settle_cleanups()
 
-        self.run(drop())
+        try:
+            self.run(drop(), f"{person}'s disconnect")
+        except _Stuck:
+            return
         # Socket.IO takes a closed socket out of every room it was in.
         for members in self.members.values():
             members.discard(sid)
@@ -644,7 +684,10 @@ class HandlerMachine(RuleBasedStateMachine):
             # the handoff loop would.
             await replay_staged(self.ctx)
 
-        self.run(advance())
+        try:
+            self.run(advance(), f"a {seconds} s clock jump")
+        except _Stuck:
+            return
 
     @rule(person=st.sampled_from(PEOPLE), command=st.data(), shape=st.sampled_from(["nothing", "one", "two"]))
     def anything(self, person, command, shape):
@@ -1039,6 +1082,7 @@ def test_the_machine_plays_a_whole_game():
     a random run that falls short of a floor."""
     REACHED.clear()
     HUNG.clear()
+    _stack_dump_if_stuck()
     machine = HandlerMachine()
     try:
         machine.create_room("Ann", {"rounds": 1}, True)
@@ -1063,5 +1107,6 @@ def test_the_machine_plays_a_whole_game():
         machine.rooms_hold_together()
     finally:
         machine.teardown()
+        faulthandler.cancel_dump_traceback_later()
     assert not HUNG, HUNG[0]
     assert REACHED["games_recorded"] == 1
