@@ -52,9 +52,11 @@ same runs on every invocation, and `FUZZ_SCALE` for a longer random search.
 from __future__ import annotations
 
 import asyncio
+import faulthandler
 import heapq
 import itertools
 import logging
+import sys
 import time
 import traceback
 from collections import Counter
@@ -102,6 +104,15 @@ ACCOUNTS = {person: f"user-{person.lower()}" for person in PEOPLE}
 # How far play got, across every run of the module's machine. Read by the
 # test after the runs finish.
 REACHED: Counter = Counter()
+# Real seconds a command may take. Everything a handler waits on is in
+# process and the game's deadlines are on the virtual clock, so one that runs
+# this long is stuck - waiting on a deadline only `advance_clock` could pass,
+# or on a lock a sleeping timer holds.
+COMMAND_SECONDS = 10
+# The first stuck command, if any. Kept out of Hypothesis like the decoder
+# oracle's failures: shrinking a hang costs the whole timeout per attempt, so
+# the rest of the run is skipped and the test fails on this one.
+HUNG: list[str] = []
 
 _real_sleep = asyncio.sleep
 
@@ -355,13 +366,22 @@ class HandlerMachine(RuleBasedStateMachine):
                     self.task_failures.append("".join(traceback.format_exception(result)))
 
     def send(self, person: str, command: str, *args):
+        if HUNG:
+            return None
+
         async def call():
-            answer = await asyncio.wait_for(self.sio.handlers["/"][command](self.sids[person], *args), 30)
+            answer = await asyncio.wait_for(self.sio.handlers["/"][command](self.sids[person], *args), COMMAND_SECONDS)
             await settle()
             await self._settle_cleanups()
             return answer
 
-        answer = self.run(call())
+        try:
+            answer = self.run(call())
+        except TimeoutError:
+            HUNG.append(
+                f"{command} from {person} never answered in {COMMAND_SECONDS} s; payload {args!r:.300}"
+            )
+            return None
         if isinstance(answer, dict) and answer.get("ok") is False:
             assert isinstance(answer.get("errorCode"), str), (
                 f"{command} refused without an errorCode: {answer!r}"
@@ -538,7 +558,7 @@ class HandlerMachine(RuleBasedStateMachine):
     def disconnect(self, person, act):
         """The socket drops. The person comes back on a new one, later, by
         joining again - or does not, and the grace runs out."""
-        if not act:
+        if not act or HUNG:
             return
         sid = self.sids[person]
 
@@ -559,6 +579,8 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @rule(seconds=st.sampled_from([1, 5, 16, 31, 61, 121]))
     def advance_clock(self, seconds):
+        if HUNG:
+            return
         async def advance():
             await self.clock.advance(seconds)
             await settle()
@@ -723,6 +745,8 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @invariant()
     def nothing_was_logged_as_an_error(self):
+        if HUNG:
+            return
         if self.errors.records:
             record = self.errors.records[0]
             detail = logging.Formatter().format(record)
@@ -730,6 +754,8 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @invariant()
     def no_background_task_died_unheard(self):
+        if HUNG:
+            return
         for task in self.tasks:
             # `_log_traceback` is what asyncio itself reads to report a task
             # whose exception was never retrieved - set until someone does.
@@ -740,6 +766,8 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @invariant()
     def rooms_hold_together(self):
+        if HUNG:
+            return
         sockets: dict[str, str] = {}
         for room in self.room_manager.rooms.values():
             assert room.state in ("waiting", "playing"), room.state
@@ -767,6 +795,8 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @invariant()
     def nothing_leaked(self):
+        if HUNG:
+            return
         assert not self.leaks, self.leaks[0]
 
     def _check_emit(self, event, data, kwargs) -> None:
@@ -836,12 +866,24 @@ class HandlerMachine(RuleBasedStateMachine):
                 )
 
 
+def _stack_dump_if_stuck():
+    """A traceback of every thread in the log if the test outlives any honest
+    run - a stall on CI would otherwise end as a cancelled job and nothing."""
+    faulthandler.dump_traceback_later(240, exit=False, file=sys.__stderr__)
+
+
 def test_the_handlers_survive_any_game():
     REACHED.clear()
-    run_state_machine_as_test(
-        HandlerMachine,
-        settings=settings(max_examples=budget(200), stateful_step_count=80),
-    )
+    HUNG.clear()
+    _stack_dump_if_stuck()
+    try:
+        run_state_machine_as_test(
+            HandlerMachine,
+            settings=settings(max_examples=budget(200), stateful_step_count=80),
+        )
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    assert not HUNG, HUNG[0]
     # A run that never gets past the front door compares nothing. Each floor
     # is under half the least it reached over 100 random seeds at this budget
     # (games started 174, drawing turns 93, correct guesses 14, refused junk
@@ -862,6 +904,7 @@ def test_the_machine_plays_a_whole_game():
     reach a correct guess or a recorded game fails here by name rather than as
     a random run that falls short of a floor."""
     REACHED.clear()
+    HUNG.clear()
     machine = HandlerMachine()
     try:
         machine.create_room("Ann", {"rounds": 1}, True)
@@ -886,4 +929,5 @@ def test_the_machine_plays_a_whole_game():
         machine.rooms_hold_together()
     finally:
         machine.teardown()
+    assert not HUNG, HUNG[0]
     assert REACHED["games_recorded"] == 1
