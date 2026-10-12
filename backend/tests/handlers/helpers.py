@@ -169,10 +169,26 @@ async def settle_deferred(ctx):
     A finished game is staged on a tracked task, not inside the action, so
     that the room's own snapshot never waits behind an encode. A test that
     wants to look at the staging waits for it here, as the shutdown drain
-    does in the process.
+    does in the process. Returns what the tasks raised, for a caller that
+    keeps it rather than gathering it away.
+
+    Each task is waited for once, rather than until the set is empty. A
+    finished task leaves the set by a done-callback, which runs on a later
+    turn of the loop - and `gather` over tasks that are all done returns
+    without yielding one. A task that finished in the same turn the waiter
+    resumed was still in the set, so the loop gathered it again, and again,
+    holding the event loop for good and every timeout on it with it. Which
+    turn an encode thread finished on decided it: the handler state machine
+    hung on about half its runs on a CI runner and never on a laptop.
     """
-    while ctx.room_cleanups:
-        await asyncio.gather(*list(ctx.room_cleanups), return_exceptions=True)
+    waited: set[asyncio.Task] = set()
+    failures: list[Exception] = []
+    while pending := ctx.room_cleanups - waited:
+        waited |= pending
+        for result in await asyncio.gather(*pending, return_exceptions=True):
+            if isinstance(result, Exception):
+                failures.append(result)
+    return failures
 
 
 async def settle_capacity_closes(ctx):
