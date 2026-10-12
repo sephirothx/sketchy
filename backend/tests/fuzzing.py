@@ -14,10 +14,12 @@ example.
 """
 from __future__ import annotations
 
-import faulthandler
 import os
+import signal
+import sys
+import threading
+import traceback
 from contextlib import contextmanager
-from pathlib import Path
 
 from hypothesis import HealthCheck, settings
 
@@ -45,34 +47,45 @@ def budget(examples: int) -> int:
     return examples * FUZZ_SCALE
 
 
-# Far past any honest run of a generated-input suite on CI (about a minute),
-# and short of the job being cancelled under it.
-STALL_SECONDS = 300
+# Far past any honest run of a generated-input suite on CI (about a minute).
+STALL_SECONDS = 240
+
+
+class Stalled(AssertionError):
+    """A generated-input suite outlived `STALL_SECONDS`; carries every
+    thread's stack at that moment."""
+
+
+def _every_stack() -> str:
+    names = {thread.ident: thread.name for thread in threading.enumerate()}
+    blocks = []
+    for ident, frame in sys._current_frames().items():
+        stack = "".join(traceback.format_stack(frame, limit=12))
+        blocks.append(f"--- thread {names.get(ident, ident)} ---\n{stack}")
+    return "\n".join(blocks)
 
 
 @contextmanager
 def stall_guard(seconds: float = STALL_SECONDS):
-    """Dump every thread's stack and end the process if the body runs past
+    """Fail the test, with every thread's stack, if the body runs past
     `seconds`.
 
     A suite that blocks the thread its event loop runs on cannot be stopped
-    by any asyncio timeout, and under xdist a stuck worker is silent: three
-    CI runs of #1479 sat after their last report until the runner was shut
-    down, with nothing in the log. Ending the worker makes xdist report it
-    as crashed in the test it was running, so the job fails with a name and
-    a stack (`test-results/stall-<worker>.txt`) instead of holding the runner.
+    by any asyncio timeout, and under xdist a stuck worker is silent: CI runs
+    of #1479 sat after their last report until the runner was shut down.
+    Ending the worker instead left xdist's controller waiting out the job's
+    six hours. An alarm signal interrupts the main thread where it is
+    blocked - a select, a lock, a pure-Python loop - and raises there, so the
+    test fails as an ordinary failure whose report, which xdist does show,
+    holds the stacks.
     """
-    # xdist does not show a worker's stderr, so the stacks go to a file in
-    # `test-results/`, which CI uploads with the JUnit report once the job
-    # fails rather than being cancelled.
-    results = Path(__file__).resolve().parent.parent / "test-results"
-    results.mkdir(exist_ok=True)
-    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
-    with open(results / f"stall-{worker}.txt", "w") as dump:
-        faulthandler.dump_traceback_later(seconds, exit=True, file=dump)
-        try:
-            yield
-        finally:
-            faulthandler.cancel_dump_traceback_later()
-    # Nothing stalled: leave no empty file behind to be mistaken for one.
-    (results / f"stall-{worker}.txt").unlink(missing_ok=True)
+    def interrupt(signum, frame):
+        raise Stalled(f"ran past {seconds} s; every thread at that moment:\n{_every_stack()}")
+
+    previous = signal.signal(signal.SIGALRM, interrupt)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
