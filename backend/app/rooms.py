@@ -1174,12 +1174,13 @@ class RoomManager:
             ),
             avatar_key=None if is_anonymous else avatar_key,
             score=0,
-            is_host=not is_spectator and len(active_players) == 0,
+            is_host=False,
             is_spectator=is_spectator,
             colorblind_safe_colors=colorblind_safe_colors,
             prompt_language=prompt_language,
         )
         room.players[player_id] = player
+        self.seat_takes_host_if_unclaimed(room, player)
         if room.game is not None:
             room.game.seat_languages[player_id] = room.seat_language(player)
         metrics.record(
@@ -1251,6 +1252,26 @@ class RoomManager:
                 user_id=_metrics_user_id(departing.user_id),
             )
         self._observe()
+
+    def seat_takes_host_if_unclaimed(self, room: Room, player: Player) -> None:
+        """Give the host role to `player`, just seated, when no other seated
+        player holds it - taking it off a spectator who held it meanwhile.
+
+        A spectator holds the role only while nobody is seated
+        (`_promote_new_host_if_needed`): somebody has to, for the room to be
+        run at all. The first seat taken after that takes the role over.
+        Granting it beside the spectator's left two hosts, and not granting it
+        left a spectator running a room of players (R-ROOM-16). Called by
+        every way into a seat: `add_player`, and a spectator taking one with
+        `become_player`.
+        """
+        if player.is_spectator:
+            return
+        if any(p.is_host and not p.is_spectator for p in room.players.values() if p is not player):
+            return
+        for other in room.players.values():
+            other.is_host = False
+        player.is_host = True
 
     def release_host_if_held(self, room: Room, player: Player) -> bool:
         """Take the host role off `player` and give it to somebody present.

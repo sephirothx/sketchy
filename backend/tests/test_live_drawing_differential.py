@@ -73,7 +73,9 @@ from app.live_drawing import (
     is_relative,
     resolve_relative_points,
 )
-from tests.fuzzing import budget
+from tests.fuzzing import budget, stall_guard
+
+pytestmark = pytest.mark.fuzz
 
 ORACLE = Path(__file__).with_name("live_drawing_oracle.mjs")
 # Far beyond any real answer, which takes well under a millisecond. A decoder
@@ -437,7 +439,8 @@ def test_both_decoders_agree_on_every_generated_frame(oracle):
                 if expected is not None and expected.get("widths"):
                     seen["widths"] += 1
 
-    check()
+    with stall_guard():
+        check()
     if broke:
         pytest.fail(broke[0])
 

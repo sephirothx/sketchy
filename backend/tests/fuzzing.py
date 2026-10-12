@@ -14,7 +14,13 @@ example.
 """
 from __future__ import annotations
 
+import faulthandler
 import os
+import signal
+import sys
+import threading
+import traceback
+from contextlib import contextmanager
 
 from hypothesis import HealthCheck, settings
 
@@ -27,8 +33,8 @@ _COMMON = dict(
     # slow machine for being slow.
     deadline=None,
     print_blob=True,
-    # The suites generate deliberately skewed input - mostly malformed frames -
-    # and that is the point, not a smell.
+    # The suites generate deliberately skewed input - mostly malformed frames,
+    # mostly refused commands - and that is the point, not a smell.
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
 )
 
@@ -40,3 +46,55 @@ settings.load_profile("fuzz" if FUZZ_SCALE > 1 else "sketchy")
 def budget(examples: int) -> int:
     """`examples` on an ordinary run, `FUZZ_SCALE` times that on a long one."""
     return examples * FUZZ_SCALE
+
+
+# Far past any honest run of a generated-input suite on CI (well under a
+# minute), scaled with the budget for a long `FUZZ_SCALE` search.
+STALL_SECONDS = 240 * FUZZ_SCALE
+
+
+class Stalled(AssertionError):
+    """A generated-input suite outlived `STALL_SECONDS`; carries every
+    thread's stack at that moment."""
+
+
+def _every_stack() -> str:
+    names = {thread.ident: thread.name for thread in threading.enumerate()}
+    blocks = []
+    for ident, frame in sys._current_frames().items():
+        stack = "".join(traceback.format_stack(frame, limit=12))
+        blocks.append(f"--- thread {names.get(ident, ident)} ---\n{stack}")
+    return "\n".join(blocks)
+
+
+@contextmanager
+def stall_guard(seconds: float = STALL_SECONDS):
+    """Fail the test, with every thread's stack, if the body runs past
+    `seconds`.
+
+    A suite that blocks the thread its event loop runs on cannot be stopped
+    by any asyncio timeout, and under xdist a stuck worker is silent: CI runs
+    of #1479 sat after their last report until the runner was shut down.
+    Ending the worker instead left xdist's controller waiting out the job's
+    six hours. An alarm signal interrupts the main thread where it is
+    blocked - a select, a lock, a pure-Python loop - and raises there, so the
+    test fails as an ordinary failure whose report, which xdist does show,
+    holds the stacks.
+    """
+    def interrupt(signum, frame):
+        raise Stalled(f"ran past {seconds} s; every thread at that moment:\n{_every_stack()}")
+
+    previous = signal.signal(signal.SIGALRM, interrupt)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    # A handler only runs once the main thread is back in Python. Blocked
+    # below that - a lock taken in C, a resolver call, another thread holding
+    # the interpreter - it never does, and a CI run sat silent for its whole
+    # limit. faulthandler's watchdog writes the stacks from a thread of its
+    # own without needing the interpreter, so the log has them either way.
+    faulthandler.dump_traceback_later(seconds + 15, repeat=True, file=sys.__stderr__)
+    try:
+        yield
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
