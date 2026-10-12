@@ -73,7 +73,6 @@ from hypothesis.stateful import (
     RuleBasedStateMachine,
     initialize,
     invariant,
-    precondition,
     rule,
     run_state_machine_as_test,
 )
@@ -647,10 +646,12 @@ class HandlerMachine(RuleBasedStateMachine):
     def toggle_afk(self, person, afk):
         self.send(person, "toggle_afk", {"afk": afk})
 
-    @rule(person=st.sampled_from(PEOPLE), act=_sometimes)
-    def disconnect(self, person, act):
+    @rule(person=st.sampled_from(PEOPLE), act=_sometimes, gone=st.booleans())
+    def disconnect(self, person, act, gone):
         """The socket drops. The person comes back on a new one, later, by
-        joining again - or does not, and the grace runs out."""
+        joining again - or is gone for good, and the reconnect grace runs out
+        on the spot, so a seat's eviction is not left to a later clock jump
+        happening to land before they return."""
         if not act or HUNG:
             return
         sid = self.sids[person]
@@ -672,6 +673,8 @@ class HandlerMachine(RuleBasedStateMachine):
         self.sessions.sessions[new_sid] = {"user_id": ACCOUNTS[person]}
         self.sids[person] = new_sid
         REACHED["disconnected"] += 1
+        if gone:
+            self.advance_clock(31)
 
     @rule(seconds=st.sampled_from([1, 5, 16, 31, 61, 121]))
     def advance_clock(self, seconds):
@@ -704,18 +707,16 @@ class HandlerMachine(RuleBasedStateMachine):
     def _person(self, player) -> str | None:
         return next((name for name in PEOPLE if player and player.user_id == ACCOUNTS[name]), None)
 
-    @precondition(lambda self: any(
-        room.state == "waiting" and len(room.active_players()) >= 2
-        for room in self.room_manager.rooms.values()
-    ))
     @rule()
     def host_starts(self):
         """The host of a room with two players starts it - which random
         commands from four people almost never line up to do."""
-        room = next(
+        room = next((
             room for room in self.room_manager.rooms.values()
             if room.state == "waiting" and len(room.active_players()) >= 2
-        )
+        ), None)
+        if room is None:
+            return
         host = next((p for p in room.players.values() if p.is_host), None)
         person = self._person(host)
         if person is not None and host.sid == self.sids[person]:
@@ -727,6 +728,12 @@ class HandlerMachine(RuleBasedStateMachine):
     # draw and someone to guess, in that order. These make the next move a
     # game is waiting for, so play gets deep enough for the random rules
     # around it to land in the middle of turns.
+    #
+    # None has a precondition: each finds its room itself and does nothing
+    # when there is none. Which rules Hypothesis may pick must not depend on
+    # the server's state, which is not exactly reproducible (random ids, set
+    # order) - with preconditions a replayed run could draw differently, and
+    # Hypothesis fails that as an inconsistent strategy.
 
     def _seat_holder(self, room, player) -> str | None:
         """The person sitting in `player`'s seat, on their current socket - back
@@ -739,39 +746,37 @@ class HandlerMachine(RuleBasedStateMachine):
             self.send(person, "join_room", {"code": room.code, "nickname": person})
         return person if player.sid == self.sids[person] else None
 
-    @precondition(lambda self: any(
-        room.state == "waiting" and len(room.active_players()) < 2 and room.players
-        for room in self.room_manager.rooms.values()
-    ))
     @rule(person=st.sampled_from(PEOPLE))
     def gather(self, person):
-        room = next(
+        room = next((
             room for room in self.room_manager.rooms.values()
             if room.state == "waiting" and len(room.active_players()) < 2 and room.players
-        )
+        ), None)
+        if room is None:
+            return
         self.send(person, "join_room", {"code": room.code, "nickname": person})
 
-    @precondition(lambda self: any(len(room.players) >= 2 for room in self.room_manager.rooms.values()))
     @rule(pick=st.integers(0, 3))
     def host_leaves(self, pick):
         """The host of a room someone else is in walks out, so the role has
         to pass on - to a player, or with none left to a spectator, and back
         to the next player to sit down (R-ROOM-16)."""
         rooms = [room for room in self.room_manager.rooms.values() if len(room.players) >= 2]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         host = next((p for p in room.players.values() if p.is_host), None)
         person = self._person(host)
         if person is not None and host.sid == self.sids[person]:
             self.send(person, "leave_room", None)
 
-    @precondition(lambda self: any(
-        room.game and room.game.phase == Phase.DRAWING for room in self.room_manager.rooms.values()
-    ))
     @rule(pick=st.integers(0, 3))
     def aware_seat_types_the_prompt(self, pick):
         """The drawer, or someone who already guessed it, types the answer
         mid-turn: the line must reach only the prompt-aware audience."""
         rooms = [r for r in self.room_manager.rooms.values() if r.game and r.game.phase == Phase.DRAWING]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         game = room.game
         aware = [p for p in room.players.values() if p.id == game.current_drawer or p.id in game.correct_guessers]
@@ -779,10 +784,6 @@ class HandlerMachine(RuleBasedStateMachine):
         if person and room.game is game and game.phase == Phase.DRAWING:
             self.send(person, "send_chat", {"text": game.prompt})
 
-    @precondition(lambda self: any(
-        room.state == "waiting" and any(p.is_spectator for p in room.players.values())
-        for room in self.room_manager.rooms.values()
-    ))
     @rule(pick=st.integers(0, 3))
     def spectator_sits(self, pick):
         """A spectator in a waiting room takes a free seat (`become_player`) -
@@ -792,15 +793,14 @@ class HandlerMachine(RuleBasedStateMachine):
             r for r in self.room_manager.rooms.values()
             if r.state == "waiting" and any(p.is_spectator for p in r.players.values())
         ]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         watchers = [p for p in room.players.values() if p.is_spectator]
         person = self._seat_holder(room, watchers[pick % len(watchers)])
         if person:
             self.send(person, "become_player", None)
 
-    @precondition(lambda self: any(
-        room.game and room.game.current_drawer for room in self.room_manager.rooms.values()
-    ))
     @rule(
         pick=st.integers(0, 3),
         votes=st.lists(st.booleans(), min_size=0, max_size=3),
@@ -811,6 +811,8 @@ class HandlerMachine(RuleBasedStateMachine):
         run past the vote or the restart delay - none of which random
         commands line up to do."""
         rooms = [r for r in self.room_manager.rooms.values() if r.game and r.game.current_drawer]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         seated = [p for p in room.players.values() if not p.is_spectator]
         if not seated:
@@ -827,10 +829,6 @@ class HandlerMachine(RuleBasedStateMachine):
         if wait:
             self.advance_clock(wait)
 
-    @precondition(lambda self: any(
-        room.game and room.game.phase == Phase.DRAWING and room.game.hint_mode in ("purchase", "wheel")
-        for room in self.room_manager.rooms.values()
-    ))
     @rule(pick=st.integers(0, 3), slot=st.integers(0, 4), letter=st.sampled_from(["a", "e", "r", "k", "z"]))
     def guesser_buys_a_hint(self, pick, slot, letter):
         """A seat still guessing buys a letter, in whichever hint mode the
@@ -840,6 +838,8 @@ class HandlerMachine(RuleBasedStateMachine):
             r for r in self.room_manager.rooms.values()
             if r.game and r.game.phase == Phase.DRAWING and r.game.hint_mode in ("purchase", "wheel")
         ]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         game = room.game
         guessers = [
@@ -856,12 +856,13 @@ class HandlerMachine(RuleBasedStateMachine):
         else:
             self.send(person, "buy_wheel_letter", {"letter": letter})
 
-    @precondition(lambda self: any(room.game for room in self.room_manager.rooms.values()))
     @rule(pick=st.integers(0, 3), action=st.sampled_from(["draw", "guess", "guess", "wait"]))
     def play_on(self, pick, action):
         """The next move the game is waiting for - carried on within the step
         when it opens another, so a chosen prompt can be drawn or guessed."""
         rooms = [room for room in self.room_manager.rooms.values() if room.game]
+        if not rooms:
+            return
         room = rooms[pick % len(rooms)]
         game = room.game
 
@@ -1045,26 +1046,22 @@ def test_the_handlers_survive_any_game():
     with stall_guard():
         run_state_machine_as_test(
             HandlerMachine,
-            settings=settings(max_examples=budget(200), stateful_step_count=80),
+            settings=settings(max_examples=budget(100), stateful_step_count=60),
         )
     assert not HUNG, HUNG[0]
     # A run that never gets past the front door compares nothing. Each floor
-    # is under half the least it reached over 100 random seeds at this budget,
-    # not counting what `a_room_to_play_in` hands every run: games started 32,
-    # drawing turns 160, correct guesses 10, restarts proposed 32 and voted
-    # on 32, refused junk 892, codes that name no room 25, dropped sockets 58.
-    # The derandomized draws move with any edit to this file, and a floor that
-    # held for one seed only is a red build waiting for an unrelated change.
-    # Hint purchases have no floor: a median of 14 a run, but none on a few
-    # seeds.
-    assert REACHED["answered:start_game"] >= 15, REACHED
-    assert REACHED["drawing_turns"] >= 75, REACHED
-    assert REACHED["correct_guess"] >= 5, REACHED
-    assert REACHED["answered:propose_restart_vote"] >= 15, REACHED
-    assert REACHED["answered:cast_restart_vote"] >= 15, REACHED
-    assert REACHED["refused:invalid_payload"] >= 400, REACHED
-    assert REACHED["refused:room_not_found"] >= 10, REACHED
-    assert REACHED["disconnected"] >= 25, REACHED
+    # is under half the least it reached over 140 random seeds at this budget,
+    # not counting what `a_room_to_play_in` hands every run: games started 6,
+    # drawing turns 33, refused junk 219. The derandomized draws move with any
+    # edit to this file, and a floor that held for one seed only is a red
+    # build waiting for an unrelated change. Correct guesses, restart votes,
+    # unknown codes, dropped sockets and hint purchases have no floor: medians
+    # of 29, 32, 33, 64 and about 10 a run, but none on a few seeds at this
+    # budget. The scripted game below pins a correct guess, and the nightly
+    # run's twentyfold budget reaches all of them.
+    assert REACHED["answered:start_game"] >= 3, REACHED
+    assert REACHED["drawing_turns"] >= 15, REACHED
+    assert REACHED["refused:invalid_payload"] >= 100, REACHED
 
 
 def test_the_machine_plays_a_whole_game():

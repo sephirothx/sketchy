@@ -14,6 +14,7 @@ example.
 """
 from __future__ import annotations
 
+import faulthandler
 import os
 import signal
 import sys
@@ -47,8 +48,9 @@ def budget(examples: int) -> int:
     return examples * FUZZ_SCALE
 
 
-# Far past any honest run of a generated-input suite on CI (about a minute).
-STALL_SECONDS = 240
+# Far past any honest run of a generated-input suite on CI (well under a
+# minute), scaled with the budget for a long `FUZZ_SCALE` search.
+STALL_SECONDS = 240 * FUZZ_SCALE
 
 
 class Stalled(AssertionError):
@@ -84,8 +86,15 @@ def stall_guard(seconds: float = STALL_SECONDS):
 
     previous = signal.signal(signal.SIGALRM, interrupt)
     signal.setitimer(signal.ITIMER_REAL, seconds)
+    # A handler only runs once the main thread is back in Python. Blocked
+    # below that - a lock taken in C, a resolver call, another thread holding
+    # the interpreter - it never does, and a CI run sat silent for its whole
+    # limit. faulthandler's watchdog writes the stacks from a thread of its
+    # own without needing the interpreter, so the log has them either way.
+    faulthandler.dump_traceback_later(seconds + 15, repeat=True, file=sys.__stderr__)
     try:
         yield
     finally:
+        faulthandler.cancel_dump_traceback_later()
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous)

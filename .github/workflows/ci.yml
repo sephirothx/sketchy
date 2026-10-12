@@ -397,8 +397,11 @@ jobs:
         with:
           node-version: "22"
 
+      # faulthandler_timeout: every thread's stack in the log if a test runs
+      # past it, written by a watchdog thread that needs nothing from the
+      # stuck one - a stall on CI once ran out the job's limit in silence.
       - name: Run the generated-input suites
-        run: .venv/bin/pytest -q -m fuzz --durations=10 --junitxml=test-results/fuzz.xml
+        run: .venv/bin/pytest -q -m fuzz --durations=10 -o faulthandler_timeout=180 --junitxml=test-results/fuzz.xml
 
       - name: Save generated-input test results
         if: ${{ !cancelled() }}
