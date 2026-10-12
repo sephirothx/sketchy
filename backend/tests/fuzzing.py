@@ -53,9 +53,16 @@ def budget(examples: int) -> int:
 STALL_SECONDS = 240 * FUZZ_SCALE
 
 
-class Stalled(AssertionError):
+class Stalled(BaseException):
     """A generated-input suite outlived `STALL_SECONDS`; carries every
-    thread's stack at that moment."""
+    thread's stack at that moment.
+
+    Not an `Exception`, so Hypothesis does not take it for a failing example:
+    it lets it through at once instead of replaying the example to confirm it
+    and shrinking it. A stall is a fact about the wall clock, not the input -
+    the replay ran without it and drew further, which Hypothesis reported as
+    a flaky strategy, and a shrink at the speed of a stall ran a CI job out
+    of its limit."""
 
 
 def _every_stack() -> str:
