@@ -10,6 +10,8 @@ import os
 
 import pytest
 
+# Loads the Hypothesis profile before any suite that generates input is collected.
+import tests.fuzzing  # noqa: F401
 from tests.database_backed import is_database_backed, module_name
 from tests.parallel_databases import WorkerDatabases
 

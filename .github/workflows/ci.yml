@@ -171,6 +171,15 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -q -r requirements-dev.txt
 
+      # For tests/test_live_drawing_differential.py, which runs the client's
+      # live-drawing decoder beside the server's (#1464). It imports the
+      # frontend source directly and needs no node_modules, so this is the
+      # whole cost.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Lint
         run: .venv/bin/ruff check app tests ../scripts/check_tracked_artifacts.py ../scripts/prompt_lists ../ops/grafana/generate.py
 
