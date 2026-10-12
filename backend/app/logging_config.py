@@ -39,6 +39,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+import functools
 import ipaddress
 import json
 import logging
@@ -174,6 +175,11 @@ def _parse_address(candidate: str) -> ipaddress.IPv4Address | ipaddress.IPv6Addr
     for text in (candidate, *(
         [candidate.rsplit(":", 1)[0]] if candidate.rsplit(":", 1)[-1].isdigit() else []
     )):
+        # An IPv6 address has `::`, or all eight groups, or ends in a dotted
+        # quad; anything else with a colon is a time, a ratio or a MAC, and
+        # is turned away without the parser's exception.
+        if ":" in text and "::" not in text and text.count(":") < 7 and "." not in text:
+            continue
         try:
             return ipaddress.ip_address(text)
         except ValueError:
@@ -181,23 +187,42 @@ def _parse_address(candidate: str) -> ipaddress.IPv4Address | ipaddress.IPv6Addr
     return None
 
 
-def _mask_ip(match: re.Match[str]) -> str:
-    address = _parse_address(match.group("ip"))
+@functools.lru_cache(maxsize=1024)
+def _names_a_client(candidate: str) -> bool:
+    """Whether a candidate is an address that names a person: not loopback or
+    unspecified, an IPv4-mapped one read as the IPv4 address it carries.
+
+    Cached: `redact` runs on the event loop for every JSON line, and a line
+    of nothing but candidates - `a::` repeated, as #1454's linear-time bound
+    tries - cost a parse and two network checks each."""
+    # A host's address has a prefix and an interface; `a::` or `2600::` is a
+    # network at most - or a time, an ordinal - and is left alone.
+    if ":" in candidate and sum(1 for group in candidate.split(":") if group) < 2:
+        return False
+    address = _parse_address(candidate)
     if address is None:
-        return match.group(0)
+        return False
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
-    if address.is_loopback or address.is_unspecified:
-        return match.group(0)
-    return "[address]"
+    return not (address.is_loopback or address.is_unspecified)
+
+
+def _mask_ip(match: re.Match[str]) -> str:
+    return "[address]" if _names_a_client(match.group("ip")) else match.group(0)
 
 
 def redact(text: str) -> str:
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
     text = _mask_addresses(text)
-    text = _IPV6.sub(_mask_ip, text)
-    return _IPV4.sub(_mask_ip, text)
+    # The candidates are found and decided first, each distinct one once, and
+    # the line rewritten only when one names somebody: most lines have none,
+    # and a line of nothing but candidates then costs a scan, not a call per
+    # candidate (#1454's linear-time bound).
+    for pattern in (_IPV6, _IPV4):
+        if any(_names_a_client(candidate) for candidate in set(pattern.findall(text))):
+            text = pattern.sub(_mask_ip, text)
+    return text
 
 
 def log_format(environ: dict[str, str] | None = None) -> str:
