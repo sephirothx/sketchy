@@ -43,7 +43,9 @@ those modules only), and the `advance_clock` rule moves it: every prompt
 choice, drawing, turn-results, hint, restart-vote and reconnect-grace timer
 due by then fires, in deadline order, on the code path the real timer takes.
 The AFK sweep and the idle-room reaper are separate background loops and are
-not driven here; `test_afk.py` and the idle-room tests cover them.
+not driven here; `test_afk.py` and the idle-room tests cover them. Work the
+server hands to a thread pool - a finished game's encode - runs inline, so
+it lands at the same point in a step on every machine.
 
 **Budgets.** Command budgets are switched off: they exist to refuse exactly
 the burst a state machine is, and with them on most steps come back
@@ -310,6 +312,21 @@ class HandlerMachine(RuleBasedStateMachine):
             return task
 
         self.loop.set_task_factory(track)
+
+        # A finished game is encoded on a thread pool, and which turn of the
+        # loop the thread hands it back on is up to the machine it runs on:
+        # the timers a clock jump fires, and the next command, landed before
+        # or after it, so the same draws played out differently from one run
+        # to the next. Run here, it lands at the same point every time.
+        def run_inline(executor, function, *args):
+            future = self.loop.create_future()
+            try:
+                future.set_result(function(*args))
+            except Exception as error:
+                future.set_exception(error)
+            return future
+
+        self.loop.run_in_executor = run_inline
 
         self.room_manager = RoomManager()
         self.sessions = SessionStore()
