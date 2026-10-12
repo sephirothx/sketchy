@@ -88,7 +88,7 @@ def test_the_flag_deselects_and_leaves_the_rest_running(pytester):
     (package / "dbfixtures.py").write_text(
         "def create_test_db(): ...\n\n\ndef assert_disposable(url): ...\n"
     )
-    for name in ("database_backed", "parallel_databases"):
+    for name in ("database_backed", "fuzzing", "parallel_databases"):
         (package / f"{name}.py").write_text((BACKEND_ROOT / "tests" / f"{name}.py").read_text())
     (package / "test_rows.py").write_text(
         "from tests.dbfixtures import create_test_db\n\n\ndef test_a_row_lands(): pass\n"

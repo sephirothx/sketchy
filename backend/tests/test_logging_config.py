@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
+import random
+import re
+import time
 
 import pytest
 
@@ -126,6 +129,9 @@ def test_the_text_format_is_the_development_console_verbatim():
         ("refused o'brien@example.test", "refused ***@example.test"),
         ("refused foo@a.b", "refused ***@a.b"),
         ("refused a=b#c{d}@example.test", "refused ***@example.test"),
+        # Two addresses with nothing between them but local-part characters:
+        # the second starts where the first one's domain ended.
+        ("a@b.c!d@e.f and g@h.i", "***@b.c***@e.f and ***@h.i"),
         # And the lines it must still leave legible.
         ("postgresql+asyncpg://sketchy:pa55@db.internal:5432/x", "postgresql+asyncpg://sketchy:***@db.internal:5432/x"),
         ("array[i]@list is not an address", "array[i]@list is not an address"),
@@ -135,6 +141,74 @@ def test_the_text_format_is_the_development_console_verbatim():
 )
 def test_secrets_and_addresses_never_reach_the_line(text, expected):
     assert redact(text) == expected
+
+
+# The rules as they were written before two of them were made linear, each a
+# single regular expression: the URL password ran from every `://` to the next
+# `@` or space, and an address's local part could start anywhere. What they
+# masked is the specification; the rewrite has to agree on every line.
+_QUADRATIC_REDACTIONS = (
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+"), r"\1 ***"),
+    (
+        re.compile(
+            r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|"
+            r"[a-z_]*session|cookie)(\s*[:=]\s*)([^\s;,&\"']+)"
+        ),
+        r"\1\2***",
+    ),
+    (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
+    (re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)"""), r"***@\1"),
+)
+
+
+def _quadratic_redact(text: str) -> str:
+    from app.logging_config import _IPV4, _IPV6, _mask_ip
+
+    for pattern, replacement in _QUADRATIC_REDACTIONS:
+        text = pattern.sub(replacement, text)
+    # A client's address is masked after the rules either way (#1418): it was
+    # not part of what was rewritten, and `a::` is an address.
+    text = _IPV6.sub(_mask_ip, text)
+    return _IPV4.sub(_mask_ip, text)
+
+
+def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
+    rng = random.Random(472)
+    # Short lines built from the pieces that decide where a URL's credentials
+    # or an address start and end - single characters alone almost never spell
+    # either: characters allowed in a local part but not a domain, in both, the
+    # delimiters, the quote, a URL's `://`, and whole domains and addresses, so
+    # they abut, nest in quotes and in URLs, and run on.
+    pieces = [
+        "a", "1", "-", ".", "!", "'", "+", '"', "@", " ", ":", "/", ",", "[", "\\",
+        "b.c", "@d.e", "://", "x@y.z", "password=",
+    ]
+    for _ in range(40_000):
+        line = "".join(rng.choice(pieces) for _ in range(rng.randrange(1, 16)))
+        assert redact(line) == _quadratic_redact(line), line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "1.2." * 3000,  # no `@` at all
+        "a" * 12_000 + "@",  # one `@`, and no domain after it
+        "://a:" * 2400,  # a URL's start over and over, and no `@` to end a password
+    ],
+    ids=["no-at", "one-trailing-at", "userinfo-without-at"],
+)
+def test_a_long_line_redacts_in_linear_time(line):
+    """`redact` runs on the event loop for every JSON line, and a line can carry
+    client text: a pattern that retries a run from each of its characters took
+    half a second on 12 KB, which stalls every room on the server."""
+    elapsed = min(_timed(redact, line) for _ in range(3))
+    assert elapsed < 0.05, f"{elapsed * 1000:.0f} ms"
+
+
+def _timed(fn, arg) -> float:
+    start = time.perf_counter()
+    fn(arg)
+    return time.perf_counter() - start
 
 
 # --- wiring ------------------------------------------------------------------------

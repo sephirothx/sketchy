@@ -2067,6 +2067,25 @@ CI prints the slowest 50 test phases and saves JUnit reports for seven days in t
 `backend-test-results` and `postgresql-test-results` artifacts; the former also
 contains `coverage.json`. Local JUnit output belongs in `backend/test-results/`.
 
+Generated-input suites build their input with Hypothesis rather than listing it
+(`backend/tests/fuzzing.py`). They are marked `fuzz` and CI runs them in a job of
+their own, *Generated-input tests* (`pytest -m fuzz`, one process, no coverage,
+15-minute limit); the backend job deselects them with `-m "not fuzz"`. A plain
+local `pytest` still runs them with everything else. Their per-PR budgets finish
+in seconds; `.github/workflows/fuzz-nightly.yml` runs them every night at
+`FUZZ_SCALE=20`, with random generation, and can be started by hand. Generation is derandomized, so every run — CI's and
+yours — tries the same inputs and a failure reproduces from the test alone. Set
+`FUZZ_SCALE=<n>` to multiply every budget by `n` and draw at random instead: a
+longer search, started by hand, whose failures print a `@reproduce_failure` blob.
+`test_live_drawing_differential.py` runs the client's live-drawing decoder in Node
+beside the server's (R-ENG-20), so the backend suite needs `node` (22.12+, as the
+frontend does) on `PATH`; it imports the frontend source directly and needs no
+`npm install`. `handlers/test_handler_state_machine.py` plays four people against
+every socket handler, with the game's deadlines on a virtual clock (R-ENG-21).
+A generated-input suite that runs past four minutes fails on an alarm signal,
+with every thread's stack in the failure report (`tests/fuzzing.py`
+`stall_guard`), rather than holding its xdist worker.
+
 With `TEST_OWNER_DATABASE_URL` set as well, the suite runs as the application
 role that `TEST_DATABASE_URL` names against a schema the owner migrated - what CI
 does (#896): the owner clones the template for each worker and empties the
@@ -2095,6 +2114,9 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 # Combined statement/branch coverage and the existing module floors
 .venv/bin/pytest -q -n 4 --dist=loadgroup --cov=app --cov-branch --cov-report=json:coverage.json
 .venv/bin/python ../scripts/check-coverage.py coverage.json
+
+# A longer, random search through the generated-input suites
+FUZZ_SCALE=20 .venv/bin/pytest -q tests/test_live_drawing_differential.py tests/handlers/test_handler_state_machine.py
 
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
 .venv/bin/ruff check app tests

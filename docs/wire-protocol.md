@@ -1795,7 +1795,7 @@ ruler-straight line would then appear on viewers' screens all at once.
 
 ### Server-side refusals
 
-`decode_live_drawing` ([`backend/app/live_drawing.py:469`](../backend/app/live_drawing.py))
+`decode_live_drawing` ([`backend/app/live_drawing.py:513`](../backend/app/live_drawing.py))
 rejects, before anything is recorded or rebroadcast:
 
 - A non-integer, non-bytes payload, or an empty frame.
@@ -1805,6 +1805,23 @@ rejects, before anything is recorded or rebroadcast:
 - Any frame whose length does not exactly match its tag's layout.
 - A brush width outside 1 – 64, an unknown shape id, a fill point outside the canvas.
 - A width keyframe that is misplaced (above), and any coordinate packed to −32768.
+- More than 256 points in one frame, or delta records that walk a coordinate off the
+  packed range from the frame's first point. (A relative frame's walk from the open
+  path's last point is checked by `resolve_relative_points`, which the handler calls
+  before recording.)
+- A base64 string with a character outside the alphabet (whitespace included), missing
+  or excess padding, or longer than the largest frame needs. Non-zero padding bits are
+  accepted.
+
+The server forwards the drawer's own bytes rather than re-encoding them, so every frame it
+accepts has to decode in the client's `decodeLiveDrawing`
+([`frontend/src/lib/liveDrawing.ts`](../frontend/src/lib/liveDrawing.ts)) to the same packet
+— a frame the server accepts and a viewer reads differently is a stroke in the history that
+viewer never drew. For bytes and the control integer the client refuses exactly what the
+server does; for base64 it is deliberately looser (`atob` takes a string without its
+padding), which costs nothing because the server never relays what it refused.
+[`test_live_drawing_differential.py`](../backend/tests/test_live_drawing_differential.py)
+compares the two decoders over generated frames in every wire shape (R-ENG-20).
 
 On top of the codec, [`drawing.py`](../backend/app/handlers/drawing.py) refuses:
 
