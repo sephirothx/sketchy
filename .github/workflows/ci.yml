@@ -179,8 +179,9 @@ jobs:
       # condition did.
       # loadgroup shares the immutable repository-history scan between its
       # two tests; every other test is distributed normally (R-ENG-12/15).
+      # `not fuzz`: the generated-input suites run in their own job below.
       - name: Run the backend suite with coverage
-        run: .venv/bin/pytest -q -n 4 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+        run: .venv/bin/pytest -q -n 4 --dist=loadgroup -m "not fuzz" --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -350,6 +351,63 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: postgresql-test-results
+          path: backend/test-results/
+          retention-days: 7
+
+  # The generated-input suites (R-ENG-20, R-ENG-21): the client's live-drawing
+  # decoder against the server's, and the state machine over every socket
+  # handler. Their own job, because in the backend job's four coverage-traced
+  # xdist workers they ran 17x slower than locally and, three times in five
+  # runs, stalled a worker until the runner gave up - taking the whole backend
+  # check with them. Here they run in one process, untraced, with a limit.
+  fuzz:
+    name: Generated-input tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        id: python
+        with:
+          python-version: "3.14"
+
+      # The same virtualenv, under the same key, as the backend job.
+      - name: Cache the backend virtualenv
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+
+      - name: Create backend virtualenv and install dependencies
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
+
+      # The differential runs the client's decoder in Node. It imports the
+      # frontend source directly and needs no node_modules.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # faulthandler_timeout: every thread's stack in the log if a test runs
+      # past it, written by a watchdog thread that needs nothing from the
+      # stuck one - a stall on CI once ran out the job's limit in silence.
+      - name: Run the generated-input suites
+        run: .venv/bin/pytest -q -m fuzz --durations=10 -o faulthandler_timeout=180 --junitxml=test-results/fuzz.xml
+
+      - name: Save generated-input test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-test-results
           path: backend/test-results/
           retention-days: 7
 

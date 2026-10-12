@@ -684,6 +684,29 @@ async def test_waiting_spectator_can_become_player_when_space_is_available():
         for call in sio.emit.await_args_list
     )
 
+async def test_a_spectator_taking_a_seat_takes_the_host_role_from_a_spectator_host():
+    """R-ROOM-16 through the handler. The last player left, so a spectator
+    holds the role; another spectator taking a seat takes it over, rather
+    than leaving a spectator running a room of players (#1465 review)."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", max_players=4)
+    host = room_manager.add_player(room, "Host")
+    watcher = room_manager.add_player(room, "Watcher", is_spectator=True)
+    room_manager.remove_player(room, host.id)
+    assert watcher.is_host is True
+    newcomer = room_manager.add_player(room, "Newcomer", is_spectator=True)
+    newcomer.sid = "newcomer-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": newcomer.id})
+    sio.emit = AsyncMock()
+
+    assert await sio.handlers["/"]["become_player"]("newcomer-sid", {}) == {"ok": True}
+
+    assert newcomer.is_host is True
+    assert watcher.is_host is False
+
+
 async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", max_players=2)
