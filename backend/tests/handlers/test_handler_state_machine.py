@@ -7,9 +7,10 @@ nobody sends: #1235 was every handler raising a `TypeError` for a command that
 arrived with no payload at all, found by reading the code. Here Hypothesis
 plays four people at the real handlers (`register_all_handlers`, in process):
 they open and join rooms, take a seat from the spectators, start games, pick
-prompts, draw, guess, chat (the prompt too), buy hints, undo, vote, leave, drop
-their connection and come back, while the clock jumps past the game's
-deadlines - and one rule sends any command arbitrary JSON, or nothing.
+prompts, draw, guess, chat (the prompt too), buy hints, undo, vote on kicks
+and restarts, leave, drop their connection and come back, while the clock
+jumps past the game's deadlines - and one rule sends any command arbitrary
+JSON, or nothing.
 
 After every step:
 
@@ -24,10 +25,12 @@ After every step:
   one while anyone is seated (R-ROOM-16), a socket in one seat at most
   (R-ROOM-08 - an account may hold two), and the sockets subscribed to the
   room's broadcasts exactly its connected seats;
-- no message reached a seat that may still guess carrying the prompt - who
-  may see it is worked out here (drawer, correct guessers, spectators where
-  the room allows), not asked of the code under test - and no broadcast
-  carried an account id or a credential key.
+- no message or acknowledgement reached a seat that may not know it yet
+  carrying the prompt - in any spelling, case or surrounding text - or, while
+  the drawer chooses, any choice offered; who may know is worked out here
+  (drawer, correct guessers, spectators where the room allows), not asked of
+  the code under test. And no broadcast carried an account id or a
+  credential key.
 
 The run asserts how far play got, so a change that leaves every command
 bouncing off `invalid_payload` fails rather than passing vacuously; a scripted
@@ -56,6 +59,7 @@ import faulthandler
 import heapq
 import itertools
 import logging
+import re
 import sys
 import time
 import traceback
@@ -115,6 +119,28 @@ COMMAND_SECONDS = 10
 HUNG: list[str] = []
 
 _real_sleep = asyncio.sleep
+
+
+def _letters(text: str) -> str:
+    """The letters of `text`, case-folded: what a reader would recognise as
+    the word, whatever spacing, case or masking surrounds it."""
+    return re.sub(r"[\W\d_]", "", text).casefold()
+
+
+def _carries(value, secret: str) -> bool:
+    """Whether `value` spells out `secret` anywhere - inside a longer line, in
+    another case, through a masked prompt with every letter shown. An exact
+    comparison passed a masked prompt revealing all of its letters."""
+    wanted = _letters(secret)
+    if len(wanted) < 3:
+        return False
+    if isinstance(value, str):
+        return wanted in _letters(value)
+    if isinstance(value, dict):
+        return any(_carries(item, secret) for item in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return any(_carries(item, secret) for item in value)
+    return False
 
 
 # --- Virtual time ------------------------------------------------------------------
@@ -281,6 +307,9 @@ class HandlerMachine(RuleBasedStateMachine):
             self.sessions.sessions[sid] = {"user_id": ACCOUNTS[person]}
         self.guess_ids = itertools.count(1)
         self.sequences = itertools.count(1)
+        # Set while `a_room_to_play_in` runs, so the floors count what the
+        # rules achieved rather than what every run is handed at the start.
+        self.initializing = False
 
     def _undo_set_up(self) -> None:
         if not self.loop.is_closed():
@@ -343,6 +372,8 @@ class HandlerMachine(RuleBasedStateMachine):
             self.run(self._close())
         finally:
             self._undo_set_up()
+        # What the final teardowns raised has no invariant after it.
+        assert HUNG or not self.task_failures, f"a background task failed:\n{self.task_failures[0]}"
 
     async def _close(self) -> None:
         await self.ctx.timers.close()
@@ -386,9 +417,21 @@ class HandlerMachine(RuleBasedStateMachine):
             assert isinstance(answer.get("errorCode"), str), (
                 f"{command} refused without an errorCode: {answer!r}"
             )
-            REACHED[f"refused:{answer['errorCode']}"] += 1
+            outcome = f"refused:{answer['errorCode']}"
         else:
-            REACHED[f"answered:{command}"] += 1
+            outcome = f"answered:{command}"
+        if not self.initializing:
+            REACHED[outcome] += 1
+        # An acknowledgement is a message to the sender's own socket, and is
+        # held to the same rule: a hint ack carries the masked prompt, a guess
+        # ack its line. Not the room's custom word list, which its players
+        # read in the waiting room by design (`get_custom_prompts`), so a
+        # custom word is no secret from them once a game has drawn it.
+        if answer is not None and command not in ("get_room_settings", "get_custom_prompts"):
+            try:
+                self._check_emit(f"{command} acknowledgement", answer, {"to": self.sids[person]})
+            except AssertionError as violation:
+                self.leaks.append(str(violation))
         return answer
 
     def room_of(self, person: str):
@@ -412,28 +455,35 @@ class HandlerMachine(RuleBasedStateMachine):
 
     @initialize(
         fields=_settings_fields,
+        hint_mode=st.sampled_from(sorted(HINT_MODES)),
         spectators=st.sampled_from([0, 1, 2]),
         start=st.sampled_from([True, True, False]),
     )
-    def a_room_to_play_in(self, fields, spectators, start):
+    def a_room_to_play_in(self, fields, hint_mode, spectators, start):
         """Every run begins in a gathered room - Ann hosting, Bob seated, Cyd
         and Dee seated or watching - and usually with its game under way.
 
         Without it how deep play got depended on the draws: over 100 seeds
-        the drawing turns a run reached went from none to hundreds, so a bug
+        the drawing turns a run reached went from none to over a hundred, so a bug
         in the middle of a turn was caught or missed by whichever seed an
         unrelated edit to this file happened to produce. Starting here, every
         run spends its steps in and around a live game.
         """
-        created = self.send("Ann", "create_room", {"nickname": "Ann", **fields})
-        if not (isinstance(created, dict) and created.get("ok")):
-            return
-        code = created["code"]
-        self.send("Bob", "join_room", {"code": code, "nickname": "Bob"})
-        for index, person in enumerate(("Cyd", "Dee")):
-            self.send(person, "join_room", {"code": code, "nickname": person, "asSpectator": index < spectators})
-        if start:
-            self.send("Ann", "start_game", None)
+        self.initializing = True
+        try:
+            # Every hint mode, every run: left to the optional settings, the
+            # purchase and wheel paths were reached a handful of times a run.
+            created = self.send("Ann", "create_room", {"nickname": "Ann", **fields, "hintMode": hint_mode})
+            if not (isinstance(created, dict) and created.get("ok")):
+                return
+            code = created["code"]
+            self.send("Bob", "join_room", {"code": code, "nickname": "Bob"})
+            for index, person in enumerate(("Cyd", "Dee")):
+                self.send(person, "join_room", {"code": code, "nickname": person, "asSpectator": index < spectators})
+            if start:
+                self.send("Ann", "start_game", None)
+        finally:
+            self.initializing = False
 
 
     # Leaving, dropping and opening another room each undo the progress a
@@ -447,10 +497,15 @@ class HandlerMachine(RuleBasedStateMachine):
         if act or self.room_of(person)[0] is None:
             self.send(person, "create_room", {"nickname": person, **fields})
 
-    @rule(person=st.sampled_from(PEOPLE), pick=st.sampled_from([0, 0, 0, 1, 2, 5]), spectator=st.booleans())
-    def join_room(self, person, pick, spectator):
+    @rule(
+        person=st.sampled_from(PEOPLE),
+        pick=st.sampled_from([0, 0, 0, 1, 2, 5]),
+        spectator=st.booleans(),
+        bad_code=st.sampled_from([False, False, False, False, True]),
+    )
+    def join_room(self, person, pick, spectator, bad_code):
         room = self.any_room(pick)
-        code = room.code if room else "ABCDEF"
+        code = room.code if room and not bad_code else "ZZZZZZ"
         self.send(person, "join_room", {"code": code, "nickname": person, "asSpectator": spectator})
 
     @rule(person=st.sampled_from(PEOPLE), act=_sometimes)
@@ -513,7 +568,7 @@ class HandlerMachine(RuleBasedStateMachine):
     def guess(self, person, kind):
         room, player = self.room_of(person)
         game = room.game if room else None
-        prompt = game.prompt if game and game.prompt else "walrus"
+        prompt = game.prompt if game and game.prompt else "no word yet"
         text = {"right": prompt, "close": prompt[:-1] or "x", "wrong": "definitely not it"}[kind]
         before = len(game.correct_guessers) if game else 0
         self.send(person, "guess", {"text": text, "id": next(self.guess_ids), "turnId": game.current_turn_id if game else None})
@@ -526,7 +581,7 @@ class HandlerMachine(RuleBasedStateMachine):
         it can type and only the prompt-aware audience may read."""
         if text == "PROMPT":
             room, _ = self.room_of(person)
-            text = room.game.prompt if room and room.game and room.game.prompt else "walrus"
+            text = room.game.prompt if room and room.game and room.game.prompt else "no word yet"
         self.send(person, "send_chat", {"text": text})
 
     @rule(person=st.sampled_from(PEOPLE))
@@ -699,6 +754,64 @@ class HandlerMachine(RuleBasedStateMachine):
         if person:
             self.send(person, "become_player", None)
 
+    @precondition(lambda self: any(
+        room.game and room.game.current_drawer for room in self.room_manager.rooms.values()
+    ))
+    @rule(
+        pick=st.integers(0, 3),
+        votes=st.lists(st.booleans(), min_size=0, max_size=3),
+        wait=st.sampled_from([0, 4, 21, 61]),
+    )
+    def restart_is_put_to_a_vote(self, pick, votes, wait):
+        """A seated player proposes a restart, others vote, and the clock may
+        run past the vote or the restart delay - none of which random
+        commands line up to do."""
+        rooms = [r for r in self.room_manager.rooms.values() if r.game and r.game.current_drawer]
+        room = rooms[pick % len(rooms)]
+        seated = [p for p in room.players.values() if not p.is_spectator]
+        if not seated:
+            return
+        proposer = self._seat_holder(room, seated[pick % len(seated)])
+        if proposer is None:
+            return
+        self.send(proposer, "propose_restart_vote", None)
+        others = [p for p in seated if self._person(p) != proposer]
+        for player, vote in zip(others, votes, strict=False):
+            person = self._seat_holder(room, player)
+            if person:
+                self.send(person, "cast_restart_vote", {"vote": vote})
+        if wait:
+            self.advance_clock(wait)
+
+    @precondition(lambda self: any(
+        room.game and room.game.phase == Phase.DRAWING and room.game.hint_mode in ("purchase", "wheel")
+        for room in self.room_manager.rooms.values()
+    ))
+    @rule(pick=st.integers(0, 3), slot=st.integers(0, 4), letter=st.sampled_from(["a", "e", "r", "k", "z"]))
+    def guesser_buys_a_hint(self, pick, slot, letter):
+        """A seat still guessing buys a letter, in whichever hint mode the
+        room runs - so the purchase paths and their acknowledgements, which
+        carry the masked prompt, are exercised."""
+        rooms = [
+            r for r in self.room_manager.rooms.values()
+            if r.game and r.game.phase == Phase.DRAWING and r.game.hint_mode in ("purchase", "wheel")
+        ]
+        room = rooms[pick % len(rooms)]
+        game = room.game
+        guessers = [
+            p for p in room.players.values()
+            if not p.is_spectator and p.id != game.current_drawer and p.id not in game.correct_guessers
+        ]
+        if not guessers:
+            return
+        person = self._seat_holder(room, guessers[pick % len(guessers)])
+        if person is None or room.game is not game:
+            return
+        if game.hint_mode == "purchase":
+            self.send(person, "buy_hint", {"slot": slot})
+        else:
+            self.send(person, "buy_wheel_letter", {"letter": letter})
+
     @precondition(lambda self: any(room.game for room in self.room_manager.rooms.values()))
     @rule(pick=st.integers(0, 3), action=st.sampled_from(["draw", "guess", "guess", "wait"]))
     def play_on(self, pick, action):
@@ -823,7 +936,21 @@ class HandlerMachine(RuleBasedStateMachine):
         skipped = set(skipped) if isinstance(skipped, (list, tuple, set)) else {skipped}
         for live in game_rooms:
             game = live.game
-            if not game or not game.prompt or game.phase not in (Phase.CHOOSING_PROMPT, Phase.DRAWING):
+            if not game or game.phase not in (Phase.CHOOSING_PROMPT, Phase.DRAWING):
+                continue
+            # What must not be read yet: while the drawer chooses, every
+            # choice offered (`game.prompt` is empty then); while drawing, the
+            # prompt in every spelling its seats play it in.
+            choosing = game.phase == Phase.CHOOSING_PROMPT
+            if choosing:
+                secrets = list(game.prompt_choice_answers())
+            else:
+                secrets = [game.prompt, *game.prompt_spellings().values()] if game.prompt else []
+            if not secrets:
+                continue
+            if choosing and event == "chat_message":
+                # Nothing is chosen yet: a line somebody typed that matches a
+                # choice is what they typed, not something the server let out.
                 continue
             # A room broadcast reaches the sockets subscribed to it.
             listening = self.members.get(live.id, set()) if room is not None else {target}
@@ -838,7 +965,7 @@ class HandlerMachine(RuleBasedStateMachine):
             spoiler_allowed = author is not None and (
                 author == game.current_drawer or author in game.correct_guessers
             )
-            if spoiler_allowed and contains_secret(data, game.prompt):
+            if spoiler_allowed and any(_carries(data, secret) for secret in secrets):
                 REACHED["spoiler_reached_spectators"] += 1
             # Open question, not yet a rule (#1480): a restricted line from a
             # spectator or a frozen-out seat - neither shown the prompt - goes
@@ -853,17 +980,19 @@ class HandlerMachine(RuleBasedStateMachine):
                 p for p in readers
                 if not (
                     p.id == game.current_drawer
-                    or p.id in game.correct_guessers
-                    or (p.is_spectator and live.spectators_see_prompt)
+                    or (not choosing and p.id in game.correct_guessers)
+                    or (not choosing and p.is_spectator and live.spectators_see_prompt)
                     or p.id == author
                     or (spoiler_allowed and p.is_spectator)
                     or (pending_1480 and p.is_spectator)
                 )
             ]
             if guessing:
-                assert not contains_secret(data, game.prompt), (
-                    f"{event} handed the prompt to a guesser: {data!r}"
-                )
+                for secret in secrets:
+                    assert not _carries(data, secret), (
+                        f"{event} handed {'a prompt choice' if choosing else 'the prompt'} "
+                        f"{secret!r} to {guessing[0].nickname}: {data!r}"
+                    )
 
 
 def _stack_dump_if_stuck():
@@ -885,16 +1014,21 @@ def test_the_handlers_survive_any_game():
         faulthandler.cancel_dump_traceback_later()
     assert not HUNG, HUNG[0]
     # A run that never gets past the front door compares nothing. Each floor
-    # is under half the least it reached over 100 random seeds at this budget
-    # (games started 174, drawing turns 93, correct guesses 14, refused junk
-    # 976, dropped sockets 54): the derandomized draws move with any edit to
-    # this file, and a floor that held for one seed only is a red build
-    # waiting for an unrelated change. They are this high because every run
-    # starts in a gathered room (`a_room_to_play_in`).
-    assert REACHED["answered:start_game"] >= 80, REACHED
-    assert REACHED["drawing_turns"] >= 40, REACHED
-    assert REACHED["correct_guess"] >= 6, REACHED
-    assert REACHED["refused:invalid_payload"] >= 450, REACHED
+    # is under half the least it reached over 100 random seeds at this budget,
+    # not counting what `a_room_to_play_in` hands every run: games started 32,
+    # drawing turns 160, correct guesses 10, restarts proposed 32 and voted
+    # on 32, refused junk 892, codes that name no room 25, dropped sockets 58.
+    # The derandomized draws move with any edit to this file, and a floor that
+    # held for one seed only is a red build waiting for an unrelated change.
+    # Hint purchases have no floor: a median of 14 a run, but none on a few
+    # seeds.
+    assert REACHED["answered:start_game"] >= 15, REACHED
+    assert REACHED["drawing_turns"] >= 75, REACHED
+    assert REACHED["correct_guess"] >= 5, REACHED
+    assert REACHED["answered:propose_restart_vote"] >= 15, REACHED
+    assert REACHED["answered:cast_restart_vote"] >= 15, REACHED
+    assert REACHED["refused:invalid_payload"] >= 400, REACHED
+    assert REACHED["refused:room_not_found"] >= 10, REACHED
     assert REACHED["disconnected"] >= 25, REACHED
 
 
@@ -908,7 +1042,7 @@ def test_the_machine_plays_a_whole_game():
     machine = HandlerMachine()
     try:
         machine.create_room("Ann", {"rounds": 1}, True)
-        machine.join_room("Bob", 0, False)
+        machine.join_room("Bob", 0, False, False)
         room = next(iter(machine.room_manager.rooms.values()))
         assert len(room.active_players()) == 2
         machine.host_starts()
