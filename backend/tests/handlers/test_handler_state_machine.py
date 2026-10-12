@@ -65,6 +65,7 @@ from collections import Counter
 from contextlib import ExitStack
 from unittest.mock import AsyncMock, patch
 
+import pytest
 import socketio
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -99,6 +100,8 @@ from tests.handlers.helpers import (
     replay_staged,
 )
 from tests.fuzzing import budget, stall_guard
+
+pytestmark = pytest.mark.fuzz
 
 # Nicknames need three characters: a two-letter one is refused at every door.
 PEOPLE = ("Ann", "Bob", "Cyd", "Dee")

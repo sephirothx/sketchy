@@ -75,6 +75,8 @@ from app.live_drawing import (
 )
 from tests.fuzzing import budget, stall_guard
 
+pytestmark = pytest.mark.fuzz
+
 ORACLE = Path(__file__).with_name("live_drawing_oracle.mjs")
 # Far beyond any real answer, which takes well under a millisecond. A decoder
 # that loops forever on some frame fails with the frame named, rather than

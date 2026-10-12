@@ -2066,7 +2066,10 @@ CI prints the slowest 50 test phases and saves JUnit reports for seven days in t
 contains `coverage.json`. Local JUnit output belongs in `backend/test-results/`.
 
 Generated-input suites build their input with Hypothesis rather than listing it
-(`backend/tests/fuzzing.py`). Generation is derandomized, so every run — CI's and
+(`backend/tests/fuzzing.py`). They are marked `fuzz` and CI runs them in a job of
+their own, *Generated-input tests* (`pytest -m fuzz`, one process, no coverage,
+15-minute limit); the backend job deselects them with `-m "not fuzz"`. A plain
+local `pytest` still runs them with everything else. Generation is derandomized, so every run — CI's and
 yours — tries the same inputs and a failure reproduces from the test alone. Set
 `FUZZ_SCALE=<n>` to multiply every budget by `n` and draw at random instead: a
 longer search, started by hand, whose failures print a `@reproduce_failure` blob.
