@@ -38,12 +38,10 @@ rather than a process. Budgets and reproducibility: `tests/fuzzing.py`.
 from __future__ import annotations
 
 import base64
-import faulthandler
 import json
 import queue
 import shutil
 import subprocess
-import sys
 import threading
 from collections import Counter, deque
 from pathlib import Path
@@ -75,7 +73,7 @@ from app.live_drawing import (
     is_relative,
     resolve_relative_points,
 )
-from tests.fuzzing import budget
+from tests.fuzzing import budget, stall_guard
 
 ORACLE = Path(__file__).with_name("live_drawing_oracle.mjs")
 # Far beyond any real answer, which takes well under a millisecond. A decoder
@@ -439,13 +437,8 @@ def test_both_decoders_agree_on_every_generated_frame(oracle):
                 if expected is not None and expected.get("widths"):
                     seen["widths"] += 1
 
-    # A traceback of every thread in the log if the comparison outlives any
-    # honest run, rather than a cancelled CI job with nothing to read.
-    faulthandler.dump_traceback_later(240, exit=False, file=sys.__stderr__)
-    try:
+    with stall_guard():
         check()
-    finally:
-        faulthandler.cancel_dump_traceback_later()
     if broke:
         pytest.fail(broke[0])
 

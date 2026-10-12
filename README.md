@@ -2075,6 +2075,9 @@ beside the server's (R-ENG-20), so the backend suite needs `node` (22.12+, as th
 frontend does) on `PATH`; it imports the frontend source directly and needs no
 `npm install`. `handlers/test_handler_state_machine.py` plays four people against
 every socket handler, with the game's deadlines on a virtual clock (R-ENG-21).
+A generated-input suite that runs past five minutes ends its worker on purpose:
+xdist then names the test as crashed, and every thread's stack is in
+`backend/test-results/stall-<worker>.txt` (uploaded with the JUnit report).
 
 With `TEST_OWNER_DATABASE_URL` set as well, the suite runs as the application
 role that `TEST_DATABASE_URL` names against a schema the owner migrated - what CI

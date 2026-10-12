@@ -55,12 +55,10 @@ same runs on every invocation, and `FUZZ_SCALE` for a longer random search.
 from __future__ import annotations
 
 import asyncio
-import faulthandler
 import heapq
 import itertools
 import logging
 import re
-import sys
 import time
 import traceback
 from collections import Counter
@@ -100,7 +98,7 @@ from tests.handlers.helpers import (
     contains_secret,
     replay_staged,
 )
-from tests.fuzzing import budget
+from tests.fuzzing import budget, stall_guard
 
 # Nicknames need three characters: a two-letter one is refused at every door.
 PEOPLE = ("Ann", "Bob", "Cyd", "Dee")
@@ -1038,23 +1036,14 @@ class HandlerMachine(RuleBasedStateMachine):
                     )
 
 
-def _stack_dump_if_stuck():
-    """A traceback of every thread in the log if the test outlives any honest
-    run - a stall on CI would otherwise end as a cancelled job and nothing."""
-    faulthandler.dump_traceback_later(240, exit=False, file=sys.__stderr__)
-
-
 def test_the_handlers_survive_any_game():
     REACHED.clear()
     HUNG.clear()
-    _stack_dump_if_stuck()
-    try:
+    with stall_guard():
         run_state_machine_as_test(
             HandlerMachine,
             settings=settings(max_examples=budget(200), stateful_step_count=80),
         )
-    finally:
-        faulthandler.cancel_dump_traceback_later()
     assert not HUNG, HUNG[0]
     # A run that never gets past the front door compares nothing. Each floor
     # is under half the least it reached over 100 random seeds at this budget,
@@ -1082,7 +1071,13 @@ def test_the_machine_plays_a_whole_game():
     a random run that falls short of a floor."""
     REACHED.clear()
     HUNG.clear()
-    _stack_dump_if_stuck()
+    with stall_guard():
+        _play_a_whole_game()
+    assert not HUNG, HUNG[0]
+    assert REACHED["games_recorded"] == 1
+
+
+def _play_a_whole_game():
     machine = HandlerMachine()
     try:
         machine.create_room("Ann", {"rounds": 1}, True)
@@ -1107,6 +1102,3 @@ def test_the_machine_plays_a_whole_game():
         machine.rooms_hold_together()
     finally:
         machine.teardown()
-        faulthandler.cancel_dump_traceback_later()
-    assert not HUNG, HUNG[0]
-    assert REACHED["games_recorded"] == 1

@@ -14,7 +14,10 @@ example.
 """
 from __future__ import annotations
 
+import faulthandler
 import os
+from contextlib import contextmanager
+from pathlib import Path
 
 from hypothesis import HealthCheck, settings
 
@@ -40,3 +43,36 @@ settings.load_profile("fuzz" if FUZZ_SCALE > 1 else "sketchy")
 def budget(examples: int) -> int:
     """`examples` on an ordinary run, `FUZZ_SCALE` times that on a long one."""
     return examples * FUZZ_SCALE
+
+
+# Far past any honest run of a generated-input suite on CI (about a minute),
+# and short of the job being cancelled under it.
+STALL_SECONDS = 300
+
+
+@contextmanager
+def stall_guard(seconds: float = STALL_SECONDS):
+    """Dump every thread's stack and end the process if the body runs past
+    `seconds`.
+
+    A suite that blocks the thread its event loop runs on cannot be stopped
+    by any asyncio timeout, and under xdist a stuck worker is silent: three
+    CI runs of #1479 sat after their last report until the runner was shut
+    down, with nothing in the log. Ending the worker makes xdist report it
+    as crashed in the test it was running, so the job fails with a name and
+    a stack (`test-results/stall-<worker>.txt`) instead of holding the runner.
+    """
+    # xdist does not show a worker's stderr, so the stacks go to a file in
+    # `test-results/`, which CI uploads with the JUnit report once the job
+    # fails rather than being cancelled.
+    results = Path(__file__).resolve().parent.parent / "test-results"
+    results.mkdir(exist_ok=True)
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    with open(results / f"stall-{worker}.txt", "w") as dump:
+        faulthandler.dump_traceback_later(seconds, exit=True, file=dump)
+        try:
+            yield
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+    # Nothing stalled: leave no empty file behind to be mistaken for one.
+    (results / f"stall-{worker}.txt").unlink(missing_ok=True)
