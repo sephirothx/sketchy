@@ -87,6 +87,33 @@ def test_a_seat_taken_after_a_spectator_inherited_the_room_takes_the_host_role_o
     assert [p.nickname for p in room.players.values() if p.is_host] == ["Cy"]
 
 
+def test_a_spectator_taking_a_seat_takes_the_host_role_from_a_spectator_host():
+    """R-ROOM-16, the other way into a seat: `become_player` turns a spectator
+    into a player, and with only a spectator holding the role that player
+    takes it over. Found in review of the state machine (#1465)."""
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    host = rm.add_player(room, "Ann")
+    first_watcher = rm.add_player(room, "Bob", is_spectator=True)
+    rm.remove_player(room, host.id)
+    second_watcher = rm.add_player(room, "Cyd", is_spectator=True)
+    assert first_watcher.is_host is True
+
+    second_watcher.is_spectator = False
+    rm.seat_takes_host_if_unclaimed(room, second_watcher)
+
+    assert [p.nickname for p in room.players.values() if p.is_host] == ["Cyd"]
+
+
+def test_a_seated_host_keeps_the_role_when_another_player_sits_down():
+    rm = RoomManager()
+    room = rm.create_room(name="Room", is_public=True)
+    host = rm.add_player(room, "Ann")
+    rm.add_player(room, "Bob", is_spectator=True)
+    arrival = rm.add_player(room, "Cyd")
+    assert host.is_host is True and arrival.is_host is False
+
+
 def test_registered_player_uses_requested_name_color_or_random_default():
     rm = RoomManager()
     room = rm.create_room(name="Room")
