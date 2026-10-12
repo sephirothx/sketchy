@@ -1,0 +1,64 @@
+name: Nightly fuzz
+
+# The generated-input suites (R-ENG-20, R-ENG-21) at twenty times the budget
+# every pull request runs, with random rather than derandomized generation, so
+# each night looks somewhere new. The per-PR budget is sized to finish in
+# seconds; paths it reaches on most seeds but not all - correct guesses,
+# restart votes, hint purchases, grace evictions - are reached here every
+# time. A failure prints a @reproduce_failure blob to pin it with; the input it
+# shrank to belongs in the suite as an example.
+on:
+  schedule:
+    - cron: "23 3 * * *" # daily, 03:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Generated-input tests (x20)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        id: python
+        with:
+          python-version: "3.14"
+
+      - name: Cache the backend virtualenv
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+
+      - name: Create backend virtualenv and install dependencies
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Run the generated-input suites at twenty times the budget
+        env:
+          FUZZ_SCALE: "20"
+        run: .venv/bin/pytest -q -m fuzz --durations=10 -o faulthandler_timeout=3600 --junitxml=test-results/fuzz-nightly.xml
+
+      - name: Save nightly fuzz results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-nightly-results
+          path: backend/test-results/
+          retention-days: 14

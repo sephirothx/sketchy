@@ -1420,6 +1420,7 @@ async def become_player(ctx: HandlerContext, sid, data=None):
 
     player.is_spectator = False
     player.score = 0
+    ctx.room_manager.seat_takes_host_if_unclaimed(room, player)
     await ctx.game_flow.announce(
         room, Announcement.JOINED_AS_PLAYER, {"nickname": player.nickname}
     )
