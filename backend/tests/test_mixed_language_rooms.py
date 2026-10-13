@@ -139,6 +139,23 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
     assert dog.translations["de"].prompt_version_id != dog.translations["en"].prompt_version_id
 
 
+async def test_forms_found_in_the_same_list_share_one_source_tuple(seeded):
+    """#1483: a game holds every language's form of every prompt it drew, and
+    each carried a tuple and an id string of its own - 576 copies of the
+    same eight list ids at eight seats over three rounds."""
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
+    )
+    sample = await prompts.sample_mixed_prompts(list(pinned.list_ids), limit=10)
+    tuples: dict[str, set[int]] = {}
+    for prompt in sample.prompts:
+        for language, form in prompt.translations.items():
+            tuples.setdefault(language, set()).add(id(form.source_list_ids))
+    assert len(tuples) == len(PROMPT_LANGUAGES)
+    assert all(len(found) == 1 for found in tuples.values()), tuples
+
+
 async def test_a_mixed_draw_carries_the_selection_s_false_friends(seeded):
     """German "Hut" is the hat, and English "hut" a different concept: the
     draw says so for the German seat whatever it sampled (#1367)."""

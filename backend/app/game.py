@@ -9,6 +9,7 @@ import random
 import re
 import string
 import time
+import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -301,14 +302,41 @@ def _is_close_pair(guess: str, target: str) -> bool:
     return False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PromptForm:
-    """One language's form of a prompt in a mixed-language game (#1182)."""
+    """One language's form of a prompt in a mixed-language game (#1182).
+
+    A game holds one for every language of every prompt it drew - 576 for
+    eight seats over three rounds - from its first turn to its last, so it is
+    kept small (#1483): slots rather than an attribute dict per form, the
+    version id as its 16 bytes (`packed_version_id`), and the source lists as
+    a tuple the draw shares between every form found in the same lists.
+    `version_id_for` and `version_sources` hand the id back in its public
+    form, which is the only one that leaves the game.
+    """
 
     answer: str
     aliases: tuple[str, ...] = ()
-    version_id: str | None = None
+    version_id: bytes | str | None = None
     source_list_ids: tuple[str, ...] = ()
+
+
+def packed_version_id(version_id: str | None) -> bytes | str | None:
+    """A prompt version's public id as the 16 bytes it spells (#1483); an id
+    that is not a UUID, as given."""
+    if version_id is None:
+        return None
+    try:
+        return uuid.UUID(version_id).bytes
+    except ValueError:
+        return version_id
+
+
+def _public_version_id(version_id: bytes | str | None) -> str | None:
+    """The public form of an id `packed_version_id` packed."""
+    if isinstance(version_id, bytes):
+        return str(uuid.UUID(bytes=version_id))
+    return version_id
 
 
 @dataclass(frozen=True)
@@ -586,7 +614,7 @@ class Game:
     def version_id_for(self, key: str, language: str | None = None) -> str | None:
         form = self.prompt_translations.get(key, {}).get(language or "")
         if form is not None:
-            return form.version_id
+            return _public_version_id(form.version_id)
         return self.prompt_version_ids.get(key)
 
     def source_list_ids_for(
@@ -607,7 +635,7 @@ class Game:
         for forms in self.prompt_translations.values():
             for form in forms.values():
                 if form.version_id is not None:
-                    sources[form.version_id] = form.source_list_ids
+                    sources[_public_version_id(form.version_id)] = form.source_list_ids
         return sources
 
     def prompt_for(self, token: str | None) -> str | None:

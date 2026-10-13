@@ -19,7 +19,7 @@ from app.announcements import Announcement
 from app.auth.avatars import avatar_url
 from app.encode_pool import off_loop
 from app.flow_timing import timing
-from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase, PromptForm
+from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase, PromptForm, packed_version_id
 from app.domain_values import (
     MIXED_PROMPT_LANGUAGE,
     PROMPT_LANGUAGES,
@@ -835,7 +835,7 @@ class GameFlowService:
                     language: PromptForm(
                         answer=form.answer,
                         aliases=form.aliases,
-                        version_id=form.prompt_version_id,
+                        version_id=packed_version_id(form.prompt_version_id),
                         source_list_ids=form.source_list_ids,
                     )
                     for language, form in prompt.translations.items()
@@ -843,11 +843,11 @@ class GameFlowService:
                 for prompt in drawn
                 if prompt.translations
             },
-            letter_counts_by_language={
-                language: dict(counts)
-                for language, counts in room.prompt_letter_counts_by_language.items()
-            },
-            letter_total_by_language=dict(room.prompt_letter_total_by_language),
+            # The room's own tallies, not a copy (#1483): the game only reads
+            # them, and a selection checked again replaces the room's rather
+            # than changing them, so the game keeps the ones it started on.
+            letter_counts_by_language=room.prompt_letter_counts_by_language,
+            letter_total_by_language=room.prompt_letter_total_by_language,
             false_friends=sample.false_friends,
         )
 
