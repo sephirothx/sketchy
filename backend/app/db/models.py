@@ -3867,6 +3867,18 @@ class PromptVersion(Base):
         nullable=True,
     )
     moderated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # The list whose takedown hid this word, while that is still the word's
+    # decision (#1425 review). Each word a list takes down holds its own
+    # byline - so a decision on one word reaches that word and its copies,
+    # not its siblings - and a list restored finds its words by this rather
+    # than by any byline, which a second takedown would have moved. Copied
+    # with the decision onto a later version and onto a copy; cleared by any
+    # decision about the word itself. No foreign key: a list can be deleted
+    # with its word hidden, and the column is only ever read through the
+    # owner's takedown records, never scanned.
+    hidden_with_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
     # When a save or a deletion last took this version out of a list's
     # working copy (#1359). A game that drew it before then still holds it in
     # memory and writes it into its turns when it ends, so it is collected only

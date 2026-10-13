@@ -30,6 +30,7 @@ import {
   reviewModerationReport,
   readHeldPublication,
   reviewHeldPublication,
+  type ListHideScope,
   reviewPromptContentReport,
   type ContentIncident,
   type GalleryReviewQueue,
@@ -499,6 +500,9 @@ export function ModerationPage() {
   });
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
+  // What hiding a list is for, by case (#1425): its words unless the
+  // moderator says it is only the name or description.
+  const [listScope, setListScope] = useState<Record<string, ListHideScope>>({});
   // Optional, so nothing here refuses to proceed without it: what it buys is
   // a notice with structure when the sentence is terse, not another gate on
   // a decision that already has a step-up in front of it.
@@ -939,7 +943,7 @@ export function ModerationPage() {
   const decideHeld =
     (id: string, version: number, state: "active" | "hidden") => async () => {
       try {
-        return await reviewHeldPublication(id, state, note[id], version);
+        return await reviewHeldPublication(id, state, note[id], version, listScope[id] ?? "words");
       } catch (problem) {
         if (problem instanceof ApiError && problem.status === 409) {
           // This list's read is the one that went stale, so only it is
@@ -1581,6 +1585,13 @@ export function ModerationPage() {
                       : "this list",
                   )}
                   {noteField(contentCase.id)}
+                  {contentCase.targetType === "list" && (
+                    <ListScopeChoice
+                      name={`list-scope-${contentCase.id}`}
+                      value={listScope[contentCase.id] ?? "words"}
+                      onChange={(scope) => setListScope((current) => ({ ...current, [contentCase.id]: scope }))}
+                    />
+                  )}
                   <div className="mod-actions">
                     <button
                       type="button"
@@ -1634,6 +1645,9 @@ export function ModerationPage() {
                               "resolved",
                               note[contentCase.id],
                               "hidden",
+                              contentCase.targetType === "list"
+                                ? listScope[contentCase.id] ?? "words"
+                                : undefined,
                             ),
                           "Hidden, and the owner is told if they have a confirmed address.",
                         )
@@ -1723,6 +1737,11 @@ export function ModerationPage() {
                     if they have a confirmed address.
                   </span>
                 </label>
+                <ListScopeChoice
+                  name={`list-scope-${heldCase.id}`}
+                  value={listScope[heldCase.id] ?? "words"}
+                  onChange={(scope) => setListScope((current) => ({ ...current, [heldCase.id]: scope }))}
+                />
                 <div className="mod-actions">
                   <button
                     type="button"
@@ -1982,5 +2001,32 @@ export function ModerationPage() {
         )}
       </div>
     </main>
+  );
+}
+
+/** What hiding a list is for (#1425). Its words is the default: hiding a
+    list used to leave every word its owner's to paste into a new list and
+    publish again. Its name or description alone leaves innocent words usable. */
+function ListScopeChoice({ name, value, onChange }: {
+  name: string;
+  value: ListHideScope;
+  onChange: (scope: ListHideScope) => void;
+}) {
+  return (
+    <fieldset className="mod-scope" data-testid="list-hide-scope">
+      <legend>If you hide this list, hide it for</legend>
+      <label>
+        <input type="radio" name={name} checked={value === "words"} onChange={() => onChange("words")} />
+        <span>
+          Its words <small>— they come back hidden if the owner types them again</small>
+        </span>
+      </label>
+      <label>
+        <input type="radio" name={name} checked={value === "presentation"} onChange={() => onChange("presentation")} />
+        <span>
+          Its name or description <small>— the words stay theirs to use</small>
+        </span>
+      </label>
+    </fieldset>
   );
 }
