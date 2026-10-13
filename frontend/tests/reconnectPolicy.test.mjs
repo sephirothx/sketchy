@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { Socket } from "socket.io-client";
+
 import {
   ESCALATION_BASE_MS,
   ESCALATION_MAX_MS,
@@ -13,6 +15,7 @@ import {
   createRestartLatch,
   pingWindowMs,
   attemptIsInFlight,
+  handshakeAwaitingAnswer,
   shouldReconnectImmediately,
   STALL_INTERVAL_MS,
   shutdownHoldMs,
@@ -155,6 +158,79 @@ test("an attempt is in flight however it was opened, not only on a retry", () =>
   assert.equal(attemptIsInFlight("open"), true, "the namespace connect is still a round trip");
   assert.equal(attemptIsInFlight("closed"), false);
   assert.equal(attemptIsInFlight(undefined), false, "no manager, nothing to interrupt");
+});
+
+test("a socket whose CONNECT is out and unanswered is not asked to connect again", () => {
+  assert.equal(
+    handshakeAwaitingAnswer({ connected: false, active: true, managerReadyState: "open" }),
+    true,
+    "engine open, CONNECT sent, no answer yet",
+  );
+  assert.equal(
+    handshakeAwaitingAnswer({ connected: true, active: true, managerReadyState: "open" }),
+    false,
+    "already connected: the library returns early itself",
+  );
+  assert.equal(
+    handshakeAwaitingAnswer({ connected: false, active: false, managerReadyState: "open" }),
+    false,
+    "a socket that disconnected sends a CONNECT nobody else will",
+  );
+  for (const state of ["opening", "closed", undefined]) {
+    assert.equal(
+      handshakeAwaitingAnswer({ connected: false, active: true, managerReadyState: state }),
+      false,
+      `${state}: no engine yet, so connect() sends nothing`,
+    );
+  }
+});
+
+test("socket.io-client sends a second CONNECT when asked to connect mid-handshake", () => {
+  // The library behaviour the guard exists for, pinned against the real
+  // Socket over a stand-in manager. The server refuses the second CONNECT
+  // with CONNECT_ERROR and the client destroys the socket without a
+  // `disconnect` - a connected-looking socket on a closed engine. If an
+  // upgrade stops sending the second one, this fails and the guard can go.
+  const listeners = new Map();
+  const sent = [];
+  const manager = {
+    _readyState: "closed",
+    _reconnecting: false,
+    on(event, listener) {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+    },
+    off(event, listener) {
+      listeners.set(event, (listeners.get(event) ?? []).filter((l) => l !== listener));
+    },
+    open() {
+      if (this._readyState === "closed") this._readyState = "opening";
+    },
+    // The engine's handshake completing, a moment after `open()`.
+    opened() {
+      this._readyState = "open";
+      for (const listener of listeners.get("open") ?? []) listener();
+    },
+    _packet(packet) {
+      sent.push(packet.type);
+    },
+    _destroy() {},
+  };
+  const socket = new Socket(manager, "/", {});
+  const state = () => ({
+    connected: socket.connected,
+    active: socket.active,
+    managerReadyState: manager._readyState,
+  });
+
+  assert.equal(handshakeAwaitingAnswer(state()), false, "nothing sent before the first connect");
+  socket.connect();
+  assert.equal(handshakeAwaitingAnswer(state()), false, "the engine is still opening");
+  manager.opened();
+  assert.deepEqual(sent, [0], "one CONNECT once the engine is open");
+  assert.equal(handshakeAwaitingAnswer(state()), true);
+
+  socket.connect();
+  assert.deepEqual(sent, [0, 0], "and a second one from a connect() before the answer");
 });
 
 test("the network-return handler reads the manager, not the retry event", async () => {

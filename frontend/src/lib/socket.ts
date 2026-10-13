@@ -20,6 +20,7 @@ import {
   pingWindowMs,
   attemptIsInFlight,
   createRestartLatch,
+  handshakeAwaitingAnswer,
   postReconnectDelayMs,
   serverCloseRetryDelayMs,
   shouldReconnectImmediately,
@@ -398,10 +399,20 @@ function noteUpdateStuck(): void {
 // would otherwise skip the spread the server asked for. One deferred attempt
 // however many callers ask; it lands on the manager's pending retry if the
 // server closed the socket, which makes it a no-op there.
+//
+// And never while this socket's CONNECT is out and unanswered: a second one
+// is refused, and the refusal leaves a socket that reads as connected on a
+// closed engine (`handshakeAwaitingAnswer`). A caller waiting for `connect`
+// gets the one already coming.
 const rawConnect = socket.connect.bind(socket);
 let heldConnect: number | null = null;
 socket.connect = (() => {
   if (isUpdateRequired()) return socket;
+  if (handshakeAwaitingAnswer({
+    connected: socket.connected,
+    active: socket.active,
+    managerReadyState: managerReadyState(),
+  })) return socket;
   const wait = restart.holdRemainingMs(Date.now());
   if (wait <= 0) {
     restoreOrdinaryBackoff();

@@ -309,6 +309,28 @@ export function attemptIsInFlight(managerReadyState: string | undefined): boolea
   return managerReadyState === "opening" || managerReadyState === "open";
 }
 
+/** Whether this socket's namespace CONNECT has gone out and not been answered:
+the engine is open, the socket is subscribed to it (`active`), and the server
+has not yet said `connect`.
+
+`Socket.connect()` must not be called then. socket.io-client sends CONNECT
+again whenever it is called on an open manager, the server refuses a second
+CONNECT on a namespace it has just admitted with `CONNECT_ERROR`, and the
+client answers that by destroying the socket without a `disconnect`: the engine
+is closed, `connected` stays true, and nothing reconnects. Every command after
+that goes nowhere. A slow handshake is enough to open the window - the server's
+connect handler reading the session on a loaded worker - and anything that
+calls `connect()` while the socket reads as disconnected lands in it: a
+heartbeat that found no connection, a stalled phase, the canvas giving up on
+its syncs. The answer they are all waiting for is already on its way. */
+export function handshakeAwaitingAnswer(state: {
+  connected: boolean;
+  active: boolean;
+  managerReadyState: string | undefined;
+}): boolean {
+  return !state.connected && state.active && state.managerReadyState === "open";
+}
+
 // --- after the server closed the socket (#998) -----------------------------
 //
 // socket.io-client treats `io server disconnect` as final: the manager does

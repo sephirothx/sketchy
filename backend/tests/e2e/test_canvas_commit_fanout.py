@@ -31,11 +31,18 @@ BASE_URL = "http://localhost:8000"
 # when they leave, so one buffered across a reconnect counts once, when sent.
 # A received event's arguments are kept by reference and serialized only when
 # a test asks for them.
+#
+# `__socketTimeline` interleaves both directions with the acknowledgements in
+# between, timed, for a failure to print: a wait that times out says what this
+# page asked for and what it was told, not only that the answer never came.
 _RECORD_SOCKET_EVENTS = """
 (() => {
   const received = window.__socketReceived = [];
   const receivedArgs = window.__socketReceivedArgs = [];
   const sent = window.__socketSent = [];
+  const timeline = window.__socketTimeline = [];
+  const receivedAt = window.__socketReceivedAt = [];
+  const note = (direction, event, args) => timeline.push([performance.now(), direction, event, args]);
   let socket;
   Object.defineProperty(window, "__SKETCHY_SOCKET__", {
     configurable: true,
@@ -43,13 +50,62 @@ _RECORD_SOCKET_EVENTS = """
     set: (value) => {
       socket = value;
       value.onAny((event, ...args) => {
+        receivedAt.push(timeline.length);
+        note("<", event, args);
         received.push(event);
         receivedArgs.push(args);
       });
-      value.onAnyOutgoing((event) => sent.push(event));
+      value.onAnyOutgoing((event, ...args) => {
+        note(">", event, args);
+        sent.push(event);
+      });
+      value.on("connect", () => note("*", "connect", [value.id]));
+      value.on("disconnect", (reason) => note("*", "disconnect", [reason]));
+      value.on("connect_error", (error) => note("*", "connect_error", [String(error && error.message)]));
+      // Beneath the socket, each engine the manager opens: the transport it
+      // opened on, a move to another, and its close.
+      value.io.on("open", () => {
+        const engine = value.io.engine;
+        note("*", "engine open", [engine.transport && engine.transport.name]);
+        engine.on("upgrade", (transport) => note("*", "engine upgrade", [transport.name]));
+        engine.on("upgradeError", (error) => note("*", "engine upgrade error", [String(error)]));
+        engine.on("close", (reason) => note("*", "engine close", [reason]));
+      });
+      const emit = value.emit;
+      value.emit = function (event, ...args) {
+        const ack = args[args.length - 1];
+        if (typeof ack === "function") {
+          args[args.length - 1] = (...answer) => {
+            note("ack", event, answer);
+            return ack(...answer);
+          };
+        }
+        return emit.call(this, event, ...args);
+      };
     },
   });
 })();
+"""
+
+# The timeline from mark `since` on, one line per entry, for a failure message.
+_DESCRIBE_TIMELINE = """
+(since) => {
+  const start = since === 0 ? 0 : window.__socketReceivedAt[since - 1] + 1;
+  const entries = window.__socketTimeline.slice(start);
+  const origin = entries.length ? entries[0][0] : 0;
+  const shown = (args) => {
+    let text;
+    try {
+      text = JSON.stringify(args, (key, value) =>
+        value instanceof ArrayBuffer || ArrayBuffer.isView(value) ? `<${value.byteLength} bytes>` : value);
+    } catch {
+      text = "<unserializable>";
+    }
+    return text && text.length > 160 ? `${text.slice(0, 160)}...` : text ?? "";
+  };
+  return entries.map(([at, direction, event, args]) =>
+    `+${Math.round(at - origin)} ms ${direction} ${event} ${shown(args)}`);
+}
 """
 
 
@@ -117,9 +173,13 @@ class SocketEventLog:
                 timeout=timeout_s * 1000,
             )
         except PlaywrightTimeoutError as timeout:
-            # A bare timeout names neither the event nor the mark.
+            # A bare timeout names neither the event nor the mark, nor what
+            # the page sent that should have been answered.
+            timeline = await self._page.evaluate(_DESCRIBE_TIMELINE, since)
             raise AssertionError(
-                f"none of {events} arrived after event {since} within {timeout_s:g} s"
+                f"none of {events} arrived after event {since} within {timeout_s:g} s;"
+                " since then (> sent, < received, ack, * connection):\n  "
+                + ("\n  ".join(timeline) or "nothing")
             ) from timeout
 
 
