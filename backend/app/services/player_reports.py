@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
@@ -192,19 +192,49 @@ async def moderation_erased_turns(
 
     A report's evidence copy of such a drawing stays, but for administrators
     alone: moderators are told it was erased, and the reported player's
-    notice no longer offers it."""
+    notice no longer offers it. Erased on the saved drawing, or - for a turn
+    that was never saved, so has none - on the report's copies of it
+    (#1439)."""
     wanted = {turn_id for turn_id in turn_ids if turn_id is not None}
     if not wanted:
         return set()
-    return set(
-        (
-            await session.scalars(
-                select(TurnDrawing.turn_id).where(
-                    TurnDrawing.turn_id.in_(wanted),
-                    TurnDrawing.moderation_erased_at.is_not(None),
-                )
+    saved = select(TurnDrawing.turn_id).where(
+        TurnDrawing.turn_id.in_(wanted),
+        TurnDrawing.moderation_erased_at.is_not(None),
+    )
+    copied = select(PlayerReportDrawingEvidence.turn_id_snapshot).where(
+        PlayerReportDrawingEvidence.turn_id_snapshot.in_(wanted),
+        PlayerReportDrawingEvidence.moderation_erased_at.is_not(None),
+    )
+    return set((await session.scalars(saved.union(copied))).all())
+
+
+async def erase_report_copies(
+    session: AsyncSession, turn_id: UUID, *, now: datetime
+) -> UUID | None:
+    """Erase a drawing whose turn was never saved, through the report's
+    copies of it (#1439, R-MOD-22), in the caller's transaction.
+
+    Every copy of the turn is stamped, so a second report of the same canvas
+    is held back too. Answers the drawer the copies were reported against -
+    the audit's target - or ``None`` when no copy is left to erase: none was
+    ever made, or an administrator already erased them.
+    """
+    erased = (
+        await session.execute(
+            update(PlayerReportDrawingEvidence)
+            .where(
+                PlayerReportDrawingEvidence.turn_id_snapshot == turn_id,
+                PlayerReportDrawingEvidence.moderation_erased_at.is_(None),
             )
-        ).all()
+            .values(moderation_erased_at=now)
+            .returning(PlayerReportDrawingEvidence.report_id)
+        )
+    ).scalars().all()
+    if not erased:
+        return None
+    return await session.scalar(
+        select(PlayerReport.reported_user_id).where(PlayerReport.id.in_(erased)).limit(1)
     )
 
 

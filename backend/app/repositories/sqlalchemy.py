@@ -32,6 +32,7 @@ from app.db.roles import SEEDED_TABLES
 from app.encode_pool import off_loop as _off_loop
 from app.db.models import (
     GalleryShelfReview,
+    PlayerReportDrawingEvidence,
     AuditEvent,
     Friendship,
     GameParticipant,
@@ -581,6 +582,92 @@ def _turn_drawing(
     )
 
 
+async def erase_turns_saved_since(
+    session_factory: async_sessionmaker[AsyncSession], turn_ids: Sequence[UUID]
+) -> list[UUID]:
+    """Erase the saved drawing of any of these turns a report's copy says an
+    administrator erased while the turn had none (#1439, R-MOD-22).
+
+    A game writes such a turn erased when it reads the stamp; this is for the
+    write that did not: one that read the copies before the erasure
+    committed, while the erasure found no row to stamp. Each side runs this
+    once it has committed, so whichever commits second finds the other's
+    work and nothing needs a lock the other holds. Answers the turns it
+    erased."""
+    if not turn_ids:
+        return []
+    erased: list[UUID] = []
+    async with session_factory() as session:
+        stamped = (
+            await session.scalars(
+                select(PlayerReportDrawingEvidence.turn_id_snapshot.distinct()).where(
+                    PlayerReportDrawingEvidence.turn_id_snapshot.in_(list(turn_ids)),
+                    PlayerReportDrawingEvidence.moderation_erased_at.is_not(None),
+                )
+            )
+        ).all()
+        pending = (
+            await session.scalars(
+                select(TurnDrawing.turn_id).where(
+                    TurnDrawing.turn_id.in_(stamped),
+                    TurnDrawing.moderation_erased_at.is_(None),
+                )
+            )
+        ).all() if stamped else []
+    for turn_id in sorted(pending):
+        async with session_factory() as session:
+            async with session.begin():
+                if await erase_drawing_for_moderation(
+                    session, turn_id, erased_by_user_id=None, now=datetime.now(timezone.utc)
+                ) is not None:
+                    erased.append(turn_id)
+    return erased
+
+
+async def settle_erased_turns(
+    session_factory: async_sessionmaker[AsyncSession], game_id: str
+) -> list[UUID]:
+    """The turns of a game just written whose drawing an administrator
+    erased (#1439): written erased because a report's copy said so, or erased
+    now by `erase_turns_saved_since` for a write that missed the stamp. The
+    room that played it still shows them in its recap until told."""
+    record_id = _optional_entity_id(game_id)
+    if record_id is None:
+        return []
+    async with session_factory() as session:
+        turn_ids = (
+            await session.scalars(select(TurnRecord.id).where(TurnRecord.game_id == record_id))
+        ).all()
+    await erase_turns_saved_since(session_factory, turn_ids)
+    async with session_factory() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(TurnDrawing.turn_id).where(
+                        TurnDrawing.game_id == record_id,
+                        TurnDrawing.moderation_erased_at.is_not(None),
+                    )
+                )
+            ).all()
+        )
+
+
+def _moderation_erased_turn_drawing(
+    turn_id: UUID, game_id: UUID, erased_at: datetime
+) -> TurnDrawing:
+    """The row a drawing an administrator erased before its game was written
+    is written as (#1439): what `erase_drawing_for_moderation` leaves of a
+    saved one, so history reads the same whichever came first."""
+    now = datetime.now(timezone.utc)
+    return TurnDrawing(
+        turn_id=turn_id,
+        game_id=game_id,
+        status=TurnDrawingStatus.DELETED.value,
+        deleted_at=now,
+        moderation_erased_at=erased_at,
+    )
+
+
 def _erased_turn_drawing(turn_id: UUID, game_id: UUID) -> TurnDrawing:
     """The row an erased account's drawing is written as: that it was, not what.
 
@@ -1115,7 +1202,7 @@ async def erase_drawing_for_moderation(
     session: AsyncSession,
     turn_id: UUID,
     *,
-    erased_by_user_id: UUID,
+    erased_by_user_id: UUID | None,
     now: datetime,
 ) -> tuple[UUID, UUID | None] | None:
     """Erase one drawing for illegal content, in the caller's transaction
@@ -1143,7 +1230,7 @@ async def erase_drawing_for_moderation(
     turn = await session.get(TurnRecord, turn_id)
     if turn is None:
         return None
-    accounts = {erased_by_user_id}
+    accounts = {erased_by_user_id} - {None}
     if turn.drawer_user_id is not None:
         accounts.add(turn.drawer_user_id)
     await erased_identity_ids(session, accounts)
@@ -2637,6 +2724,25 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # a row written now and filled in later could never be
                 # completed by any retry.
                 drawing_rows: dict[UUID, TurnDrawing] = {}
+                # Turns an administrator erased through a report's copy while
+                # the game was still being played (#1439): written erased.
+                copies_erased = dict(
+                    (
+                        await session.execute(
+                            select(
+                                PlayerReportDrawingEvidence.turn_id_snapshot,
+                                func.min(PlayerReportDrawingEvidence.moderation_erased_at),
+                            )
+                            .where(
+                                PlayerReportDrawingEvidence.turn_id_snapshot.in_(
+                                    list(created_turn_ids)
+                                ),
+                                PlayerReportDrawingEvidence.moderation_erased_at.is_not(None),
+                            )
+                            .group_by(PlayerReportDrawingEvidence.turn_id_snapshot)
+                        )
+                    ).all()
+                ) if drawings else {}
                 for drawing, prepared_drawing in zip(drawings or [], prepared, strict=True):
                     drawing_turn_id = _optional_entity_id(drawing.turn_id)
                     if (
@@ -2647,6 +2753,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             f"Drawing references unknown turn_id '{drawing.turn_id}'"
                         )
                     drawer_id = turn_inputs_by_id[drawing_turn_id].drawer_user_id
+                    if drawing_turn_id in copies_erased:
+                        session.add(
+                            _moderation_erased_turn_drawing(
+                                drawing_turn_id, record_id, copies_erased[drawing_turn_id]
+                            )
+                        )
+                        continue
                     if drawer_id and _entity_id(drawer_id) in erased_user_ids:
                         session.add(
                             _erased_turn_drawing(drawing_turn_id, record_id)
@@ -2713,7 +2826,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     reaction_drawer_ids.append(
                         _entity_id(drawer_user_id) if drawer_user_id else None
                     )
-                    if drawer_user_id and _entity_id(drawer_user_id) in erased_user_ids:
+                    if (
+                        drawer_user_id and _entity_id(drawer_user_id) in erased_user_ids
+                    ) or reaction_turn_id in copies_erased:
                         # The drawing it was about is erased above; a
                         # reaction to nothing is not kept (R-PRIV-05 keeps
                         # the ones this seat *gave*, on other drawings).

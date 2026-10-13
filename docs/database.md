@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c1d2e3f4a5b8_words_hidden_with_their_list.py` (#1425). Both this line and the table
+`d2e3f4a5b6c9_erase_a_report_drawing_never_saved.py` (#1439). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1202,7 +1202,9 @@ under the protected report retention policy.
 ### `player_report_drawing_evidence`
 `report_id` **PK** (FK → `player_reports`, CASCADE) · `turn_id_snapshot` ·
 `round_number` · `prompt_snapshot` · `action_count` · `format_magic` ·
-`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `captured_at`.
+`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `captured_at` ·
+`moderation_erased_at` (nullable), with `ix_report_drawing_evidence_erased_turn`
+`(turn_id_snapshot) WHERE moderation_erased_at IS NOT NULL`.
 
 The canvas as it stood when a report about the player drawing on it was filed
 (R-MOD-14). One per report, and only when the reporter asked for it over
@@ -1223,6 +1225,16 @@ answers them 404, and a warned or suspended player's notice no longer lists it. 
 carries no foreign key for the reason `room_messages.turn_id` does not: the report
 is filed while the game is still being played, and a game abandoned before it ends
 never writes a `turn_records` row.
+
+**`moderation_erased_at`** is the erasure of a turn that has no saved drawing to stamp
+(#1439): the one an abandoned game was in the middle of, a game too small to record, a
+failed write, or a game still being played. Every copy of the turn is stamped, and the
+readers above treat a stamped copy as they treat a copy of an erased `turn_drawings`
+row. A game still being played reads the stamps when it is written, through the partial
+index, and writes that turn's drawing as erased - `deleted`, stamped, no reaction or
+share of it. A write that read no stamp while the erasure found no row is caught after
+both commit: each side runs `erase_turns_saved_since` once committed, so whichever
+commits second finds the other's work, and neither takes a lock the other holds.
 
 The bytes are stored the way `turn_drawings` stores them, under the same
 [`canvas_storage`](../backend/app/canvas_storage.py) rules: validated on ingest,

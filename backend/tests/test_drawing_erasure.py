@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -21,6 +21,7 @@ from app.auth.account_data import anonymize_account
 from app.auth.middleware import SessionAuthMiddleware
 from app.db.models import (
     AuditEvent,
+    PlayerReportDrawingEvidence,
     UserStatsDaily,
     generate_uuid,
     InboxEntry,
@@ -35,6 +36,8 @@ from app.repositories import sqlalchemy as repository
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     erase_drawing_for_moderation,
+    erase_turns_saved_since,
+    settle_erased_turns,
     SqlAlchemyUserRepository,
 )
 from app.services.inbox import add_entry
@@ -392,3 +395,106 @@ async def test_a_reaction_in_flight_when_the_drawing_is_erased_is_refused(env, m
     assert await _count(factory, TurnDrawingReaction, turn) == 0
     async with factory() as session:
         assert (await session.get(TurnDrawing, turn)).reaction_count == 0
+
+
+
+async def _copied_from_a_turn_never_saved(factory, report_id: str, turn: UUID) -> None:
+    """The report's copy, as if it had been taken from a turn with no saved
+    drawing: an abandoned game's turn in progress, or a game still playing."""
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PlayerReportDrawingEvidence)
+                .where(PlayerReportDrawingEvidence.report_id == UUID(report_id))
+                .values(turn_id_snapshot=turn)
+            )
+
+
+async def test_a_drawing_whose_turn_was_never_saved_is_erased_through_its_report(env):
+    """#1439: Erase pointed at the saved drawing, so a turn with none - the
+    one an abandoned game was in the middle of, which is where a reported
+    illegal drawing usually ends up - had nothing to erase, and its report's
+    copy stayed in front of every moderator and in the drawer's notice."""
+    http, users, history, factory = env
+    _, ann, _, report_id = await _reported_drawing(http, users, history, factory)
+    never_saved = uuid4()
+    await _copied_from_a_turn_never_saved(factory, report_id, never_saved)
+    admin = await _staff(users, factory, "Admin", UserRole.ADMIN)
+    await _as_moderator(http, factory, admin.id)
+    warned = await http.post(
+        "/api/moderation/warnings",
+        json={"userId": ann.id, "reason": "Drawing", "category": "offensive_drawing", "reportId": report_id},
+    )
+    assert warned.status_code == 201, warned.text
+    notice = f"/api/warnings/{warned.json()['id']}/drawings/{report_id}"
+    moderator = await _staff(users, factory, "Mod", UserRole.MODERATOR)
+    await _as_moderator(http, factory, moderator.id)
+    assert (await http.get(f"/api/moderation/reports/{report_id}/drawing")).status_code == 200
+
+    await _as_moderator(http, factory, admin.id)
+    path = f"/api/moderation/drawings/{never_saved}/erase"
+    erased = await http.post(path, json={"note": "Illegal; the game was abandoned mid-turn"})
+    assert erased.status_code == 200, erased.text
+    assert (await http.post(path, json={"note": "again"})).status_code == 404, "once"
+    async with factory() as session:
+        audit = await session.scalar(select(AuditEvent).where(AuditEvent.event_type == "drawing.erased"))
+        assert audit.target_user_id == UUID(ann.id) and audit.target_id == str(never_saved)
+
+    # Kept, for administrators alone - as a saved drawing's copy is.
+    assert (await http.get(f"/api/moderation/reports/{report_id}/drawing")).status_code == 200
+    await _as_moderator(http, factory, moderator.id)
+    assert (await http.get(f"/api/moderation/reports/{report_id}/drawing")).status_code == 404
+    [incident] = (await http.get("/api/moderation/reports")).json()["incidents"]
+    assert incident["reports"][0]["drawing"]["erased"] is True
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.get(notice)).status_code == 404
+
+
+async def test_a_game_written_after_its_turn_was_erased_writes_it_erased(env, monkeypatch):
+    """Erased while the game was still being played: the turn's drawing is
+    written as an erased one, with no reaction or share of it, and the room's
+    recap is told when the game is recorded."""
+    http, users, history, factory = env
+    _, ann, bob, report_id = await _reported_drawing(http, users, history, factory)
+    playing = uuid4()
+    await _copied_from_a_turn_never_saved(factory, report_id, playing)
+    admin = await _staff(users, factory, "Admin", UserRole.ADMIN)
+    await _as_moderator(http, factory, admin.id)
+    assert (await http.post(f"/api/moderation/drawings/{playing}/erase", json={"note": "x"})).status_code == 200
+
+    # The game ends, and its turn is the one erased.
+    import tests.test_drawing_reactions as reactions_helpers
+
+    ids = iter([generate_uuid(), generate_uuid(), playing])
+    monkeypatch.setattr(reactions_helpers, "generate_uuid", lambda: next(ids, None) or generate_uuid())
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", reactions="default", finished_at=NOW)
+    assert game.turn_id == str(playing)
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, playing)
+        assert drawing.status == TurnDrawingStatus.DELETED.value and drawing.payload is None
+        assert drawing.moderation_erased_at is not None
+    for model in (TurnDrawingReaction, TurnDrawingShare):
+        assert await _count(factory, model, playing) == 0, model.__name__
+    assert await settle_erased_turns(factory, game.game_id) == [playing]
+
+
+async def test_a_write_that_missed_the_stamp_is_erased_once_both_have_committed(env):
+    """The race: the game read no stamp, the erasure found no saved row, and
+    each committed. Whichever commits second runs `erase_turns_saved_since`
+    and finds the other's work."""
+    http, users, history, factory = env
+    game, ann, bob, report_id = await _reported_drawing(http, users, history, factory)
+    turn = UUID(game.turn_id)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PlayerReportDrawingEvidence)
+                .where(PlayerReportDrawingEvidence.report_id == UUID(report_id))
+                .values(moderation_erased_at=NOW)
+            )
+    assert await erase_turns_saved_since(factory, [turn]) == [turn]
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, turn)
+        assert drawing.moderation_erased_at is not None and drawing.status == TurnDrawingStatus.DELETED.value
+    assert await _count(factory, TurnDrawingReaction, turn) == 0
+    assert await erase_turns_saved_since(factory, [turn]) == [], "once"

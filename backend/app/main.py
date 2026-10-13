@@ -125,6 +125,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
     SqlAlchemyPromptListRepository,
+    settle_erased_turns,
 )
 from app.client_config import client_config
 from app.services.afk import start_afk_loop, stop_afk_loop
@@ -774,6 +775,11 @@ async def announce_recorded_game(game_id: str) -> None:
     gallery_shelf.invalidate()
     for user_id in await drawers_told_about_game(async_session_factory, game_id):
         await push_inbox_changed(user_id)
+    # A drawing an administrator erased while the game was still being played
+    # was written erased; the recap the room is showing takes it out too
+    # (#1439).
+    for turn_id in await settle_erased_turns(async_session_factory, game_id):
+        await erase_from_live_recaps(str(turn_id))
 
 
 finished_game_worker.bind_recorded(announce_recorded_game)
