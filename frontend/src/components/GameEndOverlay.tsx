@@ -10,6 +10,7 @@ import { SectionLabel } from "./ui/Card";
 import { BrushIcon, TimerRing, TrophyIcon } from "./icons";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import { ui } from "../content/ui/index.ts";
+import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 import { fill } from "../content/ui/slots.tsx";
 
 interface GameEndOverlayProps {
@@ -89,7 +90,17 @@ export function GameEndOverlay({
   const rest = scores.slice(3);
   const countdownVisible = !authMode && !hold;
 
-  return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite" data-testid="game-end-overlay">
+  // Said once, in one sentence (#1423). The card was a live <main>: about
+  // forty words, then the countdown's digit every second for ten seconds.
+  const announcement = scoringMode !== "none" && myScore != null
+    ? `${ui.gameEndOverlay.gameOver}. ${ui.gameEndOverlay.youFinished({ points: myScore }).replace(
+      "{place}",
+      ui.format.ordinal({ value: Math.max(1, placement) }),
+    )}`
+    : `${ui.gameEndOverlay.gameOver}.`;
+  useRoomAnnouncement(announcement);
+
+  return <main className="game-end-overlay" aria-labelledby="game-end-title" data-testid="game-end-overlay">
     <section className="game-end-podium">
       <ConfettiDots />
       <SectionLabel>{ui.gameEndOverlay.gameOver}</SectionLabel>
@@ -238,6 +249,8 @@ export function GameEndOverlay({
           onClick={onContinue}
         >
           {countdownVisible && (
+            // The button's name carries the seconds; the ring is the picture.
+            <span aria-hidden="true" style={{ display: "contents" }}>
             <TimerRing
               seconds={remaining}
               fraction={remaining / DISPLAY_SECONDS}
@@ -245,6 +258,7 @@ export function GameEndOverlay({
               size={28}
               track="rgba(255, 255, 255, 0.35)"
             />
+            </span>
           )}
           {ui.gameEndOverlay.continueLabel}
         </button>

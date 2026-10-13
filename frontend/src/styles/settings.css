@@ -105,7 +105,7 @@
 }
 
 .settings-tab-button.active .settings-tab-icon {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .settings-tab-content {
@@ -627,7 +627,7 @@
 }
 
 .settings-volume-value {
-  color: var(--primary);
+  color: var(--primary-text);
   flex: 0 0 auto;
   font-size: 13px;
   font-weight: 700;

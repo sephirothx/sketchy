@@ -1661,6 +1661,8 @@ export const EN = {
       counted(p.count, { one: "letter", other: "letters" }),
     yourTurn: "Your turn",
     pickSomethingDraw: "Pick something to draw",
+    yourTurnPickAPrompt: (p: { count: number }) =>
+      plural(p.count, { one: "Your turn: pick your prompt.", other: `Your turn: pick one of ${p.count} prompts.` }),
     autoPicksWhenTimeRunsOut: "Auto-picks when time runs out.",
     hintSpendLimitReached: "Hint spend limit reached",
     hintSpendComesOutOfTurnPoints: "Taken out of this turn's points if you guess the prompt.",
@@ -2332,6 +2334,8 @@ export const EN = {
     nextTurn: "Next turn",
     turnResults: "Turn results",
     turnComplete: "Turn complete",
+    youScoredThisTurn: (p: { points: number }) =>
+      `You scored ${counted(p.points, { one: "point", other: "points" })}.`,
   },
 
   twoFactorDialog: {
@@ -2602,9 +2606,6 @@ export const EN = {
   timer: {
     n10SecondsRemaining: "10 seconds remaining",
     timeIsUp: "Time is up",
-  },
-  chatAnnouncements: {
-    nicknameGuessedThePrompt: (p: { nickname: string }) => `${p.nickname} guessed the prompt.`,
   },
   canvasSnapshot: {
     drawingOfDownloadPrompt: (p: { downloadPrompt: string }) => `Drawing of ${p.downloadPrompt}`,

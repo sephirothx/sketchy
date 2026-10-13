@@ -48,7 +48,10 @@
   --menu-danger: #fca5a5;
   --menu-warm: #fdba74;
   --muted: #6f6759;
-  --faint: #a29883;
+  /* Tertiary text - every system chat line, section label, age and count -
+     so it holds 4.5:1 on the page and a card like any other text (#1423): it
+     was #a29883, 2.65:1 on the page. Still a step below --muted, by less. */
+  --faint: #776f60;
 
   /* lines */
   --line: #e7dfd2;
@@ -66,6 +69,10 @@
   --primary: #5157d8;
   --primary-soft: #eeeffb;
   --primary-ink: #3b41b5;
+  /* Indigo as text - a link, the hint price, "Drawing" - on the page or a
+     card. The fill in the light theme; the dark theme's fill is too dark to
+     read as text on a dark card (3.2:1) and keeps its own value (#1423). */
+  --primary-text: #5157d8;
   --primary-edge: #3b41b5;
   --primary-edge-soft: #c9ccf4;
   /* The label on an indigo fill. White in both themes: the dark theme's
@@ -230,7 +237,7 @@
   --menu: #1e293b;
   --menu-ink: #f8fafc;
   --muted: #94a3b8;
-  --faint: #64748b;
+  --faint: #8292a7;
 
   --line: #334155;
   --line-strong: #475569;
@@ -242,6 +249,7 @@
   --primary: #6369e2;
   --primary-soft: rgba(102, 108, 228, 0.17);
   --primary-ink: #c7cbfa;
+  --primary-text: #9498ee;
   --primary-edge: #3b41b5;
   --primary-edge-soft: rgba(102, 108, 228, 0.5);
   --focus-ring: color-mix(in srgb, var(--primary) 70%, #ffffff);

@@ -98,7 +98,7 @@
 }
 
 .tool-button.selected .shortcut-badge {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Single Brush Size Dropdown & Slider Popover */
@@ -189,7 +189,7 @@
 .preview-readout {
   font-size: 11px;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--primary-text);
   font-variant-numeric: tabular-nums;
 }
 

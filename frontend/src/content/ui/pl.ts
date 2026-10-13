@@ -1652,6 +1652,8 @@ export const PL: Catalogue = {
       counted(p.count, { one: "litera", few: "litery", many: "liter", other: "litery" }),
     yourTurn: "Twoja tura",
     pickSomethingDraw: "Wybierz, co narysujesz",
+    yourTurnPickAPrompt: (p: { count: number }) =>
+      plural(p.count, { one: "Twoja tura: wybierz hasło.", other: `Twoja tura: wybierz jedno z haseł (${p.count}).` }),
     autoPicksWhenTimeRunsOut: "Gdy skończy się czas, wybór nastąpi automatycznie.",
     hintSpendLimitReached: "Osiągnięto limit wydatków na podpowiedzi",
     hintSpendComesOutOfTurnPoints: "Zostanie odjęte od punktów za tę turę, jeśli odgadniesz hasło.",
@@ -2323,6 +2325,8 @@ export const PL: Catalogue = {
     nextTurn: "Następna tura",
     turnResults: "Wyniki tury",
     turnComplete: "Koniec tury",
+    youScoredThisTurn: (p: { points: number }) =>
+      `Zdobywasz ${counted(p.points, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}.`,
   },
 
   twoFactorDialog: {
@@ -2595,9 +2599,6 @@ export const PL: Catalogue = {
   timer: {
     n10SecondsRemaining: "Zostało 10 sekund",
     timeIsUp: "Koniec czasu",
-  },
-  chatAnnouncements: {
-    nicknameGuessedThePrompt: (p: { nickname: string }) => `${p.nickname} zna już hasło.`,
   },
   canvasSnapshot: {
     drawingOfDownloadPrompt: (p: { downloadPrompt: string }) => `Rysunek hasła „${p.downloadPrompt}”`,

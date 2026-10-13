@@ -640,7 +640,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 800;
   cursor: pointer;

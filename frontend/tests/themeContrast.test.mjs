@@ -143,6 +143,14 @@ const TEXT_PAIRS = [
   ["--ink", "--field", "typed text in a field"],
   ["--muted", "--paper", "secondary text on the page"],
   ["--muted", "--card", "secondary text on a card"],
+  ["--faint", "--paper", "tertiary text on the page - system chat lines, section labels, ages"],
+  ["--faint", "--card", "tertiary text on a card"],
+  ["--primary-text", "--paper", "indigo text - links, the hint price, the drawing status - on the page"],
+  ["--primary-text", "--card", "indigo text on a card"],
+  ["--primary-text", "--primary-soft", "\"Drawing\" and a shortcut badge on an indigo-tinted row or tool"],
+  ["--muted", "--primary-soft", "a rank or \"you\" on the reader's or the drawer's tinted row"],
+  ["--success-ink", "--paper", "green text - a correct letter, a rank gained - on the page"],
+  ["--success-ink", "--card", "green text on a card"],
   ["--on-primary", "--primary", "label on an indigo button, badge or toast action"],
   ["--on-success", "--success-button", "label on a go button, and the approved restart banner"],
   ["--on-danger", "--danger-button", "label on a destructive button, and a kick"],
@@ -180,13 +188,6 @@ function check(pairs, floor) {
 
 // "file selector theme" -> why that rule is short of 4.5:1 today. Shrinking
 // this is the goal; a new entry needs a reason a reviewer would accept.
-const FAINT_ICON =
-  "--faint colours the magnifier beside the field (non-text), and the field's " +
-  "own text sets --ink; the magnifier is under 3:1 in the light theme";
-const FAINT_TEXT =
-  "a small count written in --faint (2.7:1 light, 3.6:1 dark); needs --muted, not yet changed";
-const PRIMARY_TEXT =
-  "--primary as text on a dark card is 3.2:1; needs a lighter text indigo, not yet changed";
 // Deliberate product decision (2026-09-25): the marker-orange buttons - Quick
 // play, Start game, a public room's compact Join - keep white on the brand
 // --warm (3.08:1 light, 2.72:1 dark). The orange is the brand's colour for
@@ -195,15 +196,6 @@ const BRAND_WARM = "product decision 2026-09-25: brand orange kept, white on --w
 const KNOWN_SHORT = {
   "primitives.css .btn-warm light": BRAND_WARM,
   "primitives.css .btn-warm dark": BRAND_WARM,
-  "community-lists.css .community-prompts-search light": FAINT_ICON,
-  "community-lists.css .community-prompts-search dark": FAINT_ICON,
-  "lobby-page.css .lobby-room-search light": FAINT_ICON,
-  "lobby-page.css .lobby-room-search dark": FAINT_ICON,
-  "not-found.css .not-found-tools span light": "decorative tool glyphs on the not-found page",
-  "not-found.css .not-found-tools span dark": "decorative tool glyphs on the not-found page",
-  "game-room.css .room-spectator-indicator light": FAINT_TEXT,
-  "game-room.css .room-spectator-indicator dark": FAINT_TEXT,
-  "game-room.css .wheel-letter-btn dark": PRIMARY_TEXT,
 };
 
 const STYLES = new URL("../src/styles/", import.meta.url);
@@ -292,6 +284,48 @@ test("a rule that paints a background and writes on it reaches 4.5:1, in both th
   }
   for (const key of Object.keys(KNOWN_SHORT)) {
     assert.ok(seen.has(key), `KNOWN_SHORT names ${key}, which is no longer a painted rule`);
+  }
+});
+
+// The tokens a stylesheet writes text in on the page or a card without
+// painting a background of its own (#1423). The scan above only measured rules
+// that set both, so 85 rules in --faint (2.65:1) and 18 in --primary on a dark
+// card (3.2:1) went unmeasured: every system chat line and section label among
+// them. --primary is in the list to catch it written as text again: in the
+// dark theme it is a fill, and text takes --primary-text.
+const PAGE_TEXT = new Set([
+  "--ink", "--muted", "--faint", "--primary", "--primary-text", "--primary-ink",
+  "--success", "--success-ink", "--danger", "--warning", "--warm", "--warm-ink",
+]);
+// "file selector" -> why that colour-only rule is not text on the page or a
+// card, so the scan does not measure it there.
+const NOT_PAGE_TEXT = {
+  "create-room-page.css .create-room-duration > svg":
+    "the brand-orange clock beside the drawing time: a graphic on the create-room card, " +
+    "3.08:1 there, over WCAG's 3:1 for non-text; the time beside it is --ink",
+};
+
+test("a text colour written straight on the page or a card reaches 4.5:1 there, in both themes", () => {
+  const rules = paintedRules().filter((rule) => !rule.bg && PAGE_TEXT.has(rule.fg));
+  // The scan is only worth something if it finds the rules it is about.
+  assert.ok(rules.some((rule) => rule.name === "chat.css .chat-message.system"));
+  const seen = new Set();
+  const short = [];
+  for (const rule of rules) {
+    if (rule.name in NOT_PAGE_TEXT) {
+      seen.add(rule.name);
+      continue;
+    }
+    for (const theme of Object.keys(THEMES)) {
+      for (const ground of ["--paper", "--card"]) {
+        const measured = contrast(theme, rule.fg, ground, ground);
+        if (measured < TEXT) short.push(`${rule.name} ${theme}: ${rule.fg} on ${ground} is ${measured.toFixed(2)}:1`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], `text under ${TEXT}:1:\n${short.join("\n")}`);
+  for (const name of Object.keys(NOT_PAGE_TEXT)) {
+    assert.ok(seen.has(name), `NOT_PAGE_TEXT names ${name}, which no longer writes a page-text token`);
   }
 });
 

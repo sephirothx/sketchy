@@ -47,6 +47,12 @@
   border-color: var(--primary-edge-soft);
 }
 
+/* --faint on the drawer's indigo row is under 4.5:1; the rank steps up to
+   --muted there (#1423). */
+.player-row.is-drawing .player-role {
+  color: var(--muted);
+}
+
 .player-row.is-moderatable {
   cursor: pointer;
 }
@@ -130,7 +136,7 @@
 }
 
 .player-status-drawing {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .player-status-afk {

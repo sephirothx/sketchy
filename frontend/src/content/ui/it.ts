@@ -1080,7 +1080,7 @@ export const IT: Catalogue = {
     nameListAnd: " e ",
     continueLabel: "Continua",
     youFinished: (p: { points: number }) =>
-      `Sei arrivato {place} con ${counted(p.points, { one: "punto", other: "punti" })}.`,
+      `Piazzamento finale: {place}, con ${counted(p.points, { one: "punto", other: "punti" })}.`,
     continueToWaitingRoom: "Vai alla sala d’attesa",
     continueWithCountdown: (p: { seconds: number }) =>
       `Vai alla sala d’attesa, ${counted(p.seconds, { one: "secondo", other: "secondi" })} rimasti`,
@@ -1639,6 +1639,8 @@ export const IT: Catalogue = {
       counted(p.count, { one: "lettera", other: "lettere" }),
     yourTurn: "Tocca a te",
     pickSomethingDraw: "Scegli qualcosa da disegnare",
+    yourTurnPickAPrompt: (p: { count: number }) =>
+      plural(p.count, { one: "Tocca a te: scegli la tua parola.", other: `Tocca a te: scegli una parola tra ${p.count}.` }),
     autoPicksWhenTimeRunsOut: "Sceglie da sola allo scadere del tempo.",
     hintSpendLimitReached: "Limite di spesa in indizi raggiunto",
     hintSpendComesOutOfTurnPoints: "Viene tolto dai punti di questo turno se indovini la parola.",
@@ -2311,6 +2313,8 @@ export const IT: Catalogue = {
     nextTurn: "Turno successivo",
     turnResults: "Risultati del turno",
     turnComplete: "Turno concluso",
+    youScoredThisTurn: (p: { points: number }) =>
+      `Hai fatto ${counted(p.points, { one: "punto", other: "punti" })}.`,
   },
 
   twoFactorDialog: {
@@ -2579,10 +2583,6 @@ export const IT: Catalogue = {
   timer: {
     n10SecondsRemaining: "Mancano 10 secondi",
     timeIsUp: "Tempo scaduto",
-  },
-  chatAnnouncements: {
-    nicknameGuessedThePrompt: (p: { nickname: string }) =>
-      `${p.nickname} ha indovinato la parola.`,
   },
   canvasSnapshot: {
     drawingOfDownloadPrompt: (p: { downloadPrompt: string }) =>

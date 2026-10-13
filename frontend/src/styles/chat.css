@@ -229,7 +229,7 @@
 }
 
 .guess-hint-correct {
-  color: var(--success);
+  color: var(--success-ink);
 }
 
 .guess-hint-wrong {

@@ -271,7 +271,7 @@
 }
 
 .toggle-chip[aria-pressed="true"] .toggle-chip-status {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .toggle-chip-name {
@@ -930,7 +930,7 @@ input:focus-visible ~ .switch-track {
 /* The tick keeps its slot whether or not it is drawn, so the labels stay in
    one column and the list does not shift as the choice moves. */
 .picker-check {
-  color: var(--primary);
+  color: var(--primary-text);
   display: inline-flex;
   flex: none;
   justify-content: center;

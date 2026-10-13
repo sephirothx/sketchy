@@ -1640,6 +1640,8 @@ export const NL: Catalogue = {
       counted(p.count, { one: "letter", other: "letters" }),
     yourTurn: "Jouw beurt",
     pickSomethingDraw: "Kies iets om te tekenen",
+    yourTurnPickAPrompt: (p: { count: number }) =>
+      plural(p.count, { one: "Jouw beurt: kies je woord.", other: `Jouw beurt: kies een van de ${p.count} woorden.` }),
     autoPicksWhenTimeRunsOut: "Kiest vanzelf als de tijd om is.",
     hintSpendLimitReached: "Hintlimiet bereikt",
     hintSpendComesOutOfTurnPoints: "Gaat af van de punten van deze beurt als je het woord raadt.",
@@ -2309,6 +2311,8 @@ export const NL: Catalogue = {
     nextTurn: "Volgende beurt",
     turnResults: "Resultaten van de beurt",
     turnComplete: "Beurt voorbij",
+    youScoredThisTurn: (p: { points: number }) =>
+      `Je scoort ${counted(p.points, { one: "punt", other: "punten" })}.`,
   },
 
   twoFactorDialog: {
@@ -2577,10 +2581,6 @@ export const NL: Catalogue = {
   timer: {
     n10SecondsRemaining: "Nog 10 seconden",
     timeIsUp: "De tijd is om",
-  },
-  chatAnnouncements: {
-    nicknameGuessedThePrompt: (p: { nickname: string }) =>
-      `${p.nickname} heeft het woord geraden.`,
   },
   canvasSnapshot: {
     drawingOfDownloadPrompt: (p: { downloadPrompt: string }) =>

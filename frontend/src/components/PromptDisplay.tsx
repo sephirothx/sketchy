@@ -10,6 +10,7 @@ import type { AckResponse, HintMode } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { applyPrivateResult } from "../lib/privateResults.ts";
 import { ui } from "../content/ui/index.ts";
+import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 
 interface PromptDisplayProps {
   isDrawer: boolean;
@@ -125,6 +126,13 @@ export function PromptDisplay({
 }: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  // What a screen reader hears when the turn comes (#1423): the choice card
+  // is not live, and nothing said it was this seat's turn.
+  useRoomAnnouncement(
+    isDrawer && promptChoices.length > 0 && !myPrompt
+      ? ui.promptDisplay.yourTurnPickAPrompt({ count: promptChoices.length })
+      : null,
+  );
   // Sideways, the wheel's 26 keys above the canvas left a guesser 18% of the
   // drawing (170 x 126 at 844 x 390): there they wait behind "Buy a letter",
   // over the canvas, and go once a letter is bought (#1267).
@@ -184,7 +192,7 @@ export function PromptDisplay({
             {/* Chosen by position, not by text (#1181): the text is how the
                 drawer's language spells the offer. */}
             {promptChoices.map((prompt, index) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
+              <button key={prompt} ref={index === 0 ? focusFirstChoice : undefined} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
                 {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
@@ -305,4 +313,17 @@ export function PromptDisplay({
       )}
     </div>
   );
+}
+
+/** The first prompt takes the focus when the turn comes, on a desktop whose
+    focus is nowhere in particular (#1423): a keyboard player otherwise
+    tabbed from the top of the page to reach a choice with a timer running.
+    Not where the focus is somewhere - typing in the chat - and not on a touch
+    screen, where a focused button raises nothing and steals nothing. */
+function focusFirstChoice(button: HTMLButtonElement | null) {
+  if (!button) return;
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
+  if (window.matchMedia?.("(pointer: coarse)").matches) return;
+  button.focus();
 }

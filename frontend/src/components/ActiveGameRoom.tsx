@@ -17,6 +17,7 @@ import { ConnectedShareControl } from "../components/ConnectedShareControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RestartVoteAnnouncer } from "../components/RestartVoteNotice";
+import { RoomAnnouncer } from "../components/GameAnnouncer";
 import { canCastRestartVote, myRestartVote } from "../lib/restartVote";
 import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
@@ -579,6 +580,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         </div>
       </header>
       <RestartVoteAnnouncer vote={roomView === "playing" ? restartVote : null} />
+      <RoomAnnouncer />
 
       {isHost && colorblindSafeSuggestion && (
         <ColorblindSafeSuggestionBanner
