@@ -50,6 +50,8 @@ import {
   Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
+import { votesAwaitingMe, type OpenPlayerVote } from "../lib/playerVotes";
+import { useOpenPlayerVotes } from "../hooks/useOpenPlayerVotes";
 import { useFriendInviteStore, type RoomExit } from "../store/friendInviteStore";
 import type { FriendInvite } from "../lib/friends";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -447,11 +449,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   // A vote this seat can still answer keeps the room bar up while the phone's
   // keyboard is: the bar is where the vote lives, and a guesser who typed
-  // through its twenty seconds never saw it (review of #1316).
-  const voteAwaitsMe = roomView === "playing"
-    && restartVote !== null
-    && canCastRestartVote(restartVote, me)
-    && myRestartVote(restartVote, me) === null;
+  // through its twenty seconds never saw it (review of #1316). A kick or AFK
+  // vote's chip lives there too (review of #1447).
+  const openVotes = useOpenPlayerVotes();
+  const voteAwaitsMe = roomView === "playing" && (
+    (restartVote !== null
+      && canCastRestartVote(restartVote, me)
+      && myRestartVote(restartVote, me) === null)
+    || votesAwaitingMe(openVotes).length > 0
+  );
   const room = (
     <div
       className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}${voteAwaitsMe ? " vote-awaits-me" : ""}`}
@@ -535,6 +541,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             voteBusy={restartBusy}
             voteQuiet={isGuessFocused || (phase === "drawing" && drawerId === playerId)}
             onVote={(vote) => void handleRestartVote(vote)}
+            onPlayerVote={castPlayerVote}
           />
           {/* Going AFK is a menu row; being away is worth seeing, because it
               skips your turns without asking. One click here comes back. */}
@@ -704,4 +711,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // Every sheet in the room reaches the room's history through this, and
   // only the room provides it: a sheet anywhere else leaves Back alone.
   return <RoomHistoryProvider value={roomHistory}>{room}</RoomHistoryProvider>;
+}
+
+/** A ballot in a kick or AFK vote, cast or withdrawn: the server counts it as
+    a toggle, as the players list's chip always has. */
+function castPlayerVote(vote: OpenPlayerVote) {
+  emitTransient("vote_player", { targetPlayerId: vote.targetId, action: vote.kind });
 }

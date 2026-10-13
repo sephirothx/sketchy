@@ -402,6 +402,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   joined_as_player: (p) => `${text(p.nickname)} dołącza jako gracz.`,
   kicked_by_vote: (p) => `Wyrzucono w głosowaniu: ${text(p.nickname)}.`,
   marked_afk_by_vote: (p) => `Oznaczono jako AFK w głosowaniu: ${text(p.nickname)}.`,
+  kick_vote_started: (p) => `Rozpoczęło się głosowanie nad wyrzuceniem: ${text(p.nickname)}.`,
+  afk_vote_started: (p) => `Rozpoczęło się głosowanie nad oznaczeniem jako AFK: ${text(p.nickname)}.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} rozpoczyna głosowanie za restartem gry.`,
@@ -1921,6 +1923,20 @@ export const PL: Catalogue = {
     friendRequest: (p: { count: number }) =>
       plural(p.count, { one: "Zaproszenie do znajomych", few: "Zaproszenia do znajomych", many: "Zaproszenia do znajomych", other: "Zaproszenia do znajomych" }),
     serverUpdateStarted: "Trwa aktualizacja serwera. Ta gra wkrótce się zakończy.",
+  },
+
+  playerVoteNotice: {
+    kickQuestion: (p: { nickname: string }) => `Wyrzucić z pokoju: ${p.nickname}?`,
+    afkQuestion: (p: { nickname: string }) => `Oznaczyć jako AFK: ${p.nickname}?`,
+    kickAboutYou: "Trwa głosowanie nad wyrzuceniem cię z pokoju.",
+    afkAboutYou: "Trwa głosowanie nad oznaczeniem cię jako AFK.",
+    tally: (p: { count: number; required: number }) => `Głosy: ${p.count} z ${p.required}`,
+    voteKick: "Głosuj za wyrzuceniem",
+    voteAfk: "Głosuj za AFK",
+    withdraw: "Wycofaj głos",
+    onlyPlayersCanVote: "Głosować mogą tylko osoby grające w tej grze.",
+    votesOpen: (p: { count: number }) =>
+      plural(p.count, { one: "1 trwające głosowanie", other: `Trwające głosowania: ${p.count}` }),
   },
 
   roomPlayersPanel: {

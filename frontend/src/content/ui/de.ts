@@ -402,6 +402,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   joined_as_player: (p) => `${text(p.nickname)} ist als Spieler beigetreten.`,
   kicked_by_vote: (p) => `${text(p.nickname)} wurde per Abstimmung rausgeworfen.`,
   marked_afk_by_vote: (p) => `${text(p.nickname)} wurde per Abstimmung als AFK markiert.`,
+  kick_vote_started: (p) => `Eine Abstimmung, ${text(p.nickname)} rauszuwerfen, hat begonnen.`,
+  afk_vote_started: (p) => `Eine Abstimmung, ${text(p.nickname)} als AFK zu markieren, hat begonnen.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} hat eine Abstimmung über einen Neustart gestartet.`,
@@ -1913,6 +1915,20 @@ export const DE: Catalogue = {
     friendRequest: (p: { count: number }) =>
       plural(p.count, { one: "Freundschaftsanfrage", other: "Freundschaftsanfragen" }),
     serverUpdateStarted: "Server-Update läuft. Diese Runde endet bald.",
+  },
+
+  playerVoteNotice: {
+    kickQuestion: (p: { nickname: string }) => `${p.nickname} aus dem Raum werfen?`,
+    afkQuestion: (p: { nickname: string }) => `${p.nickname} als AFK markieren?`,
+    kickAboutYou: "Es läuft eine Abstimmung, dich aus dem Raum zu werfen.",
+    afkAboutYou: "Es läuft eine Abstimmung, dich als AFK zu markieren.",
+    tally: (p: { count: number; required: number }) => `${p.count} von ${p.required} Stimmen`,
+    voteKick: "Für Rauswurf stimmen",
+    voteAfk: "Für AFK stimmen",
+    withdraw: "Stimme zurückziehen",
+    onlyPlayersCanVote: "Abstimmen kann nur, wer im Spiel mitspielt.",
+    votesOpen: (p: { count: number }) =>
+      plural(p.count, { one: "1 Abstimmung läuft", other: `${p.count} Abstimmungen laufen` }),
   },
 
   roomPlayersPanel: {

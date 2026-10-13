@@ -1,7 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { ClockIcon, MailIcon, RoundsIcon, UsersIcon, WifiOffIcon } from "./icons";
+import { ClockIcon, MailIcon, MoonIcon, RoundsIcon, UsersIcon, WifiOffIcon } from "./icons";
 import { RestartVoteChipBody, RestartVotePopover } from "./RestartVoteNotice";
+import { PlayerVotePopover } from "./PlayerVoteNotice";
+import { playerVoteChipBody, playerVoteChipLabel, type OpenPlayerVote } from "../lib/playerVotes";
+import { useOpenPlayerVotes } from "../hooks/useOpenPlayerVotes";
 import { canCastRestartVote, myRestartVote, type RestartVoter } from "../lib/restartVote";
 import type { RestartVoteState } from "../types";
 import { DRAIN_FINAL_SECONDS, placeNotices, type ChipNotice } from "../lib/appNotices";
@@ -40,9 +43,21 @@ function connectionLabel(status: Exclude<ConnectionStatus, "connected">): string
   return ui.roomNoticeChips.reconnecting;
 }
 
-/** A chip in the room bar: a server notice, a restart vote, a friend's
-    invitation, or a friend request. */
-type RoomChip = ChipNotice | "restart-vote" | "invite" | "friend-request";
+/** A kick or AFK vote's chip, one per open vote (#1422). */
+type PlayerVoteChip = `player-vote:${string}`;
+
+/** A chip in the room bar: a server notice, a restart vote, a kick or AFK
+    vote, a friend's invitation, or a friend request. */
+type RoomChip = ChipNotice | "restart-vote" | PlayerVoteChip | "invite" | "friend-request";
+
+/** How long a closed kick or AFK vote stays asked-about after it closes:
+    the length of the server's `player_vote_announce_cooldown_seconds`, which
+    the server counts from its last announcement instead (#1422). */
+const PLAYER_VOTE_FORGET_MS = 60_000;
+
+function isVoteChip(chip: RoomChip): boolean {
+  return chip === "restart-vote" || chip.startsWith("player-vote:");
+}
 
 interface RoomNoticeChipsProps {
   /** The vote under way in a game being played, if any. */
@@ -55,6 +70,8 @@ interface RoomNoticeChipsProps {
       once this clears, if the seat can still vote. */
   voteQuiet?: boolean;
   onVote?: (vote: boolean) => void;
+  /** Cast this seat's ballot in a kick or AFK vote, or withdraw it. */
+  onPlayerVote?: (vote: OpenPlayerVote) => void;
 }
 
 /** A planned-deploy drain, a dropped connection, a restart vote, a friend's
@@ -92,14 +109,26 @@ banner in the page flow, and proposing one moved the stage - the drawer's
 canvas mid-stroke, and a phone guesser's field off the bottom of a screen that
 does not scroll, for the vote's twenty seconds (#1266). Its popover opens by
 itself once for a seat that can still vote, and closes when that seat has; the
-chip carries the countdown, and the outcome is announced once. */
+chip carries the countdown, and the outcome is announced once.
+
+A **Kick vote** and an **AFK vote** are chips too, one per open vote (#1422):
+their only trace was a tally on the target's row in the desktop players list,
+which a phone folds behind the Room menu, so a phone never saw one and a vote
+nobody sees never reaches its majority. Each popover opens by itself once for
+a seat that may still cast in it, as the restart vote's does.
+
+While the connection is down no vote's popover stays open, and none opens:
+it covered the card that says the connection was lost, and a ballot cast then
+could not be counted. */
 export function RoomNoticeChips({
   restartVote = null,
   voter,
   voteBusy = false,
   voteQuiet = false,
   onVote,
+  onPlayerVote,
 }: RoomNoticeChipsProps = {}) {
+  const playerVotes = useOpenPlayerVotes();
   const shutdownNotice = useServerNoticesStore((state) => state.shutdownNotice);
   const updateRequired = useServerNoticesStore((state) => state.updateRequired);
   const connection = useServerNoticesStore((state) => state.connection);
@@ -136,33 +165,99 @@ export function RoomNoticeChips({
   const chips: RoomChip[] = [
     ...serverChips,
     ...(restartVote ? ["restart-vote" as const] : []),
+    ...playerVotes.map((vote): PlayerVoteChip => `player-vote:${vote.key}`),
     ...(invite ? ["invite" as const] : []),
     ...(requests.length > 0 ? ["friend-request" as const] : []),
   ];
   // A notice that ends closes its own popover rather than leaving a card that
   // describes something no longer true - and closes it for good: only hiding
   // it kept the choice, so the next outage opened the card nobody asked for.
-  if (open !== null && !chips.includes(open)) setOpen(null);
+  // What `open` becomes in this render. Each step below may change it, and a
+  // later step must see what an earlier one decided: a restart vote and a kick
+  // vote opening in the same render used to race, and the later one won
+  // (review of #1422).
+  let nextOpen = open;
+  const decide = (chip: RoomChip | null) => {
+    nextOpen = chip;
+    setOpen(chip);
+  };
+  if (nextOpen !== null && !chips.includes(nextOpen)) decide(null);
+  const offline = connection !== "connected";
+  if (offline && nextOpen !== null && isVoteChip(nextOpen)) decide(null);
+  // Kick and AFK votes this seat has been asked about - by the popover opening
+  // by itself, a tap on the chip, or a ballot of its own - so each asks once.
+  const playerVoteKeys = playerVotes.map((vote) => vote.key);
+  const [playerVotesSeen, setPlayerVotesSeen] = useState<string[]>([]);
+  const [playerVotesCast, setPlayerVotesCast] = useState<string[]>([]);
+  const [autoOpenedVote, setAutoOpenedVote] = useState<string | null>(null);
+  // Several steps below can change the list in one render; each builds on the
+  // last, and it is written once at the end, so none overwrites another.
+  let nextSeen = playerVotesSeen;
   // The vote asks for an answer: its popover opens by itself once per vote for
   // a seat that can still give one, and closes once that seat has - after
   // which the chip opens it again on a tap. Adjusted during render, as the
   // line above is, so the answer and the popover never disagree for a frame.
+  // It comes first: it lasts twenty seconds, and a kick or AFK vote waits.
   const voteKey = restartVote ? `${restartVote.proposerId}:${restartVote.expiresAt}` : null;
   const myVote = restartVote ? myRestartVote(restartVote, voter) : null;
   const [voteOpenedFor, setVoteOpenedFor] = useState<string | null>(null);
   const [voteAnsweredFor, setVoteAnsweredFor] = useState<string | null>(null);
   if (
-    voteKey !== null && voteKey !== voteOpenedFor && myVote === null && !voteQuiet
+    voteKey !== null && voteKey !== voteOpenedFor && myVote === null && !voteQuiet && !offline
     && restartVote !== null && canCastRestartVote(restartVote, voter)
   ) {
     setVoteOpenedFor(voteKey);
-    setOpen("restart-vote");
+    // A kick or AFK popover it covers has not been answered: it asks again.
+    const covered = nextOpen?.startsWith("player-vote:") ? nextOpen.slice("player-vote:".length) : null;
+    if (covered !== null && nextSeen.includes(covered) && !playerVotesCast.includes(covered)) {
+      nextSeen = nextSeen.filter((key) => key !== covered);
+    }
+    decide("restart-vote");
   }
   if (voteKey !== null && myVote !== null && voteKey !== voteAnsweredFor) {
     setVoteAnsweredFor(voteKey);
-    if (open === "restart-vote") setOpen(null);
+    if (nextOpen === "restart-vote") decide(null);
   }
+  // A kick or AFK vote opens by itself once, for a seat that may still cast
+  // in it, when nothing else is open; it closes once that seat has cast.
+  const castNow = playerVotes.filter((vote) => vote.mine).map((vote) => vote.key);
+  if (castNow.join() !== playerVotesCast.join()) {
+    const newlyCast = castNow.filter((key) => !playerVotesCast.includes(key));
+    setPlayerVotesCast(castNow);
+    // A ballot of its own is an answer: withdrawn, it does not ask again.
+    const unseen = newlyCast.filter((key) => !nextSeen.includes(key));
+    if (unseen.length > 0) nextSeen = [...nextSeen, ...unseen];
+    if (newlyCast.some((key) => nextOpen === `player-vote:${key}`)) decide(null);
+  }
+  const askMe = playerVotes.find(
+    (vote) => vote.canVote && !vote.mine && !nextSeen.includes(vote.key) && !castNow.includes(vote.key),
+  );
+  if (askMe && nextOpen === null && !voteQuiet && !offline) {
+    nextSeen = [...nextSeen, askMe.key];
+    setAutoOpenedVote(askMe.key);
+    decide(`player-vote:${askMe.key}`);
+  }
+  if (nextSeen !== playerVotesSeen) setPlayerVotesSeen(nextSeen);
+  // A vote that closes is forgotten only a minute after it closed - the
+  // server's announcement cooldown, though counted from the close rather than
+  // from the announcement: a ballot is a toggle, and one withdrawn and recast
+  // must not ask every seat again (review of #1422).
+  const liveVoteKeys = useRef(playerVoteKeys);
+  useEffect(() => {
+    liveVoteKeys.current = playerVoteKeys;
+  });
+  const closedSeen = playerVotesSeen.filter((key) => !playerVoteKeys.includes(key)).join();
+  useEffect(() => {
+    if (closedSeen === "") return;
+    const timer = window.setTimeout(() => {
+      setPlayerVotesSeen((seen) => seen.filter((key) => liveVoteKeys.current.includes(key)));
+    }, PLAYER_VOTE_FORGET_MS);
+    return () => window.clearTimeout(timer);
+  }, [closedSeen]);
   const openNotice = open !== null && chips.includes(open) ? open : null;
+  const openPlayerVote = openNotice?.startsWith("player-vote:")
+    ? playerVotes.find((vote) => `player-vote:${vote.key}` === openNotice) ?? null
+    : null;
 
   useEffect(() => {
     if (openNotice === null) return;
@@ -189,6 +284,30 @@ export function RoomNoticeChips({
   return (
     <div className="room-notice-chips" ref={groupRef}>
       {chips.map((notice) => {
+        if (notice.startsWith("player-vote:")) {
+          const vote = playerVotes.find((candidate) => `player-vote:${candidate.key}` === notice);
+          if (!vote) return null;
+          return (
+            <button
+              key={notice}
+              type="button"
+              className="chip chip-warm room-notice-chip"
+              data-notice={notice}
+              aria-label={playerVoteChipLabel(vote)}
+              aria-expanded={openNotice === notice}
+              aria-controls={openNotice === notice ? popoverId : undefined}
+              onClick={() => {
+                // Asked by hand: it does not open by itself as well later.
+                if (!playerVotesSeen.includes(vote.key)) setPlayerVotesSeen([...playerVotesSeen, vote.key]);
+                setAutoOpenedVote(null);
+                setOpen((current) => (current === notice ? null : notice));
+              }}
+            >
+              {vote.kind === "afk" ? <MoonIcon size={13} strokeWidth={2.4} /> : <UsersIcon size={13} strokeWidth={2.4} />}
+              <span className="room-notice-chip-label">{playerVoteChipBody(vote)}</span>
+            </button>
+          );
+        }
         if (notice === "restart-vote" && restartVote) {
           return (
             <button
@@ -318,18 +437,29 @@ export function RoomNoticeChips({
           </div>
         </div>
       )}
+      {openPlayerVote && (
+        <PlayerVotePopover
+          key={openPlayerVote.key}
+          id={popoverId}
+          vote={openPlayerVote}
+          arming={autoOpenedVote === openPlayerVote.key && !openPlayerVote.mine}
+          offline={offline}
+          onVote={() => onPlayerVote?.(openPlayerVote)}
+          onDismiss={() => setOpen(null)}
+        />
+      )}
       {openNotice === "restart-vote" && restartVote && (
         <RestartVotePopover
           key={voteKey}
           id={popoverId}
           vote={restartVote}
           player={voter}
-          busy={voteBusy}
+          busy={voteBusy || offline}
           arming={myVote === null && voteOpenedFor === voteKey}
           onVote={(vote) => onVote?.(vote)}
         />
       )}
-      {openNotice !== null && openNotice !== "invite" && openNotice !== "friend-request" && openNotice !== "restart-vote" && (
+      {openNotice !== null && openNotice !== "invite" && openNotice !== "friend-request" && !isVoteChip(openNotice) && (
         <div id={popoverId} className="room-notice-popover" data-notice={openNotice}>
           <p>{openNotice === "drain" ? drainText : connectionTrouble ? connectionStatusText(connectionTrouble) : null}</p>
           {openNotice === "connection" && connection === "failed" && (

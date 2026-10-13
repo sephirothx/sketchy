@@ -1356,6 +1356,13 @@ retained: nothing in a room cites a line (`report_player` selects its own eviden
 the UUIDv7's random half, which deflate cannot remove, was 39% of a viewer's whole
 stream on the wire (#869). A lobby line keeps its id because a lobby report cites it.
 
+**A kick or AFK vote opening is announced** (#1422, protocol 67): the first ballot of a
+`vote_player` on a seat says `kick_vote_started` / `afk_vote_started` `{nickname}`, riding
+that action's `room_state` causes, at most once a minute per seat and kind, since a ballot
+is a toggle and withdrawing and recasting it must not fill the chat. An AFK ballot on a seat
+that is already AFK is acknowledged and not counted, and a seat's AFK ballots are cleared
+the moment it becomes AFK, so they cannot return as a vote nobody just cast.
+
 **A room-authored announcement carries no text.** Said to the whole room as part of an
 action that changes it — a rename, a vote, a restart — it rides that action's
 `room_state` in `causes`; said to one socket, or outside an action, it is a
@@ -2646,7 +2653,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (66) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (67) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

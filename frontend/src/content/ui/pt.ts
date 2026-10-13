@@ -402,6 +402,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   joined_as_player: (p) => `${text(p.nickname)} entrou como jogador.`,
   kicked_by_vote: (p) => `${text(p.nickname)} foi expulso por votação.`,
   marked_afk_by_vote: (p) => `${text(p.nickname)} foi marcado como AFK por votação.`,
+  kick_vote_started: (p) => `Começou uma votação para expulsar ${text(p.nickname)}.`,
+  afk_vote_started: (p) => `Começou uma votação para marcar ${text(p.nickname)} como AFK.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} começou uma votação para reiniciar a partida.`,
@@ -1912,6 +1914,20 @@ export const PT: Catalogue = {
     friendRequest: (p: { count: number }) =>
       plural(p.count, { one: "Pedido de amizade", other: "Pedidos de amizade" }),
     serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
+  },
+
+  playerVoteNotice: {
+    kickQuestion: (p: { nickname: string }) => `Expulsar ${p.nickname} da sala?`,
+    afkQuestion: (p: { nickname: string }) => `Marcar ${p.nickname} como AFK?`,
+    kickAboutYou: "Há uma votação aberta para te expulsar da sala.",
+    afkAboutYou: "Há uma votação aberta para te marcar como AFK.",
+    tally: (p: { count: number; required: number }) => `${p.count} de ${p.required} votos`,
+    voteKick: "Votar expulsão",
+    voteAfk: "Votar AFK",
+    withdraw: "Retirar o meu voto",
+    onlyPlayersCanVote: "Só quem joga a partida pode votar.",
+    votesOpen: (p: { count: number }) =>
+      plural(p.count, { one: "1 votação aberta", other: `${p.count} votações abertas` }),
   },
 
   roomPlayersPanel: {

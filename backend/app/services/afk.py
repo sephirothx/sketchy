@@ -316,6 +316,9 @@ class AfkWatch:
     async def _raise(self, room: Room, player: Player) -> None:
         """Mark one seat AFK, with everything that follows from it."""
         player.is_afk = True
+        # An AFK vote on the seat is over: it is AFK. Kept, its ballots came
+        # back as a vote nobody had just cast the moment it returned (#1422).
+        player.afk_votes.clear()
         # The host role moves before the room hears about either change, so
         # the broadcast carries one consistent state rather than a room that
         # briefly has an AFK host. Only this path moves it: a player who set

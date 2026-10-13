@@ -276,6 +276,9 @@ class Player:
     colorblind_safe_colors: bool = False
     kick_votes: set[str] = field(default_factory=set)
     afk_votes: set[str] = field(default_factory=set)
+    # When a kick or an AFK vote on this seat was last announced, by kind
+    # (#1422): the cooldown that keeps a toggled vote from filling the chat.
+    vote_announced_at: dict[str, float] = field(default_factory=dict)
     # Guess ids already handled on the current connection. A guess is emitted
     # volatile, so the client retries once with the same id when the server
     # never acknowledges; without this the retry of a guess that did arrive
