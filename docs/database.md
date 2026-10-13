@@ -1232,9 +1232,14 @@ failed write, or a game still being played. Every copy of the turn is stamped, a
 readers above treat a stamped copy as they treat a copy of an erased `turn_drawings`
 row. A game still being played reads the stamps when it is written, through the partial
 index, and writes that turn's drawing as erased - `deleted`, stamped, no reaction or
-share of it. A write that read no stamp while the erasure found no row is caught after
-both commit: each side runs `erase_turns_saved_since` once committed, so whichever
-commits second finds the other's work, and neither takes a lock the other holds.
+share of it, counted as no reaction received. The erasure takes the reported drawer's
+`users` row (shared, with the administrator's, ascending) before it reads the turn, and a
+game being written holds every account it names `FOR UPDATE` until it commits: so the
+erasure waits for that write and erases the row it wrote, or goes first and the write
+reads its stamp. As a backstop, both sides run `erase_turns_saved_since` once committed -
+the write first thing in its recorded-game announcement - so a row that still slipped
+through is erased by whichever commits second. A report whose drawer's account is gone
+(a guest purged after thirty days) is still erasable, audited with no target.
 
 The bytes are stored the way `turn_drawings` stores them, under the same
 [`canvas_storage`](../backend/app/canvas_storage.py) rules: validated on ingest,
@@ -1712,8 +1717,11 @@ status from the drawing row it locks (`populate_existing`), not from the turn it
 before the lock: an administrator's erasure leaves the drawer's account standing, so the
 account lock does not order the two. The stamp is the only difference: the game detail reads it as
 `drawingStatus` `removed`, and the report evidence routes hold a copy of that turn back
-from everybody but administrators (`player_report_drawing_evidence`). It locks the
-drawer's and the administrator's `users` rows (shared, ascending) before the drawing row,
+from everybody but administrators (`player_report_drawing_evidence`). A game written
+after an administrator erased one of its turns through the report's copies writes that
+row this way from the start: `deleted`, stamped, with no reaction or share of it (#1439).
+It locks the drawer's and the administrator's `users` rows (shared, ascending; no
+administrator's when it erases a turn a report's copy says was erased) before the drawing row,
 the order an account erasure takes them in: drawing first, its audit row's foreign key
 waited on the account a concurrent erasure of the drawer held, while that erasure waited
 on the drawing.

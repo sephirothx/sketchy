@@ -211,14 +211,16 @@ async def moderation_erased_turns(
 
 async def erase_report_copies(
     session: AsyncSession, turn_id: UUID, *, now: datetime
-) -> UUID | None:
+) -> tuple[bool, UUID | None]:
     """Erase a drawing whose turn was never saved, through the report's
     copies of it (#1439, R-MOD-22), in the caller's transaction.
 
     Every copy of the turn is stamped, so a second report of the same canvas
-    is held back too. Answers the drawer the copies were reported against -
-    the audit's target - or ``None`` when no copy is left to erase: none was
-    ever made, or an administrator already erased them.
+    is held back too. Answers whether any copy was left to stamp, and the
+    drawer they were reported against - the audit's target, or ``None`` once
+    that account is gone: a guest whose only game was abandoned is purged
+    after thirty days, and their reported drawing must still be erasable
+    (review of #1439).
     """
     erased = (
         await session.execute(
@@ -232,9 +234,11 @@ async def erase_report_copies(
         )
     ).scalars().all()
     if not erased:
-        return None
-    return await session.scalar(
-        select(PlayerReport.reported_user_id).where(PlayerReport.id.in_(erased)).limit(1)
+        return False, None
+    return True, await session.scalar(
+        select(PlayerReport.reported_user_id)
+        .where(PlayerReport.id.in_(erased), PlayerReport.reported_user_id.is_not(None))
+        .limit(1)
     )
 
 

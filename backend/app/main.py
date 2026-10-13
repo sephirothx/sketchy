@@ -772,14 +772,21 @@ async def announce_recorded_game(game_id: str) -> None:
     in the Gallery, so This week is read again (R-GAL-07), and the drawers
     they left an inbox entry for are told if any of their sockets is connected
     (R-SHARE-09)."""
+    # First, and on its own: a drawing an administrator erased while the game
+    # was still being played was written erased - or is erased now, for a
+    # write that missed the stamp - and the recap the room is showing takes
+    # it out too (#1439). Before the shelf is read again and the drawers are
+    # told, so neither sees it.
+    try:
+        for turn_id in await settle_erased_turns(async_session_factory, game_id):
+            await erase_from_live_recaps(str(turn_id))
+    except Exception:  # noqa: BLE001 - the rest of the announcement still goes out
+        logging.getLogger("sketchy.main").exception(
+            "Could not settle the erased drawings of game %s", game_id
+        )
     gallery_shelf.invalidate()
     for user_id in await drawers_told_about_game(async_session_factory, game_id):
         await push_inbox_changed(user_id)
-    # A drawing an administrator erased while the game was still being played
-    # was written erased; the recap the room is showing takes it out too
-    # (#1439).
-    for turn_id in await settle_erased_turns(async_session_factory, game_id):
-        await erase_from_live_recaps(str(turn_id))
 
 
 finished_game_worker.bind_recorded(announce_recorded_game)

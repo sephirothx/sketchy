@@ -2823,12 +2823,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     seen_reactions.add(key)
                     drawer_user_id = turn_inputs_by_id[reaction_turn_id].drawer_user_id
+                    if reaction_turn_id in copies_erased:
+                        # Erased by an administrator above: no reaction to
+                        # it is kept, and none is counted as received
+                        # (review of #1439), as a rebuild would not count it.
+                        continue
                     reaction_drawer_ids.append(
                         _entity_id(drawer_user_id) if drawer_user_id else None
                     )
-                    if (
-                        drawer_user_id and _entity_id(drawer_user_id) in erased_user_ids
-                    ) or reaction_turn_id in copies_erased:
+                    if drawer_user_id and _entity_id(drawer_user_id) in erased_user_ids:
                         # The drawing it was about is erased above; a
                         # reaction to nothing is not kept (R-PRIV-05 keeps
                         # the ones this seat *gave*, on other drawings).
