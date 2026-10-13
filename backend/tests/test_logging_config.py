@@ -162,9 +162,14 @@ _QUADRATIC_REDACTIONS = (
 
 
 def _quadratic_redact(text: str) -> str:
+    from app.logging_config import _IPV4, _IPV6, _mask_ip
+
     for pattern, replacement in _QUADRATIC_REDACTIONS:
         text = pattern.sub(replacement, text)
-    return text
+    # A client's address is masked after the rules either way (#1418): it was
+    # not part of what was rewritten, and `a::` is an address.
+    text = _IPV6.sub(_mask_ip, text)
+    return _IPV4.sub(_mask_ip, text)
 
 
 def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
@@ -279,3 +284,79 @@ def test_an_exception_already_rendered_as_text_is_carried_as_the_exc_field():
     record.exc_text = "Traceback: login failed password=hunter2 for x"
     payload = json.loads(JsonFormatter().format(record))
     assert payload["exc"] == "Traceback: login failed password=*** for x"
+
+
+def test_a_client_address_is_masked_in_every_line_uvicorn_writes():
+    """#1418: in JSON mode uvicorn's WebSocket accept line wrote the forwarded
+    address on every connect, though raw addresses are never stored
+    (R-RATE-02). IPv4 and IPv6 are masked, ports included; times and
+    version numbers are left alone."""
+    import json
+    import logging
+
+    from app.logging_config import JsonFormatter, redact
+
+    record = logging.LogRecord(
+        "uvicorn.error", logging.INFO, __file__, 1,
+        '%s - "WebSocket %s" [accepted]', ("10.0.0.6:0", "/socket.io/?EIO=4"), None,
+    )
+    line = json.loads(JsonFormatter().format(record))["msg"]
+    assert "10.0.0.6" not in line and "[accepted]" in line
+    # The same line for a client whose address ends in `::` (review of #1452).
+    record.args = ("2600:1234:::0", "/socket.io/?EIO=4")
+    line = json.loads(JsonFormatter().format(record))["msg"]
+    assert "2600" not in line and line.startswith("[address] - "), line
+    for text in (
+        "client 203.0.113.9 connected",
+        "refused a socket from 203.0.113.9.",
+        "client 2001:db8::1 connected",
+        "[2001:db8:85a3::8a2e:370:7334]:443 opened",
+        "fe80::1%en0 bound",
+        # What a dual-stack listener reports for an IPv4 client, and NAT64.
+        "::ffff:10.0.0.6:0 - accepted",
+        "64:ff9b::192.0.2.33 connected",
+        # Followed by a colon, as `address: reason` is written.
+        "Blocked 2001:db8::1: too many",
+        "connect to 2001:db8::1:443: refused",
+        "::ffff:203.0.113.9: refused",
+        "[2001:db8::1]: closed",
+        # Uvicorn writes `host:port` unbracketed, so an address ending in
+        # `::` and its port run together into something no parser reads.
+        '2600:1234:::0 - "WebSocket /socket.io/?EIO=4" [accepted]',
+        "2600:1234:::52114 closed",
+    ):
+        masked = redact(text)
+        assert "[address]" in masked, masked
+        assert not any(part in masked for part in ("203.0", "2001:", "fe80", "10.0", "0.6", "192.0", "ff9b", ".113", "]]", "2600")), masked
+    for text in (
+        "took 12:34:56",
+        "version 1.2.3",
+        "at 2026-10-11T12:34:56.123Z",
+        "ratio 0.25:1",
+        # Not addresses at all, or none that names a person: a MAC, a
+        # fingerprint, the bind line, a local proxy.
+        "nic 00:1a:2b:3c:4d:5e up",
+        "key SHA256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01",
+        "Uvicorn running on http://0.0.0.0:8000",
+        "Uvicorn running on http://[::]:8000",
+        "from 127.0.0.1:52114",
+        "from [::1]:52114",
+    ):
+        assert redact(text) == text
+
+
+def test_text_mode_in_production_says_it_is_not_redacted(monkeypatch, caplog):
+    """Review of #1418: the masking runs in JSON mode only. Text mode stays a
+    choice, but not a silent one."""
+    import logging
+
+    from app.logging_config import configure_logging
+
+    monkeypatch.setenv("SKETCHY_ENV", "production")
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.logging_config"):
+            configure_logging(fmt="text")
+        assert any("not redacted" in record.getMessage() for record in caplog.records)
+    finally:
+        monkeypatch.setenv("SKETCHY_ENV", "test")
+        configure_logging(fmt="text")

@@ -160,6 +160,8 @@ async def test_with_a_ceiling_of_two_a_third_polling_handshake_allocates_nothing
     assert len(sio.eio.sockets) == 2
     assert room_capacity.transports.open == 2
     assert rejected(store) == {"server": 2}
+    # The front door closing on people, which pages (#1418).
+    assert store.capacity_refusals.get(("sockets",)) == 2
 
 
 async def test_with_a_ceiling_of_two_a_third_websocket_handshake_allocates_nothing(monkeypatch):

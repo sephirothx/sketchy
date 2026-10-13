@@ -39,6 +39,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+import functools
+import ipaddress
 import json
 import logging
 import os
@@ -142,10 +144,85 @@ def _mask_addresses(text: str) -> str:
     return "".join(parts)
 
 
+# A client's address (#1418). Uvicorn's WebSocket accept line - `10.0.0.6:0 -
+# "WebSocket /socket.io/?..." [accepted]` - wrote the forwarded address on
+# every connect in JSON mode, the format production runs, though raw
+# addresses are never to be stored (R-RATE-02) and are hashed everywhere the
+# application keeps one. Masked whole, port and all: the hash is what the
+# application correlates on, so the address is worth nothing here.
+#
+# The patterns only find candidates; `ipaddress` decides. A clock reading
+# (12:34:56), a MAC address or a colon-separated fingerprint is not an
+# address and is left as it was. Loopback and unspecified addresses are left
+# too - a local proxy, or the bind line's `0.0.0.0:8000` - since they name no
+# person, and the bind line is what says which port the server is on.
+_IPV4 = re.compile(r"(?<![\w.])(?P<ip>(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?(?!\w|\.\d)")
+# Bracketed or bare, ending in hex or - IPv4-mapped (::ffff:a.b.c.d, what a
+# dual-stack listener reports for an IPv4 client) or NAT64 - a dotted quad.
+_IPV6 = re.compile(
+    # The last group is empty only after `::`, and a colon may follow unless
+    # hex does: `2001:db8::1: refused` is an address and then its reason.
+    r"(?<![\w:.])\[?(?P<ip>(?:[0-9A-Fa-f]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{1,4}|(?<=::)))"
+    r"(?:%[\w.]+)?\]?(?::\d{1,5})?(?!\w|:[0-9A-Fa-f]|\.\d)"
+)
+
+
+def _parse_address(candidate: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """The address a candidate is, if any - read once more without a trailing
+    `:port`: uvicorn writes `host:port` unbracketed, and an IPv6 address
+    ending in `::` runs into its port (`2600:1234:::0`) as something no
+    parser reads (review of #1452)."""
+    for text in (candidate, *(
+        [candidate.rsplit(":", 1)[0]] if candidate.rsplit(":", 1)[-1].isdigit() else []
+    )):
+        # An IPv6 address has `::`, or all eight groups, or ends in a dotted
+        # quad; anything else with a colon is a time, a ratio or a MAC, and
+        # is turned away without the parser's exception.
+        if ":" in text and "::" not in text and text.count(":") < 7 and "." not in text:
+            continue
+        try:
+            return ipaddress.ip_address(text)
+        except ValueError:
+            continue
+    return None
+
+
+@functools.lru_cache(maxsize=1024)
+def _names_a_client(candidate: str) -> bool:
+    """Whether a candidate is an address that names a person: not loopback or
+    unspecified, an IPv4-mapped one read as the IPv4 address it carries.
+
+    Cached: `redact` runs on the event loop for every JSON line, and a line
+    of nothing but candidates - `a::` repeated, as #1454's linear-time bound
+    tries - cost a parse and two network checks each."""
+    # A host's address has a prefix and an interface; `a::` or `2600::` is a
+    # network at most - or a time, an ordinal - and is left alone.
+    if ":" in candidate and sum(1 for group in candidate.split(":") if group) < 2:
+        return False
+    address = _parse_address(candidate)
+    if address is None:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return not (address.is_loopback or address.is_unspecified)
+
+
+def _mask_ip(match: re.Match[str]) -> str:
+    return "[address]" if _names_a_client(match.group("ip")) else match.group(0)
+
+
 def redact(text: str) -> str:
     for pattern, replacement in _REDACTIONS:
         text = pattern.sub(replacement, text)
-    return _mask_addresses(text)
+    text = _mask_addresses(text)
+    # The candidates are found and decided first, each distinct one once, and
+    # the line rewritten only when one names somebody: most lines have none,
+    # and a line of nothing but candidates then costs a scan, not a call per
+    # candidate (#1454's linear-time bound).
+    for pattern in (_IPV6, _IPV4):
+        if any(_names_a_client(candidate) for candidate in set(pattern.findall(text))):
+            text = pattern.sub(_mask_ip, text)
+    return text
 
 
 def log_format(environ: dict[str, str] | None = None) -> str:
@@ -250,3 +327,11 @@ def configure_logging(level: str | None = None, *, fmt: str | None = None) -> No
         # there is no duplicate to avoid - and switching it off would cut these
         # records off from anything that attaches to root later, pytest's
         # caplog included.
+    if chosen == TEXT_FORMAT and is_production():
+        # Allowed - an operator may want the console - but nothing in text
+        # mode is redacted: uvicorn's own access log prints every client's
+        # address, and nothing masks credentials or e-mail addresses.
+        logging.getLogger("app.logging_config").warning(
+            "LOG_FORMAT=text in production: lines are not redacted, so client "
+            "addresses and tokens reach the log (R-RATE-02); JSON is the default"
+        )

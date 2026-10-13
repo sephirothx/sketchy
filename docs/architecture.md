@@ -1438,7 +1438,11 @@ default is 80 ms.
 Deliberately **not** tunable: abuse backstops (the authentication and submission
 limits, the canvas and replay ceilings), anything that can change a score, and any
 value the frontend duplicates — the last of those is a wire contract, and moving one
-side alone makes the two disagree.
+side alone makes the two disagree. The one exception is guest provisioning's day
+(`guests.daily_limit`) and each network's share of it (`guests.prefix_daily_limit`):
+neither bounds one caller, both close the door on visitors who did nothing wrong, and
+raising them was a restart that ended every live game (#1418). The per-address limit
+stays off the panel.
 
 ### Timers
 
@@ -1606,8 +1610,10 @@ minting another. There are two formats, for two readers. `LOG_FORMAT=json`, the 
 `logger`, `msg`, the correlation keys when present, a `fields` object for structured
 extras, `exc` for a traceback - each passed through a redaction filter first (a bearer
 or basic credential, a `password=`/`token=`/`secret=`/cookie value, a password inside
-a database URL, the local part of any e-mail address), because a log store is kept
-longer than the data that leaks into it. In this mode the server starts uvicorn with
+a database URL, the local part of any e-mail address, and any IPv4 or IPv6 address
+that is not loopback or unspecified, IPv4-mapped included, #1418), because a log store
+is kept longer than the data that leaks into it. Text mode in production is allowed
+and logs a warning at startup, because none of that applies to it. In this mode the server starts uvicorn with
 its own logging configuration switched off so its lines take the same shape, and the
 middleware's one access line per request (route template, status, milliseconds; probes
 and static files at DEBUG) replaces uvicorn's access log. `LOG_FORMAT=text`, the default

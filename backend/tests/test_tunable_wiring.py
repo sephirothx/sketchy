@@ -49,6 +49,50 @@ def test_a_budget_change_moves_what_the_guard_will_read():
 # ------------------------------------------------------------------ ceilings
 
 
+async def test_the_guest_day_ceiling_moves_without_a_restart():
+    """#1418: env-only, raising it needed a restart that ends every game."""
+    from app.auth.routes import GLOBAL_PROVISION_KEY, guest_day_ceiling
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        limiter = guest_day_ceiling(factory)
+        settings = a_registry(guests_per_day=limiter)
+        settings.set("guests.daily_limit", 100)
+        for _ in range(100):
+            assert await limiter.check(GLOBAL_PROVISION_KEY)
+        assert not await limiter.check(GLOBAL_PROVISION_KEY)
+        settings.set("guests.daily_limit", 101)
+        assert await limiter.check(GLOBAL_PROVISION_KEY)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_networks_share_moves_and_a_small_day_survives_boot():
+    """Review of #1418: the share needed a restart too, and the day's 100
+    floor turned a closed beta's GUEST_PROVISION_DAILY_LIMIT=50 into 5,000."""
+    from app.auth.routes import guest_day_ceiling, guest_network_share
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        day, share = guest_day_ceiling(factory), guest_network_share(factory)
+        settings = build_runtime_settings(
+            budgets=CommandBudgetPolicy(),
+            guests_per_day=day,
+            guests_per_network=share,
+            environ={"GUEST_PROVISION_DAILY_LIMIT": "50"},
+        )
+        assert settings.value("guests.daily_limit") == 50 and day.limit == 50
+        settings.set("guests.prefix_daily_limit", 2)
+        assert share.limit == 2
+        assert await share.check("2001:db8:1::/48") and await share.check("2001:db8:1::/48")
+        assert not await share.check("2001:db8:1::/48")
+    finally:
+        await engine.dispose()
+
+
+
 def test_the_global_room_ceiling_refuses_at_its_new_value():
     rooms = RoomManager()
     quotas = RoomQuotaService(rooms)
@@ -231,3 +275,38 @@ def test_the_drawing_budget_is_checked_against_whichever_cadence_is_faster():
     settings.set("client.polling_flush_interval_ms", 400)
     with pytest.raises(TunableError, match="client.flush_interval_ms"):
         settings.set("client.flush_interval_ms", 10)
+
+
+def panel_headings() -> set[str]:
+    """The groups `GROUP_LABELS` in the operations panel has a heading for."""
+    import re
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "adminControls.ts").read_text()
+    block = re.search(r"const GROUP_LABELS[^{]*\{(.*?)\};", source, re.S).group(1)
+    return set(re.findall(r"^\s*(\w+):", block, re.M))
+
+
+async def test_every_group_the_panel_shows_has_a_heading():
+    """Review of #1418: `guests` reached the operations panel as a bare group
+    name. The headings live in the frontend, so read them from there."""
+    from app.auth.routes import guest_day_ceiling, guest_network_share
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        settings = build_runtime_settings(
+            budgets=CommandBudgetPolicy(),
+            quotas=RoomQuotaService(RoomManager()),
+            capacity=RoomCapacityService(),
+            flow=FlowTiming(),
+            client=ClientConfig(),
+            shutdown=ShutdownCoordinator(session_factory=None, room_manager=RoomManager()),
+            guests_per_day=guest_day_ceiling(factory),
+            guests_per_network=guest_network_share(factory),
+            environ={},
+        )
+        groups = {name.split(".", 1)[0] for name in settings.names()}
+    finally:
+        await engine.dispose()
+    assert groups <= panel_headings(), groups - panel_headings()

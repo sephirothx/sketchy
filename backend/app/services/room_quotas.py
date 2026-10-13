@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.rate_limit import PersistentRateLimiter, RateLimiter
 from app.rooms import Room, RoomManager
+from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.room_quotas")
 
@@ -286,6 +287,7 @@ class RoomQuotaService:
         for a second creation to arrive in.
         """
         if len(self._rooms.rooms) >= self.global_rooms:
+            telemetry.note_capacity_refusal("rooms")
             raise RoomQuotaExceeded(
                 "This server is holding as many rooms as it can. "
                 "Try again in a few minutes."

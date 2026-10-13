@@ -17,6 +17,19 @@ groups:
           summary: "Sketchy is not answering its scrape"
           runbook: "README.md#on-call"
 
+      # `up == 0` compares a series, and a series that is not there compares
+      # nothing: a job renamed in the scrape config, or a target that fell out
+      # of discovery, leaves SketchyDown - and every rule on the server's own
+      # series - silent rather than firing (#1418).
+      - alert: SketchyNotScraped
+        expr: absent(up{job="sketchy"})
+        for: 15m
+        labels: {severity: page}
+        annotations:
+          summary: "Prometheus has no scrape target for job sketchy"
+          description: "Every rule on the server's own series is silent while this fires. Check the job name and the target in the scrape config (ops/prometheus/scrape-example.yml)."
+          runbook: "README.md#on-call"
+
       - alert: SketchyDatabaseUnreachable
         expr: sketchy_db_ready == 0
         for: 2m
@@ -47,6 +60,28 @@ groups:
         annotations:
           summary: "The synthetic game has not run in the last five minutes, or its series is not being collected"
           description: "Check the probe's cron entry, the textfile path, and that the node_exporter textfile job is scraped (ops/prometheus/scrape-example.yml)."
+          runbook: "README.md#on-call"
+
+      # --- the front door (#1418) ---------------------------------------------------
+      # A deployment-wide ceiling refuses somebody who did nothing wrong. One
+      # routed /48 was measured spending the whole day of guests in 34 s, and
+      # the only trace was a WARNING line and a 429 that reads like a rejected
+      # name. The per-network share refuses one site, which is a flood or a
+      # NAT that needs more, and warns rather than pages.
+      - alert: SketchyTurningVisitorsAway
+        expr: increase(sketchy_capacity_refusals_total{ceiling!="guests_per_prefix"}[10m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "A deployment-wide ceiling is turning visitors away (ceiling={{ $labels.ceiling }})"
+          description: "guests_per_day: raise guests.daily_limit on /admin/operations if these are real people. rooms: rooms.global_limit. sockets: rooms.socket_limit. Each moves without a restart."
+          runbook: "README.md#on-call"
+
+      - alert: SketchyGuestShareSpent
+        expr: increase(sketchy_capacity_refusals_total{ceiling="guests_per_prefix"}[1h]) > 0
+        labels: {severity: warn}
+        annotations:
+          summary: "One network has spent its day's share of new guests"
+          description: "guests.prefix_daily_limit on /admin/operations, per IPv6 /48 or IPv4 /24. A flood from one site, or a school or carrier NAT that needs a larger share; everybody else's day is untouched."
           runbook: "README.md#on-call"
 
       # --- data already lost ---------------------------------------------------------
@@ -268,6 +303,18 @@ groups:
         labels: {severity: page}
         annotations:
           summary: "Less than 10% of the data volume is free"
+          runbook: "README.md#on-call"
+
+      # On PostgreSQL the ratio exists only when the scrape's relabel matched
+      # the database's mount; a data directory anywhere else leaves it absent,
+      # and SketchyDiskLow silent at 2% free (#1418).
+      - alert: SketchyDiskUnwatched
+        expr: absent(sketchy:disk_free_ratio)
+        for: 15m
+        labels: {severity: page}
+        annotations:
+          summary: "Nothing is reporting how full the data volume is"
+          description: "On PostgreSQL, check that the postgres-host job's relabel names the data directory's mount (ops/prometheus/scrape-example.yml); on SQLite, that the server is scraped."
           runbook: "README.md#on-call"
 
       - alert: SketchyMemoryHigh

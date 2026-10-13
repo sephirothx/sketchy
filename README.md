@@ -851,12 +851,12 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_PORT` | `587`, or `465` with `SMTP_SECURITY=tls` | Relay port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_SECURITY` | `starttls` | `starttls` upgrades the connection before anything is sent (port 587), `tls` encrypts from the first byte (port 465), `none` sends in the clear. Both encrypted modes verify the relay's certificate against the system trust store, so any public mail provider works with no further setup and a relay that fails verification fails the send. A relay signed by a private authority is trusted by pointing `SSL_CERT_FILE` (or `SSL_CERT_DIR`) at a bundle that includes it. Production refuses `none` together with `SMTP_PASSWORD`; an unknown value, or the retired `SMTP_STARTTLS`, fails startup |
-| `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
+| `SMTP_FROM` | `sketchy@localhost` | Envelope sender. **Required in production** (#1418), on a domain mail can be delivered to - a `localhost`, `.local`, `.test` or `example` domain is refused at startup, since DMARC fails it - and a warning is logged when its domain is not `PUBLIC_BASE_URL`'s. A display name is allowed (`Sketchy <play@sketchy.app>`) |
 | `CONTACT_ADDRESS` | unset | The operator's address, which the privacy notice and the terms give for privacy requests, a parent asking for an under-age player's data to go, and anything Settings cannot do (`GET /api/legal`). Any environment refuses a malformed address; production refuses to start without one, or with one on a domain nobody can write to (`localhost`, `.local`, `.test`, `.example`, `.invalid`) (#1417) |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | The fallback interval for emptying the outbox: a queued message wakes the sender when its transaction commits, and a full batch is followed by another at once, so this only paces retries and anything queued by another process |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
-| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable, and the transport that prints them does not run in production |
+| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets, e-mail addresses and client IP addresses (#1418), takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable, and the transport that prints them does not run in production. Production logs a warning at startup when `text` is chosen, since none of it is redacted |
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
@@ -1619,7 +1619,8 @@ your players share one address:
 | `AUTH_RESET_ACCOUNT_LIMIT` | 3 per hour | Reset mails to one account, whatever address asks; past it nothing is sent and the answer is unchanged (#1240) |
 | `AUTH_RESET_ACCOUNT_DAILY_LIMIT` | 10 per day | The same, by the day |
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
-| `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
+| `GUEST_PROVISION_PREFIX_DAILY_LIMIT` | 500 per day | Guests provisioned per network - an IPv6 /48 or an IPv4 /24 - so one site holding many /64s cannot spend the whole day (#1418). The boot value of `guests.prefix_daily_limit`, which `/admin/operations` moves without a restart |
+| `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling. The boot value of `guests.daily_limit`, which `/admin/operations` moves without a restart |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 per hour | `POST /api/auth/password/reset`, per address — its own bucket, so opening the page does not spend what finishing the reset needs (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
@@ -2170,7 +2171,7 @@ backend/.venv/bin/python benchmarks/join_to_drawing.py --base-url http://localho
 
 # Every client returning at once after a restart, before and after the reconnect spread (#872; PostgreSQL)
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench_herd METRICS_TOKEN=x \
-  GUEST_PROVISION_LIMIT=100000 GUEST_PROVISION_DAILY_LIMIT=100000 AUTH_REGISTER_LIMIT=100000 \
+  GUEST_PROVISION_LIMIT=100000 GUEST_PROVISION_DAILY_LIMIT=100000 GUEST_PROVISION_PREFIX_DAILY_LIMIT=100000 AUTH_REGISTER_LIMIT=100000 \
   AUTH_LOOKUP_LIMIT=100000 ./benchmarks/with_server.sh benchmarks/reconnect_herd.py --clients 400 --metrics-token x
 
 # Would a lower HTTP compression threshold pay on long-polling? (#887)
@@ -2593,6 +2594,11 @@ terminates TLS has to be one uvicorn trusts to say so. To check the built bundle
 locally without a PostgreSQL server, omit them all — the same `frontend/dist`
 is served either way, just in development mode.
 
+In production, startup also refuses a missing `frontend/dist/index.html` (readiness
+and the API stay green while every page 404s, so nothing else would say so) and a
+missing or placeholder `SMTP_FROM`, and `/docs`, `/redoc` and `/openapi.json` are not
+served (#1418).
+
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
 so the whole game (UI + API + WebSocket) is served from a single port. The build writes a
 Brotli and a gzip copy beside every text file it emits above 1 KiB (by extension: js, css,
@@ -2881,8 +2887,9 @@ postgres_exporter (the `postgres` job) and its host's disk from node_exporter (t
 [Reading the database from the inside](docs/database.md#reading-the-database-from-the-inside).
 
 The synthetic game is the probe that tells "the process is up" from "a game can be
-played": two guests, a room, a join, a start, one stroke seen by the other seat, and a
-leave, over Socket.IO long-polling with nothing but the standard library. Run it from
+played": the page and the first script it names (a server with no frontend build
+answers `/api/*` and nothing else), two guests, a room, a join, a start, one stroke
+seen by the other seat, and a leave, over Socket.IO long-polling with nothing but the standard library. Run it from
 cron or a node_exporter textfile job:
 
 ```bash
@@ -2900,6 +2907,18 @@ reporting last hour's success. Its two guest sessions are kept
 between runs in `--state` (default `~/.cache/sketchy/probe-sessions.json`) and only
 re-provisioned when the server no longer knows them, so a one-minute cadence stays
 well inside `GUEST_PROVISION_LIMIT`; make sure the cron user can write that path.
+
+`SketchyTurningVisitorsAway` means a deployment-wide ceiling refused somebody: the
+`ceiling` label names it (`guests_per_day`, `rooms`, `sockets`). Each one is a
+runtime setting on `/admin/operations` - `guests.daily_limit`, `rooms.global_limit`,
+`rooms.socket_limit` - so raising it needs no restart, and no restart ends a game.
+Raise it when the refusals are people; when they are one network,
+`SketchyGuestShareSpent` will have warned first, and its share
+(`guests.prefix_daily_limit`) is what held - raise that instead for a school or a
+carrier's NAT. `SketchyNotScraped` and
+`SketchyDiskUnwatched` page when a series is missing rather than bad: the scrape
+job's name or target, or a PostgreSQL data directory on a mount the `postgres-host`
+relabel does not name.
 
 One alert is not an incident at all. `SketchyDrawingStoreLarge` says the stored
 drawings have passed 50 GB, which is the size #471 named for reopening the decision to

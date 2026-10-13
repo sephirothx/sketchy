@@ -14,9 +14,10 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.auth.middleware import SessionAuthMiddleware
-from app.auth.rate_limit import address_key
+from app.auth.rate_limit import address_key, prefix_key
 from app.auth.routes import create_auth_router
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+from app.services.telemetry import telemetry
 
 from tests.dbfixtures import create_test_db
 
@@ -41,6 +42,24 @@ PASSWORD = "correct horse battery staple"
 )
 def test_an_address_keys_as_its_subscriber(host, key):
     assert address_key(host) == key
+
+
+@pytest.mark.parametrize(
+    ("host", "key"),
+    [
+        ("2001:db8:1:2::10", "2001:db8:1::/48"),
+        ("2001:db8:1:ffff:ffff::1", "2001:db8:1::/48"),
+        ("2001:db8:2::1", "2001:db8:2::/48"),
+        ("192.0.2.77", "192.0.2.0/24"),
+        ("::ffff:192.0.2.77", "192.0.2.0/24"),
+        ("fe80::1%eth0", "fe80::/48"),
+        ("testclient", "testclient"),
+        (None, "unknown"),
+    ],
+)
+def test_an_address_keys_as_its_network(host, key):
+    """The few limits that bound a site rather than a subscriber (#1418)."""
+    assert prefix_key(host) == key
 
 
 @contextlib.asynccontextmanager
@@ -136,3 +155,53 @@ async def test_an_ipv4_caller_is_one_caller_on_either_listener(monkeypatch):
 
         assert plain.status_code == 200
         assert mapped.status_code == 429
+
+
+async def test_one_network_cannot_spend_the_whole_day_of_guests(monkeypatch):
+    """#1418: 90 /64s under one routed /48, 60 guests each, spent the
+    deployment's day in 34 s and closed the door on everybody. Each /64 is a
+    fresh address bucket; the /48 is not."""
+    async with build_site(
+        monkeypatch,
+        GUEST_PROVISION_LIMIT=10,
+        GUEST_PROVISION_PREFIX_DAILY_LIMIT=2,
+        GUEST_PROVISION_DAILY_LIMIT=100,
+    ) as from_address:
+        before = telemetry.capacity_refusals.get(("guests_per_prefix",))
+        codes = [
+            (await from_address(f"2001:db8:1:{subnet}::10").post(
+                "/api/auth/display-name", json={"displayName": f"Site{subnet}"}
+            )).status_code
+            for subnet in (1, 2, 3)
+        ]
+        elsewhere = await from_address("2001:db8:2::10").post(
+            "/api/auth/display-name", json={"displayName": "Elsewhere"}
+        )
+        assert codes == [200, 200, 429]
+        assert elsewhere.status_code == 200
+        assert telemetry.capacity_refusals.get(("guests_per_prefix",)) == before + 1
+
+
+async def test_the_day_turning_visitors_away_is_counted_for_the_page(monkeypatch):
+    """The only trace was a WARNING line and a 429 that reads like a rejected
+    name (#1418). The counter is what SketchyTurningVisitorsAway reads, and a
+    refusal by the day gives the network's share back."""
+    async with build_site(
+        monkeypatch, GUEST_PROVISION_LIMIT=10, GUEST_PROVISION_DAILY_LIMIT=1
+    ) as from_address:
+        before = telemetry.capacity_refusals.get(("guests_per_day",))
+        first = await from_address("192.0.2.1").post("/api/auth/display-name", json={"displayName": "Early"})
+        late = await from_address("192.0.2.2").post("/api/auth/display-name", json={"displayName": "Late"})
+        assert (first.status_code, late.status_code) == (200, 429)
+        assert "not taking new visitors" in late.json()["detail"]
+        assert telemetry.capacity_refusals.get(("guests_per_day",)) == before + 1
+        from sqlalchemy import func, select
+        from app.db.models import AuthRateLimitBucket
+
+        async with from_address.factory() as session:
+            spent = await session.scalar(
+                select(func.sum(AuthRateLimitBucket.attempt_count)).where(
+                    AuthRateLimitBucket.scope == "guest_provision_prefix_day"
+                )
+            )
+        assert spent == 1

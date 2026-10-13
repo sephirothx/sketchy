@@ -266,7 +266,43 @@ def test_a_deployment_without_mail_still_runs_outside_production(environ):
     ["relay.example", " relay.example ", "127.0.0.1"],
 )
 def test_production_with_a_relay_starts(host):
-    validate_mail_configuration({"SKETCHY_ENV": "production", "SMTP_HOST": host})
+    validate_mail_configuration(
+        {"SKETCHY_ENV": "production", "SMTP_HOST": host, "SMTP_FROM": "Sketchy <play@sketchy.app>"}
+    )
+
+
+@pytest.mark.parametrize(
+    "sender, refused",
+    [
+        (None, "SMTP_FROM is required"),
+        ("sketchy@localhost", "nobody receives mail at"),
+        ("noreply@sketchy.local", "nobody receives mail at"),
+        ("noreply@example.com", "nobody receives mail at"),
+        ("not an address", "must name one email address"),
+    ],
+)
+def test_production_refuses_a_missing_or_placeholder_sender(sender, refused):
+    """#1418: SMTP_FROM defaulted to sketchy@localhost, and a relay with a
+    host and a password accepted it - every reset link went out From a
+    domain DMARC fails."""
+    environ = {"SKETCHY_ENV": "production", "SMTP_HOST": "relay.example"}
+    if sender is not None:
+        environ["SMTP_FROM"] = sender
+    with pytest.raises(RuntimeError, match=refused):
+        validate_mail_configuration(environ)
+
+
+def test_a_sender_off_the_site_s_domain_starts_and_is_said(caplog):
+    """A mail provider's sending domain is ordinary; misalignment is the usual
+    cause of spam filing, so it is said rather than refused."""
+    base = {"SKETCHY_ENV": "production", "SMTP_HOST": "relay.example", "PUBLIC_BASE_URL": "https://play.sketchy.app"}
+    with caplog.at_level("WARNING", logger="app.deployment"):
+        validate_mail_configuration({**base, "SMTP_FROM": "noreply@sketchy.app"})
+        assert not caplog.records
+        validate_mail_configuration({**base, "SMTP_FROM": "noreply@mailer.net"})
+    [warning] = caplog.records
+    # The domains themselves, compared whole.
+    assert warning.args == ("mailer.net", "play.sketchy.app")
 
 
 @pytest.mark.parametrize(
@@ -379,3 +415,32 @@ def test_production_without_a_reachable_contact_address_refuses_to_start(address
 def test_a_malformed_contact_address_is_refused_everywhere(address):
     with pytest.raises(RuntimeError, match="one email address, written plainly"):
         validate_contact_address({"CONTACT_ADDRESS": address})
+
+
+def test_production_refuses_to_start_without_a_frontend_build(tmp_path):
+    """#1418: with `frontend/dist` moved away the API and readiness answered
+    while every page was a 404. Production refuses; development serves the
+    API alone, as a backend developer runs it."""
+    from app.deployment import validate_frontend_build
+
+    index = tmp_path / "index.html"
+    validate_frontend_build(index, {"SKETCHY_ENV": "development"})
+    with pytest.raises(RuntimeError, match="No frontend build"):
+        validate_frontend_build(index, {"SKETCHY_ENV": "production"})
+    index.write_text("<!doctype html>")
+    validate_frontend_build(index, {"SKETCHY_ENV": "production"})
+
+
+def test_production_publishes_no_api_documentation():
+    """#1418: FastAPI's defaults served /docs, /redoc and /openapi.json in
+    production - every staff route and its schema, for anybody."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.deployment import api_documentation_urls
+
+    for environment, served in (("production", False), ("development", True)):
+        app = FastAPI(**api_documentation_urls({"SKETCHY_ENV": environment}))
+        with TestClient(app) as client:
+            for path in ("/docs", "/redoc", "/openapi.json"):
+                assert (client.get(path).status_code == 200) is served, (environment, path)

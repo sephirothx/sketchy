@@ -279,3 +279,27 @@ async def test_an_unreadable_packet_fails_the_waiting_call_and_expect():
             await socket.expect("anything", wait_seconds=2)
     finally:
         await socket.close()
+
+
+async def test_the_page_step_fails_a_deployment_with_no_frontend():
+    """#1418: with no frontend build every API step and socket event answered
+    while `/` was a 404, and the probe stayed green. The page and the first
+    script it names are now the first step."""
+    from app.probe import ProbeError, _page
+
+    def server(pages: dict[str, tuple[int, bytes]]):
+        async def transport(method, url, body, headers, *, wait_seconds=None):
+            status, payload = pages.get(url.removeprefix("http://x"), (404, b""))
+            return HttpResponse(status, {}, payload)
+        return transport
+
+    shell = b'<html><script type="module" src="/assets/index-abc.js"></script></html>'
+    await _page("http://x/", server({"/": (200, shell), "/assets/index-abc.js": (200, b"")}))
+    for pages, said in (
+        ({}, "/ answered 404"),
+        ({"/": (200, b"<html></html>")}, "names no /assets/ script"),
+        ({"/": (200, shell)}, "index-abc.js answered 404"),
+    ):
+        with pytest.raises(ProbeError, match=said) as caught:
+            await _page("http://x", server(pages))
+        assert caught.value.step == "page"

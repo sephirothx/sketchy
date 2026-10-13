@@ -392,7 +392,8 @@ password with every old device still signed in (R-AUTH-10, R-AUTH-17).
 stored.** Most scopes count a client address (keyed as R-RATE-02 says). A per-account
 scope hashes the **account** instead — `room_create`, the prompt-list and audited-route
 budgets, `report-account`, `password_reset_account` and `_day`, `email_verify_account`
-— because that is the key a caller cannot change by moving address; and
+— because that is the key a caller cannot change by moving address; `guest_provision_prefix_day`
+hashes the caller's **network** (an IPv6 /48 or IPv4 /24, #1418); and
 `email_verify_recipient` hashes the **normalized address being verified**, so one inbox
 has one bucket whoever asks for it (#1240). Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired

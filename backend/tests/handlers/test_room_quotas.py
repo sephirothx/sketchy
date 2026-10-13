@@ -7,6 +7,8 @@ player still reaches the game.
 """
 from __future__ import annotations
 
+from app.services.telemetry import telemetry
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -99,11 +101,14 @@ async def test_the_server_refuses_to_open_more_rooms_than_it_will_hold():
     await seat(sessions, "sid-1", "user-1")
     await seat(sessions, "sid-2", "user-2")
 
+    before = telemetry.capacity_refusals.get(("rooms",))
     await sio.handlers["/"]["create_room"]("sid-1", {"nickname": "Ann"})
     refused = await sio.handlers["/"]["create_room"]("sid-2", {"nickname": "Bob"})
 
     assert refused["ok"] is False
     assert len(room_manager.rooms) == 1
+    # Counted for SketchyTurningVisitorsAway (#1418).
+    assert telemetry.capacity_refusals.get(("rooms",)) == before + 1
 
 
 async def test_quick_prompts_are_capped_across_every_live_room():
