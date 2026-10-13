@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { SectionLabel } from "../components/ui/Card";
@@ -9,11 +9,13 @@ import {
   PROMPT_STATS_SORTS,
   coverageNote,
   isPromptStatsSort,
+  listsByLanguage,
   matchingPrompts,
   nothingRanked,
   plainPromptNames,
   searchExample,
   searchNote,
+  sortPromptStats,
   statsRows,
 } from "../lib/promptStats";
 import { useSettingsStore } from "../store/settingsStore";
@@ -38,9 +40,9 @@ const PAGE_SIZE = 40;
 const PLAIN_PAGE_SIZE = 120;
 
 const WINDOWS = [
-  { value: "all", get label() { return ui.promptStatsPage.allTime; }, days: null },
-  { value: "30d", get label() { return ui.promptStatsPage.last30Days; }, days: 30 },
-  { value: "90d", get label() { return ui.promptStatsPage.last90Days; }, days: 90 },
+  { value: "all", get label() { return ui.promptStatsPage.allTime; } },
+  { value: "30d", get label() { return ui.promptStatsPage.last30Days; } },
+  { value: "90d", get label() { return ui.promptStatsPage.last90Days; } },
 ] as const;
 const SCORING_FILTERS: Array<{ value: "all" | ScoringMode; label: string }> = [
   { value: "all", get label() { return ui.promptStatsPage.allScoringModes; } },
@@ -124,14 +126,10 @@ export function PromptStatsPage() {
       setLoading(true);
       setError(null);
       try {
-        const requestParams = new URLSearchParams({ sort });
-        const selectedWindow = WINDOWS.find((item) => item.value === windowFilter);
-        if (selectedWindow?.days) {
-          requestParams.set(
-            "from",
-            new Date(Date.now() - selectedWindow.days * 86_400_000).toISOString(),
-          );
-        }
+        // The period by name, which the server caches by (#1424); the sort
+        // is not asked for - the counts are the same in any order, and they
+        // are sorted here.
+        const requestParams = new URLSearchParams({ window: windowFilter });
         if (scoringMode !== "all") requestParams.set("scoringMode", scoringMode);
         if (hintMode !== "all") requestParams.set("hintMode", hintMode);
         const response = await apiRequest<PromptStatsResponse>(
@@ -153,11 +151,24 @@ export function PromptStatsPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, sort, windowFilter, scoringMode, hintMode]);
+  }, [slug, windowFilter, scoringMode, hintMode]);
 
+  const extraPromptLanguages = useSettingsStore((state) => state.extraPromptLanguages);
+  // The headings are language names in the reader's language, so they are
+  // grouped again when that changes (review of #1449).
+  const interfaceLocale = useSettingsStore((state) => state.locale);
+  const listGroups = useMemo(
+    () => listsByLanguage(lists ?? [], [playLanguage, ...extraPromptLanguages], interfaceLocale),
+    [lists, playLanguage, extraPromptLanguages, interfaceLocale],
+  );
+  // Sorted here: a change of sort is not a request (#1424).
+  const sorted = useMemo(
+    () => (stats ? { ...stats, sort, prompts: sortPromptStats(stats.prompts, sort) } : null),
+    [stats, sort],
+  );
   const list = lists?.find((entry) => entry.slug === slug) ?? null;
   const listLanguage = list?.language ?? playLanguage;
-  const matches = stats ? matchingPrompts(stats.prompts, query) : [];
+  const matches = sorted ? matchingPrompts(sorted.prompts, query) : [];
   const plain = stats !== null && nothingRanked(stats);
   const rows = plain ? [] : statsRows(matches);
   const names = plain ? plainPromptNames(matches, listLanguage) : [];
@@ -211,7 +222,15 @@ export function PromptStatsPage() {
             variant="pill"
             // Every list is as much of a choice as any other: no rest to tint against.
             restValue={slug ?? ""}
-            options={lists.map((entry) => ({ value: entry.slug, label: `${entry.name} (${entry.promptCount})` }))}
+            // By language, the reader's first (#1424): 136 lists in one
+            // column was no way to find one.
+            options={listGroups.flatMap((group) =>
+              group.lists.map((entry) => ({
+                value: entry.slug,
+                label: `${entry.name} (${ui.format.number({ value: entry.promptCount })})`,
+                group: group.label,
+              })),
+            )}
             value={slug ?? ""}
             onChange={chooseList}
           />

@@ -349,8 +349,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
     return `„${tag}” is geen label dat een lijst kan hebben.`;
   },
   unknown_sort: "Sketchy kan daar niet op sorteren.",
-  timezone_required: "Zet er een tijdzone bij die datum.",
-  range_reversed: "Het begin van het bereik moet vóór het einde liggen.",
 
   // Room presets
   room_preset_not_found: "Kamervoorinstelling niet gevonden.",

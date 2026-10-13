@@ -257,8 +257,6 @@ class ErrorCode(StrEnum):
     # Carries `reason`: `moderation` or `copy`.
     CANNOT_DUPLICATE_PROMPT_LIST = "cannot_duplicate_prompt_list"
     UNKNOWN_SORT = "unknown_sort"
-    TIMEZONE_REQUIRED = "timezone_required"
-    RANGE_REVERSED = "range_reversed"
 
     # Room presets
     ROOM_PRESET_NOT_FOUND = "room_preset_not_found"

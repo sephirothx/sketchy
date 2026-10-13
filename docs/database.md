@@ -2566,6 +2566,23 @@ ranking floor applies independently to the selected slice. `occurred_at`, `scori
 `NOT NULL`: every fact carries its authoritative occurrence time and rule dimensions,
 so bounded and segmented reads never have to exclude unattributable rows.
 
+**The read** (#1424) sums a list's facts per prompt version first and joins only those
+rows - about one per prompt - to `prompt_versions` to sum per concept: joining every
+fact the list ever had before grouping carried its whole history through the join
+(118.6 against 88.6 ms all-time at 2.1M facts, `benchmarks/prompt_stats_query.py`). The
+window is a name (`all`, `30d`, `90d`) rather than free timestamps, so the result can be
+cached per list, window and rule filters for `PROMPT_STATS_TTL_SECONDS` (300 s); a
+repeat within it runs no query. The cache is bounded by rows (20,000), not entries - a
+key is an anonymous reader's choice - keeps no empty read, and runs at most two
+aggregates at once, one per key however many readers wait on it. Facts are kept forever (R-PRIV-05), so without the cache
+the read's cost would grow with every game played.
+
+**Facts for player-owned lists are written and not read** (decision deferred, #1424): the
+Prompt stats read is for bundled lists only, so a game played on a player's list writes
+its usage facts (about 70 rows, ~17 KB, for a 24-turn game) that nothing reads yet. They
+are kept for now - a list's owner may one day see how their list plays - and whether to
+stop writing them, or to give them that reader, is an open decision.
+
 **Runtime attribution observes the durable/live boundary.** Completed turns
 snapshot nullable prompt-version source IDs, and usage writes credit those versions only
 to the lists the game played. An ephemeral prompt has a **null source even when its

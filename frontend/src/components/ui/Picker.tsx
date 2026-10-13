@@ -7,6 +7,10 @@ import { ui } from "../../content/ui/index.ts";
 export interface PickerOption<V extends string> {
   value: V;
   label: string;
+  /** A heading the option is listed under. Options sharing one are given in
+      a run, and each run is introduced by its heading: a long list - the
+      prompt lists, by language (#1424) - is found by its groups. */
+  group?: string;
 }
 
 interface PickerProps<V extends string> {
@@ -77,6 +81,26 @@ export function Picker<V extends string>({
     close();
   }
 
+  function renderOption(option: PickerOption<V>) {
+    const selected = option.value === value;
+    return (
+      <button
+        key={option.value}
+        type="button"
+        role="option"
+        aria-selected={selected}
+        data-value={option.value}
+        className={`picker-option${selected ? " is-selected" : ""}`}
+        onClick={() => choose(option.value)}
+      >
+        <span className="picker-option-label">{option.label}</span>
+        <span className="picker-check" aria-hidden="true">
+          {selected && <CheckIcon size={13} />}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className={`picker is-${variant}${open ? " is-open" : ""}`} ref={rootRef}>
       <button
@@ -110,27 +134,31 @@ export function Picker<V extends string>({
           aria-label={label}
           onKeyDown={handleListKeyDown}
         >
-          {options.map((option) => {
-            const selected = option.value === value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                data-value={option.value}
-                className={`picker-option${selected ? " is-selected" : ""}`}
-                onClick={() => choose(option.value)}
-              >
-                <span className="picker-option-label">{option.label}</span>
-                <span className="picker-check" aria-hidden="true">
-                  {selected && <CheckIcon size={13} />}
-                </span>
-              </button>
-            );
-          })}
+          {groupRuns(options).map(({ group, members }) =>
+            group === undefined ? (
+              members.map(renderOption)
+            ) : (
+              <div key={group} role="group" aria-label={group} className="picker-group">
+                <div className="picker-group-label section-label" aria-hidden="true">{group}</div>
+                {members.map(renderOption)}
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>
   );
+}
+
+/** The options in runs of one group each, in the order given. */
+function groupRuns<V extends string>(
+  options: readonly PickerOption<V>[],
+): { group: string | undefined; members: PickerOption<V>[] }[] {
+  const runs: { group: string | undefined; members: PickerOption<V>[] }[] = [];
+  for (const option of options) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === option.group) last.members.push(option);
+    else runs.push({ group: option.group, members: [option] });
+  }
+  return runs;
 }

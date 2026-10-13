@@ -349,8 +349,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
     return `„${tag}“ ist kein Schlagwort, das eine Liste tragen kann.`;
   },
   unknown_sort: "Danach kann Sketchy nicht sortieren.",
-  timezone_required: "Gib zu diesem Datum eine Zeitzone an.",
-  range_reversed: "Der Anfang des Zeitraums muss vor seinem Ende liegen.",
 
   // Room presets
   room_preset_not_found: "Raumvorlage nicht gefunden.",

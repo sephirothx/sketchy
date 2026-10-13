@@ -2097,10 +2097,8 @@
   ],
   "api.serializers:prompt_stats_payload": [
    "correctGuessCount",
-   "correctGuessRatio",
    "offerCount",
    "pickCount",
-   "pickRate",
    "totalGuesserCount"
   ],
   "api.serializers:public_user_payload": [
@@ -3153,8 +3151,6 @@
    "cannot_copy_own_prompt_list",
    "cannot_duplicate_prompt_list",
    "unknown_sort",
-   "timezone_required",
-   "range_reversed",
    "room_preset_not_found",
    "room_preset_conflict",
    "room_preset_unavailable",

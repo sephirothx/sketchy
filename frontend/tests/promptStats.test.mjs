@@ -12,6 +12,8 @@ import {
   ratioLabel,
   searchExample,
   searchNote,
+  listsByLanguage,
+  sortPromptStats,
   statsRows,
 } from "../src/lib/promptStats.ts";
 
@@ -22,8 +24,6 @@ function prompt(text, overrides = {}) {
     pickCount: 5,
     correctGuessCount: 5,
     totalGuesserCount: 10,
-    pickRate: 0.5,
-    correctGuessRatio: 0.5,
     isRated: true,
     ...overrides,
   };
@@ -58,8 +58,7 @@ test("an unrated prompt shows no difficulty rather than a measured-looking zero"
   const [row] = statsRows([
     prompt("never-played", {
       isRated: false,
-      correctGuessRatio: 0,
-      pickRate: 0,
+      correctGuessCount: 0,
       pickCount: 0,
       totalGuesserCount: 1,
     }),
@@ -81,12 +80,13 @@ test("times drawn is reported for rated and unrated prompts alike", () => {
 
 test("rows keep the server's order and gain their display fields", () => {
   const rows = statsRows([
-    prompt("roller coaster", { correctGuessRatio: 0.1, pickRate: 0.2 }),
-    prompt("cat", { correctGuessRatio: 0.9, pickRate: 0.9 }),
+    // The ratios are divided here from the counts (#1424).
+    prompt("roller coaster", { correctGuessCount: 1, pickCount: 2 }),
+    prompt("cat", { correctGuessCount: 9, pickCount: 9 }),
   ]);
   assert.deepEqual(rows.map((row) => row.text), ["roller coaster", "cat"]);
   assert.equal(rows[0].guessedLabel, "10%");
-  assert.equal(rows[0].drawnLabel, "5");
+  assert.equal(rows[0].drawnLabel, "2");
   assert.equal(rows[0].band, "Rarely guessed");
   assert.equal(rows[1].band, "Gets guessed");
   assert.equal(rows[1].pickedLabel, "90%");
@@ -151,4 +151,28 @@ test("the search example is a prompt from the list, whatever order it arrives in
   assert.equal(example, "cat");
   assert.equal(searchExample([...listed].reverse(), "en"), example);
   assert.equal(searchExample([], "en"), null);
+});
+
+test("the prompts are ranked here as the server ranks them, so a new sort is not a request (#1424)", () => {
+  const prompts = [
+    prompt("b-easy", { correctGuessCount: 9, offerCount: 10, pickCount: 1 }),
+    prompt("a-hard", { correctGuessCount: 1, offerCount: 10, pickCount: 9 }),
+    prompt("c-hard", { correctGuessCount: 1, offerCount: 10, pickCount: 4 }),
+    prompt("unrated-z", { isRated: false, correctGuessCount: 0 }),
+    prompt("unrated-a", { isRated: false, correctGuessCount: 0 }),
+  ];
+  const order = (sort) => sortPromptStats(prompts, sort).map((p) => p.text);
+  assert.deepEqual(order("hardest"), ["a-hard", "c-hard", "b-easy", "unrated-a", "unrated-z"]);
+  assert.deepEqual(order("easiest"), ["b-easy", "a-hard", "c-hard", "unrated-a", "unrated-z"]);
+  assert.deepEqual(order("most-picked"), ["a-hard", "c-hard", "b-easy", "unrated-a", "unrated-z"]);
+});
+
+test("the list selector groups by language, the reader's play languages first", () => {
+  const list = (slug, language) => ({ slug, name: slug, language, promptCount: 10 });
+  const groups = listsByLanguage(
+    [list("de-standard", "de"), list("en-standard", "en"), list("fr-standard", "fr"), list("en-extended", "en")],
+    ["fr", "en"],
+  );
+  assert.deepEqual(groups.map((group) => group.language), ["fr", "en", "de"]);
+  assert.deepEqual(groups[1].lists.map((entry) => entry.slug), ["en-standard", "en-extended"]);
 });

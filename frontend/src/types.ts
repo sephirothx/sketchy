@@ -222,9 +222,9 @@ export interface PromptStats {
   pickCount: number;
   correctGuessCount: number;
   totalGuesserCount: number;
-  pickRate: number;
-  correctGuessRatio: number;
-  /** False until enough guessers have faced it for the ratios to mean anything. */
+  /** False until enough guessers have faced it for the ratios to mean anything.
+      The ratios themselves are the client's to divide (#1424): `pickRate` and
+      `correctGuessRatio` in lib/promptStats.ts. */
   isRated: boolean;
 }
 
@@ -792,8 +792,6 @@ export type ErrorCode =
   | "cannot_copy_own_prompt_list"
   | "cannot_duplicate_prompt_list"
   | "unknown_sort"
-  | "timezone_required"
-  | "range_reversed"
   | "room_preset_not_found"
   | "room_preset_conflict"
   | "room_preset_unavailable"

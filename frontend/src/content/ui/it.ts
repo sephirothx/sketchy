@@ -349,8 +349,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
     return `«${tag}» non è un’etichetta che una lista può avere.`;
   },
   unknown_sort: "Sketchy non può ordinare per questo.",
-  timezone_required: "Indica un fuso orario insieme a questa data.",
-  range_reversed: "L’inizio dell’intervallo deve precedere la sua fine.",
 
   // Room presets
   room_preset_not_found: "Preimpostazione della stanza non trovata.",

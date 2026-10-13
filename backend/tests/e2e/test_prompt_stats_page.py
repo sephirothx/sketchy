@@ -46,7 +46,8 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
                 ".prompt-stats-plain li" if plain else ".prompt-stats-table tbody tr"
             )
             label = await list_picker.inner_text()
-            expected = int(re.search(r"\((\d+)\)\s*$", label).group(1))
+            # Locale-formatted since #1424: "1,036".
+            expected = int(re.search(r"\(([\d,]+)\)\s*$", label).group(1).replace(",", ""))
 
             more = page.locator(".prompt-stats-more button")
             while await more.count() > 0:
@@ -86,14 +87,33 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # returns at the *start* of that window. It is one frame on an idle
             # machine and eight under load, which is why this only ever failed
             # on CI.
+            # The list picker groups the lists by language, the reader's
+            # first (#1424): 136 options in one column was no way to find one.
+            await list_picker.click()
+            first_group = page.get_by_role("listbox").get_by_role("group").first
+            await expect(first_group).to_have_attribute("aria-label", "English")
+            await page.keyboard.press("Escape")
+            asked: list[str] = []
+            page.on("request", lambda request: asked.append(request.url) if "/prompt-stats" in request.url else None)
+
             await pick(page, "#prompt-stats-sort", "most-picked")
             await page.wait_for_url("**sort=most-picked")
             await expect(page.locator("#prompt-stats-sort")).to_contain_text("Most picked")
+            # Sorted here: the same counts in another order are not a request.
+            await page.wait_for_timeout(300)
+            assert asked == [], asked
 
             # Facts can be sliced without resetting or rewriting them. The
             # chosen period and rule dimensions remain linkable in the URL.
             await pick(page, "#prompt-stats-window", "30d")
             await page.wait_for_url("**window=30d*")
+            # The period by name, which the server caches by - not a timestamp.
+            for _ in range(50):
+                if any("window=30d" in url for url in asked):
+                    break
+                await page.wait_for_timeout(100)
+            assert any("window=30d" in url for url in asked), asked
+            assert not any("from=" in url for url in asked), asked
             await pick(page, "#prompt-stats-scoring", "pressure")
             await page.wait_for_url("**scoringMode=pressure*")
             await pick(page, "#prompt-stats-hints", "wheel")
@@ -111,5 +131,32 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await info.wait_for()
             assert await info.get_attribute("href") == "/prompt-lists/english_standard"
             assert await page.locator(".prompt-list-stats-links").count() == 0
+        finally:
+            await browser.close()
+
+
+async def test_the_language_headings_follow_the_interface_language():
+    """Review of #1449: the headings were remembered by list and play
+    language only, so switching the interface to German left them English
+    while everything around them changed."""
+    from uuid import uuid4
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Heads{uuid4().hex[:6]}")
+            await page.goto(f"{BASE_URL}/prompt-lists")
+            list_picker = page.locator("#prompt-stats-list")
+            first_group = page.get_by_role("listbox").get_by_role("group").first
+            await list_picker.click()
+            await expect(first_group).to_have_attribute("aria-label", "English")
+            await page.keyboard.press("Escape")
+            await page.locator(".language-picker .picker-trigger").first.click()
+            await page.get_by_role("listbox").get_by_role("option", name=re.compile("Deutsch")).click()
+            await page.wait_for_function("() => document.documentElement.lang === 'de'")
+            await list_picker.click()
+            await expect(first_group).to_have_attribute("aria-label", "Englisch")
         finally:
             await browser.close()

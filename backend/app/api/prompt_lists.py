@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import ConfigDict, Field
@@ -743,8 +743,7 @@ def create_prompt_list_router(
         request: Request,
         sort: str = Query(default="hardest"),
         limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-        from_time: datetime | None = Query(default=None, alias="from"),
-        to_time: datetime | None = Query(default=None, alias="to"),
+        window: Literal["all", "30d", "90d"] = Query(default="all"),
         scoring_mode: ScoringMode | None = Query(default=None, alias="scoringMode"),
         hint_mode: HintMode | None = Query(default=None, alias="hintMode"),
     ):
@@ -772,27 +771,9 @@ def create_prompt_list_router(
             )
         if sort not in SORTS:
             raise Refusal(422, ErrorCode.UNKNOWN_SORT, "Unknown sort.", field="sort")
-        for field_name, value in (("from", from_time), ("to", to_time)):
-            if value is not None and value.tzinfo is None:
-                raise Refusal(
-                    422,
-                    ErrorCode.TIMEZONE_REQUIRED,
-                    f"{field_name} must include a timezone.",
-                    field=field_name,
-                )
-        if from_time is not None:
-            from_time = from_time.astimezone(timezone.utc)
-        if to_time is not None:
-            to_time = to_time.astimezone(timezone.utc)
-        if from_time is not None and to_time is not None and from_time >= to_time:
-            raise Refusal(
-                422, ErrorCode.RANGE_REVERSED, "from must be earlier than to.", field="from"
-            )
-
         summaries = await prompt_list_repo.get_prompt_stats(
             slug,
-            from_time=from_time,
-            to_time=to_time,
+            window=window,
             scoring_mode=scoring_mode.value if scoring_mode else None,
             hint_mode=hint_mode.value if hint_mode else None,
         )
