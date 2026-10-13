@@ -835,7 +835,13 @@ class GameFlowService:
                     language: PromptForm(
                         answer=form.answer,
                         aliases=form.aliases,
-                        version_id=packed_version_id(form.prompt_version_id),
+                        # The room's spelling keeps the string `version_ids`
+                        # holds anyway; packing it would add a second copy.
+                        version_id=(
+                            form.prompt_version_id
+                            if form.prompt_version_id == prompt.prompt_version_id
+                            else packed_version_id(form.prompt_version_id)
+                        ),
                         source_list_ids=form.source_list_ids,
                     )
                     for language, form in prompt.translations.items()

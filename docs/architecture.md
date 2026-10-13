@@ -125,7 +125,7 @@ holds every form it drew from its first turn to its last, so a form is kept smal
 slots, the version id as 16 bytes handed back in its public form by `version_id_for`, and
 a source-list tuple the draw shares between every form found in the same lists; the
 per-language letter counts are the room's own, not a copy
-(`benchmarks/game_prompt_memory.py`: 280 KB → 143 KB at eight seats over three rounds).
+(`benchmarks/game_prompt_memory.py`: 253 KB → 141 KB at eight seats over three rounds).
 
 **`app/rooms.py` — the live room model.**
 `Room`, `Player`, `RestartVote`, `DrawingRecapEntry`, and `RoomManager`. A `Room`

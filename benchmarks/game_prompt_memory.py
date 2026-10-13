@@ -12,7 +12,7 @@ friends are left out: they are the repository's cache, shared by every room
 playing the same lists.
 
 Measured for #1483 at 3 rounds x 8 seats (72 concepts x 8 languages):
-283 KB before; the spellings (`prompt_translations`) were 241 KB of it.
+253 KB before, 238 KB of it the spellings (`prompt_translations`); 141 KB after.
 
   backend/.venv/bin/python benchmarks/game_prompt_memory.py
   backend/.venv/bin/python benchmarks/game_prompt_memory.py --family landmarks --rounds 1 --seats 2
@@ -32,6 +32,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import tracemalloc
 from types import SimpleNamespace
 
 BACKEND = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
@@ -62,6 +63,27 @@ FIELDS = (
 )
 
 
+_INSTANCE_BYTES: dict[type, int] = {}
+
+
+def instance_bytes(obj) -> int:
+    """What one instance of a dataclass costs by itself, measured rather than
+    read off `sys.getsizeof`: from Python 3.13 an instance without slots keeps
+    its attributes inline, so `getsizeof` misses them, and reading `__dict__`
+    would build a dict the instance never had (review of #1483). A thousand
+    copies sharing the same field values, less the list slot holding each."""
+    cls = type(obj)
+    if cls not in _INSTANCE_BYTES:
+        values = {field.name: getattr(obj, field.name) for field in dataclasses.fields(obj)}
+        tracemalloc.start()
+        made = [cls(**values) for _ in range(1000)]
+        traced = tracemalloc.get_traced_memory()[0]
+        tracemalloc.stop()
+        _INSTANCE_BYTES[cls] = round(traced / len(made)) - 8
+        del made
+    return _INSTANCE_BYTES[cls]
+
+
 def held(obj, seen: set[int]) -> int:
     """Bytes `obj` and everything it reaches hold, each object once."""
     if id(obj) in seen or obj is None or isinstance(obj, (bool, int, float)):
@@ -75,9 +97,7 @@ def held(obj, seen: set[int]) -> int:
     if isinstance(obj, (list, tuple, set, frozenset)):
         return size + sum(held(item, seen) for item in obj)
     if dataclasses.is_dataclass(obj):
-        if hasattr(obj, "__dict__"):
-            size += sys.getsizeof(obj.__dict__)
-        return size + sum(held(getattr(obj, f.name), seen) for f in dataclasses.fields(obj))
+        return instance_bytes(obj) + sum(held(getattr(obj, f.name), seen) for f in dataclasses.fields(obj))
     return size
 
 

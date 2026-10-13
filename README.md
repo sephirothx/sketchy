@@ -2187,7 +2187,7 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/prompt_stats_query.py --facts 2100000
 
-# What a mixed-language game holds for the prompts it drew, field by field: 280 KB before #1483, 143 KB after
+# What a mixed-language game holds for the prompts it drew, field by field: 253 KB before #1483, 141 KB after
 backend/.venv/bin/python benchmarks/game_prompt_memory.py --rounds 3 --seats 8
 
 # First contentful paint of a cold visit on a slowed phone: lobby and invite link, English and French (#1426)
