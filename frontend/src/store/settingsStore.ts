@@ -21,6 +21,8 @@ import {
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
 import {
+  FALLBACK_LOCALE,
+  hasCatalogue,
   interfaceLocale,
   isCatalogueLoaded,
   loadCatalogue,
@@ -355,19 +357,25 @@ browser from then on - a guest who changed their browser's language would
 keep the old one for good (R-I18N-06). */
 function switchLocale(locale: string, remember = true): Promise<boolean> {
   wantedLocale = locale;
-  const commit = (): boolean => {
-    if (wantedLocale !== locale || !isCatalogueLoaded(locale)) return false;
-    const inForce = setCatalogue(locale);
-    if (remember) rememberLocale(inForce);
+  // `got` is what loaded: the locale asked for, or English when it could not
+  // be fetched. English stands in only where there are no words at all - the
+  // first paint, now that English is a chunk too (#1426) - and is not
+  // remembered as a choice: it was nobody's. Anywhere else a fallback is a
+  // switch that failed, and the reader keeps what they were reading.
+  const commit = (got: string = locale): boolean => {
+    if (wantedLocale !== locale || !isCatalogueLoaded(got)) return false;
+    if (got !== locale && hasCatalogue()) return false;
+    const inForce = setCatalogue(got);
+    if (remember && got === locale) rememberLocale(inForce);
     applyDocumentLocale(inForce);
     setClockLocale(inForce);
     if (useSettingsStore.getState().locale !== inForce) {
       useSettingsStore.setState({ locale: inForce });
     }
-    return true;
+    return got === locale;
   };
   if (isCatalogueLoaded(locale)) return Promise.resolve(commit());
-  return loadCatalogue(locale).then(commit);
+  return loadCatalogue(locale).then((got) => commit(got));
 }
 
 // Before the first paint, not after it: a page that renders in English and
@@ -527,9 +535,49 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
 }));
 
 /** Settles once the reader's language can be read - what `main.tsx` holds
-    the first paint for. Never rejects: a language that cannot be fetched
-    leaves the page in English. */
+    the first paint for. A language that cannot be fetched leaves the page in
+    English; rejects only when English cannot be fetched either, and
+    `main.tsx` then draws a page that needs no words from a catalogue. */
 export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale, false).then(() => undefined);
+
+/** How long the first paint waits for the reader's language before English
+    stands in for it - the bound the paint had while English was in the entry
+    chunk, and the reader's language still arrives as an ordinary switch. */
+export const LOCALE_WAIT_MS = 2000;
+
+/** Settles with whether there are words to paint with: the reader's language
+    within `LOCALE_WAIT_MS`, or else whichever comes first of it and English,
+    fetched again if it failed the first time (#1426). Waiting for English
+    alone left a page blank with French already here, or showed the
+    could-not-load page over it (review of #1451). False only when neither
+    can be fetched, and `main.tsx` then shows the shell's own page that needs
+    no catalogue. */
+export const firstPaintWords: Promise<boolean> = new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, LOCALE_WAIT_MS);
+  void initialLocaleReady.catch(() => undefined).then(() => {
+    clearTimeout(timer);
+    resolve();
+  });
+}).then(() => {
+  if (hasCatalogue()) return true;
+  return new Promise<boolean>((resolve) => {
+    let waiting = 2;
+    const settled = () => {
+      if (hasCatalogue()) resolve(true);
+      else if (--waiting === 0) resolve(false);
+    };
+    initialLocaleReady.then(settled, settled);
+    loadCatalogue(FALLBACK_LOCALE).then(() => {
+      // English stands in only where there is still nothing.
+      if (!hasCatalogue()) {
+        const inForce = setCatalogue(FALLBACK_LOCALE);
+        applyDocumentLocale(inForce);
+        setClockLocale(inForce);
+      }
+      settled();
+    }, settled);
+  });
+});
 
 if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
   const media = window.matchMedia("(prefers-color-scheme: dark)");

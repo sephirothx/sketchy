@@ -19,7 +19,7 @@ they are free to diverge even though they hold the same eight today.
 Resolved before the first paint. A page that renders in English and then
 switches has already shown the wrong language to the person who reads slowest.
 */
-import { catalogueFor, FALLBACK_LOCALE, LOCALES, type Locale } from "../content/ui/index.ts";
+import { catalogueFor, FALLBACK_LOCALE, isCatalogueLoaded, LOCALES, type Locale } from "../content/ui/index.ts";
 
 export { FALLBACK_LOCALE, LOCALES };
 export type { Locale };
@@ -88,6 +88,9 @@ are really for; a person who has chosen another language gets theirs here. */
 export function applyDocumentLocale(locale: Locale): void {
   if (typeof document === "undefined") return;
   document.documentElement.lang = locale;
+  // Called as the settings store loads, before any catalogue has arrived
+  // (#1426): the tags wait for the words, and are set again when they come.
+  if (!isCatalogueLoaded(locale)) return;
   const description = catalogueFor(locale).document.description;
   for (const selector of ['meta[name="description"]', 'meta[property="og:description"]']) {
     document.querySelector(selector)?.setAttribute("content", description);

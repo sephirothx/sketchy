@@ -78,6 +78,94 @@ function precompress(): Plugin {
   }
 }
 
+/** The reader's language, and on an invite link the room's page, fetched from
+    the page shell - before the entry has run (#1426).
+
+Every language is a chunk of its own, English included, and the app asks for
+the reader's from inside the entry: a French reader's first paint waited for
+the entry and its static imports to download and run, then for French. And an
+invite link (`/room/CODE`) asked for the room's page from inside the entry
+too, while the lobby's play routes competed with it. This writes the chunk
+lists into `index.html` and an inline script that chooses the language the
+way the app does (`resolveLocale`: the stored choice, then the browser's
+languages by base tag, then English) and appends `modulepreload` links for it
+- and for the room's page and its imports on `/room/`.
+
+Appended after Vite's own tags, so the entry and vendor are asked for first:
+inserted before them, the room's preloads starved vendor and the paint came
+later (2,680 ms, measured). Each language's list carries its static imports
+(the shared format chunk among them, without which the gain disappeared),
+less what the entry already preloads. The room's stylesheets are preloaded
+too: Vite's own loader holds the page's import until they arrive, and asked
+for from the entry they were one more round trip before the paint. With
+`crossorigin`, as the loader's own links have it: a preload in another
+credentials mode is not reused, and the file is fetched three times. The inline script's hash is read by
+the server at startup for its CSP (`security_headers.inline_script_hashes`). */
+function preloadReaderChunks(): Plugin {
+  return {
+    name: 'sketchy-preload-reader-chunks',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const bundle = ctx.bundle
+        if (!bundle) return html
+        const chunks = Object.values(bundle).filter((item) => item.type === 'chunk')
+        const byFile = new Map(chunks.map((chunk) => [chunk.fileName, chunk]))
+        const closure = (start: string[]): string[] => {
+          const seen = new Set<string>()
+          const queue = [...start]
+          while (queue.length) {
+            const file = queue.shift()!
+            if (seen.has(file)) continue
+            seen.add(file)
+            queue.push(...(byFile.get(file)?.imports ?? []))
+          }
+          return [...seen]
+        }
+        const entry = chunks.find((chunk) => chunk.isEntry)
+        const preloaded = new Set(entry ? closure([entry.fileName]) : [])
+        const own = (start: string[]) => closure(start).filter((file) => !preloaded.has(file))
+        const facade = (pattern: RegExp) =>
+          chunks.find((chunk) => chunk.facadeModuleId && pattern.test(chunk.facadeModuleId))
+        const locales: Record<string, string[]> = {}
+        for (const chunk of chunks) {
+          const match = chunk.facadeModuleId?.match(/[\\/]src[\\/]content[\\/]ui[\\/]([a-z]{2})\.ts$/)
+          if (match) locales[match[1]] = own([chunk.fileName])
+        }
+        if (!locales.en) throw new Error('sketchy-preload-reader-chunks: no English catalogue chunk')
+        const room = facade(/[\\/]src[\\/]pages[\\/]GameRoomPage\.tsx$/)
+        const styles = (files: string[]) =>
+          new Set(files.flatMap((file) => [...(byFile.get(file)?.viteMetadata?.importedCss ?? [])]))
+        const entryStyles = styles([...preloaded])
+        const roomFiles = room ? own([room.fileName]) : []
+        const roomStyles = [...styles(roomFiles)].filter((file) => !entryStyles.has(file))
+        const plan = { locales, room: roomFiles, roomCss: roomStyles }
+        const script =
+          `(function(){try{var p=${JSON.stringify(plan)};var s=null;` +
+          `try{s=localStorage.getItem("sketchy_locale")}catch(e){}` +
+          // Own keys only: a stored "constructor" is not a language.
+          `var h=function(k){return Object.prototype.hasOwnProperty.call(p.locales,k)};` +
+          `var l=h(s)?s:null;` +
+          `if(!l){var b=navigator.languages||[navigator.language||""];` +
+          `for(var i=0;i<b.length&&!l;i++){var t=String(b[i]).toLowerCase();` +
+          `if(h(t))l=t;else if(h(t.split("-")[0]))l=t.split("-")[0];}}` +
+          `var f=p.locales[l||"en"];` +
+          // The first path segment, not a "/room/" literal: a page's markup is
+          // checked for links into rooms (test_gallery.py), and the shell is
+          // every page's markup.
+          `var c=[];if(location.pathname.split("/")[1]==="room"){f=f.concat(p.room);c=p.roomCss;}` +
+          `for(var j=0;j<f.length;j++){var k=document.createElement("link");` +
+          `k.rel="modulepreload";k.crossOrigin="";k.href="/"+f[j];document.head.appendChild(k);}` +
+          `for(var n=0;n<c.length;n++){var y=document.createElement("link");` +
+          `y.rel="preload";y.as="style";y.crossOrigin="";y.href="/"+c[n];document.head.appendChild(y);}` +
+          `}catch(e){}})();`
+        return html.replace('</head>', `  <script>${script}</script>\n  </head>`)
+      },
+    },
+  }
+}
+
 // The API and Socket.IO endpoints are same-origin in every real deployment:
 // the backend serves the built frontend itself (see SPAStaticFiles in
 // backend/app/main.py). The Vite dev server on :5173 is the one exception, so
@@ -88,7 +176,7 @@ const DEV_BACKEND = 'http://localhost:8000'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), precompress()],
+  plugins: [react(), preloadReaderChunks(), precompress()],
   server: {
     proxy: {
       // The backend admits a browser only from its own origin (#465). Through

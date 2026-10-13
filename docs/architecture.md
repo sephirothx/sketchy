@@ -226,8 +226,8 @@ frontend/src/
 ├── routeModules.ts        Every page and overlay but the lobby as a chunk of its own, and what is prefetched when (#475)
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
-├── content/ui/            The interface's words, one typed module per locale; English in the entry chunk, every other locale
-│                          a chunk of its own fetched before the first paint by whoever reads it (#982)
+├── content/ui/            The interface's words, one typed module per locale, each a chunk of its own - English too (#1426) -
+│                          preloaded by the page shell for whoever reads it (#982)
 │   └── CrashBoundary.tsx  The class both crash boundaries use (R-UX-06); pages/CrashPage.tsx is its fallback
 ├── hooks/
 │   ├── useGameSocketListeners.ts  Every server→client listener, registered once
@@ -247,12 +247,25 @@ frontend/src/
 ```
 
 **What a first visit downloads.** The entry chunk holds the lobby and what every page
-needs: the socket, the stores, the app-level listeners, English, and the crash page.
+needs: the socket, the stores, the app-level listeners, and the crash page.
 Every other page and both overlays are chunks of their own
 ([`routeModules.ts`](../frontend/src/routeModules.ts)), and so is every interface
-language but English (#982). The chunk for the address being opened is fetched while
-the first paint waits on the account, not after it. The room, Create and the offline
-banner's scratch pad are fetched once the lobby has painted, because a player is about
+language, English included (#982, #1426). The reader's language does not wait for the
+entry to run: an inline script the build writes at the end of `index.html`
+(`preloadReaderChunks` in [`vite.config.ts`](../frontend/vite.config.ts)) chooses it as
+the app does - stored choice, then browser languages, then English - and preloads its
+chunk and imports, after Vite's own tags so the entry and vendor go first; on an invite
+link it preloads the room's page and its imports too. English was in the entry until a
+French reader was measured downloading English, then French, in turn: on a 4× CPU,
+Slow 4G phone the French lobby's first paint went 2,056 → 1,756 ms and an invite
+link's 2,712 → 2,472 ms (English) and 2,848 → 2,464 ms (French), the English lobby
+unchanged ([`benchmarks/first_paint.py`](../benchmarks/first_paint.py)). The first paint
+waits for a catalogue whatever its bound, since without one there are no words; a
+reader's chunk that cannot be fetched falls back to English, and a shell whose chunks
+are all gone is reloaded. The chunk for the address being opened is fetched while the
+first paint waits on the account, not after it. The room, Create and the offline
+banner's scratch pad are fetched once the lobby has painted - on an invite link, once
+the room's page has arrived, which they competed with - because a player is about
 to need them, and the scratch pad cannot be fetched once the connection it stands in
 for has gone. React, the router and socket.io are a separate `vendor` chunk whose hash
 changes only when a dependency does, so a deploy of the app leaves them cached. A
@@ -286,8 +299,9 @@ the canvas renderer, loads the same way
 ([`LazyReportedDrawing`](../frontend/src/components/LazyReportedDrawing.tsx)): its
 frame and caption show while the chunk arrives, and say it could not be loaded if it
 cannot - the notice's words still stand. Together they took 10.6 KB of gzip out of the first
-load (213.6 → 203.0 KB). CI holds the first-load set to a
-gzip budget (`npm run bundle:check`, [`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
+load (213.6 → 203.0 KB). CI holds the first-load set - with the largest language, which every reader downloads
+before the first paint (#1426) - to a gzip budget (`npm run bundle:check`,
+[`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
 
 Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
 

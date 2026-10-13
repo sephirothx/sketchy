@@ -67,7 +67,7 @@ Called from `main.tsx` while the first paint waits on the account, so the
 page's chunk arrives alongside that answer rather than after it. A failed
 fetch is ignored here: the page asks again when it renders, and that is where
 a failure is shown. */
-export function prefetchRouteFor(pathname: string): void {
+export function prefetchRouteFor(pathname: string): Promise<unknown> {
   const first = pathname.split("/")[1] ?? "";
   const loader = ({
     create: load.createRoom,
@@ -88,7 +88,7 @@ export function prefetchRouteFor(pathname: string): void {
     admin: pathname.startsWith("/admin/bug-reports") ? load.bugReports : load.adminOperations,
     moderation: load.moderation,
   } as Record<string, (() => Promise<unknown>) | undefined>)[first];
-  void loader?.().catch(() => undefined);
+  return loader?.().catch(() => undefined) ?? Promise.resolve();
 }
 
 /** Fetch what the lobby's buttons lead to once the lobby is on screen, so
