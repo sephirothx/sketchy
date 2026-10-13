@@ -1,6 +1,7 @@
 """Log lines a machine can read, that name what they belong to, and keep secrets out."""
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import random
@@ -193,7 +194,9 @@ def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
     [
         ("1.2.", 3000, ""),  # no `@` at all
         ("a", 12_000, "@"),  # one `@`, and no domain after it
-        ("://a:", 2400, ""),  # a URL's start over and over, and no `@` to end a password
+        # A URL's start over and over, and no `@` to end a password: 24 KB,
+        # since on 12 KB its quadratic form was only 124 ms.
+        ("://a:", 4800, ""),
     ],
     ids=["no-at", "one-trailing-at", "userinfo-without-at"],
 )
@@ -202,16 +205,38 @@ def test_a_long_line_redacts_in_linear_time(unit, count, tail):
     client text: a pattern that retries a run from each of its characters took
     half a second on 12 KB, which stalls every room on the server.
 
-    Asked as how the cost grows rather than as a number of milliseconds: a line
-    eight times as long costs about eight times as much when the work is linear
-    and about sixty times when it is quadratic, on any machine. A fixed bound
-    measured the runner instead - CI's regular expressions run some twenty
-    times slower than a laptop's, a green run sat at half the old 50 ms, and a
-    busy runner went over it (#1484's CI)."""
+    Quadratic work is both slow and grows like a square, so the test asks for
+    both, in this thread's CPU time. Either alone measured the runner: linear
+    redaction takes 1.4 ms here and 26 ms on a green CI run, and a busy one
+    went over the old 50 ms bound (57 ms); a busy one also read x46-x78
+    growth from it for a line eight times as long, against x8 here (#1484's
+    CI). The quadratic patterns kept above as the specification take 500 ms
+    here and grow x60."""
     long_line = unit * count + tail
     short_line = unit * (count // 8) + tail
-    growth = _best(redact, long_line) / _best(redact, short_line)
-    assert growth < 20, f"x{growth:.0f} for a line eight times as long"
+    elapsed = _best(redact, long_line)
+    growth = elapsed / _best(redact, short_line)
+    assert elapsed < 0.1 or growth < 20, (
+        f"{elapsed * 1000:.0f} ms, x{growth:.0f} for an eighth of the line; by stage, "
+        f"microseconds for each: {_growth_by_stage(long_line, short_line)}"
+    )
+
+
+def _growth_by_stage(long_line: str, short_line: str) -> dict[str, str]:
+    """Which pass grew, so a failure on a runner nobody can reproduce on
+    names its pattern - each timed on the raw line."""
+    from app import logging_config as lc
+
+    stages = {
+        **{f"rule{i}": functools.partial(pattern.sub, replacement) for i, (pattern, replacement) in enumerate(lc._REDACTIONS)},
+        "addresses": lc._mask_addresses,
+        "ipv6": lc._IPV6.findall,
+        "ipv4": lc._IPV4.findall,
+    }
+    return {
+        name: f"{_best(stage, long_line) * 1e6:.0f}/{_best(stage, short_line) * 1e6:.0f}"
+        for name, stage in stages.items()
+    }
 
 
 def _best(fn, arg, runs: int = 5) -> float:
@@ -219,9 +244,11 @@ def _best(fn, arg, runs: int = 5) -> float:
 
 
 def _timed(fn, arg) -> float:
-    start = time.perf_counter()
+    # This thread's CPU time, not the wall clock: the time the other test
+    # workers hold the runner's CPUs is not this call's.
+    start = time.thread_time()
     fn(arg)
-    return time.perf_counter() - start
+    return time.thread_time() - start
 
 
 # --- wiring ------------------------------------------------------------------------
