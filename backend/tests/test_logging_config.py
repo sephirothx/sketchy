@@ -189,20 +189,33 @@ def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
 
 
 @pytest.mark.parametrize(
-    "line",
+    ("unit", "count", "tail"),
     [
-        "1.2." * 3000,  # no `@` at all
-        "a" * 12_000 + "@",  # one `@`, and no domain after it
-        "://a:" * 2400,  # a URL's start over and over, and no `@` to end a password
+        ("1.2.", 3000, ""),  # no `@` at all
+        ("a", 12_000, "@"),  # one `@`, and no domain after it
+        ("://a:", 2400, ""),  # a URL's start over and over, and no `@` to end a password
     ],
     ids=["no-at", "one-trailing-at", "userinfo-without-at"],
 )
-def test_a_long_line_redacts_in_linear_time(line):
+def test_a_long_line_redacts_in_linear_time(unit, count, tail):
     """`redact` runs on the event loop for every JSON line, and a line can carry
     client text: a pattern that retries a run from each of its characters took
-    half a second on 12 KB, which stalls every room on the server."""
-    elapsed = min(_timed(redact, line) for _ in range(3))
-    assert elapsed < 0.05, f"{elapsed * 1000:.0f} ms"
+    half a second on 12 KB, which stalls every room on the server.
+
+    Asked as how the cost grows rather than as a number of milliseconds: a line
+    eight times as long costs about eight times as much when the work is linear
+    and about sixty times when it is quadratic, on any machine. A fixed bound
+    measured the runner instead - CI's regular expressions run some twenty
+    times slower than a laptop's, a green run sat at half the old 50 ms, and a
+    busy runner went over it (#1484's CI)."""
+    long_line = unit * count + tail
+    short_line = unit * (count // 8) + tail
+    growth = _best(redact, long_line) / _best(redact, short_line)
+    assert growth < 20, f"x{growth:.0f} for a line eight times as long"
+
+
+def _best(fn, arg, runs: int = 5) -> float:
+    return min(_timed(fn, arg) for _ in range(runs))
 
 
 def _timed(fn, arg) -> float:
