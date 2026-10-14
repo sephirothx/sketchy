@@ -2756,7 +2756,7 @@ includes the saved configuration and archive state.
 - By default, spectators see the masked prompt like active guessers, but room creators can enable **Allow spectators to see the prompt**.
 - Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
 - A spectator who leaves and comes back as a player mid-drawing sits that drawing out and guesses from the next: they may have seen the prompt, and have read the chat that gives it away.
-- Unless spectators may see the prompt, they are told who guessed it but not the guess itself, correct or close — it is the answer, or nearly. What the drawer and players who guessed it type still reaches them.
+- Unless spectators may see the prompt, they are told who guessed it but not the guess itself, correct or close — it is the answer, or nearly. What the drawer and players who guessed it type still reaches them, and so does what other spectators type, even the answer: spectator chat is not screened.
 
 ### Runtime analytics
 
