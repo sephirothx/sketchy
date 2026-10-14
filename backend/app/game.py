@@ -33,12 +33,14 @@ from app.domain_values import (
     TurnParticipantOutcome,
 )
 from app.identifiers import generate_uuid7
-from app.prompts import MAX_PROMPT_LENGTH, PROMPTS, letter_histogram, wheel_letters
+from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
 from app.prompt_content import (
+    letter_histogram,
     prompt_match_key,
     prompt_match_variants,
     prompt_match_extra_words,
     prompt_match_words,
+    wheel_letters,
 )
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
@@ -110,7 +112,8 @@ PRESSURE_MIN_POINTS = 50
 #   visible only to them. Unlike "purchase", the cost varies per letter
 #   (vowels cost more than consonants, and more common letters across the
 #   room's prompt pool cost more than rare ones) and is charged whether or not
-#   the letter turns out to be in the prompt.
+#   the letter turns out to be in the prompt. It has no MIN_HIDDEN_LETTERS
+#   floor (R-HINT-04): buying every letter of the answer is paying for it.
 # Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
 # The language a seat of a mixed game plays in when its client never said.

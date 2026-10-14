@@ -229,7 +229,7 @@ from app.prompt_content import (
     prompt_match_variants_by_language,
     validate_prompt_list_language,
 )
-from app.prompts import letter_histogram
+from app.prompt_content import letter_histogram
 from app.refusals import ErrorCode
 
 logger = logging.getLogger(__name__)

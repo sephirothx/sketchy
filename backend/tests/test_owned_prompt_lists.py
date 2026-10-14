@@ -13,7 +13,7 @@ from app.db.models import (
     User,
     generate_uuid,
 )
-from app.prompts import letter_histogram
+from app.prompt_content import letter_histogram
 from app.repositories.interfaces import (
     PromptListConflictError,
     PromptListEntryInput,

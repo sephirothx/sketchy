@@ -2245,7 +2245,7 @@ them, and `upsert_bundled` writes them when seeding. Wheel pricing needs how com
 letter is among the prompts a game can draw (R-HINT-03), a distribution rather than the
 words, which is what lets a room price letters without keeping its prompt pool in memory.
 `letter_counts` tallies a–z, the only letters that can be bought, each letter under every
-key that reveals it - ż and ź under `z`, ł under `l`, œ under both `o` and `e` (`prompts.wheel_letters`,
+key that reveals it - ż and ź under `z`, ł under `l`, œ under both `o` and `e` (`prompt_content.wheel_letters`,
 #1384) - so a key is priced by what it shows. `letter_total` counts each alphabetic
 character once, as written, because it is the divisor: a ligature counted twice there would
 make every other letter in its list look rarer. Membership is counted

@@ -20,7 +20,8 @@ import socketio
 from app.flow_timing import timing
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers import restart
-from app.prompts import PROMPTS, letter_histogram
+from app.prompt_content import letter_histogram
+from app.prompts import PROMPTS
 from app.rooms import RestartVote
 from app.repositories.interfaces import PromptSample
 from tests.fake_game_history_repo import FakeGameHistoryRepository

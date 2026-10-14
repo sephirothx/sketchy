@@ -24,7 +24,7 @@ from app.prompt_content import (
     default_prompt_list_slug,
     prompt_match_key,
 )
-from app.prompts import letter_histogram
+from app.prompt_content import letter_histogram
 from app.repositories.interfaces import (
     BundledPromptDefinition,
     PromptListEntryInput,

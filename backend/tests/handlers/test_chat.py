@@ -401,6 +401,42 @@ async def test_buy_wheel_letter():
         with suppress(asyncio.CancelledError):
             await timer
 
+async def test_a_wheel_letter_found_only_in_its_accented_forms_is_reported_found():
+    """The case #1384 was filed for: a Polish seat paid for "z" on "żołądź"
+    and was told Z is not in the word."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="wheel")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    guesser.sid = "guesser-sid"
+    drawer.sid = "drawer-sid"
+    room.game = Game(
+        turn_order=[drawer.id, guesser.id],
+        hint_mode="wheel",
+        prompt_language="pl",
+        prompt_pool=["żołądź"],
+    )
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "żołądź")
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+
+    res = await sio.handlers["/"]["buy_wheel_letter"]("guesser-sid", {"letter": "Z"})
+    assert res["ok"] is True
+    assert res["found"] == 2
+    assert res["line"]["code"] == "hint_letter_found"
+    assert res["line"]["params"] == {"letter": "Z", "cost": res["cost"], "count": 2}
+    assert res["maskedPrompt"] == "ż____ź  6"
+
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
 async def test_near_miss_guess_privacy_and_restricted_chat():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)

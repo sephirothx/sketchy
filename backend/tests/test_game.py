@@ -24,7 +24,8 @@ from app.game import (
 )
 from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
-from app.prompts import MAX_PROMPT_LENGTH, letter_histogram, wheel_letters
+from app.prompts import MAX_PROMPT_LENGTH
+from app.prompt_content import letter_histogram, wheel_letters
 
 
 def make_game(n_players=3, rounds=2):
@@ -741,8 +742,15 @@ def test_buy_wheel_letter_still_recorded_when_letter_absent():
 
 
 def _wheel_game(prompt, language):
-    game = make_hint_game(prompt, "wheel")
-    game.prompt_language = language
+    game = Game(
+        turn_order=["p0", "p1", "p2"],
+        rounds_total=1,
+        prompt_language=language,
+        prompt_pool=[prompt],
+        hint_mode="wheel",
+    )
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.force_prompt_choice()
     return game, next(t for t in game.turn_order if t != game.current_drawer)
 
 
@@ -776,6 +784,14 @@ def test_a_wheel_letter_reveals_and_counts_its_accented_forms(language, prompt, 
     assert game.masked_prompt(other).count("_") == len(prompt)
 
 
+def test_the_wheel_has_no_hidden_floor():
+    """R-HINT-04 exempts the wheel: every letter bought is the answer paid for."""
+    game, buyer = _wheel_game("żaba", "pl")
+    for letter in "zab":
+        assert game.buy_wheel_letter(buyer, letter) is True
+    assert game.masked_prompt(buyer) == "żaba  4"
+
+
 def test_wheel_letters_fold_the_way_guess_matching_does():
     assert wheel_letters("É") == "e"
     assert wheel_letters("ż") == wheel_letters("ź") == "z"
@@ -800,7 +816,7 @@ def test_letter_histogram_counts_a_letter_under_every_key_that_reveals_it():
 def test_a_folded_letter_is_priced_by_its_accented_forms():
     game, _ = _wheel_game("x", "pl")
     game.prompt_pool = ["źdźbło", "żaba", "żurek"]
-    # Five z's under four accents and none plain: z is the commonest key.
+    # Four z's, as ż and ź and never plain: z is the commonest consonant key.
     assert game.letter_price("z") == max(
         game.letter_price(letter) for letter in "bcdfghjklmnpqrstvwxz"
     )

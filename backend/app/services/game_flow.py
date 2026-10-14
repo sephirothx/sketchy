@@ -49,8 +49,13 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import AnswerOwners, default_prompt_list_slug, prompt_match_key
-from app.prompts import letter_histogram, parse_custom_prompt_list
+from app.prompt_content import (
+    AnswerOwners,
+    default_prompt_list_slug,
+    letter_histogram,
+    prompt_match_key,
+)
+from app.prompts import parse_custom_prompt_list
 from app.refusals import ErrorCode
 from app.repositories.interfaces import (
     MixedRoomListError,
