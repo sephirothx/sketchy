@@ -35,6 +35,8 @@ BASE_URL = "http://localhost:8000"
 # `__socketTimeline` interleaves both directions with the acknowledgements in
 # between, timed, for a failure to print: a wait that times out says what this
 # page asked for and what it was told, not only that the answer never came.
+# What goes out is kept as sent but for binary frames, recorded by size: a
+# drawing test sends thousands, and nothing reads their bytes back.
 _RECORD_SOCKET_EVENTS = """
 (() => {
   const received = window.__socketReceived = [];
@@ -42,7 +44,9 @@ _RECORD_SOCKET_EVENTS = """
   const sent = window.__socketSent = [];
   const timeline = window.__socketTimeline = [];
   const receivedAt = window.__socketReceivedAt = [];
+  window.__socketTimelineMarks = {};
   const note = (direction, event, args) => timeline.push([performance.now(), direction, event, args]);
+  const sized = (arg) => (arg instanceof ArrayBuffer || ArrayBuffer.isView(arg) ? `<${arg.byteLength} bytes>` : arg);
   let socket;
   Object.defineProperty(window, "__SKETCHY_SOCKET__", {
     configurable: true,
@@ -56,7 +60,7 @@ _RECORD_SOCKET_EVENTS = """
         receivedArgs.push(args);
       });
       value.onAnyOutgoing((event, ...args) => {
-        note(">", event, args);
+        note(">", event, args.map(sized));
         sent.push(event);
       });
       value.on("connect", () => note("*", "connect", [value.id]));
@@ -88,9 +92,12 @@ _RECORD_SOCKET_EVENTS = """
 """
 
 # The timeline from mark `since` on, one line per entry, for a failure message.
+# From where `mark()` stood when it returned `since`; a mark taken some other
+# way starts after the event before it.
 _DESCRIBE_TIMELINE = """
 (since) => {
-  const start = since === 0 ? 0 : window.__socketReceivedAt[since - 1] + 1;
+  const start = window.__socketTimelineMarks[since]
+    ?? (since === 0 ? 0 : window.__socketReceivedAt[since - 1] + 1);
   const entries = window.__socketTimeline.slice(start);
   const origin = entries.length ? entries[0][0] : 0;
   const shown = (args) => {
@@ -133,7 +140,15 @@ class SocketEventLog:
 
     async def mark(self) -> int:
         """The point in what arrives from which the next assertions read."""
-        return await self._page.evaluate("() => window.__socketReceived.length")
+        # The first mark at a point keeps it: a later one at the same count
+        # must not move an earlier wait's timeline past what it sent.
+        return await self._page.evaluate(
+            """() => {
+                const at = window.__socketReceived.length;
+                window.__socketTimelineMarks[at] ??= window.__socketTimeline.length;
+                return at;
+            }"""
+        )
 
     async def received(self, since: int = 0) -> list[str]:
         return await self._page.evaluate("(since) => window.__socketReceived.slice(since)", since)

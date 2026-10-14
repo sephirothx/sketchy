@@ -317,15 +317,21 @@ used to be all of that from every client inside a second, against a pool of ten.
   answered overload with the most expensive request a client can make.
 - **One CONNECT per transport.** A `connect()` asked for while the socket's
   namespace CONNECT is out and unanswered — the engine open, the socket
-  subscribed to it, no `connect` yet — is a no-op
-  (`handshakeAwaitingAnswer`); whoever asked gets the `connect` already on its
+  subscribed to it, no `connect` yet — waits for that answer
+  (`connectDuringHandshake`); whoever asked gets the `connect` already on its
   way. socket.io-client sends CONNECT again on every `connect()` against an open
   engine, the server answers a second one on a namespace it has just admitted
   with `CONNECT_ERROR`, and the client meets that by destroying the socket
   without a `disconnect`: the engine closed, `connected` still true, no
   reconnection, every command unanswered. A slow connect handler on a loaded
   server opens the window, and a heartbeat that finds the socket disconnected
-  inside it asks for exactly that `connect()`.
+  inside it asks for exactly that `connect()`. The wait is bounded by
+  `CONNECT_TIMEOUT_MS` (6 s) from the engine opening: an answer not there by
+  then may never come — a connect handler that failed sends none, and the
+  transport's pings keep the engine alive regardless — so the engine is closed
+  and a new one opened. And a socket found in that destroyed state anyway, by a
+  `connect_error` arriving while it reads as connected, is closed properly and
+  reopened (`destroyedWhileConnected`).
 
 ### Origin
 

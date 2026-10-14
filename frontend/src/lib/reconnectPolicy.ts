@@ -309,26 +309,50 @@ export function attemptIsInFlight(managerReadyState: string | undefined): boolea
   return managerReadyState === "opening" || managerReadyState === "open";
 }
 
-/** Whether this socket's namespace CONNECT has gone out and not been answered:
-the engine is open, the socket is subscribed to it (`active`), and the server
-has not yet said `connect`.
+/** What a `connect()` should do, given where this socket's handshake stands.
 
-`Socket.connect()` must not be called then. socket.io-client sends CONNECT
-again whenever it is called on an open manager, the server refuses a second
+`"wait"` while its namespace CONNECT has gone out and not been answered - the
+engine open, the socket subscribed to it (`active`), no `connect` yet - for up
+to `patienceMs` from the engine opening. socket.io-client sends CONNECT again
+whenever `connect()` is called on an open manager, the server refuses a second
 CONNECT on a namespace it has just admitted with `CONNECT_ERROR`, and the
 client answers that by destroying the socket without a `disconnect`: the engine
-is closed, `connected` stays true, and nothing reconnects. Every command after
-that goes nowhere. A slow handshake is enough to open the window - the server's
-connect handler reading the session on a loaded worker - and anything that
-calls `connect()` while the socket reads as disconnected lands in it: a
-heartbeat that found no connection, a stalled phase, the canvas giving up on
-its syncs. The answer they are all waiting for is already on its way. */
-export function handshakeAwaitingAnswer(state: {
+closed, `connected` still true, nothing reconnecting, every command after it
+lost. A slow handshake is enough to open the window - the server's connect
+handler reading the session on a loaded worker - and anything that calls
+`connect()` while the socket reads as disconnected lands in it: a heartbeat
+that found no connection, a stalled phase, the canvas giving up on its syncs.
+The answer they are all waiting for is on its way.
+
+`"restart"` once the wait has outlasted that patience: an answer that has not
+come by then may never come - a connect handler that failed sends none, and
+the transport's pings keep the engine alive regardless - and waiting longer
+would leave every rebind waiting on it for good. Restarting means closing the
+engine and opening another, never a second CONNECT on this one.
+
+`"connect"` otherwise: there is no CONNECT out to wait for. */
+export function connectDuringHandshake(state: {
   connected: boolean;
   active: boolean;
   managerReadyState: string | undefined;
-}): boolean {
-  return !state.connected && state.active && state.managerReadyState === "open";
+  /** When the current engine opened, which is when its CONNECT went out. */
+  openedAt: number | null;
+  now: number;
+  patienceMs: number;
+}): "connect" | "wait" | "restart" {
+  if (state.connected || !state.active || state.managerReadyState !== "open") return "connect";
+  if (state.openedAt !== null && state.now - state.openedAt >= state.patienceMs) return "restart";
+  return "wait";
+}
+
+/** Whether socket.io-client has destroyed this socket while it still reads as
+connected: `connected` true, no longer subscribed to its manager (`active`
+false). The library does that on a `CONNECT_ERROR` to a namespace it had
+already joined, without a `disconnect`, so nothing reconnects it and every emit
+is dropped. `connectDuringHandshake` closes the one way in this client knows;
+this notices the state itself, whatever led to it. */
+export function destroyedWhileConnected(state: { connected: boolean; active: boolean }): boolean {
+  return state.connected && !state.active;
 }
 
 // --- after the server closed the socket (#998) -----------------------------
