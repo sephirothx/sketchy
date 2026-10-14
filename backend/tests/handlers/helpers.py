@@ -14,7 +14,7 @@ from app.services.game_handoff import FinishedGameHandoffWorker
 from tests.fake_envelope_store import MemoryEnvelopeStore
 from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE
 from app.prompt_content import prompt_match_key
-from app.prompts import letter_histogram
+from app.prompt_content import letter_histogram
 from app.repositories.interfaces import (
     MixedRoomListError,
     PinnedPromptSelection,

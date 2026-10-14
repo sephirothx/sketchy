@@ -35,10 +35,12 @@ from app.domain_values import (
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
 from app.prompt_content import (
+    letter_histogram,
     prompt_match_key,
     prompt_match_variants,
     prompt_match_extra_words,
     prompt_match_words,
+    wheel_letters,
 )
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
@@ -110,7 +112,8 @@ PRESSURE_MIN_POINTS = 50
 #   visible only to them. Unlike "purchase", the cost varies per letter
 #   (vowels cost more than consonants, and more common letters across the
 #   room's prompt pool cost more than rare ones) and is charged whether or not
-#   the letter turns out to be in the prompt.
+#   the letter turns out to be in the prompt. It has no MIN_HIDDEN_LETTERS
+#   floor (R-HINT-04): buying every letter of the answer is paying for it.
 # Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
 # The language a seat of a mixed game plays in when its client never said.
@@ -1067,9 +1070,10 @@ class Game:
         return self.revealed_by_spelling.setdefault(spelling, set())
 
     def letter_occurrences(self, token: str, letter: str) -> int:
-        """How often `letter` appears in the prompt as `token` reads it."""
+        """How many of the prompt's letters, as `token` reads it, the wheel
+        key `letter` reveals - its accented forms included (#1384)."""
         text, positions = self._positions_in(self.seat_language(token))
-        return sum(1 for i in positions if text[i].lower() == letter)
+        return sum(1 for i in positions if letter in wheel_letters(text[i]))
 
     def masked_prompt(
         self,
@@ -1109,7 +1113,11 @@ class Game:
         }
         bought_letters = self.purchased_letters.get(token, set())
         if bought_letters:
-            revealed_indices |= {i for i in letter_positions if prompt[i].lower() in bought_letters}
+            # A key reveals the letter's accented forms too: "z" shows ż (#1384).
+            revealed_indices |= {
+                i for i in letter_positions
+                if not bought_letters.isdisjoint(wheel_letters(prompt[i]))
+            }
         masked_words = []
         for match in re.finditer(r"\S+", prompt):
             start = match.start()
@@ -1241,8 +1249,8 @@ class Game:
                 if self.prompt_pool
                 else PROMPTS
             )
-            counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
-            total = sum(counts.values()) or 1
+            counts, total = letter_histogram(pool)
+            total = total or 1
         frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
         self._cached_letter_frequencies[cache_key] = frequencies
         return frequencies
@@ -1295,9 +1303,10 @@ class Game:
     def buy_wheel_letter(self, token: str, letter: str) -> bool:
         """Buy a whole letter for `token` only (hint_mode="wheel").
 
-        Every occurrence of `letter` in the prompt will be shown to this player
-        (via `masked_prompt`) regardless of whether it's actually present, and
-        the price is charged either way - on credit, like `buy_hint_letter`.
+        Every occurrence of `letter` in the prompt, accented forms included
+        (`wheel_letters`), will be shown to this player (via `masked_prompt`).
+        The price is charged whether or not it is actually present - on
+        credit, like `buy_hint_letter`.
         Returns False if the letter is invalid, already bought by this player
         this turn, the token isn't an eligible guesser right now, or the price
         would take the turn's spend past MAX_HINT_SPEND.

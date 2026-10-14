@@ -2244,9 +2244,14 @@ migrated in start empty and the next start fills them.
 them, and `upsert_bundled` writes them when seeding. Wheel pricing needs how common each
 letter is among the prompts a game can draw (R-HINT-03), a distribution rather than the
 words, which is what lets a room price letters without keeping its prompt pool in memory.
-`letter_counts` tallies a–z, the only letters that can be bought; `letter_total` counts
-*every* alphabetic character, including those outside a–z, because it is the divisor and
-a list in such a language must keep the ratios it would have had. Membership is counted
+`letter_counts` tallies a–z, the only letters that can be bought, each letter under every
+key that reveals it - ż and ź under `z`, ł under `l`, œ under both `o` and `e` (`prompt_content.wheel_letters`,
+#1384) - so a key is priced by what it shows. `letter_total` counts each alphabetic
+character once, as written, because it is the divisor: a ligature counted twice there would
+make every other letter in its list look rarer. A change to how the histogram counts reaches
+a stored row only when that list is next saved or its seed version moves; nothing rewrites
+the rest. Before launch that is a database rebuilt (see the Pre-v1 note); after it, such a
+change needs a backfill. Membership is counted
 rather than moderation state: a takedown does not rewrite the list, so a tally that
 tracked moderation would be wrong from the first takedown and stay wrong through any
 restore. The cost is that hidden content is priced without being drawable, which R-HINT-03

@@ -2744,6 +2744,10 @@ includes the saved configuration and archive state.
   cost nothing at all to a player who never guesses the prompt. Spend is capped at 300 per turn — the
   most a single guess can ever be worth. In Pressure mode the 50-point floor guarantees the *gross*
   award only; the hint spend is settled after it.
+- **Wheel of Fortune** offers the same 26 keys, a–z, in every language. A key reveals its
+  letter's accented forms too: `e` shows é, è, ê and ë, `z` shows ż and ź, `s` shows ß, `l`
+  shows ł, and a ligature such as œ shows on either of its letters. A key costs more the
+  commoner all of those are across the room's prompts, and vowels cost more than consonants.
 - The drawer receives the sum of points earned by all correct guessers in that turn (`drawer_score = sum of guesser scores`, after each guesser's hint spend), balancing drawing and guessing potential across complete rotations.
 - These parameters are scoring rules version 1. Changing an outcome-producing
   constant or algorithm requires a version bump; every completed game freezes

@@ -25,6 +25,7 @@ from app.game import (
 from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
 from app.prompts import MAX_PROMPT_LENGTH
+from app.prompt_content import letter_histogram, wheel_letters
 
 
 def make_game(n_players=3, rounds=2):
@@ -738,6 +739,87 @@ def test_buy_wheel_letter_still_recorded_when_letter_absent():
     assert game.masked_prompt(guesser).count("_") == len(game.prompt)
     # Still counts toward this turn's escalating cost, and can't be re-bought.
     assert game.buy_wheel_letter(guesser, "z") is False
+
+
+def _wheel_game(prompt, language):
+    game = Game(
+        turn_order=["p0", "p1", "p2"],
+        rounds_total=1,
+        prompt_language=language,
+        prompt_pool=[prompt],
+        hint_mode="wheel",
+    )
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.force_prompt_choice()
+    return game, next(t for t in game.turn_order if t != game.current_drawer)
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "letter", "masked", "found"),
+    [
+        # The case #1384 was filed for: "z" was paid for and told it is not there.
+        ("pl", "żołądź", "z", "ż____ź  6", 2),
+        # ł is no l with a mark - NFD leaves it whole - so it is mapped.
+        ("pl", "żołądź", "l", "__ł___  6", 1),
+        ("pl", "żołądź", "a", "___ą__  6", 1),
+        # ß case-folds to "ss": one tile, revealed by "s".
+        ("de", "Fußball", "s", "__ß____  7", 1),
+        # On the wheel ü is a "u" with a mark, not the "ue" a German types.
+        ("de", "Müsli", "u", "_ü___  5", 1),
+        ("de", "Müsli", "e", "_____  5", 0),
+        # A ligature is either of its letters.
+        ("fr", "cœur", "o", "_œ__  4", 1),
+        ("fr", "cœur", "e", "_œ__  4", 1),
+        ("fr", "éléphant", "e", "é_é_____  8", 2),
+    ],
+)
+def test_a_wheel_letter_reveals_and_counts_its_accented_forms(language, prompt, letter, masked, found):
+    game, buyer = _wheel_game(prompt, language)
+    assert game.buy_wheel_letter(buyer, letter) is True
+
+    assert game.masked_prompt(buyer) == masked
+    assert game.letter_occurrences(buyer, letter) == found
+    # Still the buyer's alone.
+    other = next(t for t in game.turn_order if t not in (game.current_drawer, buyer))
+    assert game.masked_prompt(other).count("_") == len(prompt)
+
+
+def test_the_wheel_has_no_hidden_floor():
+    """R-HINT-04 exempts the wheel: every letter bought is the answer paid for."""
+    game, buyer = _wheel_game("żaba", "pl")
+    for letter in "zab":
+        assert game.buy_wheel_letter(buyer, letter) is True
+    assert game.masked_prompt(buyer) == "żaba  4"
+
+
+def test_wheel_letters_fold_the_way_guess_matching_does():
+    assert wheel_letters("É") == "e"
+    assert wheel_letters("ż") == wheel_letters("ź") == "z"
+    assert wheel_letters("ł") == "l"
+    assert wheel_letters("ø") == "o"
+    assert wheel_letters("ß") == "s"
+    assert wheel_letters("œ") == "oe"
+    assert wheel_letters("Æ") == "ae"
+    assert wheel_letters("7") == wheel_letters("я") == ""
+
+
+def test_letter_histogram_counts_a_letter_under_every_key_that_reveals_it():
+    counts, total = letter_histogram(["żołądź", "Fußball", "cœur"])
+    assert counts["z"] == 2
+    assert counts["l"] == 3
+    assert counts["s"] == 1
+    assert counts["o"] == 2 and counts["e"] == 1
+    # The divisor is the letters as written: œ is one of them, not two.
+    assert total == 6 + 7 + 4
+
+
+def test_a_folded_letter_is_priced_by_its_accented_forms():
+    game, _ = _wheel_game("x", "pl")
+    game.prompt_pool = ["źdźbło", "żaba", "żurek"]
+    # Four z's, as ż and ź and never plain: z is the commonest consonant key.
+    assert game.letter_price("z") == max(
+        game.letter_price(letter) for letter in "bcdfghjklmnpqrstvwxz"
+    )
 
 
 def test_wheel_hint_cost_scales_up_per_letter_bought_this_turn():
