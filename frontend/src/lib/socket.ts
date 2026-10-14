@@ -19,7 +19,9 @@ import {
   RECONNECTION_RANDOMIZATION,
   pingWindowMs,
   attemptIsInFlight,
+  connectDuringHandshake,
   createRestartLatch,
+  destroyedWhileConnected,
   postReconnectDelayMs,
   serverCloseRetryDelayMs,
   shouldReconnectImmediately,
@@ -351,6 +353,17 @@ socket.io.on("close", disarmStallWatchdog);
 
 socket.on("connect_error", (error) => {
   recordClientError("socket", `connect_error: ${error?.message ?? error}`);
+  // A refusal to a socket that had already joined leaves it destroyed but
+  // reading as connected (`destroyedWhileConnected`): close it properly, so
+  // everything listening hears the `disconnect`, and open a new one. After
+  // this dispatch, since the library is still inside its packet handler.
+  if (!destroyedWhileConnected({ connected: socket.connected, active: socket.active })) return;
+  recordClientError("socket", "destroyed while connected: reconnecting");
+  window.setTimeout(() => {
+    if (!destroyedWhileConnected({ connected: socket.connected, active: socket.active })) return;
+    socket.disconnect();
+    socket.connect();
+  }, 0);
 });
 
 // Registered here rather than in a component because a version skew is not
@@ -398,10 +411,39 @@ function noteUpdateStuck(): void {
 // would otherwise skip the spread the server asked for. One deferred attempt
 // however many callers ask; it lands on the manager's pending retry if the
 // server closed the socket, which makes it a no-op there.
+//
+//
+// And never a second CONNECT on one engine: one is refused, and the refusal
+// leaves a socket that reads as connected on a closed engine. While this
+// socket's CONNECT is out and unanswered a caller gets the `connect` already
+// coming; past CONNECT_TIMEOUT_MS without one, the engine is closed and a new
+// one opened (`connectDuringHandshake`).
 const rawConnect = socket.connect.bind(socket);
 let heldConnect: number | null = null;
+let engineOpenedAt: number | null = null;
+socket.io.on("open", () => {
+  engineOpenedAt = Date.now();
+});
+socket.io.on("close", () => {
+  engineOpenedAt = null;
+});
 socket.connect = (() => {
   if (isUpdateRequired()) return socket;
+  const handshake = connectDuringHandshake({
+    connected: socket.connected,
+    active: socket.active,
+    managerReadyState: managerReadyState(),
+    openedAt: engineOpenedAt,
+    now: Date.now(),
+    patienceMs: CONNECT_TIMEOUT_MS,
+  });
+  if (handshake === "wait") return socket;
+  if (handshake === "restart") {
+    recordClientError("socket", "handshake unanswered: restarting the connection");
+    // Closes the engine without a `disconnect`, since the socket never
+    // connected; the connect below opens a fresh one.
+    socket.disconnect();
+  }
   const wait = restart.holdRemainingMs(Date.now());
   if (wait <= 0) {
     restoreOrdinaryBackoff();

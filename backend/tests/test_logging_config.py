@@ -1,7 +1,6 @@
 """Log lines a machine can read, that name what they belong to, and keep secrets out."""
 from __future__ import annotations
 
-import functools
 import json
 import logging
 import random
@@ -190,62 +189,38 @@ def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
 
 
 @pytest.mark.parametrize(
-    ("unit", "count", "tail"),
+    "line",
     [
-        ("1.2.", 3000, ""),  # no `@` at all
-        ("a", 12_000, "@"),  # one `@`, and no domain after it
-        # A URL's start over and over, and no `@` to end a password: 24 KB,
-        # since on 12 KB its quadratic form was only 124 ms.
-        ("://a:", 4800, ""),
+        lambda n: "1.2." * (n // 4),  # no `@` at all
+        lambda n: "a" * n + "@",  # one `@`, and no domain after it
+        lambda n: "://a:" * (n // 5),  # a URL's start over and over, and no `@` to end a password
     ],
     ids=["no-at", "one-trailing-at", "userinfo-without-at"],
 )
-def test_a_long_line_redacts_in_linear_time(unit, count, tail):
+def test_a_long_line_redacts_in_linear_time(line):
     """`redact` runs on the event loop for every JSON line, and a line can carry
     client text: a pattern that retries a run from each of its characters took
     half a second on 12 KB, which stalls every room on the server.
 
-    Quadratic work is both slow and grows like a square, so the test asks for
-    both, in this thread's CPU time. Either alone measured the runner: linear
-    redaction takes 1.4 ms here and 26 ms on a green CI run, and a busy one
-    went over the old 50 ms bound (57 ms); a busy one also read x46-x78
-    growth from it for a line eight times as long, against x8 here (#1484's
-    CI). The quadratic patterns kept above as the specification take 500 ms
-    here and grow x60."""
-    long_line = unit * count + tail
-    short_line = unit * (count // 8) + tail
-    elapsed = _best(redact, long_line)
-    growth = elapsed / _best(redact, short_line)
-    assert elapsed < 0.1 or growth < 20, (
-        f"{elapsed * 1000:.0f} ms, x{growth:.0f} for an eighth of the line; by stage, "
-        f"microseconds for each: {_growth_by_stage(long_line, short_line)}"
+    Told apart by growth, not by a deadline: eight times the line costs eight
+    times as much when linear and sixty-four when quadratic, on any machine. A
+    fixed 50 ms failed a linear `redact` on a loaded CI runner at 1.3 ms of
+    work. The two lengths take turns so a busy stretch slows both, each keeps
+    its fastest run, and the clock is the thread's CPU time, which does not
+    run while another xdist worker has the core."""
+    short, long = line(1_500), line(12_000)
+    short_time = long_time = float("inf")
+    for _ in range(15):
+        short_time = min(short_time, _timed(redact, short))
+        long_time = min(long_time, _timed(redact, long))
+    # With twice as many CPU hogs as cores the linear ratio stayed under 8.5;
+    # the quadratic rules measure 64. Twenty leaves twice the room either way.
+    assert long_time / short_time < 20, (
+        f"{short_time * 1000:.2f} ms -> {long_time * 1000:.2f} ms"
     )
 
 
-def _growth_by_stage(long_line: str, short_line: str) -> dict[str, str]:
-    """Which pass grew, so a failure on a runner nobody can reproduce on
-    names its pattern - each timed on the raw line."""
-    from app import logging_config as lc
-
-    stages = {
-        **{f"rule{i}": functools.partial(pattern.sub, replacement) for i, (pattern, replacement) in enumerate(lc._REDACTIONS)},
-        "addresses": lc._mask_addresses,
-        "ipv6": lc._IPV6.findall,
-        "ipv4": lc._IPV4.findall,
-    }
-    return {
-        name: f"{_best(stage, long_line) * 1e6:.0f}/{_best(stage, short_line) * 1e6:.0f}"
-        for name, stage in stages.items()
-    }
-
-
-def _best(fn, arg, runs: int = 5) -> float:
-    return min(_timed(fn, arg) for _ in range(runs))
-
-
 def _timed(fn, arg) -> float:
-    # This thread's CPU time, not the wall clock: the time the other test
-    # workers hold the runner's CPUs is not this call's.
     start = time.thread_time()
     fn(arg)
     return time.thread_time() - start

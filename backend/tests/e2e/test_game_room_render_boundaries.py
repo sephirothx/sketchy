@@ -90,11 +90,21 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             guessers = [page for page in pages if page is not drawer]
             guesser = guessers[0]
 
+            # Each page's own evidence that the turn began, since the canvas is
+            # not: a guesser shows one while the prompt is chosen, so waiting
+            # for it read the counts whenever the test got there, and a guesser
+            # still behind on a loaded runner had rendered nothing yet. Its
+            # choosing overlay is seen first, so its going means something.
+            for page in guessers:
+                await page.wait_for_selector('[data-testid="choosing-prompt-status"]')
             for page in pages:
                 await page.evaluate(RESET_COUNTS)
             await drawer.locator(".prompt-choices button").first.click()
-            for page in pages:
-                await page.wait_for_selector("canvas.drawing-canvas")
+            await drawer.wait_for_selector("canvas.drawing-canvas.drawable")
+            for page in guessers:
+                await page.wait_for_selector(
+                    '[data-testid="choosing-prompt-status"]', state="detached"
+                )
             # A phase change reaches gameplay on every page, and the canvas on
             # the one page it means something to: the drawer's, whose pointer
             # input the turn has just enabled. A guesser's canvas is handed the
@@ -201,8 +211,13 @@ async def test_a_timed_hint_reveal_stops_at_the_prompt_it_changes():
             assert drawer is not None
             guesser = guest if drawer is host else host
 
+            # The turn has begun on the guesser when its choosing overlay goes,
+            # not when a canvas is up: it has one while the prompt is chosen.
+            await guesser.wait_for_selector('[data-testid="choosing-prompt-status"]')
             await drawer.locator(".prompt-choices button").first.click()
-            await guesser.wait_for_selector("canvas.drawing-canvas")
+            await guesser.wait_for_selector(
+                '[data-testid="choosing-prompt-status"]', state="detached"
+            )
             assert await guesser.locator(".masked-tile.is-revealed").count() == 0
 
             await guesser.evaluate(RESET_COUNTS)
