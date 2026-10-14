@@ -224,12 +224,12 @@ from app.prompt_content import (
     normalize_prompt_answer,
     visible_text_problem,
     languages_sharing_words,
+    letter_histogram,
     prompt_match_key,
     prompt_match_variants,
     prompt_match_variants_by_language,
     validate_prompt_list_language,
 )
-from app.prompt_content import letter_histogram
 from app.refusals import ErrorCode
 
 logger = logging.getLogger(__name__)
