@@ -1027,12 +1027,12 @@ class HandlerMachine(RuleBasedStateMachine):
             )
             if spoiler_allowed and any(_carries(data, secret) for secret in secrets):
                 REACHED["spoiler_reached_spectators"] += 1
-            # Open question, not yet a rule (#1480): a restricted line from a
-            # spectator or a frozen-out seat - neither shown the prompt - goes
-            # to every spectator, so one that spells the answer reaches
-            # spectators in a room that hides it. Exempted by name until it is
-            # decided, so the machine keeps checking everything around it.
-            pending_1480 = (
+            # And spectator chat - a restricted line from another spectator or
+            # a seat the turn froze out - reaches every spectator even when it
+            # spells the answer, which neither writer was shown: chat among
+            # people who cannot score this turn is not screened (R-SPEC-03,
+            # R-SPEC-04, decided in #1480).
+            spectator_chat = (
                 isinstance(data, dict) and data.get("restricted") and not data.get("correct")
                 and author is not None and not spoiler_allowed
             )
@@ -1044,7 +1044,7 @@ class HandlerMachine(RuleBasedStateMachine):
                     or (not choosing and p.is_spectator and live.spectators_see_prompt)
                     or p.id == author
                     or (spoiler_allowed and p.is_spectator)
-                    or (pending_1480 and p.is_spectator)
+                    or (spectator_chat and p.is_spectator)
                 )
             ]
             if guessing:

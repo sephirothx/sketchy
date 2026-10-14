@@ -1417,6 +1417,43 @@ async def test_a_guess_echo_reaches_spectators_only_where_they_see_the_prompt(
             await timer
 
 
+async def test_spectator_chat_that_spells_the_answer_still_reaches_spectators():
+    """#1480, decided: in a room that keeps the prompt from spectators, a
+    spectator who types the answer is not screened from the others. It is
+    chat among people who cannot score this turn (R-SPEC-03, R-SPEC-04); the
+    active guesser still never sees it."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, spectators_see_prompt=False)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    first = room_manager.add_player(room, "Cyd", is_spectator=True)
+    second = room_manager.add_player(room, "Dee", is_spectator=True)
+    drawer.sid, guesser.sid, first.sid, second.sid = "drawer-sid", "guesser-sid", "cyd-sid", "dee-sid"
+
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["helmet"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "helmet")
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+    assert room.game.masked_prompt(second.id, is_spectator=True, spectators_see_prompt=False) != "helmet"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": first.id})
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["send_chat"]("cyd-sid", {"text": "helmet"})
+
+    [line] = [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"]
+    assert line.args[1]["text"] == "helmet" and line.args[1]["restricted"] is True
+    assert set(line.kwargs["to"]) == {"drawer-sid", "cyd-sid", "dee-sid"}
+
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
 async def _guess_in(prompt: str, language: str, typed: str):
     """One guess by a guesser in a game drawing `prompt`, a second guesser
     beside it: what the guesser was answered, the chat lines the whole room
