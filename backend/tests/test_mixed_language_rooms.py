@@ -429,6 +429,44 @@ def test_the_wheel_is_priced_from_the_seat_s_own_language():
     assert english["q"] > english["e"]
 
 
+def test_a_wheel_letter_reveals_each_seat_s_accented_forms():
+    """One key, every seat's own spelling: an English seat and a Polish seat
+    get the same 26 keys, and the Polish seat's are as strong (#1384)."""
+    knot = {
+        "en": PromptForm("bow tie", (), "v-en"),
+        "pl": PromptForm("muszka żółta", (), "v-pl"),
+        "de": PromptForm("Fußball", (), "v-de"),
+        "fr": PromptForm("nœud", (), "v-fr"),
+    }
+    game = Game(
+        turn_order=["drawer", "polish", "german", "french", "english"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-knot"],
+        prompt_answers={"c-knot": "bow tie"},
+        prompt_translations={"c-knot": knot},
+        seat_languages={
+            "drawer": "en", "polish": "pl", "german": "de", "french": "fr", "english": "en",
+        },
+        hint_mode="wheel",
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    for seat in ("polish", "german", "french", "english"):
+        assert game.buy_wheel_letter(seat, "z")
+        assert game.buy_wheel_letter(seat, "s")
+        assert game.buy_wheel_letter(seat, "o")
+
+    assert game.masked_prompt("polish") == "__sz__  żó___  6 5"
+    assert game.letter_occurrences("polish", "z") == 2
+    assert game.letter_occurrences("polish", "o") == 1
+    assert game.masked_prompt("german") == "__ß____  7"
+    assert game.letter_occurrences("german", "s") == 1
+    assert game.masked_prompt("french") == "_œ__  4"
+    assert game.masked_prompt("english") == "_o_  ___  3 3"
+
+
 def test_each_language_s_guessers_count_against_its_own_version():
     game = _mixed_game()
     game.snapshot_turn_participants(
