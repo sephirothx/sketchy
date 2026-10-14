@@ -2248,7 +2248,10 @@ words, which is what lets a room price letters without keeping its prompt pool i
 key that reveals it - ż and ź under `z`, ł under `l`, œ under both `o` and `e` (`prompt_content.wheel_letters`,
 #1384) - so a key is priced by what it shows. `letter_total` counts each alphabetic
 character once, as written, because it is the divisor: a ligature counted twice there would
-make every other letter in its list look rarer. Membership is counted
+make every other letter in its list look rarer. A change to how the histogram counts reaches
+a stored row only when that list is next saved or its seed version moves; nothing rewrites
+the rest. Before launch that is a database rebuilt (see the Pre-v1 note); after it, such a
+change needs a backfill. Membership is counted
 rather than moderation state: a takedown does not rewrite the list, so a tally that
 tracked moderation would be wrong from the first takedown and stay wrong through any
 restore. The cost is that hidden content is priced without being drawable, which R-HINT-03
