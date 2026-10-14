@@ -120,7 +120,12 @@ A game tracks its prompts by **key** - a list prompt's concept, a quick prompt's
 text (#1181) - and spells each one per seat: `Game.seat_language(token)` is the one
 question every mask, offer, hint, wheel price and match asks. It answers the room's
 language, except in a mixed-language room (R-PROMPT-13, #1182), where each seat plays
-in the language it joined with and a prompt carries a `PromptForm` per language.
+in the language it joined with and a prompt carries a `PromptForm` per language. A game
+holds every form it drew from its first turn to its last, so a form is kept small (#1483):
+slots, the version id as 16 bytes handed back in its public form by `version_id_for`, and
+a source-list tuple the draw shares between every form found in the same lists; the
+per-language letter counts are the room's own, not a copy
+(`benchmarks/game_prompt_memory.py`: 253 KB → 141 KB at eight seats over three rounds).
 
 **`app/rooms.py` — the live room model.**
 `Room`, `Player`, `RestartVote`, `DrawingRecapEntry`, and `RoomManager`. A `Room`

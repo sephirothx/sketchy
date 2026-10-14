@@ -1611,6 +1611,21 @@ def test_version_sources_names_every_form_s_lists():
     assert game.version_sources() == {"v-en": ("list-en",), "v-de": ("list-de",)}
 
 
+def test_a_mixed_game_holds_each_form_small_and_hands_its_id_back_whole():
+    """#1483: slots rather than an attribute dict, and the version id as its
+    16 bytes - handed back in its public form wherever it leaves the game."""
+    from app.game import PromptForm, packed_version_id
+
+    public = "01a136b5-50a1-7669-9b2c-9bda8220c704"
+    form = PromptForm(answer="Hund", version_id=packed_version_id(public), source_list_ids=("list-de",))
+    assert not hasattr(form, "__dict__")
+    assert form.version_id == bytes.fromhex(public.replace("-", ""))
+    game = Game(turn_order=["a", "b"], prompt_translations={"concept-1": {"de": form}})
+    assert game.version_id_for("concept-1", "de") == public
+    assert game.version_sources() == {public: ("list-de",)}
+    assert packed_version_id("v-de") == "v-de", "an id that is not a UUID is kept as it is"
+
+
 def test_a_near_miss_is_measured_without_separators_and_partly_by_words():
     """Acceptance drops spaces and hyphens (#1396), so a typo in "hang glider"
     written as one word is one typo, not two; words still count for "partial"."""

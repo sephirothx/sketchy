@@ -4929,11 +4929,20 @@ async def _source_lists(
             )
         ).all():
             found[version_id].append(list_id)
+    # One tuple for every version found in the same lists, and one string per
+    # list: a mixed draw holds a form per language per prompt, and a tuple and
+    # an id string of its own for each was half of what a game held (#1483).
+    names: dict[UUID, str] = {}
+    shared: dict[tuple[UUID, ...], tuple[str, ...]] = {}
     sources: defaultdict[UUID, tuple[str, ...]] = defaultdict(tuple)
     for version_id, lists in found.items():
-        sources[version_id] = tuple(
-            _public_id(list_id) for list_id in sorted(lists, key=order.__getitem__)
-        )
+        key = tuple(sorted(lists, key=order.__getitem__))
+        held = shared.get(key)
+        if held is None:
+            held = shared[key] = tuple(
+                names.setdefault(list_id, _public_id(list_id)) for list_id in key
+            )
+        sources[version_id] = held
     return sources
 
 
