@@ -179,6 +179,139 @@ async def test_mid_session_socket_reconnects_to_room():
             await browser2.close()
 
 
+async def test_a_connect_during_the_handshake_does_not_kill_the_socket():
+    """Asking to connect while the server's answer is on its way changes nothing.
+
+    socket.io-client sends its namespace CONNECT again whenever `connect()` is
+    called on an open engine, the server refuses the second with
+    `CONNECT_ERROR`, and the client destroys the socket without a
+    `disconnect`: `connected` stays true on a closed engine and nothing
+    reconnects. On a loaded runner the server's connect handler is slow enough
+    for the heartbeat to find the socket disconnected in that window and ask
+    for a restart - and the viewer in `test_canvas_sync_on_entry` waited out a
+    tail that could never come. The answer is held here instead of hoping for
+    a slow server, and the test calls `connect()` itself, standing in for
+    every caller that can (R-CONN-14).
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        # Server frames from the CONNECT answer on are queued while `holding`,
+        # in order, and sent on when the test lets them go.
+        hold = {"holding": False, "queue": None}
+
+        async def route_socket(ws):
+            server = ws.connect_to_server()
+
+            def to_page(message):
+                if hold["queue"] is not None:
+                    hold["queue"].append((ws, message))
+                elif hold["holding"] and isinstance(message, str) and message.startswith("40"):
+                    hold["queue"] = [(ws, message)]
+                else:
+                    ws.send(message)
+
+            server.on_message(to_page)
+            ws.on_message(server.send)
+
+        # Before the first navigation: a route covers documents loaded after it.
+        await page.route_web_socket("**/socket.io/**", route_socket)
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, unique("Shake"))
+            await page.wait_for_function("() => window.__SKETCHY_SOCKET__.connected")
+
+            # The reconnect on WebSocket alone: on polling the route would
+            # never see the handshake it has to hold.
+            hold["holding"] = True
+            await page.evaluate(
+                """() => {
+                    const s = window.__SKETCHY_SOCKET__;
+                    s.io.opts.transports = ["websocket"];
+                    s.io.engine.close();
+                }"""
+            )
+            for _ in range(100):
+                if hold["queue"] is not None:
+                    break
+                await asyncio.sleep(0.1)
+            assert hold["queue"] is not None, "the reconnect never reached its CONNECT answer"
+            assert await page.evaluate(
+                "() => { const s = window.__SKETCHY_SOCKET__; return s.io._readyState === 'open' && !s.connected; }"
+            ), "the engine should be open and the socket still waiting for its answer"
+
+            await page.evaluate(
+                """() => {
+                    const s = window.__SKETCHY_SOCKET__;
+                    window.__interruptions = [];
+                    s.on("connect_error", (error) => window.__interruptions.push(`connect_error: ${error.message}`));
+                    s.on("disconnect", (reason) => window.__interruptions.push(`disconnect: ${reason}`));
+                    s.connect();
+                }"""
+            )
+            hold["holding"] = False
+            held, hold["queue"] = hold["queue"], None
+            for ws, message in held:
+                ws.send(message)
+
+            await page.wait_for_function("() => window.__SKETCHY_SOCKET__.connected")
+            # Connected is what a destroyed socket says too; an answer is not.
+            answered = await page.evaluate(
+                """() => new Promise((resolve) => {
+                    window.__SKETCHY_SOCKET__.timeout(5000).emit("session_ping", null, (error) => resolve(!error));
+                })"""
+            )
+            assert answered, "the socket reads as connected but nothing it sends is answered"
+            # And by the handshake already under way, not by the recovery from
+            # a refused second one (the next test's subject).
+            assert await page.evaluate("() => window.__interruptions") == []
+        finally:
+            await browser.close()
+
+
+async def test_a_socket_destroyed_while_connected_is_reconnected():
+    """However a second CONNECT gets out, the dead socket it leaves comes back.
+
+    The server's `CONNECT_ERROR` makes socket.io-client destroy a socket that
+    had joined without a `disconnect`, so it reads as connected on a closed
+    engine and nothing reconnects it. `connect()` no longer sends one; this
+    sends one the way the library would - its own `onopen` on an open engine -
+    and requires the client to notice, say `disconnect` to whatever listens,
+    and come back on a new socket that answers (R-CONN-14).
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, unique("Revive"))
+            await page.wait_for_function("() => window.__SKETCHY_SOCKET__.connected")
+            old = await page.evaluate(
+                """() => {
+                    const s = window.__SKETCHY_SOCKET__;
+                    window.__disconnects = [];
+                    s.on("disconnect", (reason) => window.__disconnects.push(reason));
+                    const id = s.id;
+                    s.onopen();
+                    return id;
+                }"""
+            )
+            await page.wait_for_function(
+                "(old) => { const s = window.__SKETCHY_SOCKET__; return s.connected && s.active && s.id !== old; }",
+                arg=old,
+                timeout=10000,
+            )
+            assert await page.evaluate("() => window.__disconnects") == ["io client disconnect"]
+            answered = await page.evaluate(
+                """() => new Promise((resolve) => {
+                    window.__SKETCHY_SOCKET__.timeout(5000).emit("session_ping", null, (error) => resolve(!error));
+                })"""
+            )
+            assert answered, "the new socket reads as connected but nothing it sends is answered"
+        finally:
+            await browser.close()
+
+
 async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
     """Losing the server must not blank the lobby.
 

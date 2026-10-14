@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { Socket } from "socket.io-client";
+
 import {
   ESCALATION_BASE_MS,
   ESCALATION_MAX_MS,
@@ -13,6 +15,8 @@ import {
   createRestartLatch,
   pingWindowMs,
   attemptIsInFlight,
+  connectDuringHandshake,
+  destroyedWhileConnected,
   shouldReconnectImmediately,
   STALL_INTERVAL_MS,
   shutdownHoldMs,
@@ -155,6 +159,112 @@ test("an attempt is in flight however it was opened, not only on a retry", () =>
   assert.equal(attemptIsInFlight("open"), true, "the namespace connect is still a round trip");
   assert.equal(attemptIsInFlight("closed"), false);
   assert.equal(attemptIsInFlight(undefined), false, "no manager, nothing to interrupt");
+});
+
+test("a connect() waits for a CONNECT already out, and restarts one never answered", () => {
+  const at = (overrides) => connectDuringHandshake({
+    connected: false,
+    active: true,
+    managerReadyState: "open",
+    openedAt: 10_000,
+    now: 12_000,
+    patienceMs: 6_000,
+    ...overrides,
+  });
+  assert.equal(at({}), "wait", "engine open, CONNECT sent, the answer is on its way");
+  assert.equal(at({ now: 15_999 }), "wait", "inside the patience");
+  assert.equal(at({ now: 16_000 }), "restart", "an answer this late may never come");
+  assert.equal(at({ openedAt: null }), "wait", "no open time recorded is no evidence of a stall");
+  assert.equal(at({ connected: true }), "connect", "already connected: the library returns early itself");
+  assert.equal(at({ active: false }), "connect", "a socket that disconnected sends a CONNECT nobody else will");
+  for (const state of ["opening", "closed", undefined]) {
+    assert.equal(at({ managerReadyState: state }), "connect", `${state}: no engine yet, so connect() sends nothing`);
+  }
+});
+
+/** socket.io-client's real Socket over a stand-in manager whose engine opens
+when the test says so, recording the packet types the socket sends. */
+function socketOverStandInManager() {
+  const listeners = new Map();
+  const sent = [];
+  const manager = {
+    _readyState: "closed",
+    _reconnecting: false,
+    on(event, listener) {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+    },
+    off(event, listener) {
+      listeners.set(event, (listeners.get(event) ?? []).filter((l) => l !== listener));
+    },
+    emit(event, ...args) {
+      for (const listener of listeners.get(event) ?? []) listener(...args);
+    },
+    open() {
+      if (this._readyState === "closed") this._readyState = "opening";
+    },
+    // The engine's handshake completing, a moment after `open()`.
+    opened() {
+      this._readyState = "open";
+      this.emit("open");
+    },
+    _packet(packet) {
+      sent.push(packet.type);
+    },
+    _destroy() {},
+  };
+  const socket = new Socket(manager, "/", {});
+  return { manager, socket, sent };
+}
+
+test("socket.io-client sends a second CONNECT when asked to connect mid-handshake", () => {
+  // The library behaviour the wait exists for. If an upgrade stops sending
+  // the second one, this fails and the wait can go.
+  const { manager, socket, sent } = socketOverStandInManager();
+  const decision = () => connectDuringHandshake({
+    connected: socket.connected,
+    active: socket.active,
+    managerReadyState: manager._readyState,
+    openedAt: 0,
+    now: 0,
+    patienceMs: 6_000,
+  });
+
+  socket.connect();
+  assert.equal(decision(), "connect", "the engine is still opening");
+  manager.opened();
+  assert.deepEqual(sent, [0], "one CONNECT once the engine is open");
+  assert.equal(decision(), "wait");
+
+  socket.connect();
+  assert.deepEqual(sent, [0, 0], "and a second one from a connect() before the answer");
+});
+
+test("a CONNECT_ERROR to a joined socket leaves it destroyed but reading as connected", () => {
+  // What the server's refusal of that second CONNECT does to the client: no
+  // `disconnect`, `connected` still true. `destroyedWhileConnected` is how
+  // the client recognises it.
+  const { manager, socket } = socketOverStandInManager();
+  const disconnects = [];
+  socket.on("disconnect", (reason) => disconnects.push(reason));
+  socket.on("connect_error", () => {});
+  socket.connect();
+  manager.opened();
+  manager.emit("packet", { type: 0, nsp: "/", data: { sid: "a" } });
+  assert.equal(socket.connected, true);
+  assert.equal(destroyedWhileConnected({ connected: socket.connected, active: socket.active }), false);
+
+  manager.emit("packet", { type: 4, nsp: "/", data: { message: "Unable to connect" } });
+  assert.equal(socket.connected, true, "still reads as connected");
+  assert.deepEqual(disconnects, [], "and nothing was told it went");
+  assert.equal(destroyedWhileConnected({ connected: socket.connected, active: socket.active }), true);
+});
+
+test("the socket's connect door and its connect_error handler use the handshake rules", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../src/lib/socket.ts", import.meta.url), "utf8");
+  assert.match(source, /socket\.connect = \(\(\) => \{\n  if \(isUpdateRequired\(\)\) return socket;\n  const handshake = connectDuringHandshake\(/);
+  assert.match(source, /if \(handshake === "wait"\) return socket;/);
+  assert.match(source, /socket\.on\("connect_error"[\s\S]*?destroyedWhileConnected\(/);
 });
 
 test("the network-return handler reads the manager, not the retry event", async () => {
