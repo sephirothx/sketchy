@@ -191,24 +191,39 @@ def test_lines_are_masked_exactly_as_the_single_patterns_masked_them():
 @pytest.mark.parametrize(
     "line",
     [
-        "1.2." * 3000,  # no `@` at all
-        "a" * 12_000 + "@",  # one `@`, and no domain after it
-        "://a:" * 2400,  # a URL's start over and over, and no `@` to end a password
+        lambda n: "1.2." * (n // 4),  # no `@` at all
+        lambda n: "a" * n + "@",  # one `@`, and no domain after it
+        lambda n: "://a:" * (n // 5),  # a URL's start over and over, and no `@` to end a password
     ],
     ids=["no-at", "one-trailing-at", "userinfo-without-at"],
 )
 def test_a_long_line_redacts_in_linear_time(line):
     """`redact` runs on the event loop for every JSON line, and a line can carry
     client text: a pattern that retries a run from each of its characters took
-    half a second on 12 KB, which stalls every room on the server."""
-    elapsed = min(_timed(redact, line) for _ in range(3))
-    assert elapsed < 0.05, f"{elapsed * 1000:.0f} ms"
+    half a second on 12 KB, which stalls every room on the server.
+
+    Told apart by growth, not by a deadline: eight times the line costs eight
+    times as much when linear and sixty-four when quadratic, on any machine. A
+    fixed 50 ms failed a linear `redact` on a loaded CI runner at 1.3 ms of
+    work. The two lengths take turns so a busy stretch slows both, each keeps
+    its fastest run, and the clock is the thread's CPU time, which does not
+    run while another xdist worker has the core."""
+    short, long = line(1_500), line(12_000)
+    short_time = long_time = float("inf")
+    for _ in range(15):
+        short_time = min(short_time, _timed(redact, short))
+        long_time = min(long_time, _timed(redact, long))
+    # With twice as many CPU hogs as cores the linear ratio stayed under 8.5;
+    # the quadratic rules measure 64. Twenty leaves twice the room either way.
+    assert long_time / short_time < 20, (
+        f"{short_time * 1000:.2f} ms -> {long_time * 1000:.2f} ms"
+    )
 
 
 def _timed(fn, arg) -> float:
-    start = time.perf_counter()
+    start = time.thread_time()
     fn(arg)
-    return time.perf_counter() - start
+    return time.thread_time() - start
 
 
 # --- wiring ------------------------------------------------------------------------
