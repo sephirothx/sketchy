@@ -1289,6 +1289,15 @@ class PlayerReportDrawingEvidence(Base):
 
     __tablename__ = "player_report_drawing_evidence"
     __table_args__ = (
+        # The copies an administrator erased, by turn: read for every game
+        # written, to write an erased turn erased, and by every reader of a
+        # report's drawing - and almost no copy is erased (#1439).
+        Index(
+            "ix_report_drawing_evidence_erased_turn",
+            "turn_id_snapshot",
+            postgresql_where=text("moderation_erased_at IS NOT NULL"),
+            sqlite_where=text("moderation_erased_at IS NOT NULL"),
+        ),
         # The same structural sanity bound `turn_drawings` carries, for the
         # same reason: not the protocol limit, which is derived from the
         # action and point caps and must stay free to move without a migration.
@@ -1330,6 +1339,17 @@ class PlayerReportDrawingEvidence(Base):
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     captured_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    # An administrator erased this drawing for illegal content (#1439,
+    # R-MOD-22) while its turn had no saved drawing to stamp: the turn an
+    # abandoned game was in the middle of, a game too small to record, a
+    # write that failed - or a game still being played. Every copy of the
+    # turn is stamped, which holds them back from all but administrators as
+    # `turn_drawings.moderation_erased_at` holds back a saved drawing's; and
+    # a game still being played writes that turn's drawing erased when it
+    # ends. A saved drawing is erased on its own row instead.
+    moderation_erased_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
     )
 
     report: Mapped[PlayerReport] = relationship(back_populates="drawing_evidence")

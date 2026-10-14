@@ -43,6 +43,7 @@ from app.repositories.sqlalchemy import (
     _lock_versions,
     apply_gallery_decision,
     erase_drawing_for_moderation,
+    erase_turns_saved_since,
 )
 from app.services.gallery_shelf import read_shelf_review
 from app.services.prompt_editions import UNDER_REVIEW as EDITION_UNDER_REVIEW
@@ -54,6 +55,7 @@ from app.services.player_reports import (
     decided_incident_report_ids,
     drawing_evidence_for_report,
     drawing_evidence_payload,
+    erase_report_copies,
     moderation_erased_turns,
     open_report_id,
     record_player_report,
@@ -4067,18 +4069,56 @@ def create_moderation_router(
                 if reviewer.role != UserRole.ADMIN.value:
                     raise HTTPException(status_code=404, detail="Not found")
                 require_step_up(request)
+                # The accounts first, in one ordered statement: the reported
+                # drawer's (a report copies only the drawer's own canvas) and
+                # the administrator's. A game being written holds every
+                # account it names FOR UPDATE until it commits, so this waits
+                # for that write and reads its turn - or goes first, and the
+                # write reads the stamp below (review of #1439).
+                drawers = set(
+                    (
+                        await session.scalars(
+                            select(PlayerReport.reported_user_id)
+                            .join(
+                                PlayerReportDrawingEvidence,
+                                PlayerReportDrawingEvidence.report_id == PlayerReport.id,
+                            )
+                            .where(
+                                PlayerReportDrawingEvidence.turn_id_snapshot == db_turn_id,
+                                PlayerReport.reported_user_id.is_not(None),
+                            )
+                        )
+                    ).all()
+                )
+                await erased_identity_ids(session, drawers | {reviewer.id})
                 # The drawer through the alias, as the ledger names every
                 # takedown's target. No own-content check: administrators are
                 # exempt from it (`_is_about_themselves`).
                 turn = await session.get(TurnRecord, db_turn_id)
-                drawer_id = (
-                    await canonical_user_id(session, turn.drawer_user_id)
-                    if turn is not None and turn.drawer_user_id is not None
-                    else None
+                erased: object = None
+                drawer_id = None
+                if turn is not None:
+                    drawer_id = (
+                        await canonical_user_id(session, turn.drawer_user_id)
+                        if turn.drawer_user_id is not None
+                        else None
+                    )
+                    erased = await erase_drawing_for_moderation(
+                        session, db_turn_id, erased_by_user_id=reviewer.id, now=now
+                    )
+                # Never saved (#1439) - or saved without a drawing row - the
+                # report's copies are all there is, so the erasure is theirs;
+                # a game still being played writes the turn erased.
+                through_copies = erased is None and not await session.scalar(
+                    select(exists().where(TurnDrawing.turn_id == db_turn_id))
                 )
-                erased = await erase_drawing_for_moderation(
-                    session, db_turn_id, erased_by_user_id=reviewer.id, now=now
-                )
+                if through_copies:
+                    stamped, reported = await erase_report_copies(
+                        session, db_turn_id, now=now
+                    )
+                    erased = stamped or None
+                    if drawer_id is None and reported is not None:
+                        drawer_id = await canonical_user_id(session, reported)
                 if erased is None:
                     raise HTTPException(status_code=404, detail="No such drawing.")
                 session.add(
@@ -4095,6 +4135,11 @@ def create_moderation_router(
                         created_at=now,
                     )
                 )
+        if through_copies:
+            # A backstop for the lock above: a write that slipped past it
+            # read no stamp, and its row is read here now both have committed
+            # (#1439).
+            await erase_turns_saved_since(session_factory, [db_turn_id])
         # Once committed: the shelf and a live recap read the drawing as it is.
         if on_gallery_decision is not None:
             on_gallery_decision()

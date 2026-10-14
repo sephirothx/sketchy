@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c1d2e3f4a5b8_words_hidden_with_their_list.py` (#1425). Both this line and the table
+`d2e3f4a5b6c9_erase_a_report_drawing_never_saved.py` (#1439). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1202,7 +1202,9 @@ under the protected report retention policy.
 ### `player_report_drawing_evidence`
 `report_id` **PK** (FK → `player_reports`, CASCADE) · `turn_id_snapshot` ·
 `round_number` · `prompt_snapshot` · `action_count` · `format_magic` ·
-`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `captured_at`.
+`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `captured_at` ·
+`moderation_erased_at` (nullable), with `ix_report_drawing_evidence_erased_turn`
+`(turn_id_snapshot) WHERE moderation_erased_at IS NOT NULL`.
 
 The canvas as it stood when a report about the player drawing on it was filed
 (R-MOD-14). One per report, and only when the reporter asked for it over
@@ -1223,6 +1225,21 @@ answers them 404, and a warned or suspended player's notice no longer lists it. 
 carries no foreign key for the reason `room_messages.turn_id` does not: the report
 is filed while the game is still being played, and a game abandoned before it ends
 never writes a `turn_records` row.
+
+**`moderation_erased_at`** is the erasure of a turn that has no saved drawing to stamp
+(#1439): the one an abandoned game was in the middle of, a game too small to record, a
+failed write, or a game still being played. Every copy of the turn is stamped, and the
+readers above treat a stamped copy as they treat a copy of an erased `turn_drawings`
+row. A game still being played reads the stamps when it is written, through the partial
+index, and writes that turn's drawing as erased - `deleted`, stamped, no reaction or
+share of it, counted as no reaction received. The erasure takes the reported drawer's
+`users` row (shared, with the administrator's, ascending) before it reads the turn, and a
+game being written holds every account it names `FOR UPDATE` until it commits: so the
+erasure waits for that write and erases the row it wrote, or goes first and the write
+reads its stamp. As a backstop, both sides run `erase_turns_saved_since` once committed -
+the write first thing in its recorded-game announcement - so a row that still slipped
+through is erased by whichever commits second. A report whose drawer's account is gone
+(a guest purged after thirty days) is still erasable, audited with no target.
 
 The bytes are stored the way `turn_drawings` stores them, under the same
 [`canvas_storage`](../backend/app/canvas_storage.py) rules: validated on ingest,
@@ -1700,8 +1717,11 @@ status from the drawing row it locks (`populate_existing`), not from the turn it
 before the lock: an administrator's erasure leaves the drawer's account standing, so the
 account lock does not order the two. The stamp is the only difference: the game detail reads it as
 `drawingStatus` `removed`, and the report evidence routes hold a copy of that turn back
-from everybody but administrators (`player_report_drawing_evidence`). It locks the
-drawer's and the administrator's `users` rows (shared, ascending) before the drawing row,
+from everybody but administrators (`player_report_drawing_evidence`). A game written
+after an administrator erased one of its turns through the report's copies writes that
+row this way from the start: `deleted`, stamped, with no reaction or share of it (#1439).
+It locks the drawer's and the administrator's `users` rows (shared, ascending; no
+administrator's when it erases a turn a report's copy says was erased) before the drawing row,
 the order an account erasure takes them in: drawing first, its audit row's foreign key
 waited on the account a concurrent erasure of the drawer held, while that erasure waited
 on the drawing.

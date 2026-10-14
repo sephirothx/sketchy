@@ -71,7 +71,8 @@ keep seeing**: one that is illegal. When in doubt, hide first and ask an adminis
   country: the national police, or that country's hotline listed by INHOPE (inhope.org).
   Note the date, the report id and the turn; describe what it is, but attach nothing.
 - **Then an administrator erases the drawing** (*Erase drawing* on the case), and the
-  account is suspended with no end date.
+  account is suspended with no end date. This works whether or not the game was saved:
+  a drawing from a game everyone left mid-turn is erased through the report's copy.
 - The copy kept with the report stays, readable by administrators only, by the operator's
   decision. Give it to the police only when they ask for it, through the operator. Nothing
   in the app deletes that copy yet; if the police say it is no longer needed, the operator
