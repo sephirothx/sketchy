@@ -265,12 +265,11 @@ def create_solo_router(
         with the player's result for it: none, part or all of it."""
         user = await account(request)
         throttle(serve_limiter, user)
+        local = local_date(today)
+        cursor_date = parse_date(before) if before is not None else None
         open_door(user, "archive")
         days, cursor = await solo.archive(
-            str(user.id),
-            local_date(today),
-            before=parse_date(before) if before is not None else None,
-            limit=ARCHIVE_PAGE,
+            str(user.id), local, before=cursor_date, limit=ARCHIVE_PAGE, now=now()
         )
         return {"days": days, "next": cursor}
 

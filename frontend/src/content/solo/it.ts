@@ -34,7 +34,7 @@ export const SOLO_IT: SoloCopy = {
     noDailiesYet: "Qui compariranno le sfide del giorno che giochi.",
     pastDailies: "Sfide del giorno passate",
     pastDailiesIntro:
-      "Gioca una Sfida del giorno che hai perso, finisci quella lasciata a metà o rigiocane una. Una sfida passata non conta mai per i tuoi giorni di fila, e una sfida rigiocata non viene registrata.",
+      "Gioca una Sfida del giorno che hai perso, finisci quella lasciata a metà o rigiocane una. Una sfida persa non conta per i tuoi giorni di fila, e una sfida rigiocata non viene registrata.",
     noPastDailies: "Non ci sono ancora sfide del giorno passate.",
     playPast: "Gioca",
     continuePast: "Continua",

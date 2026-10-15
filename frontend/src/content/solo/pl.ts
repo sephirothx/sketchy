@@ -34,7 +34,7 @@ export const SOLO_PL: SoloCopy = {
     noDailiesYet: "Tu pojawią się wyzwania dnia, w które zagrasz.",
     pastDailies: "Dawne wyzwania dnia",
     pastDailiesIntro:
-      "Zagraj w pominięte wyzwanie dnia, dokończ rozpoczęte albo zagraj w któreś jeszcze raz. Dawne wyzwanie dnia nigdy nie liczy się do dni z rzędu, a ponowna gra nie jest zapisywana.",
+      "Zagraj w pominięte wyzwanie dnia, dokończ rozpoczęte albo zagraj w któreś jeszcze raz. Pominięte wyzwanie nie liczy się do dni z rzędu, a ponowna gra nie jest zapisywana.",
     noPastDailies: "Nie ma jeszcze dawnych wyzwań dnia.",
     playPast: "Zagraj",
     continuePast: "Kontynuuj",

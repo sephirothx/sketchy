@@ -134,7 +134,12 @@
   font-weight: 700;
 }
 
-/* The archive's rows add what to do with the day (#1470). */
+/* The archive's rows add what to do with the day (#1470); on a phone the
+   points and the button take a line of their own. */
+.solo-archive-list {
+  padding: 18px 20px;
+}
+
 .solo-archive-day {
   grid-template-columns: auto 1fr auto auto;
 }
@@ -252,6 +257,7 @@
   .solo-guess { flex-wrap: wrap; }
   .solo-guess-input { flex-basis: 100%; }
   .solo-guess .btn { flex: 1 1 0; justify-content: center; }
+  .solo-archive-day { grid-template-columns: auto 1fr; }
 }
 
 /* ----------------------------------------------------- result and summary */

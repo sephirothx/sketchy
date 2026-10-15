@@ -34,7 +34,7 @@ export const SOLO_NL: SoloCopy = {
     noDailiesYet: "De dagpuzzels die je speelt, komen hier te staan.",
     pastDailies: "Eerdere dagpuzzels",
     pastDailiesIntro:
-      "Speel een dagpuzzel die je hebt gemist, maak er een af die je liet liggen, of speel er een opnieuw. Een eerdere dagpuzzel telt nooit mee voor je dagen op rij, en opnieuw spelen wordt niet bewaard.",
+      "Speel een dagpuzzel die je hebt gemist, maak er een af die je liet liggen, of speel er een opnieuw. Een gemiste dagpuzzel telt niet mee voor je dagen op rij, en opnieuw spelen wordt niet bewaard.",
     noPastDailies: "Er zijn nog geen eerdere dagpuzzels.",
     playPast: "Spelen",
     continuePast: "Verder",

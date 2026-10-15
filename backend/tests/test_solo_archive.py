@@ -11,10 +11,10 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.api import solo as solo_api
-from app.db.models import SoloDailyDay, SoloDailyResult, SoloRun
+from app.db.models import SoloDailyDay, SoloDailyResult, SoloRun, SoloServe, TurnDrawing
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
 from tests import test_solo_daily
@@ -187,9 +187,12 @@ async def test_the_archive_lists_the_dailies_there_were_with_what_the_player_mad
     assert partial["completed"] is False and partial["positionsPlayed"] == 1
     assert none is None
 
-    first, cursor = await solo.archive(stranger.id, TODAY, before=None, limit=2)
+    first, cursor = await solo.archive(stranger.id, TODAY, before=None, limit=2, now=datetime.now(timezone.utc))
     assert [entry["date"] for entry in first] == [day.isoformat() for day in days[:2]]
-    rest, end = await solo.archive(stranger.id, TODAY, before=datetime.fromisoformat(cursor).date(), limit=2)
+    rest, end = await solo.archive(
+        stranger.id, TODAY, before=datetime.fromisoformat(cursor).date(), limit=2,
+        now=datetime.now(timezone.utc),
+    )
     assert [entry["date"] for entry in rest] == [days[2].isoformat()] and end is None
 
 
@@ -211,3 +214,50 @@ async def test_one_gate_closes_every_archive_door_and_leaves_today_s(env, monkey
     ):
         assert refused.status_code == 403, refused.text
     assert (await http.post(f"/api/solo/daily/{TODAY.isoformat()}")).status_code == 200
+
+
+async def test_the_archive_holds_back_a_date_still_open_somewhere(env):
+    """At 05:00 UTC the player's yesterday is still today west of UTC-5:
+    played from the archive it would go through today's door and count
+    toward a streak (#1496 review)."""
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "Other")
+    yesterday = TODAY - timedelta(days=1)
+    for day in (yesterday, PAST):
+        await solo.open_daily(other.id, day, now=_noon(day))
+    stranger = await player(users, factory, "Stranger")
+    early = datetime.combine(TODAY, time(5), tzinfo=timezone.utc)
+    listed, _ = await solo.archive(stranger.id, TODAY, before=None, limit=30, now=early)
+    assert [entry["date"] for entry in listed] == [PAST.isoformat()]
+    # Once it has ended everywhere, it is there.
+    late = datetime.combine(TODAY, time(15), tzinfo=timezone.utc)
+    listed, _ = await solo.archive(stranger.id, TODAY, before=None, limit=30, now=late)
+    assert [entry["date"] for entry in listed] == [yesterday.isoformat(), PAST.isoformat()]
+
+
+async def test_a_replay_resumed_takes_a_drawing_replaced_since(env):
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 7)
+    stranger = await player(users, factory, "Stranger")
+    begun = await solo.open_daily(stranger.id, PAST, now=_noon(PAST))
+    for serve in begun.serves:
+        await solo.settle(stranger.id, serve.serve_id, outcome="solved", seconds=4, now=_noon(PAST))
+    await sign_in_as(http, factory, stranger.id)
+    replay = (await http.post(f"/api/solo/daily/{PAST.isoformat()}/replay")).json()
+
+    async def turns():
+        async with factory() as session:
+            return list((await session.scalars(
+                select(SoloServe.turn_id).where(SoloServe.run_id == UUID(replay["runId"]))
+                .order_by(SoloServe.position)
+            )).all())
+
+    hidden = (await turns())[2]
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(TurnDrawing).where(TurnDrawing.turn_id == hidden).values(gallery_hidden_at=_noon(TODAY))
+        )
+    again = (await http.post(f"/api/solo/daily/{PAST.isoformat()}/replay")).json()
+    assert again["runId"] == replay["runId"]
+    assert hidden not in await turns()

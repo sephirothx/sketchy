@@ -34,7 +34,7 @@ export const SOLO_FR: SoloCopy = {
     noDailiesYet: "Les défis du jour que tu joues apparaîtront ici.",
     pastDailies: "Anciens défis du jour",
     pastDailiesIntro:
-      "Joue un défi du jour manqué, termine celui que tu as laissé ou rejoue-en un. Un ancien défi du jour ne compte jamais pour tes jours d’affilée, et le rejouer n’est pas enregistré.",
+      "Joue un défi du jour manqué, termine celui que tu as laissé ou rejoue-en un. Un défi manqué ne compte pas pour tes jours d’affilée, et le rejouer n’est pas enregistré.",
     noPastDailies: "Il n’y a pas encore d’anciens défis du jour.",
     playPast: "Jouer",
     continuePast: "Continuer",

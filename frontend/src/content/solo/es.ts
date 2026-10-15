@@ -34,7 +34,7 @@ export const SOLO_ES: SoloCopy = {
     noDailiesYet: "Aquí aparecerán los retos diarios que juegues.",
     pastDailies: "Retos diarios anteriores",
     pastDailiesIntro:
-      "Juega un reto diario que te perdiste, termina uno que dejaste a medias o vuelve a jugar uno. Un reto diario anterior nunca cuenta para tus días seguidos, y volver a jugarlo no queda registrado.",
+      "Juega un reto diario que te perdiste, termina uno que dejaste a medias o vuelve a jugar uno. Uno que te perdiste no cuenta para tus días seguidos, y volver a jugarlo no queda registrado.",
     noPastDailies: "Todavía no hay retos diarios anteriores.",
     playPast: "Jugar",
     continuePast: "Continuar",

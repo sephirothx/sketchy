@@ -321,6 +321,13 @@ async def test_a_missed_daily_is_played_from_past_dailies_and_then_played_again(
             for _ in range(5):
                 await give_up_and_continue(page)
             await expect(page.get_by_test_id("solo-summary")).to_contain_text("Played again")
+
+            # The archive's rows fit a phone too (R-SOLO-17).
+            await page.get_by_test_id("solo-back").click()
+            await page.set_viewport_size({"width": 412, "height": 915})
+            await expect(page.get_by_test_id("solo-archive-day").first).to_be_visible()
+            width = await page.evaluate("() => document.documentElement.scrollWidth")
+            assert width <= 412, width
         finally:
             await context.close()
             await browser.close()

@@ -62,6 +62,7 @@ from app.prompt_content import prompt_match_variants
 from app.repositories.interfaces import TurnDrawingDetail
 from app.solo_rules import (
     DAILY_LENGTH,
+    DAY_EDGE,
     DAILY_REUSE_DAYS,
     SKIPPED_RETRY,
     MAX_OPEN_SERVES,
@@ -1202,6 +1203,10 @@ class SoloRepository:
                             .with_for_update()
                         )
                         if active is not None and active.daily_date == day:
+                            # Resumed as a Daily is: a drawing the set replaced
+                            # since is swapped in (R-SOLO-13).
+                            rows = await _set_rows(session, day)
+                            await self._sync_daily_serves(session, active, rows, languages, now=now)
                             return await self._view_with_serves(session, active, player)
                         if active is not None:
                             await self._abandon(session, active, now=now)
@@ -1222,13 +1227,17 @@ class SoloRepository:
         raise SoloRefused("conflict")
 
     async def archive(
-        self, user_id: str, today: date, *, before: date | None, limit: int
+        self, user_id: str, today: date, *, before: date | None, limit: int, now: datetime
     ) -> tuple[list[dict], str | None]:
-        """The past Dailies there were (#1470), newest first, before the
-        player's `today` (or `before`, the page's cursor), each with what the
-        player made of it: none, part or all. A date no one asked for while
-        it was open has no Daily and is not listed."""
-        upper = min(today, before) if before is not None else today
+        """The past Dailies there were (#1470), newest first, each with what
+        the player made of it: none, part or all. Only dates that have ended
+        everywhere: the player's yesterday may still be somebody's today, and
+        played from here it would count toward a streak the archive promises
+        it never does (#1496 review). A date no one asked for while it was
+        open has no Daily and is not listed."""
+        # `daily_release_at(d) <= now` is `d < (now - DAY_EDGE).date()`.
+        ended_before = (now - DAY_EDGE).date()
+        upper = min(today, ended_before, *([before] if before is not None else []))
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
             days = list(

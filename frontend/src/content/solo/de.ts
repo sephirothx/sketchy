@@ -34,7 +34,7 @@ export const SOLO_DE: SoloCopy = {
     noDailiesYet: "Hier erscheinen die Tagesrätsel, die du spielst.",
     pastDailies: "Frühere Tagesrätsel",
     pastDailiesIntro:
-      "Spiel ein verpasstes Tagesrätsel, beende ein angefangenes oder spiel eines noch einmal. Ein früheres Tagesrätsel zählt nie für deine Tage in Folge, und eine Wiederholung wird nicht gespeichert.",
+      "Spiel ein verpasstes Tagesrätsel, beende ein angefangenes oder spiel eines noch einmal. Ein verpasstes zählt nicht für deine Tage in Folge, und eine Wiederholung wird nicht gespeichert.",
     noPastDailies: "Noch keine früheren Tagesrätsel.",
     playPast: "Spielen",
     continuePast: "Weiterspielen",

@@ -34,7 +34,7 @@ export const SOLO_PT: SoloCopy = {
     noDailiesYet: "Os desafios do dia que jogares aparecem aqui.",
     pastDailies: "Desafios do dia anteriores",
     pastDailiesIntro:
-      "Joga um Desafio do dia que perdeste, acaba um que deixaste a meio ou volta a jogar um. Um desafio anterior nunca conta para os teus dias seguidos, e jogar outra vez não fica registado.",
+      "Joga um Desafio do dia que perdeste, acaba um que deixaste a meio ou volta a jogar um. Um desafio que perdeste não conta para os teus dias seguidos, e jogar outra vez não fica registado.",
     noPastDailies: "Ainda não há desafios do dia anteriores.",
     playPast: "Jogar",
     continuePast: "Continuar",

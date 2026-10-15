@@ -38,7 +38,7 @@ export const SOLO_EN = {
     noDailiesYet: "The Dailies you play will be listed here.",
     pastDailies: "Past Dailies",
     pastDailiesIntro:
-      "Play a Daily you missed, finish one you left, or play one again. A past Daily never counts toward your streak, and playing one again is not recorded.",
+      "Play a Daily you missed, finish one you left, or play one again. One you missed doesn't count toward your streak, and playing one again is not recorded.",
     noPastDailies: "There are no past Dailies yet.",
     playPast: "Play",
     continuePast: "Continue",

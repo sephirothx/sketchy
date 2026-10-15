@@ -247,7 +247,8 @@ export function SoloPage() {
   // Today's Daily, after a 404 on one of its drawings: the set may have
   // replaced it for everybody (R-SOLO-13), which opening it again picks up.
   const reopenDaily = async () => {
-    if (!run || run.mode !== "daily" || !run.dailyDate) return;
+    // A replay ended elsewhere is not reopened: that would start another.
+    if (!run || run.mode !== "daily" || !run.dailyDate || run.state !== "active") return;
     try {
       const fresh = await (run.replay ? replayDaily : openDaily)(run.dailyDate);
       setRun((current) => (current?.runId === fresh.runId ? fresh : current));
@@ -314,16 +315,23 @@ export function SoloPage() {
         <SoloArchive
           today={today}
           busy={busy}
+          error={error}
           onPlay={(date) => void begin(() => openDaily(date))}
           onPlayAgain={(date) => void begin(() => replayDaily(date))}
-          onBack={() => setView("home")}
+          onBack={() => {
+            setError(null);
+            setView("home");
+          }}
         />
       ) : (
         <SoloHome
           summary={summary}
           error={error}
           busy={busy}
-          onArchive={() => setView("archive")}
+          onArchive={() => {
+            setError(null);
+            setView("archive");
+          }}
           onDaily={() => void begin(() => openDaily(today))}
           onFree={(length) => void begin(() => startFreeRun(length))}
           onContinue={() =>
@@ -533,12 +541,15 @@ function resultOf(run: SoloRun): SoloDailyResult {
 function SoloArchive({
   today,
   busy,
+  error: refusal,
   onPlay,
   onPlayAgain,
   onBack,
 }: {
   today: string;
   busy: boolean;
+  /** Why the last Play, Continue or Play it again was refused. */
+  error: string | null;
   onPlay: (date: string) => void;
   onPlayAgain: (date: string) => void;
   onBack: () => void;
@@ -584,8 +595,8 @@ function SoloArchive({
         <h1>{words().pastDailies}</h1>
         <p>{words().pastDailiesIntro}</p>
       </div>
-      {error && <p className="lobby-action-error" role="alert">{error}</p>}
-      <section className="surface-card solo-history">
+      {(refusal ?? error) && <p className="lobby-action-error" role="alert">{refusal ?? error}</p>}
+      <section className="surface-card solo-history solo-archive-list">
         {days && days.length === 0 ? (
           <p className="solo-note">{words().noPastDailies}</p>
         ) : (
