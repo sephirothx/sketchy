@@ -108,11 +108,11 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 
 **`app/game.py` — the pure state machine.**
 `Game` owns phases, the turn rotation, prompt choice, hint economics, and scoring.
-Whether a guess is right, close or held is [`app/guess_judge.py`](../backend/app/guess_judge.py)'s:
-`Game` hands it the prompt as one seat plays it (`Game._judge_target`), and Solo (#1434)
-hands it the same shape without a game.
-[`fixtures/guess_judge_cases.json`](../fixtures/guess_judge_cases.json) records its verdicts;
-the browser's port Solo plays with is held to the same file. It performs no I/O and touches no socket. `Phase` is
+It performs no I/O and touches no socket. Whether a guess is right, close or held is
+[`app/guess_judge.py`](../backend/app/guess_judge.py)'s, which is pure too: `Game` hands it
+the prompt as one seat plays it (`Game._judge_target`), and Solo (#1434) hands it the same
+shape without a game. [`fixtures/guess_judge_cases.json`](../fixtures/guess_judge_cases.json)
+records its verdicts, for the browser port Solo plays with to be held to. `Phase` is
 `choosing_prompt | drawing | turn_results | game_end`
 ([`backend/app/game.py:150`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
