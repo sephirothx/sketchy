@@ -77,8 +77,8 @@ def gallery_share_rows():
     The one definition the projections, their rebuild and the audit count."""
     return union_all(
         select(TurnDrawingShare.turn_id, TurnDrawingShare.created_at),
-        select(SoloGalleryShare.turn_id, SoloGalleryShare.created_at).where(
-            SoloGalleryShare.release_at.is_(None)
+        select(SoloGalleryShare.turn_id, SoloGalleryShare.entered_at).where(
+            SoloGalleryShare.entered_at.is_not(None)
         ),
     ).subquery()
 

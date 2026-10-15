@@ -4042,6 +4042,9 @@ class SoloGalleryShare(Base):
 
     __tablename__ = "solo_gallery_shares"
     __table_args__ = (
+        CheckConstraint(
+            "(release_at IS NULL) = (entered_at IS NOT NULL)", name="ck_solo_gallery_shares_held"
+        ),
         Index(
             "ix_solo_gallery_shares_held",
             "release_at",
@@ -4061,9 +4064,13 @@ class SoloGalleryShare(Base):
         primary_key=True,
         index=True,
     )
+    # When the player shared it: the order shares are credited in (R-SHARE-06).
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
-    # When a held share enters the Gallery; NULL once it is in.
+    # When a held share is to enter the Gallery; NULL once it is in.
     release_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When it entered the Gallery - the share itself, or its release: what
+    # the Gallery's counts and New read. NULL while it is held.
+    entered_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class GalleryShelfReview(Base):

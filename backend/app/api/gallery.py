@@ -283,6 +283,6 @@ def create_gallery_router(
             on_gallery_changed=shelf_cache.invalidate,
             on_shares_changed=on_shares_changed,
         )
-        return {"turnId": result.turn_id, "inGallery": bool(result.shares)}
+        return {"turnId": result.turn_id, "inGallery": result.in_gallery}
 
     return router

@@ -215,7 +215,12 @@ function GameRow({
             ...current,
             turns: current.turns.map((turn) =>
               turn.id === turnId
-                ? { ...turn, shares: result.shares, shareWithdrawn: result.shareWithdrawn }
+                ? {
+                    ...turn,
+                    shares: result.shares,
+                    shareWithdrawn: result.shareWithdrawn,
+                    inGallery: result.inGallery,
+                  }
                 : turn,
             ),
           }
@@ -405,6 +410,7 @@ function GameRow({
                   shares: turn.shares ?? [],
                   mine: detail.mySeatId,
                   withdrawn: turn.shareWithdrawn ?? false,
+                  inGallery: turn.inGallery,
                 })}
                 credit={shareCredit(turn.shares ?? [], {
                   mine: detail.mySeatId,

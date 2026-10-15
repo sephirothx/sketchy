@@ -36,11 +36,14 @@ export interface ShareSituation {
   /** The viewer's own token or seat id, to find their share among them. */
   mine: string | null;
   withdrawn: boolean;
+  /** In the Gallery whatever the seats say, where the server says so: a
+      Solo player's share holds a drawing without a seat to list (#1434). */
+  inGallery?: boolean;
 }
 
 export function shareOffer(situation: ShareSituation): ShareOffer {
   if (!situation.canAct) return "hidden";
-  const inGallery = situation.shares.length > 0;
+  const inGallery = situation.inGallery ?? situation.shares.length > 0;
   if (situation.isDrawer) {
     if (inGallery) return "takeOut";
     return situation.shareable ? "share" : "hidden";
