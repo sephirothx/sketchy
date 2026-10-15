@@ -134,12 +134,38 @@ export function SoloPage() {
       // tab: the server's run says which it was.
       if (!(failure instanceof ApiError) || (failure.status !== 404 && failure.status !== 409)) throw failure;
       const fresh = await fetchSoloRun(run.runId).catch(() => null);
-      const kept = fresh?.serves.find((candidate) => candidate.serveId === serve.serveId);
-      if (!fresh || !kept || kept.outcome === null) throw failure;
+      if (!fresh) throw failure;
+      const kept = fresh.serves.find((candidate) => candidate.serveId === serve.serveId);
+      if (!kept || kept.outcome === null) {
+        if (fresh.state === "active") throw failure;
+        // Ended elsewhere - abandoned, or an unlimited run's miss in another
+        // tab - and this drawing went with it: what the run came to is all
+        // there is to show.
+        forgetServeStart(serve.serveId);
+        setCard(null);
+        setSummaryOf(fresh);
+        setRun(null);
+        void loadSummary();
+        return;
+      }
       answer = { serve: kept, run: fresh };
     }
     forgetServeStart(serve.serveId);
-    setRun((current) => (current?.runId === answer.run.runId ? answer.run : current));
+    setRun((current) =>
+      current?.runId === answer.run.runId
+        ? {
+            ...answer.run,
+            // The server's list, and any drawing held ready that a top-up
+            // added after the server read it.
+            serves: [
+              ...answer.run.serves,
+              ...current.serves.filter(
+                (held) => !answer.run.serves.some((listed) => listed.serveId === held.serveId),
+              ),
+            ].sort((left, right) => left.position - right.position),
+          }
+        : current,
+    );
     setCard(answer.serve);
   };
 
@@ -543,6 +569,9 @@ function SoloPlay({
   // What the player decided and the server has not yet taken, to send again.
   const [unsaved, setUnsaved] = useState<{ outcome: SoloOutcome; seconds: number } | null>(null);
   const settling = useRef(false);
+  // The player's decision, once made: it stands, and a retry or the clock
+  // running out sends that, never another.
+  const decided = useRef<{ outcome: SoloOutcome; seconds: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const target = useMemo(() => (serve.forms ? decodeSoloForms(serve.serveId, serve.forms) : null), [serve]);
   const upcomingId = upcoming?.serveId ?? null;
@@ -603,23 +632,28 @@ function SoloPlay({
   const settle = useCallback(async (outcome: SoloOutcome, seconds: number) => {
     if (settling.current) return;
     settling.current = true;
-    const decided = { outcome, seconds: Math.min(SOLO_CLOCK_SECONDS, Math.max(0, seconds)) };
+    const choice = decided.current ?? {
+      outcome,
+      seconds: Math.min(SOLO_CLOCK_SECONDS, Math.max(0, seconds)),
+    };
+    decided.current = choice;
     try {
-      await onSettleRef.current(decided.outcome, decided.seconds);
+      await onSettleRef.current(choice.outcome, choice.seconds);
     } catch {
       // Said, with the way to send it again: the decision stands.
-      setUnsaved(decided);
+      setUnsaved(choice);
       settling.current = false;
     }
   }, []);
 
   const timedOut = startedAt !== null && remaining <= 0;
   useEffect(() => {
-    if (!timedOut) return;
+    // A decision already made is not overtaken by the clock.
+    if (!timedOut || unsaved) return;
     // Out of the render that noticed it: the report may say it failed.
     const timer = window.setTimeout(() => void settle("timed_out", SOLO_CLOCK_SECONDS), 0);
     return () => window.clearTimeout(timer);
-  }, [timedOut, settle]);
+  }, [timedOut, unsaved, settle]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -683,11 +717,7 @@ function SoloPlay({
           <button
             type="button"
             className="btn btn-secondary btn-compact"
-            onClick={() => {
-              const decided = unsaved;
-              setUnsaved(null);
-              void settle(decided.outcome, decided.seconds);
-            }}
+            onClick={() => void settle(unsaved.outcome, unsaved.seconds)}
           >
             {ui.solo.tryAgain}
           </button>
