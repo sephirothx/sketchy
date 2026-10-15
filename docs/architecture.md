@@ -96,6 +96,7 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 ├── app/presenters.py Pure construction of outgoing payloads
 ├── app/refusals.py   The one refusal vocabulary, shared by REST and the socket
 ├── app/game.py       Pure game state machine — no I/O
+├── app/guess_judge.py  Pure guess matching, shared by rooms and Solo
 ├── app/rooms.py      In-memory Room/Player/RoomManager domain model
 ├── app/canvas_*.py   Canvas history, per-turn session, durable storage policy
 ├── app/live_drawing.py  Binary live-drawing frame codec
@@ -106,13 +107,17 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 ### Layer responsibilities
 
 **`app/game.py` — the pure state machine.**
-`Game` owns phases, the turn rotation, prompt choice, hint economics, guess matching,
-and scoring. It performs no I/O and touches no socket. `Phase` is
+`Game` owns phases, the turn rotation, prompt choice, hint economics, and scoring.
+Whether a guess is right, close or held is [`app/guess_judge.py`](../backend/app/guess_judge.py)'s:
+`Game` hands it the prompt as one seat plays it (`Game._judge_target`), and Solo (#1434)
+hands it the same shape without a game.
+[`fixtures/guess_judge_cases.json`](../fixtures/guess_judge_cases.json) records its verdicts;
+the browser's port Solo plays with is held to the same file. It performs no I/O and touches no socket. `Phase` is
 `choosing_prompt | drawing | turn_results | game_end`
-([`backend/app/game.py:152`](../backend/app/game.py)). Scoring constants and the
+([`backend/app/game.py:150`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
-([`backend/app/game.py:52`](../backend/app/game.py),
-[`backend/app/game.py:548`](../backend/app/game.py)). This is the module to change when
+([`backend/app/game.py:65`](../backend/app/game.py),
+[`backend/app/game.py:428`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
 
@@ -1996,6 +2001,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/drawing_rules.py`](../backend/app/drawing_rules.py) | A room's drawing rules: which tools and which colors a drawer may use. |
 | [`app/encode_pool.py`](../backend/app/encode_pool.py) | The threads CPU-bound drawing work runs on, so the event loop does not. |
 | [`app/game.py`](../backend/app/game.py) | Per-room game state machine: turn rotation, prompt choice, drawing timer, scoring. |
+| [`app/guess_judge.py`](../backend/app/guess_judge.py) | Whether a guess names a prompt, and how near a wrong one came. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |
 | [`app/handlers/connection.py`](../backend/app/handlers/connection.py) | Socket.IO handlers for the connection domain. |

@@ -1,0 +1,3213 @@
+{
+ "version": 1,
+ "note": "What a guess is, as both judges must answer it: backend/app/guess_judge.py (backend/tests/test_guess_judge_corpus.py) and frontend/src/lib/guessJudge.ts (frontend/tests/guessJudge.test.mjs). `expected` is the Python judge's verdict - null for a plain wrong guess or chat. Change a rule on one side alone and the other fails; change it on both and regenerate with SKETCHY_REGENERATE_GUESS_CORPUS=1 pytest tests/test_guess_judge_corpus.py, then read the diff.",
+ "cases": [
+  {
+   "note": "english single word",
+   "text": "dog",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "DOG",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "  dog  ",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "Dog.",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "dog?",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "puppy",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "dgo",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "dogg",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "do",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "cat",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "english single word",
+   "text": "doggy",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "hot dog",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "a dog",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english single word",
+   "text": "is it a dog or a cat",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "english single word",
+   "text": "d o g",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "dog​",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english single word",
+   "text": "ｄｏｇ",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "puppy"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "english compound",
+   "text": "lighthouse",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english compound",
+   "text": "light house",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english compound",
+   "text": "light-house",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english compound",
+   "text": "lighthose",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "lihgthouse",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "ligthhuose",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "lighthouses",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "lighthouse keeper",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "the lighthouse",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english compound",
+   "text": "is it a lighthouse?",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "english compound",
+   "text": "concatenate lighthouse x y",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "english compound",
+   "text": "lighthousekeeper",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "english two words",
+   "text": "hang glider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english two words",
+   "text": "hangglider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english two words",
+   "text": "hang-glider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english two words",
+   "text": "hangglidr",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english two words",
+   "text": "glider hang",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english two words",
+   "text": "hang",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "english two words",
+   "text": "glider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english two words",
+   "text": "hang gliding",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "english two words",
+   "text": "paper glider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english two words",
+   "text": "hang glider pilot",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": [
+      "hang-glider"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "english three words",
+   "text": "ice cream",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english three words",
+   "text": "cream cone",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english three words",
+   "text": "ice cream cone",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english three words",
+   "text": "icecreamcone",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "english three words",
+   "text": "cone ice cream",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english three words",
+   "text": "ice cone",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "english three words",
+   "text": "ice cream cones",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "ice cream cone",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "apostrophes and hyphens",
+   "text": "lighthouse keepers hut",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse-keeper's hut",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "apostrophes and hyphens",
+   "text": "lighthouse keeper’s hut",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse-keeper's hut",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "apostrophes and hyphens",
+   "text": "lighthouse hut",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse-keeper's hut",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "apostrophes and hyphens",
+   "text": "keeper's hut lighthouse",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "lighthouse-keeper's hut",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "ampersand spelled out",
+   "text": "nunu and willump",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Nunu & Willump",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "ampersand spelled out",
+   "text": "Nunu & Willump",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Nunu & Willump",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "ampersand spelled out",
+   "text": "nunu willump",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Nunu & Willump",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "ampersand spelled out",
+   "text": "nunu",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Nunu & Willump",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "german umlauts",
+   "text": "Mädchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german umlauts",
+   "text": "maedchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german umlauts",
+   "text": "madchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german umlauts",
+   "text": "MAEDCHEN",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german umlauts",
+   "text": "Maedche",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german umlauts",
+   "text": "Madchn",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german umlauts",
+   "text": "das Mädchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german umlauts",
+   "text": "ist das ein Mädchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "german umlauts",
+   "text": "Mädchenhaft",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "german umlauts",
+   "text": "Mädchen",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Mädchen",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german sharp s",
+   "text": "Fußball",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german sharp s",
+   "text": "fussball",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german sharp s",
+   "text": "FUSSBALL",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german sharp s",
+   "text": "Fusball",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german sharp s",
+   "text": "Fußbal",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german sharp s",
+   "text": "der Fußball",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fußball",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german article held",
+   "text": "Hund",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "german article held",
+   "text": "der Hund",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german article held",
+   "text": "der Hund?",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german article held",
+   "text": "ist es vielleicht der Hund",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "german article held",
+   "text": "Hunde",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german article held",
+   "text": "Hnud",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "german article held",
+   "text": "Mund",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hund",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "french ligature",
+   "text": "cœur",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french ligature",
+   "text": "coeur",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french ligature",
+   "text": "cour",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "french ligature",
+   "text": "le cœur",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "french ligature",
+   "text": "Cœur",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french ligature",
+   "text": "coeuur",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "cœur",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feu d'artifice",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feu d’artifice",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feu dartifice",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feu d artifice",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feu",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "french apostrophe",
+   "text": "artifice feu",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "french apostrophe",
+   "text": "feux d'artifice",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "feu d'artifice",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "piñata",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "pinata",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "PIÑATA",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "pinatta",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "una piñata",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "spanish tilde",
+   "text": "¿piñata?",
+   "target": {
+    "language": "es",
+    "own": {
+     "answer": "piñata",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "italian accent",
+   "text": "caffè",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "italian accent",
+   "text": "caffe",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "italian accent",
+   "text": "caffé",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "italian accent",
+   "text": "cafe",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "italian accent",
+   "text": "il caffè",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "italian accent",
+   "text": "caff",
+   "target": {
+    "language": "it",
+    "own": {
+     "answer": "caffè",
+     "aliases": [
+      "caffe"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "dutch digraph",
+   "text": "ĳsbeer",
+   "target": {
+    "language": "nl",
+    "own": {
+     "answer": "ĳsbeer",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "dutch digraph",
+   "text": "ijsbeer",
+   "target": {
+    "language": "nl",
+    "own": {
+     "answer": "ĳsbeer",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "dutch digraph",
+   "text": "ysbeer",
+   "target": {
+    "language": "nl",
+    "own": {
+     "answer": "ĳsbeer",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "dutch digraph",
+   "text": "ijsber",
+   "target": {
+    "language": "nl",
+    "own": {
+     "answer": "ĳsbeer",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "dutch digraph",
+   "text": "de ijsbeer",
+   "target": {
+    "language": "nl",
+    "own": {
+     "answer": "ĳsbeer",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "łódź",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "lodz",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "LODZ",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "łodz",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "lódz",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "lodzz",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "polish l with stroke",
+   "text": "ta łódź",
+   "target": {
+    "language": "pl",
+    "own": {
+     "answer": "łódź",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "maçã",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "maca",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "maça",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "uma maçã",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "macã",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "portuguese cedilla and tilde",
+   "text": "mação",
+   "target": {
+    "language": "pt",
+    "own": {
+     "answer": "maçã",
+     "aliases": [
+      "maca"
+     ]
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "agnostic name",
+   "text": "farfetchd",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Farfetch'd",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "agnostic name",
+   "text": "Farfetch'd",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Farfetch'd",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "agnostic name",
+   "text": "farfetch d",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Farfetch'd",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "agnostic name",
+   "text": "farfetched",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Farfetch'd",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "agnostic name",
+   "text": "farfech'd",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "Farfetch'd",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "agnostic name in a german fold",
+   "text": "dr robotnik",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Dr. Robotnik",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "agnostic name in a german fold",
+   "text": "Dr Robotnik",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Dr. Robotnik",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "agnostic name in a german fold",
+   "text": "robotnik",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Dr. Robotnik",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "agnostic name in a german fold",
+   "text": "doktor robotnik",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Dr. Robotnik",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "agnostic name in a german fold",
+   "text": "dr. robotnic",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Dr. Robotnik",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "too long to be a guess, holds nothing",
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "too long but holds the answer",
+   "text": "this is a very long sentence about a dog in it",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "long text with the answer and many others",
+   "text": "well i think that maybe it could be a dog or not",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "empty",
+   "text": "",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "only punctuation",
+   "text": "?!",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "emoji answer",
+   "text": "🍎",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "🍎",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "emoji answer",
+   "text": "🍎🍌",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "🍎",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "emoji answer",
+   "text": "🍎 🍌 🍇",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "🍎",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "emoji answer",
+   "text": "🍏",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "🍎",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "Fliege",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "bow tie",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "bowtie",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "noeud papillon",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "papillon",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "Fliegee",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "bow tiee",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "the bow tie",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "die Fliege",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "ist es vielleicht die Fliege",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "held"
+  },
+  {
+   "note": "mixed room german seat",
+   "text": "Katze",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Fliege",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "nœud papillon",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": null
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "noeud papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "un papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "partial"
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "le noeud papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "Fliege",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room french seat",
+   "text": "bow tie",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Fliege",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "tea",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "Tee",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "the",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "thé",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "der Tee",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "a cup of tea",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "the cat is on the roof",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "held"
+  },
+  {
+   "note": "mixed room english seat",
+   "text": "teee",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "tea",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Tee",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "thé",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "hound",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "Hund",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "Hündchen",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "huendchen",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "Hunde",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "aliases in a mixed room",
+   "text": "hounds",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": [
+      "hound"
+     ]
+    },
+    "others": {
+     "de": {
+      "answer": "Hund",
+      "aliases": [
+       "Hündchen"
+      ]
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "butterfly",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "Schmetterling",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "papillon",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "schmeterling",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "papilon",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "butterfli",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "solo player with three play languages",
+   "text": "le papillon",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "butterfly",
+     "aliases": []
+    },
+    "others": {
+     "de": {
+      "answer": "Schmetterling",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "papillon",
+      "aliases": []
+     }
+    },
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "another_language"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "un papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "another_language"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "c'est peut-etre un papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "held"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "papillonn",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "close"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "noeud papillon",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "false-friend guard: italian papillon is a french butterfly",
+   "text": "bow tie",
+   "target": {
+    "language": "fr",
+    "own": {
+     "answer": "nœud papillon",
+     "aliases": []
+    },
+    "others": {
+     "it": {
+      "answer": "papillon",
+      "aliases": []
+     },
+     "en": {
+      "answer": "bow tie",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "papillon"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "false-friend guard: english hat is a german past tense",
+   "text": "hat",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hut",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "hat",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "chapeau",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "hat"
+    ]
+   },
+   "expected": "another_language"
+  },
+  {
+   "note": "false-friend guard: english hat is a german past tense",
+   "text": "Hut",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hut",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "hat",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "chapeau",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "hat"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "false-friend guard: english hat is a german past tense",
+   "text": "chapeau",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hut",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "hat",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "chapeau",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "hat"
+    ]
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "false-friend guard: english hat is a german past tense",
+   "text": "der hat",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hut",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "hat",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "chapeau",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "hat"
+    ]
+   },
+   "expected": "another_language"
+  },
+  {
+   "note": "false-friend guard: english hat is a german past tense",
+   "text": "hatt",
+   "target": {
+    "language": "de",
+    "own": {
+     "answer": "Hut",
+     "aliases": []
+    },
+    "others": {
+     "en": {
+      "answer": "hat",
+      "aliases": []
+     },
+     "fr": {
+      "answer": "chapeau",
+      "aliases": []
+     }
+    },
+    "taken": [
+     "hat"
+    ]
+   },
+   "expected": "close"
+  }
+ ]
+}
