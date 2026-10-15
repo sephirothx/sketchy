@@ -23,7 +23,10 @@ bad one:
   uses the rebuild's own logic and never repairs anything;
 - `games` - every participant's ledger sum against `final_score`, and every
   turn's `guesser_count` against its eligible outcome rows;
-- `alias_chains` - no merged identity points at another merged identity.
+- `alias_chains` - no merged identity points at another merged identity;
+- `solo_pool` - each game's `solo_pool` rows against what `pool_query` selects
+  from its facts (#1434): no servable turn missing, no row that should not be
+  there, every stored column as the facts say.
 
 Off the request path is not off the loop: the audit runs in the process
 every room shares, so what scales with the rows it reads is kept off the loop
@@ -73,6 +76,7 @@ from app.db.models import (
     GameRecord,
     IdentityAlias,
     ScoreEvent,
+    SoloPoolEntry,
     TurnDrawing,
     TurnDrawingReaction,
     TurnDrawingShare,
@@ -86,11 +90,12 @@ from app.domain_values import AccountState, AuditTargetType
 from app.services.drawing_storage import DrawingCursor, verify_stored_drawings
 from app.services.gallery_ranking import aware, hot_score
 from app.services.readiness import LoopHealth
+from app.services.solo_pool import pool_query
 from app.services.user_stats_projection import _rebuild_accounts
 
 logger = logging.getLogger(__name__)
 
-CHECKS = ("drawings", "drawing_projections", "user_stats", "games", "alias_chains")
+CHECKS = ("drawings", "drawing_projections", "user_stats", "games", "alias_chains", "solo_pool")
 # Which mismatches page: a drawing that no longer reads back is data lost
 # until a restore; a projection that drifted is a rebuild away.
 PAGING_CHECKS = frozenset({"drawings"})
@@ -472,6 +477,51 @@ async def _alias_chains_slice(session: AsyncSession, cursor: str | None) -> Slic
     )
 
 
+async def _solo_pool_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
+    """A slice of games, their `solo_pool` rows against `pool_query` over
+    their facts, compared by the database both ways (`EXCEPT`), so only the
+    turns that disagree come back - the loop never walks the rows (#1251).
+    `sample_key` is not compared: it orders the pool, and a wrong one serves
+    a drawing at a different moment, which nobody can tell from a right one.
+    A drift is a rebuild away (`python -m app.services.solo_pool`)."""
+    await _one_snapshot(session)
+    statement = select(GameRecord.id).order_by(GameRecord.id).limit(GAME_SLICE_ROWS)
+    if cursor:
+        statement = statement.where(GameRecord.id > UUID(cursor))
+    game_ids = list((await session.scalars(statement)).all())
+    if not game_ids:
+        return SliceResult(complete=True)
+    expected = pool_query().where(TurnRecord.game_id.in_(game_ids))
+    stored = select(
+        SoloPoolEntry.turn_id,
+        SoloPoolEntry.game_id,
+        SoloPoolEntry.concept_id,
+        SoloPoolEntry.prompt_version_id,
+        SoloPoolEntry.drawer_user_id,
+        SoloPoolEntry.guesser_count,
+        SoloPoolEntry.correct_count,
+        SoloPoolEntry.finished_at,
+    ).where(SoloPoolEntry.game_id.in_(game_ids))
+    wrong_or_missing = {
+        row[0] for row in (await session.execute(expected.except_(stored))).all()
+    }
+    wrong_or_extra = {
+        row[0] for row in (await session.execute(stored.except_(expected))).all()
+    }
+    result = SliceResult(rows=len(game_ids), cursor=str(game_ids[-1]))
+    for turn_id in sorted(wrong_or_missing | wrong_or_extra):
+        kind = (
+            "stale"
+            if turn_id in wrong_or_missing and turn_id in wrong_or_extra
+            else "missing" if turn_id in wrong_or_missing else "unexpected"
+        )
+        result.mismatches.append(
+            Mismatch("solo_pool", str(turn_id), kind, AuditTargetType.DRAWING.value)
+        )
+    result.complete = len(game_ids) < GAME_SLICE_ROWS
+    return result
+
+
 # --- the pass -----------------------------------------------------------------
 
 
@@ -532,6 +582,7 @@ class IntegrityAudit:
             "user_stats": lambda cursor, _budget: _user_stats_slice(factory, cursor),
             "games": lambda cursor, _budget: with_session(_games_slice, cursor),
             "alias_chains": lambda cursor, _budget: with_session(_alias_chains_slice, cursor),
+            "solo_pool": lambda cursor, _budget: with_session(_solo_pool_slice, cursor),
         }[check]
 
     async def run_check(self, check: str, *, deadline: float) -> None:
