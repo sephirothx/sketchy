@@ -320,3 +320,8 @@
   gap: 10px;
   justify-content: center;
 }
+
+/* The verdict and the summary's heading take focus from the page so a screen
+   reader says them (tabindex -1, as `.ops-tabpanel`): read, never a control,
+   so no ring. */
+.solo-verdict:focus { outline: none; }
