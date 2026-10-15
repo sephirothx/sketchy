@@ -79,7 +79,7 @@ is worse than none.
   and run it.
 - **Validation, then authorization, then mutation** — always, in
   `backend/app/handlers/payloads.py`.
-- **Pure logic stays pure.** `game.py`, `rooms.py`, and `presenters.py` do no I/O.
+- **Pure logic stays pure.** `game.py`, `guess_judge.py`, `rooms.py`, and `presenters.py` do no I/O.
 - **Stored formats are forever.** A decoder in `canvas_storage.py` is added, never
   removed.
 - **Facts, not counters.** Derived rows such as `user_stats_daily` are disposable;
