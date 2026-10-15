@@ -455,7 +455,7 @@ and British spellings in an American catalogue. English only, on purpose: the
 other six write their own typography (French spaces its colons, German and
 Dutch phrase "Could not" differently), and a rule that fits English would be
 wrong in each of them. */
-const ENGLISH = ["content/ui/en.ts", "content/rules/en.ts"];
+const ENGLISH = ["content/ui/en.ts", "content/rules/en.ts", "content/solo/en.ts"];
 
 /** Every piece of text in a source file's string and template literals, with
     its line - the words, not the keys or the code around them. */

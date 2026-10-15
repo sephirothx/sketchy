@@ -1913,6 +1913,8 @@ frontend/
                   anchors.ts is the link notices use, kept apart from the documents
     content/legal/ The privacy notice and the terms of use, one typed module per language
                   (en.ts is the reference); lib/minimumAge.ts holds the age they state
+    content/solo/ Solo's page copy (#1434), one typed module per language, loaded with
+                  the pages that use it rather than in the first-load catalogue
     content/ui/   Every word the interface says, one typed module per language
                   (en.ts is the reference; every language, English included, is its
                   own chunk, preloaded by the page shell for whoever reads it;

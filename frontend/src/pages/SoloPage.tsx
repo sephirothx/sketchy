@@ -7,7 +7,8 @@ import { ReplayCanvas } from "../components/ReplayCanvas";
 import { ReportDrawingDialog } from "../components/ReportDrawingDialog";
 import { CopyIcon, FlagIcon, ImageIcon, UserIcon } from "../components/icons";
 import { EmptyState } from "../components/ui/EmptyState";
-import { ui } from "../content/ui/index.ts";
+import { soloCopyFor } from "../content/solo/index.ts";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { ApiError } from "../lib/api";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -49,6 +50,12 @@ import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import "../styles/lazy/solo.css";
 
+/** The page's own words, in the language the interface is in now: read at
+    each render, as `ui` is, so a language switch reaches them too. */
+function words() {
+  return soloCopyFor(interfaceLocale());
+}
+
 /**
  * Solo, `/solo` (#1434): a game of one. A registered player guesses drawings
  * from public games they were not in - the Daily, five the same for
@@ -85,7 +92,7 @@ export function SoloPage() {
       setSummary(await fetchSoloSummary(localDateKey()));
       setError(null);
     } catch (failure) {
-      setError(refusalText(failure, ui.solo.couldNotLoad));
+      setError(refusalText(failure, words().couldNotLoad));
     }
   }, []);
 
@@ -97,7 +104,7 @@ export function SoloPage() {
         if (!cancelled) setSummary(loaded);
       })
       .catch((failure) => {
-        if (!cancelled) setError(refusalText(failure, ui.solo.couldNotLoad));
+        if (!cancelled) setError(refusalText(failure, words().couldNotLoad));
       });
     return () => {
       cancelled = true;
@@ -117,7 +124,7 @@ export function SoloPage() {
       setSummaryOf(null);
       setRun(next);
     } catch (failure) {
-      setError(refusalText(failure, ui.solo.couldNotLoad));
+      setError(refusalText(failure, words().couldNotLoad));
     } finally {
       setBusy(false);
     }
@@ -198,7 +205,7 @@ export function SoloPage() {
       );
       setCard(null);
     } catch (failure) {
-      setError(refusalText(failure, ui.solo.couldNotLoad));
+      setError(refusalText(failure, words().couldNotLoad));
       setCard(null);
       setRun(null);
       void loadSummary();
@@ -242,26 +249,26 @@ export function SoloPage() {
 
   return (
     <div className="page solo-page" data-testid="solo-page">
-      <AppHeader backLabel={ui.solo.backToLobby} />
+      <AppHeader backLabel={words().backToLobby} />
 
       {signedOut || guest ? (
         <>
           <div className="solo-head">
             <h1>{ui.solo.solo}</h1>
-            <p>{ui.solo.intro}</p>
+            <p>{words().intro}</p>
           </div>
           <EmptyState
             testId="solo-account-required"
-            title={signedOut ? ui.solo.signInToPlay : ui.solo.accountToPlay}
-            body={signedOut ? ui.solo.signInBody : ui.solo.accountBody}
+            title={signedOut ? words().signInToPlay : words().accountToPlay}
+            body={signedOut ? words().signInBody : words().accountBody}
             action={
               signedOut ? (
                 <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
-                  {ui.solo.backToLobby}
+                  {words().backToLobby}
                 </button>
               ) : (
                 <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
-                  {ui.solo.createAccount}
+                  {words().createAccount}
                 </button>
               )
             }
@@ -301,7 +308,7 @@ export function SoloPage() {
           onContinue={() =>
             void begin(async () => {
               const active = await fetchActiveFreeRun();
-              if (!active) throw new Error(ui.solo.couldNotLoad);
+              if (!active) throw new Error(words().couldNotLoad);
               return active;
             })
           }
@@ -343,27 +350,27 @@ function SoloHome({
     <div className="solo-home" aria-busy={summary === null && !error}>
       <div className="solo-head">
         <h1>{ui.solo.solo}</h1>
-        <p>{ui.solo.intro}</p>
+        <p>{words().intro}</p>
       </div>
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       <div className="solo-grid">
         <section className="surface-card solo-daily" data-testid="solo-daily">
           <div className="solo-card-head">
-            <h2>{ui.solo.daily}</h2>
+            <h2>{words().daily}</h2>
             {summary && summary.streak > 0 && (
               <span className="chip chip-warm" data-testid="solo-streak">
-                {ui.solo.streak({ days: summary.streak })}
+                {words().streak({ days: summary.streak })}
               </span>
             )}
           </div>
-          <p className="solo-card-intro">{ui.solo.dailyIntro}</p>
+          <p className="solo-card-intro">{words().dailyIntro}</p>
           {todayState === "unavailable" ? (
-            <p className="solo-note">{ui.solo.noDailyToday}</p>
+            <p className="solo-note">{words().noDailyToday}</p>
           ) : todayState === "done" && result ? (
             <div className="solo-daily-done">
               <DailyMarks result={result} />
-              <p className="solo-daily-points">{ui.solo.dailyDone({ points: result.points })}</p>
+              <p className="solo-daily-points">{words().dailyDone({ points: result.points })}</p>
               <CopyResultButton result={result} />
               <NextDailyCountdown />
             </div>
@@ -376,19 +383,19 @@ function SoloHome({
               onClick={onDaily}
             >
               {todayState === "in_progress" && result
-                ? ui.solo.continueDaily({ played: result.positionsPlayed })
+                ? words().continueDaily({ played: result.positionsPlayed })
                 : todayState === "in_progress"
-                  ? ui.solo.continueDaily({ played: 0 })
-                  : ui.solo.playDaily}
+                  ? words().continueDaily({ played: 0 })
+                  : words().playDaily}
             </button>
           )}
         </section>
 
         <section className="surface-card solo-free" data-testid="solo-free">
           <div className="solo-card-head">
-            <h2>{ui.solo.freeRun}</h2>
+            <h2>{words().freeRun}</h2>
           </div>
-          <p className="solo-card-intro">{ui.solo.freeRunIntro}</p>
+          <p className="solo-card-intro">{words().freeRunIntro}</p>
           {summary?.activeRunId && (
             <button
               type="button"
@@ -397,10 +404,10 @@ function SoloHome({
               disabled={busy}
               onClick={onContinue}
             >
-              {ui.solo.continueRun}
+              {words().continueRun}
             </button>
           )}
-          <div className="solo-lengths" role="group" aria-label={ui.solo.freeRun}>
+          <div className="solo-lengths" role="group" aria-label={words().freeRun}>
             {([5, 10, null] as const).map((length) => (
               <button
                 key={String(length)}
@@ -410,23 +417,23 @@ function SoloHome({
                 disabled={busy || summary === null}
                 onClick={() => onFree(length)}
               >
-                {length === null ? ui.solo.unlimited : ui.solo.drawingsCount({ count: length })}
+                {length === null ? words().unlimited : words().drawingsCount({ count: length })}
               </button>
             ))}
           </div>
-          <p className="solo-note solo-preview">{ui.solo.supporterPreview}</p>
+          <p className="solo-note solo-preview">{words().supporterPreview}</p>
         </section>
       </div>
 
       <div className="solo-grid">
         <section className="surface-card solo-bests" data-testid="solo-bests">
-          <h2>{ui.solo.bests}</h2>
+          <h2>{words().bests}</h2>
           <dl>
             {(
               [
-                ["5", ui.solo.bestFive],
-                ["10", ui.solo.bestTen],
-                ["unlimited", ui.solo.bestUnlimited],
+                ["5", words().bestFive],
+                ["10", words().bestTen],
+                ["unlimited", words().bestUnlimited],
               ] as const
             ).map(([key, label]) => {
               const best = summary?.bests[key];
@@ -435,10 +442,10 @@ function SoloHome({
                   <dt>{label}</dt>
                   <dd>
                     {best === undefined
-                      ? ui.solo.noBestYet
+                      ? words().noBestYet
                       : key === "unlimited"
-                        ? ui.solo.inARow({ count: best })
-                        : ui.solo.pointsValue({ points: best })}
+                        ? words().inARow({ count: best })
+                        : words().pointsValue({ points: best })}
                   </dd>
                 </div>
               );
@@ -447,16 +454,16 @@ function SoloHome({
         </section>
 
         <section className="surface-card solo-history" data-testid="solo-history">
-          <h2>{ui.solo.yourDailies}</h2>
+          <h2>{words().yourDailies}</h2>
           {summary && summary.history.length === 0 ? (
-            <p className="solo-note">{ui.solo.noDailiesYet}</p>
+            <p className="solo-note">{words().noDailiesYet}</p>
           ) : (
             <ol>
               {(summary?.history ?? []).slice(0, 14).map((day) => (
                 <li key={day.date} className="solo-history-day">
                   <span className="solo-history-date">{dayLabel(day.date)}</span>
                   <DailyMarks result={day} />
-                  <span className="solo-history-points">{ui.solo.pointsValue({ points: day.points })}</span>
+                  <span className="solo-history-points">{words().pointsValue({ points: day.points })}</span>
                 </li>
               ))}
             </ol>
@@ -491,7 +498,7 @@ function resultOf(run: SoloRun): SoloDailyResult {
 function DailyMarks({ result }: { result: SoloDailyResult }) {
   const marks = dailyMarks(result);
   return (
-    <span className="solo-marks" role="img" aria-label={ui.solo.youNamed({ solved: result.solved, total: 5 })}>
+    <span className="solo-marks" role="img" aria-label={words().youNamed({ solved: result.solved, total: 5 })}>
       {marks.map((mark, index) => (
         <span key={index} className={`solo-mark is-${mark}`} aria-hidden="true" />
       ))}
@@ -505,15 +512,15 @@ function CopyResultButton({ result }: { result: SoloDailyResult }) {
     const symbols = dailyMarks(result)
       .map((mark) => (mark === "solved" ? "🟩" : mark === "missed" ? "🟥" : "⬜"))
       .join("");
-    const text = `${ui.solo.resultText({
-      daily: ui.solo.daily,
+    const text = `${words().resultText({
+      daily: words().daily,
       date: result.date,
       marks: symbols,
       points: result.points,
     })}\n${window.location.origin}/solo`;
     try {
       await navigator.clipboard.writeText(text);
-      notify(ui.solo.copied, "success");
+      notify(words().copied, "success");
     } catch {
       notify(text, "info", 8000);
     }
@@ -521,7 +528,7 @@ function CopyResultButton({ result }: { result: SoloDailyResult }) {
   return (
     <button type="button" className="btn btn-secondary btn-compact" data-testid="solo-copy-result" onClick={() => void copy()}>
       <CopyIcon size={15} />
-      {ui.solo.copyResult}
+      {words().copyResult}
     </button>
   );
 }
@@ -537,7 +544,7 @@ function NextDailyCountdown() {
   const time = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60]
     .map((part) => String(part).padStart(2, "0"))
     .join(":");
-  return <p className="solo-note solo-countdown" data-testid="solo-countdown">{ui.solo.nextDailyIn({ time })}</p>;
+  return <p className="solo-note solo-countdown" data-testid="solo-countdown">{words().nextDailyIn({ time })}</p>;
 }
 
 /**
@@ -667,24 +674,24 @@ function SoloPlay({
     setGuess("");
     setFeedback(
       verdict === "close"
-        ? { text: ui.solo.veryClose, tone: "close" }
+        ? { text: words().veryClose, tone: "close" }
         : verdict === "partial"
-          ? { text: ui.solo.someWordsRight, tone: "close" }
-          : { text: ui.solo.notIt({ guess: text }), tone: "miss" },
+          ? { text: words().someWordsRight, tone: "close" }
+          : { text: words().notIt({ guess: text }), tone: "miss" },
     );
   };
 
   return (
     <div className="solo-play" data-testid="solo-play">
       <div className="solo-play-bar">
-        <span className="solo-play-position">{ui.solo.drawingOf({ position: serve.position, length: run.length })}</span>
+        <span className="solo-play-position">{words().drawingOf({ position: serve.position, length: run.length })}</span>
         <span
           className={`solo-clock${remaining <= 10 ? " is-low" : ""}`}
           data-testid="solo-clock"
           role="timer"
           aria-live="off"
         >
-          {ui.solo.secondsLeft({ seconds: Math.ceil(remaining) })}
+          {words().secondsLeft({ seconds: Math.ceil(remaining) })}
         </span>
       </div>
       <div className="solo-clock-track" aria-hidden="true">
@@ -702,9 +709,9 @@ function SoloPlay({
           />
         ) : failed ? (
           <div className="solo-canvas-failed">
-            <p className="solo-note">{ui.solo.couldNotLoadDrawing}</p>
+            <p className="solo-note">{words().couldNotLoadDrawing}</p>
             <button type="button" className="btn btn-secondary btn-compact" onClick={() => setAttempt((count) => count + 1)}>
-              {ui.solo.tryAgain}
+              {words().tryAgain}
             </button>
           </div>
         ) : (
@@ -713,13 +720,13 @@ function SoloPlay({
       </div>
       {unsaved && (
         <div className="solo-unsaved" role="alert" data-testid="solo-unsaved">
-          <span>{ui.solo.couldNotSaveAnswer}</span>
+          <span>{words().couldNotSaveAnswer}</span>
           <button
             type="button"
             className="btn btn-secondary btn-compact"
             onClick={() => void settle(unsaved.outcome, unsaved.seconds)}
           >
-            {ui.solo.tryAgain}
+            {words().tryAgain}
           </button>
         </div>
       )}
@@ -735,15 +742,15 @@ function SoloPlay({
           spellCheck={false}
           enterKeyHint="send"
           maxLength={64}
-          placeholder={ui.solo.typeYourGuess}
-          aria-label={ui.solo.typeYourGuess}
+          placeholder={words().typeYourGuess}
+          aria-label={words().typeYourGuess}
           disabled={!actions || timedOut || unsaved !== null}
           onChange={(change) => setGuess(change.target.value)}
           // A new guess is the player's attention; the last verdict goes.
           onFocus={() => setFeedback(null)}
         />
         <button type="submit" className="btn btn-primary" disabled={!actions || !guess.trim() || timedOut || unsaved !== null}>
-          {ui.solo.guess}
+          {words().guess}
         </button>
         <button
           type="button"
@@ -754,7 +761,7 @@ function SoloPlay({
           disabled={(!actions && !failed) || timedOut || unsaved !== null}
           onClick={() => void settle("given_up", elapsed)}
         >
-          {ui.solo.giveUp}
+          {words().giveUp}
         </button>
       </form>
       <p
@@ -817,14 +824,14 @@ function SoloCard({
           className={`solo-verdict${solved ? " is-solved" : " is-missed"}`}
           data-testid="solo-verdict"
         >
-          {solved ? ui.solo.gotIt : serve.outcome === "timed_out" ? ui.solo.timeUp : ui.solo.gaveUp}
+          {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
         </p>
-        <p className="solo-it-was">{ui.solo.itWas}</p>
+        <p className="solo-it-was">{words().itWas}</p>
         <h1 className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</h1>
         {solved && serve.points !== null && (
-          <p className="solo-points" data-testid="solo-points">{ui.solo.plusPoints({ points: serve.points })}</p>
+          <p className="solo-points" data-testid="solo-points">{words().plusPoints({ points: serve.points })}</p>
         )}
-        <p className="solo-note">{ui.solo.anonymity}</p>
+        <p className="solo-note">{words().anonymity}</p>
         <div className="solo-result-actions">
           <DrawingReactionControl
             reactions={[]}
@@ -848,24 +855,24 @@ function SoloCard({
               onClick={() => void toggleShare()}
             >
               <ImageIcon size={15} />
-              {share?.sharedByMe ? ui.solo.sharedToGallery : ui.solo.shareToGallery}
+              {share?.sharedByMe ? words().sharedToGallery : words().shareToGallery}
             </button>
           )}
           <button
             type="button"
             className="btn btn-ghost btn-compact btn-icon"
-            aria-label={ui.solo.report}
-            title={ui.solo.report}
+            aria-label={words().report}
+            title={words().report}
             data-testid="solo-report"
             onClick={() => setReporting(true)}
           >
             <FlagIcon size={14} />
           </button>
         </div>
-        {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{ui.solo.shareHeld}</p>}
-        {share?.shareWithdrawn && <p className="solo-note">{ui.solo.shareTakenOut}</p>}
+        {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{words().shareHeld}</p>}
+        {share?.shareWithdrawn && <p className="solo-note">{words().shareTakenOut}</p>}
         <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" disabled={busy} onClick={onNext}>
-          {over ? ui.solo.seeResult : ui.solo.next}
+          {over ? words().seeResult : words().next}
         </button>
       </div>
       {reporting && (
@@ -900,13 +907,13 @@ function SoloSummaryView({
     <div className="solo-summary" data-testid="solo-summary">
       <div className="surface-card solo-result-card">
         <p ref={heading} tabIndex={-1} className="solo-verdict is-solved">
-          {run.mode === "daily" ? ui.solo.dailyComplete : ui.solo.runOver}
+          {run.mode === "daily" ? words().dailyComplete : words().runOver}
         </p>
-        <h1 className="solo-prompt">{ui.solo.totalPoints({ points: run.points })}</h1>
-        <p className="solo-it-was">{ui.solo.youNamed({ solved: run.solved, total: settledCount })}</p>
+        <h1 className="solo-prompt">{words().totalPoints({ points: run.points })}</h1>
+        <p className="solo-it-was">{words().youNamed({ solved: run.solved, total: settledCount })}</p>
         {result && <DailyMarks result={result} />}
         {newBest && (
-          <p className="chip chip-warm solo-new-best" data-testid="solo-new-best">{ui.solo.newBest}</p>
+          <p className="chip chip-warm solo-new-best" data-testid="solo-new-best">{words().newBest}</p>
         )}
         <div className="solo-result-actions">
           {result && <CopyResultButton result={result} />}
@@ -914,7 +921,7 @@ function SoloSummaryView({
         </div>
         <button type="button" className="btn btn-primary solo-next" data-testid="solo-back" onClick={onBack}>
           <UserIcon size={15} />
-          {ui.solo.backToSolo}
+          {words().backToSolo}
         </button>
       </div>
     </div>

@@ -94,7 +94,8 @@ import { refusalText } from "../lib/refusals.ts";
 import { apiRequest } from "../lib/api.ts";
 import { setSoloOptOut } from "../lib/solo";
 import { useToast } from "../lib/toast";
-import { ui } from "../content/ui/index.ts";
+import { soloCopyFor } from "../content/solo/index.ts";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 import { ModalHeader } from "./ui/ModalShell";
@@ -537,8 +538,8 @@ function SoloOptOutGroup() {
   return (
     <Group title={ui.solo.solo}>
       <ToggleRow
-        label={ui.solo.optOut}
-        hint={ui.solo.optOutHint}
+        label={soloCopyFor(interfaceLocale()).optOut}
+        hint={soloCopyFor(interfaceLocale()).optOutHint}
         checked={allowed}
         onChange={(next) => {
           setAllowed(next);
