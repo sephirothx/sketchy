@@ -55,6 +55,8 @@ export interface SoloRun {
   points: number;
   /** The player's local date a Daily is for. */
   dailyDate: string | null;
+  /** A finished past Daily played again (#1470): nothing it comes to is kept. */
+  replay: boolean;
   serves: SoloServe[];
 }
 
@@ -157,9 +159,32 @@ export function localDateKey(now: Date = new Date()): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-/** Today's Daily: created with its five drawings the first time, resumed after. */
+/** A date's Daily: created with its five drawings the first time, resumed
+    after. Today's, or a past one from the archive (#1470) to play late or to
+    finish. */
 export function openDaily(date: string): Promise<SoloRun> {
   return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}`, { method: "POST" });
+}
+
+/** A past Daily the player finished, played again: nothing is recorded. */
+export function replayDaily(date: string): Promise<SoloRun> {
+  return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}/replay`, { method: "POST" });
+}
+
+/** One past Daily in the archive, with the player's result for it if any. */
+export interface SoloArchiveDay {
+  date: string;
+  result: SoloDailyResult | null;
+}
+
+/** A page of past Dailies, newest first; `next` is the cursor for older ones. */
+export function fetchSoloArchive(
+  today: string,
+  before: string | null = null,
+): Promise<{ days: SoloArchiveDay[]; next: string | null }> {
+  const query = new URLSearchParams({ today });
+  if (before !== null) query.set("before", before);
+  return apiRequest(`/api/solo/daily/archive?${query.toString()}`);
 }
 
 export function fetchSoloSummary(today: string): Promise<SoloSummary> {

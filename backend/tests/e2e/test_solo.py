@@ -8,12 +8,14 @@ since play is local and the answer never shows), misses one with a wrong
 guess and gives it up, reloads mid-Daily and carries on where they were,
 finishes it, and then plays a five-drawing free run. The page also has to
 hold together at phone width, and a guest is told what an account unlocks.
+Past Dailies (#1470) plays a missed day late and then plays it again, which
+records nothing.
 """
 from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -23,6 +25,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Prompt, PromptList, PromptVersion, SoloServe, User
 from app.domain_values import PROMPT_LANGUAGES
+from app.repositories.solo import daily_set
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -42,7 +45,7 @@ from tests.e2e.staff_helpers import database_url
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "fill_replay_100.json"
 
 
-async def seed_solo_drawings(count: int) -> None:
+async def seed_solo_drawings(count: int, *, finished: datetime | None = None) -> None:
     """`count` public games of one curated turn each, every language able
     to name it, two guessers and one of them right: Daily candidates, and
     free-run drawings for anybody who was not in them."""
@@ -79,7 +82,7 @@ async def seed_solo_drawings(count: int) -> None:
         tag = uuid4().hex[:4]
         drawer = await users.create_anonymous(f"SoloDrawer{tag}")
         guessers = [await users.create_anonymous(f"SoloSeat{tag}{i}") for i in range(2)]
-        finished = datetime.now(timezone.utc) - timedelta(hours=2)
+        finished = finished or datetime.now(timezone.utc) - timedelta(hours=2)
         for version_id in versions:
             seats = [str(uuid4()) for _ in range(3)]
             turn_id = str(uuid4())
@@ -268,3 +271,56 @@ async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
             await context.close()
             await browser.close()
 
+
+async def open_past_daily(day: date) -> None:
+    """Give `day` its Daily as somebody asking for it on the day would have:
+    the archive plays only the Dailies there were."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        noon = datetime.combine(day, time(12), tzinfo=timezone.utc)
+        async with factory() as session, session.begin():
+            assert await daily_set(session, day, now=noon), "too few drawings for a past Daily"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_missed_daily_is_played_from_past_dailies_and_then_played_again():
+    # Far enough back that its concepts never stand in the way of today's
+    # Daily, which a concept used within sixty days would; its drawings were
+    # finished before it.
+    day = datetime.now(timezone.utc).date() - timedelta(days=400)
+    await seed_solo_drawings(5, finished=datetime.combine(day, time(0), tzinfo=timezone.utc) - timedelta(days=1))
+    await open_past_daily(day)
+    username = f"past{uuid4().hex[:8]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await page.goto(f"{BASE_URL}/solo")
+            await page.get_by_test_id("solo-open-archive").click()
+            row = page.locator(f'[data-testid="solo-archive-day"][data-date="{day.isoformat()}"]')
+            await expect(row.get_by_test_id("solo-archive-play")).to_have_text("Play")
+            await row.get_by_test_id("solo-archive-play").click()
+            await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
+            await expect(page.get_by_test_id("solo-play-date")).to_be_visible()
+            for _ in range(5):
+                await give_up_and_continue(page)
+            await expect(page.get_by_test_id("solo-summary")).to_contain_text("Daily complete")
+            # A past Daily has no countdown: the next one is today's.
+            await expect(page.get_by_test_id("solo-countdown")).to_have_count(0)
+
+            await page.get_by_test_id("solo-back").click()
+            await expect(row.get_by_test_id("solo-archive-play")).to_have_text("Play it again")
+            await row.get_by_test_id("solo-archive-play").click()
+            await expect(page.get_by_text("Not recorded")).to_be_visible()
+            for _ in range(5):
+                await give_up_and_continue(page)
+            await expect(page.get_by_test_id("solo-summary")).to_contain_text("Played again")
+        finally:
+            await context.close()
+            await browser.close()

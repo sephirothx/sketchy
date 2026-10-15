@@ -32,6 +32,16 @@ export const SOLO_DE: SoloCopy = {
     streak: (p: { days: number }) => `${counted(p.days, { one: "Tag", other: "Tage" })} in Folge`,
     yourDailies: "Deine Tagesrätsel",
     noDailiesYet: "Hier erscheinen die Tagesrätsel, die du spielst.",
+    pastDailies: "Frühere Tagesrätsel",
+    pastDailiesIntro:
+      "Spiel ein verpasstes Tagesrätsel, beende ein angefangenes oder spiel eines noch einmal. Ein früheres Tagesrätsel zählt nie für deine Tage in Folge, und eine Wiederholung wird nicht gespeichert.",
+    noPastDailies: "Noch keine früheren Tagesrätsel.",
+    playPast: "Spielen",
+    continuePast: "Weiterspielen",
+    playAgain: "Nochmal spielen",
+    showOlder: "Ältere anzeigen",
+    notRecorded: "Wird nicht gespeichert",
+    playedAgain: "Nochmal gespielt",
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Zeichnung ${number(p.position)}` : `Zeichnung ${number(p.position)} von ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

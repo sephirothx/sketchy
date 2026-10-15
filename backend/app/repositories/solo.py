@@ -227,6 +227,7 @@ class RunView:
     points: int
     daily_date: str | None
     serves: tuple[ServeView, ...] = ()
+    replay: bool = False
 
 
 class SoloRefused(Exception):
@@ -264,6 +265,7 @@ def _run_view(run: SoloRun, serves: Sequence[SoloServe]) -> RunView:
         points=run.points,
         daily_date=run.daily_date.isoformat() if run.daily_date else None,
         serves=tuple(_serve_view(serve) for serve in serves),
+        replay=run.replay,
     )
 
 
@@ -681,10 +683,14 @@ async def _write_set(session: AsyncSession, day: date, picked) -> None:
     await session.flush()
 
 
-async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[SoloDailySet] | None:
+async def daily_set(
+    session: AsyncSession, day: date, *, now: datetime, create: bool = True
+) -> list[SoloDailySet] | None:
     """`day`'s five, chosen by the first request for the date and the same
     for everybody after it; None for a day with too few to choose from - a
-    day looked at again, while it is open, every `SKIPPED_RETRY`.
+    day looked at again, while it is open, every `SKIPPED_RETRY` - or,
+    without `create`, for one nobody asked for while it was open: the archive
+    (#1470) plays the Dailies there were, never a past date chosen late.
 
     A pick takes the Daily pick lock first, so picks for different dates
     happen one at a time and each reads the concepts the others used; then
@@ -695,6 +701,8 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
     taken only then, so the opens of an untouched Daily never queue behind
     one another."""
     existing = await session.get(SoloDailyDay, day)
+    if existing is None and not create:
+        return None
     if existing is None:
         await _lock_daily_picks(session)
         existing = await session.get(SoloDailyDay, day, populate_existing=True)
@@ -1076,7 +1084,7 @@ class SoloRepository:
                     )
                     or 0
                 )
-                if run.mode == "daily":
+                if run.mode == "daily" and not run.replay:
                     await _record_daily(session, run, serve, now=now)
                 if run_is_over(run.length, settled=settled, missed=outcome != SOLVED):
                     run.state = "ended"
@@ -1096,17 +1104,20 @@ class SoloRepository:
 
     # --- the Daily ------------------------------------------------------------
 
-    async def open_daily(self, user_id: str, day: date, *, now: datetime) -> RunView:
+    async def open_daily(
+        self, user_id: str, day: date, *, now: datetime, archive: bool = False
+    ) -> RunView:
         """The player's Daily for `day`: created with its five serves the
         first time, resumed after - never restarted (#1434). A drawing the
         set replaced since the player was served it is swapped in their open
         serves too; what they already played keeps its mark. `missing` for a
-        day with no Daily."""
+        day with no Daily. From the `archive` (#1470), a date whose Daily was
+        never chosen has none."""
         # The set first, in a transaction of its own: a day found too thin is
         # stored as skipped even though this request is refused.
         async with self._session_factory() as session:
             async with session.begin():
-                picked = await daily_set(session, day, now=now)
+                picked = await daily_set(session, day, now=now, create=not archive)
         if picked is None:
             raise SoloRefused("missing")
         for attempt in range(2):
@@ -1132,6 +1143,7 @@ class SoloRepository:
                                 SoloRun.user_id == player,
                                 SoloRun.mode == "daily",
                                 SoloRun.daily_date == day,
+                                SoloRun.replay.is_(False),
                             )
                             .with_for_update()
                         )
@@ -1150,6 +1162,105 @@ class SoloRepository:
                 if attempt:
                     raise SoloRefused("conflict") from None
         raise SoloRefused("conflict")
+
+    async def open_replay(self, user_id: str, day: date, *, now: datetime) -> RunView:
+        """A past Daily the player finished, played again for fun (#1470):
+        the same five, as they stand now, in a run that records nothing - no
+        result, no streak, no best. The replay of that date going is resumed;
+        one of another date is abandoned, as a second free run abandons the
+        first. `conflict` while the player's own Daily for the date is
+        unfinished, which is to be finished instead; `missing` for a date
+        with no Daily."""
+        async with self._session_factory() as session:
+            async with session.begin():
+                picked = await daily_set(session, day, now=now, create=False)
+        if picked is None:
+            raise SoloRefused("missing")
+        for attempt in range(START_ATTEMPTS):
+            try:
+                async with self._session_factory() as session:
+                    async with session.begin():
+                        player = (await identity_ids(session, UUID(user_id)))[0]
+                        finished = await session.scalar(
+                            select(SoloDailyResult.completed_at).where(
+                                SoloDailyResult.user_id == player,
+                                SoloDailyResult.daily_date == day,
+                            )
+                        )
+                        if finished is None:
+                            raise SoloRefused("conflict")
+                        languages = await play_languages(session, player)
+                        if not languages:
+                            raise SoloRefused("missing")
+                        active = await session.scalar(
+                            select(SoloRun)
+                            .where(
+                                SoloRun.user_id == player,
+                                SoloRun.replay.is_(True),
+                                SoloRun.state == "active",
+                            )
+                            .with_for_update()
+                        )
+                        if active is not None and active.daily_date == day:
+                            return await self._view_with_serves(session, active, player)
+                        if active is not None:
+                            await self._abandon(session, active, now=now)
+                        run = SoloRun(
+                            user_id=player, mode="daily", length=DAILY_LENGTH,
+                            daily_date=day, replay=True, state="active", position=0,
+                            solved=0, points=0, started_at=now,
+                        )
+                        session.add(run)
+                        await session.flush()
+                        rows = await _set_rows(session, day)
+                        await self._sync_daily_serves(session, run, rows, languages, now=now)
+                        return await self._view_with_serves(session, run, player)
+            except IntegrityError:
+                # Two replays started at once: the retry finds the other.
+                if attempt == START_ATTEMPTS - 1:
+                    raise SoloRefused("conflict") from None
+        raise SoloRefused("conflict")
+
+    async def archive(
+        self, user_id: str, today: date, *, before: date | None, limit: int
+    ) -> tuple[list[dict], str | None]:
+        """The past Dailies there were (#1470), newest first, before the
+        player's `today` (or `before`, the page's cursor), each with what the
+        player made of it: none, part or all. A date no one asked for while
+        it was open has no Daily and is not listed."""
+        upper = min(today, before) if before is not None else today
+        async with self._session_factory() as session:
+            player = (await identity_ids(session, UUID(user_id)))[0]
+            days = list(
+                (
+                    await session.scalars(
+                        select(SoloDailyDay.daily_date)
+                        .where(SoloDailyDay.state == "set", SoloDailyDay.daily_date < upper)
+                        .order_by(SoloDailyDay.daily_date.desc())
+                        .limit(limit + 1)
+                    )
+                ).all()
+            )
+            page = days[:limit]
+            results = {
+                row.daily_date: row
+                for row in (
+                    await session.scalars(
+                        select(SoloDailyResult).where(
+                            SoloDailyResult.user_id == player,
+                            SoloDailyResult.daily_date.in_(page),
+                        )
+                    )
+                ).all()
+            } if page else {}
+        entries = [
+            {
+                "date": day.isoformat(),
+                "result": daily_result_payload(results[day]) if day in results else None,
+            }
+            for day in page
+        ]
+        return entries, (page[-1].isoformat() if len(days) > limit else None)
 
     async def _sync_daily_serves(
         self,
@@ -1221,7 +1332,10 @@ class SoloRepository:
             result = await session.get(SoloDailyResult, (player, today))
             run = await session.scalar(
                 select(SoloRun).where(
-                    SoloRun.user_id == player, SoloRun.mode == "daily", SoloRun.daily_date == today
+                    SoloRun.user_id == player,
+                    SoloRun.mode == "daily",
+                    SoloRun.daily_date == today,
+                    SoloRun.replay.is_(False),
                 )
             )
             if day is not None and day.state == "skipped":

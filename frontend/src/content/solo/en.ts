@@ -36,6 +36,16 @@ export const SOLO_EN = {
     streak: (p: { days: number }) => `${counted(p.days, { one: "day", other: "days" })} in a row`,
     yourDailies: "Your Dailies",
     noDailiesYet: "The Dailies you play will be listed here.",
+    pastDailies: "Past Dailies",
+    pastDailiesIntro:
+      "Play a Daily you missed, finish one you left, or play one again. A past Daily never counts toward your streak, and playing one again is not recorded.",
+    noPastDailies: "There are no past Dailies yet.",
+    playPast: "Play",
+    continuePast: "Continue",
+    playAgain: "Play it again",
+    showOlder: "Show older",
+    notRecorded: "Not recorded",
+    playedAgain: "Played again",
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Drawing ${number(p.position)}` : `Drawing ${number(p.position)} of ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

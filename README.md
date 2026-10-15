@@ -107,7 +107,8 @@ keyboard that takes half the screen, and one thumb.
   The **Daily** is five drawings, the same for everybody in every language, picked from
   drawings that most of their room could name, easiest first; it rolls over at your own
   midnight, is resumed rather than restarted, keeps its progress if you leave it half
-  played, and can be copied as a row of squares. A **Free run** is 5, 10 or unlimited
+  played, and can be copied as a row of squares. **Past Dailies** keeps every Daily there
+  was: play a missed one late, finish one, or play a finished one again for fun. A **Free run** is 5, 10 or unlimited
   drawings, and an unlimited one ends at the first miss. A personal best is kept for each
   length, and a streak of days in a row; nobody is ranked against anybody else. Play is
   local: the browser judges each guess with a port of the room's judge, and the server records what
@@ -2768,6 +2769,9 @@ includes the saved configuration and archive state.
 4. A run ends with its last drawing, or an unlimited one with its first miss: its total,
    whether it beat your best, and for the Daily a result to copy and the time until the
    next one.
+5. **Past Dailies** lists the Dailies there were. Play one you missed (it counts for no
+   streak), finish one you left, or play one you finished again; playing again records
+   nothing.
 
 ### Scoring
 

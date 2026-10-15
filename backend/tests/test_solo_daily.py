@@ -305,7 +305,8 @@ async def test_a_date_that_is_nobody_s_today_is_refused(env):
     stranger = await player(users, factory, "Stranger")
     await sign_in_as(http, factory, stranger.id)
     real_today = datetime.now(timezone.utc).date()
-    for day in (real_today - timedelta(days=2), real_today + timedelta(days=2), "2026-13-40"):
+    # A past date is the archive's (#1470, tests/test_solo_archive.py).
+    for day in (real_today + timedelta(days=2), "2026-13-40"):
         refused = await http.post(f"/api/solo/daily/{day}")
         assert refused.status_code == 422
         assert refused.json()["errorCode"] == "solo_date_out_of_range"

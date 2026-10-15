@@ -1433,6 +1433,7 @@ async def _write_export_artifact(
             "mode": run.mode,
             "length": run.length,
             "dailyDate": run.daily_date.isoformat() if run.daily_date else None,
+            "replay": run.replay,
             "state": run.state,
             "endReason": run.end_reason,
             "solved": run.solved,

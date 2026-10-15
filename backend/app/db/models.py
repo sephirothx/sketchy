@@ -3552,7 +3552,11 @@ class SoloRun(Base):
     Play is local, so a run is what the server keeps of it: which drawings it
     served (`solo_serves`), what each came to, and whether it is still going.
     A player has at most one active free run; starting another abandons it.
-    The account is the canonical one, so a merge never splits a run.
+    A **replay** is a past Daily the player already finished, played again
+    from the archive for fun (#1470): a Daily run in every other way, it
+    records no result and does not count as the date's Daily, and a player
+    has at most one going. The account is the canonical one, so a merge
+    never splits a run.
     """
 
     __tablename__ = "solo_runs"
@@ -3568,6 +3572,7 @@ class SoloRun(Base):
             "(mode = 'daily') = (daily_date IS NOT NULL) AND (mode <> 'daily' OR length = 5)",
             name="ck_solo_runs_daily",
         ),
+        CheckConstraint("NOT replay OR mode = 'daily'", name="ck_solo_runs_replay"),
         CheckConstraint(
             "(state = 'active') = (ended_at IS NULL) AND (state = 'active') = (end_reason IS NULL)",
             name="ck_solo_runs_ended",
@@ -3586,14 +3591,23 @@ class SoloRun(Base):
         ),
         # A player's runs by kind: the active one, and the bests' rebuild.
         Index("ix_solo_runs_user_mode", "user_id", "mode", "length"),
-        # One Daily per player per date: resumed, never restarted.
+        # One Daily per player per date: resumed, never restarted. Replays
+        # are beside it, not it.
         Index(
             "uq_solo_runs_one_daily",
             "user_id",
             "daily_date",
             unique=True,
-            postgresql_where=sql_text("mode = 'daily'"),
-            sqlite_where=sql_text("mode = 'daily'"),
+            postgresql_where=sql_text("mode = 'daily' AND NOT replay"),
+            sqlite_where=sql_text("mode = 'daily' AND NOT replay"),
+        ),
+        # One replay going per player: starting another abandons it.
+        Index(
+            "uq_solo_runs_one_active_replay",
+            "user_id",
+            unique=True,
+            postgresql_where=sql_text("state = 'active' AND replay"),
+            sqlite_where=sql_text("state = 'active' AND replay"),
         ),
     )
 
@@ -3610,6 +3624,10 @@ class SoloRun(Base):
     length: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     # The player's local date a Daily is for; NULL for a free run.
     daily_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # A finished past Daily played again from the archive: nothing recorded.
+    replay: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     state: Mapped[str] = mapped_column(String(12), nullable=False, default="active")
     end_reason: Mapped[str | None] = mapped_column(String(12), nullable=True)
     # Drawings served so far, how many were named, and what they scored.

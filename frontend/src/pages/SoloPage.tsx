@@ -20,17 +20,20 @@ import { refusalText } from "../lib/refusals.ts";
 import {
   decodeSoloForms,
   fetchActiveFreeRun,
+  fetchSoloArchive,
   fetchSoloDrawing,
   fetchSoloRun,
   fetchSoloSummary,
   localDateKey,
   openDaily,
   reactToServe,
+  replayDaily,
   reportServe,
   serveNext,
   settleServe,
   shareServe,
   startFreeRun,
+  type SoloArchiveDay,
   type SoloDailyResult,
   type SoloOutcome,
   type SoloRun,
@@ -86,6 +89,9 @@ export function SoloPage() {
   const [summaryOf, setSummaryOf] = useState<SoloRun | null>(null);
   // The best for the run's length before it ended: a new best beats it.
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
+  // Solo's home, or its past Dailies (#1470), which a run started there
+  // returns to.
+  const [view, setView] = useState<"home" | "archive">("home");
   // The player's own date, watched: the Daily rolls over at their midnight,
   // and a page left open across it - or a tab woken after it - must offer
   // the new one rather than yesterday's result (R-SOLO-12, #1495 review).
@@ -243,7 +249,7 @@ export function SoloPage() {
   const reopenDaily = async () => {
     if (!run || run.mode !== "daily" || !run.dailyDate) return;
     try {
-      const fresh = await openDaily(run.dailyDate);
+      const fresh = await (run.replay ? replayDaily : openDaily)(run.dailyDate);
       setRun((current) => (current?.runId === fresh.runId ? fresh : current));
     } catch {
       // The drawing stays as it is, and can be given up.
@@ -291,6 +297,7 @@ export function SoloPage() {
         <SoloPlay
           key={playing.serveId}
           run={run}
+          today={today}
           serve={playing}
           upcoming={run.serves.find((serve) => serve.outcome === null && serve !== playing) ?? null}
           onSettle={(outcome, seconds) => settled(playing, outcome, seconds)}
@@ -303,11 +310,20 @@ export function SoloPage() {
           today={today}
           onBack={() => setSummaryOf(null)}
         />
+      ) : view === "archive" ? (
+        <SoloArchive
+          today={today}
+          busy={busy}
+          onPlay={(date) => void begin(() => openDaily(date))}
+          onPlayAgain={(date) => void begin(() => replayDaily(date))}
+          onBack={() => setView("home")}
+        />
       ) : (
         <SoloHome
           summary={summary}
           error={error}
           busy={busy}
+          onArchive={() => setView("archive")}
           onDaily={() => void begin(() => openDaily(today))}
           onFree={(length) => void begin(() => startFreeRun(length))}
           onContinue={() =>
@@ -338,6 +354,7 @@ function SoloHome({
   summary,
   error,
   busy,
+  onArchive,
   onDaily,
   onFree,
   onContinue,
@@ -345,6 +362,7 @@ function SoloHome({
   summary: SoloSummary | null;
   error: string | null;
   busy: boolean;
+  onArchive: () => void;
   onDaily: () => void;
   onFree: (length: 5 | 10 | null) => void;
   onContinue: () => void;
@@ -473,6 +491,14 @@ function SoloHome({
               ))}
             </ol>
           )}
+          <button
+            type="button"
+            className="btn btn-secondary btn-compact solo-open-archive"
+            data-testid="solo-open-archive"
+            onClick={onArchive}
+          >
+            {words().pastDailies}
+          </button>
         </section>
       </div>
     </div>
@@ -497,6 +523,121 @@ function resultOf(run: SoloRun): SoloDailyResult {
     completed: played.length >= 5,
     marks: played.map((serve) => ({ outcome: serve.outcome as SoloOutcome, seconds: 0, late: false })),
   };
+}
+
+/**
+ * Solo's past Dailies (#1470), newest first: one never played is played late
+ * (it counts for no streak), one left unfinished is finished, and one
+ * finished is played again, which records nothing.
+ */
+function SoloArchive({
+  today,
+  busy,
+  onPlay,
+  onPlayAgain,
+  onBack,
+}: {
+  today: string;
+  busy: boolean;
+  onPlay: (date: string) => void;
+  onPlayAgain: (date: string) => void;
+  onBack: () => void;
+}) {
+  const [days, setDays] = useState<SoloArchiveDay[] | null>(null);
+  const [older, setOlder] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSoloArchive(today)
+      .then((page) => {
+        if (cancelled) return;
+        setDays(page.days);
+        setOlder(page.next);
+      })
+      .catch((failure) => {
+        if (!cancelled) setError(refusalText(failure, words().couldNotLoad));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [today]);
+
+  const showOlder = async () => {
+    if (older === null || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await fetchSoloArchive(today, older);
+      setDays((current) => [...(current ?? []), ...page.days]);
+      setOlder(page.next);
+    } catch (failure) {
+      setError(refusalText(failure, words().couldNotLoad));
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  return (
+    <div className="solo-home solo-archive" data-testid="solo-archive" aria-busy={days === null && !error}>
+      <div className="solo-head">
+        <h1>{words().pastDailies}</h1>
+        <p>{words().pastDailiesIntro}</p>
+      </div>
+      {error && <p className="lobby-action-error" role="alert">{error}</p>}
+      <section className="surface-card solo-history">
+        {days && days.length === 0 ? (
+          <p className="solo-note">{words().noPastDailies}</p>
+        ) : (
+          <ol>
+            {(days ?? []).map((day) => {
+              const result = day.result;
+              const again = Boolean(result?.completed);
+              return (
+                <li
+                  key={day.date}
+                  className="solo-history-day solo-archive-day"
+                  data-testid="solo-archive-day"
+                  data-date={day.date}
+                >
+                  <span className="solo-history-date">{dayLabel(day.date)}</span>
+                  {result ? <DailyMarks result={result} /> : <span />}
+                  <span className="solo-history-points">
+                    {result ? words().pointsValue({ points: result.points }) : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    data-testid="solo-archive-play"
+                    disabled={busy}
+                    onClick={() => (again ? onPlayAgain(day.date) : onPlay(day.date))}
+                  >
+                    {again ? words().playAgain : result ? words().continuePast : words().playPast}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {older !== null && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-compact solo-open-archive"
+            data-testid="solo-archive-older"
+            disabled={loadingOlder}
+            onClick={() => void showOlder()}
+          >
+            {words().showOlder}
+          </button>
+        )}
+      </section>
+      <p className="solo-note solo-preview">{words().supporterPreview}</p>
+      <button type="button" className="btn btn-primary solo-next" data-testid="solo-archive-back" onClick={onBack}>
+        <UserIcon size={15} />
+        {words().backToSolo}
+      </button>
+    </div>
+  );
 }
 
 /** One square per drawing of a Daily: named, missed, or still to play. */
@@ -559,12 +700,14 @@ function NextDailyCountdown() {
  */
 function SoloPlay({
   run,
+  today,
   serve,
   upcoming,
   onSettle,
   onMissing,
 }: {
   run: SoloRun;
+  today: string;
   serve: SoloServe;
   upcoming: SoloServe | null;
   onSettle: (outcome: SoloOutcome, seconds: number) => Promise<void>;
@@ -689,7 +832,13 @@ function SoloPlay({
   return (
     <div className="solo-play" data-testid="solo-play">
       <div className="solo-play-bar">
-        <span className="solo-play-position">{words().drawingOf({ position: serve.position, length: run.length })}</span>
+        <span className="solo-play-position">
+          {words().drawingOf({ position: serve.position, length: run.length })}
+          {run.dailyDate !== null && run.dailyDate !== today && (
+            <span className="solo-play-date" data-testid="solo-play-date"> · {dayLabel(run.dailyDate)}</span>
+          )}
+          {run.replay && <span className="chip solo-play-replay">{words().notRecorded}</span>}
+        </span>
         <span
           className={`solo-clock${remaining <= 10 ? " is-low" : ""}`}
           data-testid="solo-clock"
@@ -900,7 +1049,10 @@ function SoloSummaryView({
   onBack: () => void;
 }) {
   const settledCount = run.serves.filter((serve) => serve.outcome !== null).length;
-  const result = run.mode === "daily" && run.dailyDate === today ? resultOf(run) : null;
+  // Today's own Daily: its squares to copy, and the time to the next. A past
+  // one from the archive, or one played again, has neither.
+  const todaysDaily = run.mode === "daily" && !run.replay && run.dailyDate === today;
+  const result = todaysDaily ? resultOf(run) : null;
   const value = run.length === null ? run.solved : run.points;
   // Beaten, not tied: a run that only equals the best is not a new one.
   const newBest = run.mode === "free" && value > 0 && value > (previousBest ?? 0);
@@ -912,7 +1064,7 @@ function SoloSummaryView({
     <div className="solo-summary" data-testid="solo-summary">
       <div className="surface-card solo-result-card">
         <p ref={heading} tabIndex={-1} className="solo-verdict is-solved">
-          {run.mode === "daily" ? words().dailyComplete : words().runOver}
+          {run.replay ? words().playedAgain : run.mode === "daily" ? words().dailyComplete : words().runOver}
         </p>
         <h1 className="solo-prompt">{words().totalPoints({ points: run.points })}</h1>
         <p className="solo-it-was">{words().youNamed({ solved: run.solved, total: settledCount })}</p>
@@ -922,8 +1074,9 @@ function SoloSummaryView({
         )}
         <div className="solo-result-actions">
           {result && <CopyResultButton result={result} />}
-          {run.mode === "daily" && <NextDailyCountdown />}
+          {todaysDaily && <NextDailyCountdown />}
         </div>
+        {run.replay && <p className="solo-note">{words().notRecorded}</p>}
         <button type="button" className="btn btn-primary solo-next" data-testid="solo-back" onClick={onBack}>
           <UserIcon size={15} />
           {words().backToSolo}
