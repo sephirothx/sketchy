@@ -639,6 +639,14 @@ class UserSettings(Base):
         server_default=text("'[]'"),
         nullable=False,
     )
+    # The drawer said no to Solo (#1434): none of their drawings is served to
+    # a stranger to guess, from the next request on, and the Daily replaces
+    # any of theirs for everyone. On by default - playing a public room is
+    # the consent, as it was for the Gallery before #1430 - because Solo
+    # never shows who drew it; this is the way out.
+    solo_opt_out: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     # Which language this player reads the interface in (R-I18N-06). Distinct
     # from `prompt_language`: a Dutch speaker playing an English room is
     # ordinary, and the two registries are allowed to diverge. Stored per
@@ -3216,6 +3224,12 @@ class TurnDrawing(Base):
         UTCDateTime(), nullable=True
     )
 
+    # The drawer took this one drawing out of Solo (#1434): a fact, set and
+    # cleared by the drawer alone, and cleared by erasure with the rest.
+    solo_withdrawn_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
     turn_record: Mapped[TurnRecord] = relationship(
         back_populates="drawing", foreign_keys=[game_id, turn_id]
     )
@@ -3443,6 +3457,73 @@ class TurnParticipantOutcome(Base):
             "GameParticipant.id == foreign(TurnParticipantOutcome.participant_id)"
         ),
     )
+
+
+class SoloPoolEntry(Base):
+    """A drawing Solo may serve (#1434), as its finished game left it.
+
+    A projection of game facts, written in the finished-game transaction and
+    rebuilt by `python -m app.services.solo_pool`: a public game's curated
+    turn that somebody guessed, with a stored drawing of at least
+    `MIN_POOL_STROKES` actions. What can change after the game - a moderator's
+    hide, the drawer's opt-out or take-out, a prompt's takedown - is not
+    stored here but asked when a drawing is served, so undoing it needs no
+    write here. Erasure is final, so it deletes the row.
+    """
+
+    __tablename__ = "solo_pool"
+    __table_args__ = (
+        CheckConstraint(
+            "guesser_count >= 1 AND correct_count >= 1 AND correct_count <= guesser_count",
+            name="ck_solo_pool_counts",
+        ),
+        CheckConstraint(
+            "sample_key >= 0 AND sample_key < 2147483648", name="ck_solo_pool_sample_key"
+        ),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # What the player-was-in-it anti-join reads (`game_participants`), and
+    # what a game's deletion cascades by.
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("game_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The concept the turn's version belongs to: what the player's languages
+    # are asked about, and what the Daily keeps distinct.
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The version the drawer drew. No foreign key of its own: the turn's
+    # RESTRICT already keeps it, and this row goes with the turn.
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    # The account as the game recorded it; aliases are resolved when the
+    # opt-out is asked. Indexed for erasure, which deletes an account's rows.
+    drawer_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # The original game's seats eligible to guess, and how many named it:
+    # the Daily's solve rate.
+    guesser_count: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    correct_count: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # The row's place in the pool's random order (`solo_rules.sample_key`):
+    # a random draw is a range probe on this index, never a sort.
+    sample_key: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
 
 class TurnDrawingReaction(Base):

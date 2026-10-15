@@ -501,6 +501,15 @@ cd backend
 .venv/bin/python -m app.services.gallery_ranking
 ```
 
+Solo's pool (`solo_pool`, #1434) is a projection too: the turns of public games
+that a Solo player may be served, written with each finished game and rebuilt
+from the facts on demand, a batch of games per transaction.
+
+```bash
+cd backend
+.venv/bin/python -m app.services.solo_pool
+```
+
 ### Recalculable competitive foundation
 
 Finished-game facts—not profile counters—are the source for any future rating,
@@ -1849,6 +1858,7 @@ backend/
       drawing_reactions.py Who may react to which drawing, and the room broadcast
       drawing_shares.py Who may share which drawing from the room, and the room broadcast
       gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
+      solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread
@@ -1863,6 +1873,7 @@ backend/
     announcements.py What the room says about itself, as codes rather than sentences
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     guess_judge.py Pure guess matching (right, close, held), shared by rooms and Solo
+    solo_rules.py Solo's pure rules: the pool's bar, its random order
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
     prompts.py    Prompt list + random choice helper

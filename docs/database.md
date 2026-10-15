@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d2e3f4a5b6c9_erase_a_report_drawing_never_saved.py` (#1439). Both this line and the table
+`e3f4a5b6c7d0_solo_pool.py` (#1434). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-64 tables in eight domains.
+65 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -123,6 +123,7 @@ erDiagram
     turn_records ||--o{ profile_drawing_pins : "pinned"
     turn_records ||--o{ turn_drawing_shares : "shared"
     game_participants ||--o{ turn_drawing_shares : "sharer seat"
+    turn_records ||--o| solo_pool : "servable in Solo"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -153,6 +154,7 @@ erDiagram
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
+| **Solo** | `solo_pool` |
 
 ---
 
@@ -591,7 +593,8 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `extra_prompt_languages` (JSON list, `[]` by default: the other languages the player
 plays in, in their order — never the default, never twice, at most seven; #1209) ·
 `locale` (the interface locales, `en` by default) ·
-`email_reminder_last_shown_at` · timestamps.
+`email_reminder_last_shown_at` · `solo_opt_out` (false by default: the drawer said no to
+Solo serving any of their drawings, #1434) · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
 supported action set.
@@ -1696,7 +1699,12 @@ goes with its whole game.
 `format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
 `unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · `gallery_share_count` ·
 `gallery_shared_at` · `gallery_withdrawn_at` · `gallery_hidden_at` · `moderation_erased_at` ·
-timestamps.
+`solo_withdrawn_at` · timestamps.
+
+`solo_withdrawn_at` is the drawer taking this one drawing out of Solo (#1434): a fact, set
+and cleared by the drawer, and cleared by erasure with the rest. `gallery_hidden_at` keeps
+a drawing out of Solo as well as the Gallery — a moderator's hide is a judgement about
+strangers seeing it, which is all Solo is.
 
 `status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
 `ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
@@ -1707,7 +1715,7 @@ row.
 
 **Erased by an administrator** (#1419, R-MOD-22). `erase_drawing_for_moderation` writes
 the tombstone an account erasure writes — `status` `deleted`, the bytes and their
-identity nulled, the projections zeroed, the turn's reactions, shares and pins deleted,
+identity nulled, the projections zeroed, the turn's reactions, shares, pins and Solo pool row deleted,
 the drawer's `drawing_shared` inbox entries forgotten — and stamps
 `moderation_erased_at`, and moves the drawer's `user_stats_daily.reactions_received` down
 by the reactions it deleted (counted under the drawing's lock). A row whose bytes had
@@ -2086,6 +2094,41 @@ which a deleted list's id no longer resolves to; it is a random uuid, so it says
 about the owner. The writer writes the ids the game drew from as they are, checking and
 locking nothing (until #1362 it named only lists that still existed, held `FOR KEY SHARE`).
 Nothing reads a game's sources by list, so the list's side is not indexed.
+
+### `solo_pool`
+`turn_id` **PK** (CASCADE) · `game_id` (CASCADE, indexed) · `concept_id` (CASCADE, indexed) ·
+`prompt_version_id` (no foreign key: the turn's `RESTRICT` keeps the version, and the row
+goes with the turn) · `drawer_user_id` (SET NULL, indexed) · `guesser_count` ·
+`correct_count` · `finished_at` · `sample_key` (indexed).
+
+The drawings Solo may serve (#1434): a **projection** of game facts, one row per turn of a
+**public** game — finished or abandoned — with a **curated** prompt that **somebody guessed**
+and a **kept drawing** of at least five canvas actions (`MIN_POOL_STROKES`). Written in
+the finished-game transaction (`services/solo_pool.write_pool_rows`, from `save_game`), so a
+game is servable exactly when it is history, and rebuilt from the facts by:
+
+```bash
+cd backend && .venv/bin/python -m app.services.solo_pool
+```
+
+one transaction per batch of games, so the pool is never empty while it runs; the
+`solo_pool` integrity check compares it with the facts. `pool_query` is the one
+definition all three use.
+
+Only what a finished game cannot change is stored. Everything that can change and be
+undone is asked when a drawing is served (`repositories/solo.servable_clauses`): the
+drawing still `ready` and not `gallery_hidden_at`, not `solo_withdrawn_at`, its drawer's
+canonical account not `solo_opt_out`, the drawn version still `active` and rated
+`everyone`. So is what depends on the player: a game none of their identities sat in,
+and a concept with a version — active, rated `everyone` — in one of their play languages
+or `zxx`. Erasure is final, so it **deletes** the row: a drawing erased for moderation,
+and every drawing of a deleted account. `guesser_count` and `correct_count` are the
+original game's, the solve rate the Daily is picked by.
+
+`sample_key` is the row's place in the pool's random order: 31 bits of SHA-256 of the
+turn id (`solo_rules.sample_key`), so a rebuild puts every row back where it was. A
+random draw is a range probe on its index, never a sort of the table. Clients never see
+a turn id, so nobody can steer by it.
 
 ---
 
@@ -2812,7 +2855,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -2930,6 +2973,7 @@ Deletion:
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;
+- deletes the Solo pool rows of those erased drawings (`solo_pool` in §6);
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting
@@ -3222,6 +3266,7 @@ repairing**:
 | `user_stats` | each account's `user_stats_daily` rows against a rebuild from facts, run in a transaction that is **rolled back** | warns; `python -m app.services.user_stats_projection` rebuilds |
 | `games` | each seat's ledger sum against `final_score` (ledgered games), each turn's `guesser_count` against its eligible outcome rows | warns; a writer bug, investigate |
 | `alias_chains` | no merged identity points at another merged identity | warns |
+| `solo_pool` | each game's `solo_pool` rows against `pool_query` over its facts: none missing, none unexpected, none stale | warns; `python -m app.services.solo_pool` rebuilds |
 
 Every check walks its table by keyset and keeps its place in `app_config`
 (`integrity_audit.<check>`, one JSON value with the cursor and the cycle's timings), so
