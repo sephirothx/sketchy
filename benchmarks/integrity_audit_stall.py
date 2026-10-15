@@ -180,7 +180,9 @@ async def run(args) -> dict:
             },
             # The same games through the Solo pool's check (#1434): its
             # expected rows are `pool_query` over their facts, compared by the
-            # database, so its cost is the query's, not the loop's.
+            # database. These games are custom-prompt and private, so the pool
+            # holds none of them: this is the check's floor over a slice of
+            # big games, not a full pool's cost.
             "solo_pool_slice": {
                 "games": pooled.rows, "mismatches": len(pooled.mismatches), **pool_cost,
             },
