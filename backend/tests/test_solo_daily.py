@@ -20,6 +20,8 @@ from app.api.errors import install_refusal_handler
 from app.api.solo import create_solo_router, drawing_limiter, run_limiter, serve_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.db.models import (
+    PromptVersion,
+    SoloPoolEntry,
     SoloBest,
     SoloDailyDay,
     SoloDailyResult,
@@ -245,11 +247,10 @@ async def test_a_daily_keeps_its_progress_and_resumes_never_restarts(env):
     await _candidates(users, history, factory, 6)
     stranger = await player(users, factory, "Stranger")
     await sign_in_as(http, factory, stranger.id)
-    today = NOON.date().isoformat()
+    # The route reads the real clock: today, wherever the suite runs.
+    today = datetime.now(timezone.utc).date().isoformat()
     opened = await http.post(f"/api/solo/daily/{today}")
-    if opened.status_code != 200:
-        # The route reads the real clock; run the day the server thinks it is.
-        assert opened.status_code == 200, opened.text
+    assert opened.status_code == 200, opened.text
     run = opened.json()
     assert run["mode"] == "daily" and run["length"] == 5 and run["dailyDate"] == today
     first, second = run["serves"][0], run["serves"][1]
@@ -385,3 +386,174 @@ async def test_only_a_concept_every_language_can_name_is_the_daily(env):
     await solo.open_daily(stranger.id, DAY, now=NOON)
     turns = {row.turn_id for row in await _set(factory)}
     assert UUID(eight.turn_id) in turns and UUID(short.turn_id) not in turns
+
+
+def test_a_date_is_open_from_utc_plus_14_midnight_to_two_hours_past_utc_minus_12():
+    from app.solo_rules import date_is_open, open_dates
+
+    day = date(2026, 10, 15)
+    opens = datetime(2026, 10, 14, 10, 0, tzinfo=timezone.utc)
+    closes = datetime(2026, 10, 16, 14, 0, tzinfo=timezone.utc)
+    assert not date_is_open(day, opens - timedelta(seconds=1))
+    assert date_is_open(day, opens)
+    assert date_is_open(day, closes - timedelta(seconds=1))
+    assert not date_is_open(day, closes)
+    assert open_dates(datetime(2026, 10, 15, 9, 59, tzinfo=timezone.utc)) == (
+        date(2026, 10, 14), date(2026, 10, 15),
+    )
+    assert open_dates(datetime(2026, 10, 15, 10, 0, tzinfo=timezone.utc)) == (
+        date(2026, 10, 14), date(2026, 10, 15), date(2026, 10, 16),
+    )
+
+
+def test_a_day_with_no_daily_breaks_nobody_s_streak():
+    from app.solo_rules import daily_streak
+
+    today = date(2026, 10, 15)
+    played = [date(2026, 10, 15), date(2026, 10, 13), date(2026, 10, 12)]
+    assert daily_streak(played, today) == 1
+    assert daily_streak(played, today, skipped=[date(2026, 10, 14)]) == 3
+
+
+async def test_a_language_s_wording_taken_down_replaces_the_drawing_for_everybody(env):
+    http, users, history, solo, factory = env
+    every = {lang: f"t-{lang}" for lang in ("en", "de", "es", "fr", "it", "nl", "pl", "pt")}
+    await _candidates(users, history, factory, 4, tag="z")
+    _, _, [eight] = await _candidates(users, history, factory, 1, forms=every, tag="e")
+    stranger = await player(users, factory, "Stranger")
+    await solo.open_daily(stranger.id, DAY, now=NOON)
+    assert UUID(eight.turn_id) in {row.turn_id for row in await _set(factory)}
+    # One more candidate, for the replacement.
+    await _candidates(users, history, factory, 1, tag="x")
+
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PromptVersion)
+                .where(PromptVersion.language == "pl", PromptVersion.canonical_answer == "t-pl")
+                .values(moderation_state="hidden")
+            )
+    polish = await player(users, factory, "Polish", languages=("pl",))
+    run = await solo.open_daily(polish.id, DAY, now=NOON)
+    assert len(run.serves) == 5
+    assert UUID(eight.turn_id) not in {row.turn_id for row in await _set(factory)}
+
+
+async def test_free_runs_skip_another_drawing_of_an_open_daily_s_concept(env):
+    http, users, history, solo, factory = env
+    drawer, seats, _ = await _candidates(users, history, factory, 5)
+    now = datetime.now(timezone.utc)
+    # Nobody has opened today's Daily: a free run picks it first anyway.
+    other = await player(users, factory, "Other")
+    async with factory() as session:
+        concepts = [row.concept_id for row in (await session.scalars(select(SoloPoolEntry))).all()]
+    single = await player(users, factory, "Single")
+    # A second drawing of one of the concepts, by one guesser: no Daily
+    # candidate itself, but the same prompt.
+    async with factory() as session:
+        version = await session.scalar(
+            select(PromptVersion.id).where(PromptVersion.concept_id == concepts[0])
+        )
+    twin = await record_turn(history, drawer=drawer.id, guessers=[single.id], version_id=version)
+    run = await solo.start_free_run(other.id, length=5, now=now)
+    from app.repositories.solo import SoloRefused
+
+    try:
+        served = await solo.serve_next(other.id, run.run_id, count=1, now=now)
+    except SoloRefused:
+        served = []
+    async with factory() as session:
+        turns = set((await session.scalars(select(SoloServe.turn_id))).all())
+    assert UUID(twin.turn_id) not in turns and not served
+    async with factory() as session:
+        assert await session.get(SoloDailyDay, now.date()) is not None
+
+
+async def test_a_daily_first_played_after_its_date_is_not_started_on_it(env):
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 6)
+    stranger = await player(users, factory, "Stranger")
+    run = await solo.open_daily(stranger.id, DAY, now=NOON)
+    later = NOON + timedelta(days=3)
+    await solo.settle(stranger.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=later)
+    async with factory() as session:
+        result = await session.get(SoloDailyResult, (UUID(stranger.id), DAY))
+    assert result.started_on_date is False and result.marks[0]["late"] is True
+    summary = await solo.summary(stranger.id, DAY, now=NOON)
+    assert summary["streak"] == 0
+
+
+async def test_reuse_looks_both_ways_and_counts_a_replaced_concept(env):
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 6)
+    stranger = await player(users, factory, "Stranger")
+    later = DAY + timedelta(days=30)
+    await solo.open_daily(stranger.id, later, now=NOON)
+    from app.repositories.solo import SoloRefused
+
+    # The earlier day, picked after the later one, may not reuse its concepts.
+    try:
+        await solo.open_daily(stranger.id, DAY, now=NOON)
+    except SoloRefused:
+        pass
+    else:
+        raise AssertionError("an earlier day reused a later day's concepts")
+    picked = await _set(factory, later)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id == picked[0].turn_id)
+                .values(gallery_hidden_at=NOON)
+            )
+    await solo.open_daily(stranger.id, later, now=NOON)
+    replaced = (await _set(factory, later))[0]
+    assert replaced.replaced_concept_id == picked[0].concept_id
+    # A fresh drawing of the replaced concept: servable, and still not the
+    # next day's Daily, since that concept was this one's.
+    async with factory() as session:
+        version = await session.scalar(
+            select(PromptVersion.id).where(PromptVersion.concept_id == picked[0].concept_id)
+        )
+    fresh = [await player(users, factory, f"Fresh{i}") for i in range(3)]
+    await record_turn(
+        history, drawer=fresh[0].id, guessers=[fresh[1].id, fresh[2].id], version_id=version
+    )
+    from app.repositories.solo import pick_daily
+
+    async with factory() as session:
+        again = await pick_daily(session, later + timedelta(days=1), count=6)
+    assert replaced.replaced_concept_id not in {concept for _, concept, _ in again}
+
+
+async def test_a_skipped_day_reads_as_unavailable(env):
+    http, users, history, solo, factory = env
+    stranger = await player(users, factory, "Stranger")
+    from app.repositories.solo import SoloRefused
+
+    try:
+        await solo.open_daily(stranger.id, DAY, now=NOON)
+    except SoloRefused:
+        pass
+    summary = await solo.summary(stranger.id, DAY, now=NOON)
+    assert summary["today"]["state"] == "unavailable"
+
+
+async def test_deleting_an_account_takes_its_daily_results_and_bests(env):
+    from app.auth.account_data import anonymize_account
+    from app.db.models import SoloRun
+
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 6)
+    stranger = await player(users, factory, "Stranger")
+    run = await solo.open_daily(stranger.id, DAY, now=NOON)
+    await solo.settle(stranger.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=NOON)
+    free = await solo.start_free_run(stranger.id, length=None, now=NOON)
+    await solo.start_free_run(stranger.id, length=5, now=NOON)
+    del free
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SoloDailyResult)) == 1
+    await anonymize_account(factory, user_id=stranger.id)
+    async with factory() as session:
+        for model in (SoloRun, SoloServe, SoloDailyResult, SoloBest):
+            assert await session.scalar(select(func.count()).select_from(model)) == 0, model

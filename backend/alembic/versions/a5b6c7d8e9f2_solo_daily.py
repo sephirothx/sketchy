@@ -76,6 +76,7 @@ def upgrade() -> None:
         ),
         sa.Column("solve_rate", sa.Float(), nullable=False),
         sa.Column("replaced_turn_id", _UUID, nullable=True),
+        sa.Column("replaced_concept_id", _UUID, nullable=True),
         sa.Column("replaced_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint("daily_date", "concept_id", name="uq_solo_daily_sets_date_concept"),
         sa.CheckConstraint("position >= 1 AND position <= 5", name="ck_solo_daily_sets_position"),

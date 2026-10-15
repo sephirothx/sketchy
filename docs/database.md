@@ -2186,16 +2186,19 @@ from being served the same drawing twice.
 ### `solo_daily_days` and `solo_daily_sets`
 `solo_daily_days`: `daily_date` **PK** · `state` (`set \| skipped`) · `picked_at`.
 `solo_daily_sets`: `daily_date` (CASCADE) + `position` (1–5) composite **PK** · `turn_id`
-(CASCADE, indexed) · `concept_id` (CASCADE) · `solve_rate` · `replaced_turn_id` (no foreign
-key) · `replaced_at`; unique (`daily_date`, `concept_id`); `ix_solo_daily_sets_concept_date`.
+(CASCADE, indexed) · `concept_id` (CASCADE) · `solve_rate` · `replaced_turn_id`,
+`replaced_concept_id` (no foreign keys) · `replaced_at`; unique (`daily_date`, `concept_id`); `ix_solo_daily_sets_concept_date`.
 
 The Daily (#1434, R-SOLO-11): the same five drawings for everybody, kept **forever** for the
 archive (#1470). The day row is what two first requests race for: the one that inserts it
 (`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other waits on the key and
 reads. A day too thin is stored as `skipped` and stays so. A drawing that stops being
-servable is replaced for everybody under the day row's lock (R-SOLO-13), and the row keeps
-what it replaced. `ix_solo_daily_sets_concept_date` serves the 60-day reuse rule; the
-free runs' exclusion of a Daily still open reads `daily_date` and `turn_id`.
+playable for everybody is replaced for everybody (R-SOLO-13) under the day row's lock —
+taken only when something needs replacing, so the opens of an untouched Daily never queue
+— and the row keeps the drawing and the concept it replaced; the replaced concept still
+counts toward the 60-day reuse rule, which reads by date range (the primary key).
+`ix_solo_daily_sets_concept_date` serves the free runs' exclusion of every concept in a
+Daily still open somewhere.
 
 ### `solo_daily_results`
 `user_id` (CASCADE) + `daily_date` composite **PK** · `run_id` (SET NULL, indexed) ·
