@@ -222,9 +222,10 @@ async def test_a_daily_and_a_free_run_are_played_through():
 
 
 async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
-    # Five: a free run picks today's Daily if nobody has, and the Daily test
-    # beside this one needs it to have five drawings whichever runs first.
-    await seed_solo_drawings(5)
+    # Six: a free run picks today's Daily if nobody has, so whichever test
+    # runs first the Daily has five drawings, and a free run - which never
+    # serves an open Daily's concept - still has a sixth to play.
+    await seed_solo_drawings(6)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context(viewport={"width": 412, "height": 915}, is_mobile=True, has_touch=True)
