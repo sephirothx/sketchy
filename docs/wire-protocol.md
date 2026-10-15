@@ -2428,6 +2428,7 @@ the `X-Sketchy-Account-Required` header. A run that is not the caller's is
 `404 no_such_solo_run`; every refusal about a serve is `404 no_such_drawing`, as on every
 drawing door. A state that moved on — a serve settled already or out of order, a run that
 ended — is `409 solo_conflict`; a player the pool has nothing for is `409 solo_pool_empty` — and a free run that gets that for its very first drawing is ended (`abandoned`, recording nothing), so it never waits in its length's row as one in progress. An account deleted while a write was on its way is `401 sign_in_required`, from inside the write's own transaction, never a row written for it.
+A free run never serves a drawing from a Daily still open anywhere (R-SOLO-14).
 Budgets are per **account** and process-local: starting a run 30 a minute; serving,
 reporting and reading runs 120, one bucket; drawing bytes 240 (`429 too_many_requests`).
 
@@ -2450,6 +2451,8 @@ panel from spoiling the drawing.
 | `GET` | `/api/solo/runs/{run_id}` | The run, with its serves — an open one with its `forms`, so Continue and a reload resume it |
 | `POST` | `/api/solo/runs/{run_id}/serves?count=1\|2` | `{serves}` — the next drawings: never more than two open at once (the one played and the next, held ready), never past a finite run's length; `[]` when there is no room for one. Unseen drawings first, from a random point in the pool's order, wrapping round; then the ones seen longest ago (R-SOLO-07) |
 | `POST` | `/api/solo/serves/{serve_id}/result` | `{outcome: solved \| given_up \| timed_out, seconds: 0..30}` → `{serve, run}`. Once per serve, in order; the server derives `points` from `seconds` (R-SOLO-06). The run ends with its last drawing, or — unlimited — its first miss, and a drawing held ready goes with it |
+| `POST` | `/api/solo/daily/{date}` | Today's **Daily** (R-SOLO-11, R-SOLO-12) → the run, `mode: daily`, with all five serves: created the first time, resumed after, never restarted. `date` is the player's local `YYYY-MM-DD`, accepted only while it is today somewhere (±14 h of UTC); anything else is `422 solo_date_out_of_range` naming `date`. A day too thin for a Daily is `404 no_such_daily` |
+| `GET` | `/api/solo/me?today=<date>` | What the page opens on: `{today: {date, state: not_started \| in_progress \| done \| unavailable, result}, activeRunId, bests: {"5", "10", "unlimited"}, history, streak}`. A result is `{date, positionsPlayed, solved, points, completed, marks: [{outcome, seconds, late}]}`; `history` is the latest 60, newest first; `streak` is computed from them (R-SOLO-14). `today` is checked like the Daily's date |
 | `GET` | `/api/solo/serves/{serve_id}/drawing` | The bytes through the **fourth door** (R-SOLO-04): its own query — the caller's serve, the drawing still servable (R-SOLO-02) — with the participant route's `Cache-Control: private, no-cache`, `ETag` and `304` (R-HIST-24), and the same `404` for every refusal, signed out included |
 
 ### Inbox — [`backend/app/api/inbox.py`](../backend/app/api/inbox.py)

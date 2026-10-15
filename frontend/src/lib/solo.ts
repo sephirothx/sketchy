@@ -106,3 +106,50 @@ export function settleServe(
 export function fetchSoloDrawing(serveId: string): Promise<ArrayBuffer> {
   return apiBinaryRequest(`/api/solo/serves/${encodeURIComponent(serveId)}/drawing`);
 }
+
+/** One drawing of a Daily as played: its outcome, the seconds, and whether
+    it was played after the date had ended everywhere. */
+export interface SoloDailyMark {
+  outcome: SoloOutcome;
+  seconds: number;
+  late: boolean;
+}
+
+/** A player's Daily for one date: kept as it is played, so half a Daily
+    keeps its progress. */
+export interface SoloDailyResult {
+  date: string;
+  positionsPlayed: number;
+  solved: number;
+  points: number;
+  completed: boolean;
+  marks: SoloDailyMark[];
+}
+
+export type SoloTodayState = "not_started" | "in_progress" | "done" | "unavailable";
+
+/** What Solo's page opens on. `bests` is keyed `"5"`, `"10"`, `"unlimited"`:
+    points for the first two, drawings named for the third. */
+export interface SoloSummary {
+  today: { date: string; state: SoloTodayState; result: SoloDailyResult | null };
+  activeRunId: string | null;
+  bests: Partial<Record<"5" | "10" | "unlimited", number>>;
+  history: SoloDailyResult[];
+  streak: number;
+}
+
+/** The player's local date, as the server takes it: `YYYY-MM-DD`. */
+export function localDateKey(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** Today's Daily: created with its five drawings the first time, resumed after. */
+export function openDaily(date: string): Promise<SoloRun> {
+  return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}`, { method: "POST" });
+}
+
+export function fetchSoloSummary(today: string): Promise<SoloSummary> {
+  return apiRequest(`/api/solo/me?today=${encodeURIComponent(today)}`);
+}

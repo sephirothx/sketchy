@@ -15,3 +15,9 @@ test("the client reads the forms the server encoded (#1434)", () => {
     taken: ["hut"],
   });
 });
+
+test("the Daily's date is the player's own calendar day", async () => {
+  const { localDateKey } = await import("../src/lib/solo.ts");
+  assert.equal(localDateKey(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
+  assert.equal(localDateKey(new Date(2026, 9, 15, 0, 0)), "2026-10-15");
+});

@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import uuid
+from datetime import date, datetime, time, timedelta, timezone
 
 # A drawing needs this many canvas actions (`turn_records.stroke_count`) to
 # be served: one line and a dot is not a drawing anybody can be asked to name,
@@ -104,3 +105,53 @@ def decode_answers(serve_id: uuid.UUID | str, encoded: str) -> str:
     key = uuid.UUID(str(serve_id)).bytes
     mixed = base64.b64decode(encoded)
     return bytes(byte ^ key[index % len(key)] for index, byte in enumerate(mixed)).decode("utf-8")
+
+
+# --- the Daily -----------------------------------------------------------------
+
+DAILY_LENGTH = 5
+# A concept is not the Daily again within this many days of its last Daily.
+DAILY_REUSE_DAYS = 60
+# How far a local clock is from UTC at most: a date is somewhere's today from
+# 14 h before its UTC midnight (UTC+14) until 14 h after the next (UTC-12 and
+# a margin). The Daily rolls over at each player's own midnight, and the
+# server, which cannot see the player's zone, accepts any date that is today
+# somewhere.
+DAY_EDGE = timedelta(hours=14)
+
+
+def date_is_open(day: date, now: datetime) -> bool:
+    """Whether `day` is still today somewhere at `now`."""
+    start = datetime.combine(day, time.min, tzinfo=timezone.utc) - DAY_EDGE
+    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=timezone.utc) + DAY_EDGE
+    return start <= now < end
+
+
+def open_dates(now: datetime) -> tuple[date, ...]:
+    """Every date that is today somewhere at `now`: two or three of them."""
+    today = now.astimezone(timezone.utc).date()
+    return tuple(
+        day
+        for day in (today - timedelta(days=1), today, today + timedelta(days=1))
+        if date_is_open(day, now)
+    )
+
+
+def daily_start_key(day: date) -> int:
+    """Where a date's walk through the pool starts: the same for everybody,
+    and nothing a player can choose."""
+    digest = hashlib.sha256(b"solo-daily:" + day.isoformat().encode("ascii")).digest()
+    return int.from_bytes(digest[:4], "big") % SAMPLE_KEY_SPACE
+
+
+def daily_streak(started_dates: list[date], today: date) -> int:
+    """How many days in a row ending today - or yesterday, while today's is
+    still to play - the player started the Daily on its own date. Computed
+    from their results each time it is asked, never kept as a counter (N-03)."""
+    played = set(started_dates)
+    day = today if today in played else today - timedelta(days=1)
+    streak = 0
+    while day in played:
+        streak += 1
+        day -= timedelta(days=1)
+    return streak
