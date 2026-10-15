@@ -310,6 +310,9 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Spiel nicht gefunden.",
   no_such_drawing: "Zeichnung nicht gefunden.",
   drawing_unreadable: "Diese Zeichnung konnte nicht gelesen werden.",
+  no_such_solo_run: "Diese Solo-Runde gibt es nicht mehr.",
+  solo_conflict: "Das hat sich inzwischen geändert. Lade Solo neu und spiel weiter.",
+  solo_pool_empty: "Gerade ist keine Zeichnung zum Spielen übrig. Versuch es später noch einmal.",
   pinned_drawings_full: "Deine angehefteten Zeichnungen sind voll. Löse zuerst eine in deinem Profil.",
 
   // Prompt lists

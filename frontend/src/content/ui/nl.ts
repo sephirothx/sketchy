@@ -310,6 +310,9 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Spel niet gevonden.",
   no_such_drawing: "Tekening niet gevonden.",
   drawing_unreadable: "Deze tekening kon niet gelezen worden.",
+  no_such_solo_run: "Die Solo-ronde bestaat niet meer.",
+  solo_conflict: "Dat is intussen veranderd. Laad Solo opnieuw en ga verder.",
+  solo_pool_empty: "Er is nu geen tekening meer om te spelen. Probeer het later opnieuw.",
   pinned_drawings_full: "Je vastgezette tekeningen zijn vol. Maak er eerst een los in je profiel.",
 
   // Prompt lists

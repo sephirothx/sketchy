@@ -1834,7 +1834,7 @@ backend/
   app/
     db/           SQLAlchemy models, engine setup, seeding, and migration runner
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
-    api/          REST routers: player profiles, prompt lists, and prompt stats
+    api/          REST routers: player profiles, prompt lists, prompt stats, and Solo (#1434)
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
     compression.py Serving the build's precompressed copies; cheap gzip for what stays dynamic
     handlers/
@@ -1859,6 +1859,7 @@ backend/
       drawing_shares.py Who may share which drawing from the room, and the room broadcast
       gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
+      solo_access.py Who may open which of Solo's doors: the one gate the supporter pass narrows
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread
