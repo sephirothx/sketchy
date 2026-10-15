@@ -2122,7 +2122,11 @@ canonical account not `solo_opt_out`, the drawn version still `active` and rated
 `everyone`. So is what depends on the player: a game none of their identities sat in,
 and a concept with a version — active, rated `everyone` — in one of their play languages
 or `zxx`. Erasure is final, so it **deletes** the row: a drawing erased for moderation,
-and every drawing of a deleted account. `guesser_count` and `correct_count` are the
+and every drawing of a deleted account. A rebuild batch that races an erasure can put
+the row back; that is harmless, since serving asks the drawing's own status of every
+row, and the audit reports the row as unexpected until the next rebuild. A batch that
+deadlocks with the erasure (the erasure holds the drawer's `users` row; the batch's
+insert needs it through `drawer_user_id`) is retried whole. `guesser_count` and `correct_count` are the
 original game's, the solve rate the Daily is picked by.
 
 `sample_key` is the row's place in the pool's random order: 31 bits of SHA-256 of the
@@ -3266,7 +3270,7 @@ repairing**:
 | `user_stats` | each account's `user_stats_daily` rows against a rebuild from facts, run in a transaction that is **rolled back** | warns; `python -m app.services.user_stats_projection` rebuilds |
 | `games` | each seat's ledger sum against `final_score` (ledgered games), each turn's `guesser_count` against its eligible outcome rows | warns; a writer bug, investigate |
 | `alias_chains` | no merged identity points at another merged identity | warns |
-| `solo_pool` | each game's `solo_pool` rows against `pool_query` over its facts: none missing, none unexpected, none stale | warns; `python -m app.services.solo_pool` rebuilds |
+| `solo_pool` | each game's `solo_pool` rows against `pool_query` over its facts, compared by the database both ways (`EXCEPT`): none missing, none unexpected, none stale (`sample_key` is not compared) | warns; `python -m app.services.solo_pool` rebuilds |
 
 Every check walks its table by keyset and keeps its place in `app_config`
 (`integrity_audit.<check>`, one JSON value with the cursor and the cycle's timings), so

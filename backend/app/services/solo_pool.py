@@ -20,9 +20,10 @@ import asyncio
 from collections.abc import Iterable
 from uuid import UUID
 
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import Select, case, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import (
@@ -44,15 +45,19 @@ from app.solo_rules import MIN_POOL_CORRECT_GUESSERS, MIN_POOL_STROKES, sample_k
 REBUILD_BATCH_GAMES = 500
 
 
-def _correct_counts():
+def _correct_count():
+    """How many seats named the turn: a count correlated to the turn row, so
+    it reads that turn's outcomes by their primary key. A GROUP BY over the
+    whole outcomes table, joined after, aggregated every outcome ever
+    recorded on each game's write (#1491 review: 241 ms at a million rows)."""
     return (
-        select(
-            TurnParticipantOutcome.turn_id.label("turn_id"),
-            func.count().label("correct"),
+        select(func.count())
+        .where(
+            TurnParticipantOutcome.turn_id == TurnRecord.id,
+            TurnParticipantOutcome.outcome == Outcome.CORRECT.value,
         )
-        .where(TurnParticipantOutcome.outcome == Outcome.CORRECT.value)
-        .group_by(TurnParticipantOutcome.turn_id)
-        .subquery()
+        .correlate(TurnRecord)
+        .scalar_subquery()
     )
 
 
@@ -60,7 +65,7 @@ def pool_query() -> Select:
     """Every turn that belongs in the pool, as the rows it would hold (less
     the sample key, which is derived from the turn id). The one definition
     the finished-game write, the rebuild and the integrity audit share."""
-    correct = _correct_counts()
+    correct = _correct_count()
     return (
         select(
             TurnRecord.id.label("turn_id"),
@@ -68,19 +73,23 @@ def pool_query() -> Select:
             PromptVersion.concept_id,
             TurnRecord.prompt_version_id,
             TurnRecord.drawer_user_id,
-            TurnRecord.guesser_count,
-            correct.c.correct.label("correct_count"),
+            # A guesser count below the correct count is a game written
+            # before the count was recorded; the CHECK wants them consistent.
+            case(
+                (TurnRecord.guesser_count >= correct, TurnRecord.guesser_count),
+                else_=correct,
+            ).label("guesser_count"),
+            correct.label("correct_count"),
             GameRecord.finished_at,
         )
         .join(GameRecord, GameRecord.id == TurnRecord.game_id)
         .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
         .join(PromptVersion, PromptVersion.id == TurnRecord.prompt_version_id)
-        .join(correct, correct.c.turn_id == TurnRecord.id)
         .where(
             GameRecord.visibility == GameVisibility.PUBLIC.value,
             TurnRecord.prompt_source_kind == PromptSourceKind.CURATED.value,
             TurnRecord.stroke_count >= MIN_POOL_STROKES,
-            correct.c.correct >= MIN_POOL_CORRECT_GUESSERS,
+            correct >= MIN_POOL_CORRECT_GUESSERS,
             TurnDrawing.status == TurnDrawingStatus.READY.value,
             TurnDrawing.moderation_erased_at.is_(None),
         )
@@ -95,9 +104,7 @@ def pool_row(row) -> dict:
         "concept_id": row.concept_id,
         "prompt_version_id": row.prompt_version_id,
         "drawer_user_id": row.drawer_user_id,
-        # A guesser count below the correct count is a game written before
-        # the count was recorded; the CHECK wants the pair consistent.
-        "guesser_count": max(int(row.guesser_count), int(row.correct_count)),
+        "guesser_count": int(row.guesser_count),
         "correct_count": int(row.correct_count),
         "finished_at": row.finished_at,
         "sample_key": sample_key(row.turn_id),
@@ -159,19 +166,44 @@ async def _rebuild_batch(session: AsyncSession, after: UUID | None) -> tuple[int
     return written, game_ids[-1]
 
 
+# Deadlock and serialization failure are what PostgreSQL asks a caller to
+# retry. A batch can meet an erasure (#1491 review): the erasure holds the
+# drawer's users row and waits on the pool rows the batch deleted, while the
+# batch's insert needs that users row through `drawer_user_id`. Each batch
+# is a whole idempotent transaction, so it is retried whole.
+_TRANSIENT_SQLSTATES = frozenset({"40001", "40P01"})
+REBUILD_RETRIES = 3
+
+
+def _is_transient(error: BaseException) -> bool:
+    return getattr(getattr(error, "orig", None), "sqlstate", None) in _TRANSIENT_SQLSTATES
+
+
 async def rebuild_solo_pool(session_factory: async_sessionmaker[AsyncSession]) -> int:
     """Replace every game's pool rows with what its facts say, one
     transaction per batch of games: the pool is never empty while it is
-    rebuilt, and an interrupted rebuild is simply run again."""
+    rebuilt, and an interrupted rebuild is simply run again.
+
+    A batch racing an erasure can put back the row the erasure deleted. It
+    is harmless - the drawing is `deleted` by then, and serving asks that of
+    every row (`repositories/solo.servable_clauses`) - and the integrity audit
+    reports it as unexpected until the next rebuild."""
     written = 0
     last: UUID | None = None
     while True:
-        async with session_factory() as session:
-            async with session.begin():
-                count, last = await _rebuild_batch(session, last)
-        if last is None:
+        for attempt in range(REBUILD_RETRIES):
+            try:
+                async with session_factory() as session:
+                    async with session.begin():
+                        count, after = await _rebuild_batch(session, last)
+                break
+            except DBAPIError as error:
+                if not _is_transient(error) or attempt == REBUILD_RETRIES - 1:
+                    raise
+        if after is None:
             return written
         written += count
+        last = after
 
 
 async def _run_cli() -> None:

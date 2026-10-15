@@ -11,6 +11,7 @@ every guesser and a drawer bonus every turn, as the scorer writes them), and
 loop:
 
 - one games slice (`GAME_SLICE_ROWS` games, the first of the walk);
+- one Solo pool slice over the same games;
 - a whole drawings walk, a slice of `DRAWING_SLICE_ROWS` rows at a time under
   the audit's default byte budget, as the pass runs it.
 
@@ -140,6 +141,11 @@ async def games_slice(factory):
         return await integrity_audit._games_slice(session, None)
 
 
+async def solo_pool_slice(factory):
+    async with factory() as session, session.begin():
+        return await integrity_audit._solo_pool_slice(session, None)
+
+
 async def run(args) -> dict:
     factory, engine = await create_test_db()
     try:
@@ -160,6 +166,7 @@ async def run(args) -> dict:
         seeded = perf_counter() - seeded
 
         sliced, slice_cost = await ticked(games_slice(factory))
+        pooled, pool_cost = await ticked(solo_pool_slice(factory))
         walked, walk_cost = await ticked(verify_stored_drawings(
             factory,
             batch_size=integrity_audit.DRAWING_SLICE_ROWS,
@@ -170,6 +177,12 @@ async def run(args) -> dict:
             "games_slice": {
                 "games": sliced.rows, "shape": f"{args.seats} seats x {args.rounds} rounds",
                 "mismatches": len(sliced.mismatches), **slice_cost,
+            },
+            # The same games through the Solo pool's check (#1434): its
+            # expected rows are `pool_query` over their facts, compared by the
+            # database, so its cost is the query's, not the loop's.
+            "solo_pool_slice": {
+                "games": pooled.rows, "mismatches": len(pooled.mismatches), **pool_cost,
             },
             "drawings_walk": {
                 "drawings": walked.checked, "frame_bytes": len(frame),

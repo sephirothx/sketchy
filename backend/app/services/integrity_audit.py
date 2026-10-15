@@ -90,7 +90,7 @@ from app.domain_values import AccountState, AuditTargetType
 from app.services.drawing_storage import DrawingCursor, verify_stored_drawings
 from app.services.gallery_ranking import aware, hot_score
 from app.services.readiness import LoopHealth
-from app.services.solo_pool import pool_query, pool_row
+from app.services.solo_pool import pool_query
 from app.services.user_stats_projection import _rebuild_accounts
 
 logger = logging.getLogger(__name__)
@@ -479,7 +479,11 @@ async def _alias_chains_slice(session: AsyncSession, cursor: str | None) -> Slic
 
 async def _solo_pool_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
     """A slice of games, their `solo_pool` rows against `pool_query` over
-    their facts. A drift is a rebuild away (`python -m app.services.solo_pool`)."""
+    their facts, compared by the database both ways (`EXCEPT`), so only the
+    turns that disagree come back - the loop never walks the rows (#1251).
+    `sample_key` is not compared: it orders the pool, and a wrong one serves
+    a drawing at a different moment, which nobody can tell from a right one.
+    A drift is a rebuild away (`python -m app.services.solo_pool`)."""
     await _one_snapshot(session)
     statement = select(GameRecord.id).order_by(GameRecord.id).limit(GAME_SLICE_ROWS)
     if cursor:
@@ -487,33 +491,30 @@ async def _solo_pool_slice(session: AsyncSession, cursor: str | None) -> SliceRe
     game_ids = list((await session.scalars(statement)).all())
     if not game_ids:
         return SliceResult(complete=True)
-    expected = {
-        row.turn_id: pool_row(row)
-        for row in (
-            await session.execute(pool_query().where(TurnRecord.game_id.in_(game_ids)))
-        ).all()
+    expected = pool_query().where(TurnRecord.game_id.in_(game_ids))
+    stored = select(
+        SoloPoolEntry.turn_id,
+        SoloPoolEntry.game_id,
+        SoloPoolEntry.concept_id,
+        SoloPoolEntry.prompt_version_id,
+        SoloPoolEntry.drawer_user_id,
+        SoloPoolEntry.guesser_count,
+        SoloPoolEntry.correct_count,
+        SoloPoolEntry.finished_at,
+    ).where(SoloPoolEntry.game_id.in_(game_ids))
+    wrong_or_missing = {
+        row[0] for row in (await session.execute(expected.except_(stored))).all()
     }
-    stored = {
-        row.turn_id: row
-        for row in (
-            await session.scalars(select(SoloPoolEntry).where(SoloPoolEntry.game_id.in_(game_ids)))
-        ).all()
+    wrong_or_extra = {
+        row[0] for row in (await session.execute(stored.except_(expected))).all()
     }
     result = SliceResult(rows=len(game_ids), cursor=str(game_ids[-1]))
-    for turn_id in sorted(set(expected) | set(stored)):
-        want, have = expected.get(turn_id), stored.get(turn_id)
-        if have is None:
-            kind = "missing"
-        elif want is None:
-            kind = "unexpected"
-        elif any(
-            (aware(getattr(have, key)) if key == "finished_at" else getattr(have, key))
-            != (aware(value) if key == "finished_at" else value)
-            for key, value in want.items()
-        ):
-            kind = "stale"
-        else:
-            continue
+    for turn_id in sorted(wrong_or_missing | wrong_or_extra):
+        kind = (
+            "stale"
+            if turn_id in wrong_or_missing and turn_id in wrong_or_extra
+            else "missing" if turn_id in wrong_or_missing else "unexpected"
+        )
         result.mismatches.append(
             Mismatch("solo_pool", str(turn_id), kind, AuditTargetType.DRAWING.value)
         )
