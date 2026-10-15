@@ -24,7 +24,7 @@ from app.api.profiles import create_profile_router, profile_limiter
 from app.api.solo import create_solo_router, drawing_limiter, run_limiter, serve_limiter
 from app.api.user_settings import create_user_settings_router
 from app.auth.middleware import SessionAuthMiddleware
-from app.db.models import PlayerReport, SoloGalleryShare
+from app.db.models import PlayerReport, SoloGalleryShare, TurnDrawing
 from app.repositories.solo import SoloRepository
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -172,6 +172,43 @@ async def test_a_daily_drawing_s_share_waits_until_the_day_has_ended_everywhere(
     async with factory() as session:
         [share] = (await session.scalars(select(SoloGalleryShare))).all()
     assert share.release_at is None
+
+
+async def test_a_held_share_outlives_a_hide_and_comes_back_with_the_unhide(env):
+    """Shares already in the Gallery survive a moderator's hide; a held one
+    is released into it rather than lost, and its drawer is not told of a
+    share nobody can see (#1494 review)."""
+    http, users, history, solo, factory = env
+    drawer = await player(users, factory, "Drawer")
+    seats = [await player(users, factory, f"Guesser{i}") for i in range(2)]
+    for index in range(5):
+        concept = await seed_concept(factory, {"zxx": f"Name{index}"})
+        await record_turn(
+            history, drawer=drawer.id, guessers=[seat.id for seat in seats],
+            version_id=concept.versions["zxx"],
+        )
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    today = datetime.now(timezone.utc).date().isoformat()
+    first = (await http.post(f"/api/solo/daily/{today}")).json()["serves"][0]
+    await http.post(f"/api/solo/serves/{first['serveId']}/result", json={"outcome": "solved", "seconds": 2})
+    held = (await http.put(f"/api/solo/serves/{first['serveId']}/share")).json()
+    async with factory() as session, session.begin():
+        [share] = (await session.scalars(select(SoloGalleryShare))).all()
+        drawing = await session.get(TurnDrawing, share.turn_id)
+        drawing.gallery_hidden_at = datetime.now(timezone.utc)
+
+    later = datetime.fromisoformat(held["heldUntil"]) + timedelta(minutes=1)
+    assert int(await release_held_solo_shares(factory, now=later)) == 1
+    assert (await http.get("/api/gallery")).json()["entries"] == []
+    await sign_in_as(http, factory, drawer.id)
+    assert (await http.get("/api/inbox")).json()["entries"] == []
+
+    async with factory() as session, session.begin():
+        drawing = await session.get(TurnDrawing, share.turn_id)
+        drawing.gallery_hidden_at = None
+    [entry] = (await http.get("/api/gallery")).json()["entries"]
+    assert entry["sharedBy"]["displayName"] == stranger.display_name
 
 
 async def test_the_drawer_s_opt_out_and_take_out_close_solo_from_the_next_request(env):

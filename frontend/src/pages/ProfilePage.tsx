@@ -425,6 +425,7 @@ function GameRow({
                         }
                       : null;
                   },
+                  inGallery: turn.inGallery,
                 })}
                 onShare={(shared) => shareTurn(turn.id, shared)}
               />

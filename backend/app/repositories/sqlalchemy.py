@@ -842,8 +842,9 @@ async def release_held_solo_shares(
     erasure barrier's order, as every share write takes it: the accounts -
     the drawer's and the sharers' - shared and ascending, then the drawing
     row (#1494 review). A share whose drawing was taken out of the Gallery or
-    stopped being shareable meanwhile goes instead. A retention-loop sweep,
-    so it runs hourly and reports like one."""
+    stopped being shareable meanwhile goes instead; one whose drawing a
+    moderator hid is released into the hide with the shares already there.
+    A retention-loop sweep, so it runs hourly and reports like one."""
     from app.services.sweeps import SweepReport
 
     moment = now or datetime.now(timezone.utc)
@@ -897,9 +898,12 @@ async def release_held_solo_shares(
                     SoloGalleryShare.release_at.is_not(None),
                     SoloGalleryShare.release_at <= moment,
                 )
+                # A hide keeps the shares made before it, held ones included:
+                # released, they stay out of sight with the rest until an
+                # unhide brings them all back (R-GAL-09).
                 if (
                     drawing_row is None
-                    or not _shareable(drawing_row, turn)
+                    or not _shareable(drawing_row, turn, hidden_ok=True)
                     or not _may_share(
                         is_drawer=False,
                         visibility=turn.game.visibility,
@@ -916,8 +920,10 @@ async def release_held_solo_shares(
                 released += result.rowcount or 0
                 await refresh_share_projection(session, drawing_row)
                 # The drawer's bell reads it on its next look (R-INBOX-03); a
-                # sweep has no socket to push from.
-                await _leave_share_notice(session, turn, now=moment)
+                # sweep has no socket to push from. Not for a hidden drawing,
+                # which nobody can see shared.
+                if drawing_row.gallery_hidden_at is None:
+                    await _leave_share_notice(session, turn, now=moment)
     async with session_factory() as session:
         oldest = await session.scalar(
             select(func.min(SoloGalleryShare.release_at)).where(
@@ -1040,15 +1046,16 @@ def _may_share(*, is_drawer: bool, visibility: str, withdrawn: bool) -> bool:
     return visibility == GameVisibility.PUBLIC.value and not withdrawn
 
 
-def _shareable(drawing: TurnDrawing | None, turn: TurnRecord) -> bool:
+def _shareable(drawing: TurnDrawing | None, turn: TurnRecord, *, hidden_ok: bool = False) -> bool:
     """A drawing that can go in the Gallery at all: kept, readable, not hidden
     by a moderator, and not blank - an empty canvas from an abandoned turn is
-    nothing anyone meant to show (R-SHARE-03)."""
+    nothing anyone meant to show (R-SHARE-03). `hidden_ok` for a share made
+    before the hide: shares outlive a hide and come back with the unhide."""
     return (
         drawing is not None
         and drawing.status == TurnDrawingStatus.READY.value
         and drawing.checksum_sha256 is not None
-        and drawing.gallery_hidden_at is None
+        and (hidden_ok or drawing.gallery_hidden_at is None)
         and turn.stroke_count > 0
     )
 
