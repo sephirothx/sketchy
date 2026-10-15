@@ -113,13 +113,14 @@ export const LEGAL_FR: LegalDocuments = {
             "sauf si tu partages les tiens.",
           "Dans Solo, un joueur qui n'était pas dans une partie publique peut " +
             "se voir montrer l'un des dessins de cette partie à deviner, sans " +
-            "nom, image ni lien vers la personne qui l'a dessiné. Ce joueur " +
-            "n'apprend de qui il est que s'il le partage dans la Galerie, où il " +
-            "apparaît sous le nom sous lequel il a été dessiné. Dans les " +
-            "Paramètres, tu peux empêcher Solo de montrer tes dessins publics, " +
-            "ou retirer un seul dessin depuis ton historique des parties ; un " +
-            "dessin fait en tant qu'invité est montré de la même façon, et peut " +
-            "être retiré une fois que tu as un compte.",
+            "nom, image ni lien vers la personne qui l'a dessiné. Solo ne lui " +
+            "dit jamais de qui il est ; mais un dessin qui est dans la Galerie, " +
+            "y compris un dessin que ce joueur y partage, y apparaît sous le " +
+            "nom sous lequel il a été dessiné. Dans les Paramètres, tu peux " +
+            "empêcher Solo de montrer tes dessins publics, ou retirer un seul " +
+            "dessin depuis ton historique des parties ; un dessin fait en tant " +
+            "qu'invité est montré de la même façon, et peut être retiré une " +
+            "fois que tu as un compte.",
           "Supprimer ton compte efface tous tes dessins, sauf une copie jointe " +
             "à un signalement, qui reste avec lui ; pour en faire effacer un " +
             "seul, écris à {contact}.",

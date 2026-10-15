@@ -9,7 +9,9 @@ import { CopyIcon, FlagIcon, ImageIcon, UserIcon } from "../components/icons";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { ApiError } from "../lib/api";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
+import { formatDate } from "../lib/clock";
 import { decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHistory";
 import { judge } from "../lib/guessJudge";
 import { reactionEligibility } from "../lib/reactions";
@@ -18,6 +20,7 @@ import {
   decodeSoloForms,
   fetchActiveFreeRun,
   fetchSoloDrawing,
+  fetchSoloRun,
   fetchSoloSummary,
   localDateKey,
   openDaily,
@@ -73,6 +76,8 @@ export function SoloPage() {
   // player can do with it now.
   const [card, setCard] = useState<SoloServe | null>(null);
   const [summaryOf, setSummaryOf] = useState<SoloRun | null>(null);
+  // The best for the run's length before it ended: a new best beats it.
+  const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const today = localDateKey();
 
   const loadSummary = useCallback(async () => {
@@ -120,39 +125,90 @@ export function SoloPage() {
 
   const settled = async (serve: SoloServe, outcome: SoloOutcome, seconds: number) => {
     if (!run) return;
-    const answer = await settleServe(serve.serveId, outcome, seconds);
+    let answer: { serve: SoloServe; run: SoloRun };
+    try {
+      answer = await settleServe(serve.serveId, outcome, seconds);
+    } catch (failure) {
+      // A report that reached the server and lost its answer is refused the
+      // second time (R-SOLO-06), and so is one for a run ended in another
+      // tab: the server's run says which it was.
+      if (!(failure instanceof ApiError) || (failure.status !== 404 && failure.status !== 409)) throw failure;
+      const fresh = await fetchSoloRun(run.runId).catch(() => null);
+      const kept = fresh?.serves.find((candidate) => candidate.serveId === serve.serveId);
+      if (!fresh || !kept || kept.outcome === null) throw failure;
+      answer = { serve: kept, run: fresh };
+    }
     forgetServeStart(serve.serveId);
-    setRun((current) =>
-      current
-        ? {
-            ...answer.run,
-            // The server's run lists what it served; a drawing this page holds
-            // ready that the server has not dropped stays.
-            serves: answer.run.serves,
-          }
-        : current,
-    );
+    setRun((current) => (current?.runId === answer.run.runId ? answer.run : current));
     setCard(answer.serve);
   };
 
   const next = async () => {
-    if (!run) return;
-    setCard(null);
+    if (!run || busy) return;
     if (run.state !== "active") {
+      const key = run.length === null ? "unlimited" : run.length === 5 ? "5" : "10";
+      setPreviousBest(summary?.bests[key]);
+      setCard(null);
       setSummaryOf(run);
       setRun(null);
       void loadSummary();
       return;
     }
-    if (run.mode === "free" && !run.serves.some((serve) => serve.outcome === null)) {
-      try {
-        const served = await serveNext(run.runId, 2);
-        setRun({ ...run, serves: [...run.serves, ...served] });
-      } catch (failure) {
-        setError(refusalText(failure, ui.solo.couldNotLoad));
-        setRun(null);
-        void loadSummary();
-      }
+    const open = run.serves.filter((serve) => serve.outcome === null).length;
+    if (run.mode !== "free" || open > 0) {
+      setCard(null);
+      // One held ready and none behind it: the next is fetched while this
+      // one is played, so it is on screen the moment it is needed.
+      if (run.mode === "free" && open === 1) void topUp(run.runId, 1);
+      return;
+    }
+    // Nothing held ready: the card stays, and nothing else can start, until
+    // the next drawing is here.
+    setBusy(true);
+    try {
+      const served = await serveNext(run.runId, 2);
+      setRun((current) =>
+        current?.runId === run.runId ? { ...current, serves: [...current.serves, ...served] } : current,
+      );
+      setCard(null);
+    } catch (failure) {
+      setError(refusalText(failure, ui.solo.couldNotLoad));
+      setCard(null);
+      setRun(null);
+      void loadSummary();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const topUp = async (runId: string, count: 1 | 2) => {
+    try {
+      const served = await serveNext(runId, count);
+      setRun((current) =>
+        current?.runId === runId
+          ? {
+              ...current,
+              serves: [
+                ...current.serves,
+                ...served.filter((serve) => !current.serves.some((held) => held.serveId === serve.serveId)),
+              ],
+            }
+          : current,
+      );
+    } catch {
+      // Nothing more to hold ready: Next asks again when it is needed.
+    }
+  };
+
+  // Today's Daily, after a 404 on one of its drawings: the set may have
+  // replaced it for everybody (R-SOLO-13), which opening it again picks up.
+  const reopenDaily = async () => {
+    if (!run || run.mode !== "daily" || !run.dailyDate) return;
+    try {
+      const fresh = await openDaily(run.dailyDate);
+      setRun((current) => (current?.runId === fresh.runId ? fresh : current));
+    } catch {
+      // The drawing stays as it is, and can be given up.
     }
   };
 
@@ -190,6 +246,7 @@ export function SoloPage() {
           run={run}
           serve={card}
           onNext={() => void next()}
+          busy={busy}
           registered={Boolean(user && !user.isAnonymous)}
         />
       ) : run && playing ? (
@@ -199,11 +256,12 @@ export function SoloPage() {
           serve={playing}
           upcoming={run.serves.find((serve) => serve.outcome === null && serve !== playing) ?? null}
           onSettle={(outcome, seconds) => settled(playing, outcome, seconds)}
+          onMissing={() => void reopenDaily()}
         />
       ) : summaryOf ? (
         <SoloSummaryView
           run={summaryOf}
-          summary={summary}
+          previousBest={previousBest}
           today={today}
           onBack={() => setSummaryOf(null)}
         />
@@ -370,7 +428,7 @@ function SoloHome({
             <ol>
               {(summary?.history ?? []).slice(0, 14).map((day) => (
                 <li key={day.date} className="solo-history-day">
-                  <span className="solo-history-date">{day.date}</span>
+                  <span className="solo-history-date">{dayLabel(day.date)}</span>
                   <DailyMarks result={day} />
                   <span className="solo-history-points">{ui.solo.pointsValue({ points: day.points })}</span>
                 </li>
@@ -383,11 +441,31 @@ function SoloHome({
   );
 }
 
+/** A Daily's date, `YYYY-MM-DD`, in the reader's own words. */
+function dayLabel(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return formatDate(new Date(year, month - 1, day));
+}
+
+/** A Daily's result as the run that played it reads, before the server's
+    summary has caught up: one mark per drawing settled. */
+function resultOf(run: SoloRun): SoloDailyResult {
+  const played = run.serves.filter((serve) => serve.outcome !== null);
+  return {
+    date: run.dailyDate ?? "",
+    positionsPlayed: played.length,
+    solved: run.solved,
+    points: run.points,
+    completed: played.length >= 5,
+    marks: played.map((serve) => ({ outcome: serve.outcome as SoloOutcome, seconds: 0, late: false })),
+  };
+}
+
 /** One square per drawing of a Daily: named, missed, or still to play. */
 function DailyMarks({ result }: { result: SoloDailyResult }) {
   const marks = dailyMarks(result);
   return (
-    <span className="solo-marks" aria-label={ui.solo.youNamed({ solved: result.solved, total: 5 })}>
+    <span className="solo-marks" role="img" aria-label={ui.solo.youNamed({ solved: result.solved, total: 5 })}>
       {marks.map((mark, index) => (
         <span key={index} className={`solo-mark is-${mark}`} aria-hidden="true" />
       ))}
@@ -446,21 +524,28 @@ function SoloPlay({
   serve,
   upcoming,
   onSettle,
+  onMissing,
 }: {
   run: SoloRun;
   serve: SoloServe;
   upcoming: SoloServe | null;
   onSettle: (outcome: SoloOutcome, seconds: number) => Promise<void>;
+  onMissing: () => void;
 }) {
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [fraction, setFraction] = useState(0);
   const [guess, setGuess] = useState("");
   const [feedback, setFeedback] = useState<{ text: string; tone: "close" | "miss" } | null>(null);
+  // What the player decided and the server has not yet taken, to send again.
+  const [unsaved, setUnsaved] = useState<{ outcome: SoloOutcome; seconds: number } | null>(null);
   const settling = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
   const target = useMemo(() => (serve.forms ? decodeSoloForms(serve.serveId, serve.forms) : null), [serve]);
+  const upcomingId = upcoming?.serveId ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -472,20 +557,35 @@ function SoloPlay({
           setFailed(true);
           return;
         }
-        const start = serveStartedAt(serve.serveId);
+        const start = serveStartedAt(serve.serveId, serve.forms ?? "");
+        setFailed(false);
         setActions(decoded);
         setStartedAt(start);
         setFraction(Math.min(1, (Date.now() - start) / 1000 / SOLO_REPLAY_SECONDS));
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((failure) => {
+        if (cancelled) return;
+        setFailed(true);
+        // Gone for everybody: a Daily may have a replacement to pick up.
+        if (failure instanceof ApiError && failure.status === 404) onMissing();
       });
-    // The next one, so it is on screen the moment this one is over.
-    if (upcoming) void fetchSoloDrawing(upcoming.serveId).catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [serve.serveId, upcoming]);
+    // onMissing is the parent's, recreated each render; a new attempt or a
+    // new drawing is what fetches again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serve.serveId, serve.forms, attempt]);
+
+  // The next one, so it is on screen the moment this one is over.
+  useEffect(() => {
+    if (upcomingId) void fetchSoloDrawing(upcomingId).catch(() => undefined);
+  }, [upcomingId]);
+
+  // The field is the player's attention once there is something to guess.
+  useEffect(() => {
+    if (actions) input.current?.focus();
+  }, [actions]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 200);
@@ -495,27 +595,36 @@ function SoloPlay({
   const elapsed = startedAt === null ? 0 : Math.max(0, (now - startedAt) / 1000);
   const remaining = Math.max(0, SOLO_CLOCK_SECONDS - elapsed);
 
-  const settle = useCallback(
-    async (outcome: SoloOutcome, seconds: number) => {
-      if (settling.current) return;
-      settling.current = true;
-      try {
-        await onSettle(outcome, Math.min(SOLO_CLOCK_SECONDS, seconds));
-      } catch {
-        settling.current = false;
-      }
-    },
-    [onSettle],
-  );
-
+  const onSettleRef = useRef(onSettle);
   useEffect(() => {
-    if (startedAt !== null && remaining <= 0) void settle("timed_out", SOLO_CLOCK_SECONDS);
-  }, [remaining, startedAt, settle]);
+    onSettleRef.current = onSettle;
+  }, [onSettle]);
+
+  const settle = useCallback(async (outcome: SoloOutcome, seconds: number) => {
+    if (settling.current) return;
+    settling.current = true;
+    const decided = { outcome, seconds: Math.min(SOLO_CLOCK_SECONDS, Math.max(0, seconds)) };
+    try {
+      await onSettleRef.current(decided.outcome, decided.seconds);
+    } catch {
+      // Said, with the way to send it again: the decision stands.
+      setUnsaved(decided);
+      settling.current = false;
+    }
+  }, []);
+
+  const timedOut = startedAt !== null && remaining <= 0;
+  useEffect(() => {
+    if (!timedOut) return;
+    // Out of the render that noticed it: the report may say it failed.
+    const timer = window.setTimeout(() => void settle("timed_out", SOLO_CLOCK_SECONDS), 0);
+    return () => window.clearTimeout(timer);
+  }, [timedOut, settle]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const text = guess.trim();
-    if (!text || !target || startedAt === null) return;
+    if (!text || !target || startedAt === null || timedOut || unsaved) return;
     const verdict = judge(text, target);
     if (verdict === "correct") {
       void settle("solved", elapsed);
@@ -558,13 +667,35 @@ function SoloPlay({
             label={ui.solo.solo}
           />
         ) : failed ? (
-          <p className="solo-note">{ui.solo.couldNotLoadDrawing}</p>
+          <div className="solo-canvas-failed">
+            <p className="solo-note">{ui.solo.couldNotLoadDrawing}</p>
+            <button type="button" className="btn btn-secondary btn-compact" onClick={() => setAttempt((count) => count + 1)}>
+              {ui.solo.tryAgain}
+            </button>
+          </div>
         ) : (
-          <div className="gallery-post-skeleton" />
+          <div className="solo-canvas-skeleton" />
         )}
       </div>
+      {unsaved && (
+        <div className="solo-unsaved" role="alert" data-testid="solo-unsaved">
+          <span>{ui.solo.couldNotSaveAnswer}</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-compact"
+            onClick={() => {
+              const decided = unsaved;
+              setUnsaved(null);
+              void settle(decided.outcome, decided.seconds);
+            }}
+          >
+            {ui.solo.tryAgain}
+          </button>
+        </div>
+      )}
       <form className="solo-guess" onSubmit={submit}>
         <input
+          ref={input}
           type="search"
           className="solo-guess-input"
           data-testid="solo-guess"
@@ -576,20 +707,21 @@ function SoloPlay({
           maxLength={64}
           placeholder={ui.solo.typeYourGuess}
           aria-label={ui.solo.typeYourGuess}
-          disabled={!actions}
+          disabled={!actions || timedOut || unsaved !== null}
           onChange={(change) => setGuess(change.target.value)}
           // A new guess is the player's attention; the last verdict goes.
           onFocus={() => setFeedback(null)}
-          autoFocus
         />
-        <button type="submit" className="btn btn-primary" disabled={!actions || !guess.trim()}>
+        <button type="submit" className="btn btn-primary" disabled={!actions || !guess.trim() || timedOut || unsaved !== null}>
           {ui.solo.guess}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           data-testid="solo-give-up"
-          disabled={!actions}
+          // A drawing that will not load can still be given up: it is the
+          // only way past one that stopped being served (R-SOLO-13).
+          disabled={(!actions && !failed) || timedOut || unsaved !== null}
           onClick={() => void settle("given_up", elapsed)}
         >
           {ui.solo.giveUp}
@@ -615,13 +747,21 @@ function SoloCard({
   run,
   serve,
   onNext,
+  busy,
   registered,
 }: {
   run: SoloRun;
   serve: SoloServe;
   onNext: () => void;
+  busy: boolean;
   registered: boolean;
 }) {
+  // The field the player was typing in is gone: the verdict takes focus, so
+  // a screen reader says what the drawing came to.
+  const verdict = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    verdict.current?.focus();
+  }, []);
   const { notify } = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [mine, setMine] = useState<string | null>(null);
@@ -641,7 +781,12 @@ function SoloCard({
   return (
     <div className="solo-result" data-testid="solo-card">
       <div className="surface-card solo-result-card">
-        <p className={`solo-verdict${solved ? " is-solved" : " is-missed"}`} data-testid="solo-verdict">
+        <p
+          ref={verdict}
+          tabIndex={-1}
+          className={`solo-verdict${solved ? " is-solved" : " is-missed"}`}
+          data-testid="solo-verdict"
+        >
           {solved ? ui.solo.gotIt : serve.outcome === "timed_out" ? ui.solo.timeUp : ui.solo.gaveUp}
         </p>
         <p className="solo-it-was">{ui.solo.itWas}</p>
@@ -689,7 +834,7 @@ function SoloCard({
         </div>
         {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{ui.solo.shareHeld}</p>}
         {share?.shareWithdrawn && <p className="solo-note">{ui.solo.shareTakenOut}</p>}
-        <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" onClick={onNext}>
+        <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" disabled={busy} onClick={onNext}>
           {over ? ui.solo.seeResult : ui.solo.next}
         </button>
       </div>
@@ -703,28 +848,34 @@ function SoloCard({
 /** A run that is over: what it came to, the best, and for a Daily its result to copy. */
 function SoloSummaryView({
   run,
-  summary,
+  previousBest,
   today,
   onBack,
 }: {
   run: SoloRun;
-  summary: SoloSummary | null;
+  previousBest: number | undefined;
   today: string;
   onBack: () => void;
 }) {
   const settledCount = run.serves.filter((serve) => serve.outcome !== null).length;
-  const result = run.mode === "daily" && summary?.today.date === today ? summary.today.result : null;
-  const key = run.length === null ? "unlimited" : run.length === 5 ? "5" : "10";
-  const best = run.mode === "free" ? summary?.bests[key] : undefined;
+  const result = run.mode === "daily" && run.dailyDate === today ? resultOf(run) : null;
   const value = run.length === null ? run.solved : run.points;
+  // Beaten, not tied: a run that only equals the best is not a new one.
+  const newBest = run.mode === "free" && value > 0 && value > (previousBest ?? 0);
+  const heading = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   return (
     <div className="solo-summary" data-testid="solo-summary">
       <div className="surface-card solo-result-card">
-        <p className="solo-verdict is-solved">{run.mode === "daily" ? ui.solo.dailyComplete : ui.solo.runOver}</p>
+        <p ref={heading} tabIndex={-1} className="solo-verdict is-solved">
+          {run.mode === "daily" ? ui.solo.dailyComplete : ui.solo.runOver}
+        </p>
         <h1 className="solo-prompt">{ui.solo.totalPoints({ points: run.points })}</h1>
         <p className="solo-it-was">{ui.solo.youNamed({ solved: run.solved, total: settledCount })}</p>
         {result && <DailyMarks result={result} />}
-        {best !== undefined && best === value && value > 0 && (
+        {newBest && (
           <p className="chip chip-warm solo-new-best" data-testid="solo-new-best">{ui.solo.newBest}</p>
         )}
         <div className="solo-result-actions">

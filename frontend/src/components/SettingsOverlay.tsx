@@ -526,7 +526,8 @@ function SoloOptOutGroup() {
         if (!cancelled) setAllowed(!(settings.soloOptOut ?? false));
       })
       .catch(() => {
-        if (!cancelled) setAllowed(true);
+        // Unknown is not "allowed": a switch showing the wrong answer to an
+        // account that said no is worse than no switch until the next open.
       });
     return () => {
       cancelled = true;
@@ -543,7 +544,7 @@ function SoloOptOutGroup() {
           setAllowed(next);
           void setSoloOptOut(!next).catch((failure) => {
             setAllowed(!next);
-            notify(refusalText(failure, ui.solo.couldNotLoad), "error");
+            notify(refusalText(failure, ui.dialog.couldNotSave), "error");
           });
         }}
       />

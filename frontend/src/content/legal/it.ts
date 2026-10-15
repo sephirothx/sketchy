@@ -111,10 +111,11 @@ export const LEGAL_IT: LegalDocuments = {
           "In Solo, a un giocatore che non era in una partita pubblica può " +
             "essere mostrato uno dei disegni di quella partita da indovinare, " +
             "senza il nome, l'immagine o alcun collegamento a chi l'ha " +
-            "disegnato. Scopre di chi è solo se lo condivide nella Galleria, " +
-            "dove compare con il nome con cui è stato disegnato. Nelle " +
-            "Impostazioni puoi fare in modo che Solo non mostri nessuno dei tuoi " +
-            "disegni pubblici, oppure, dalla tua cronologia delle partite, " +
+            "disegnato. Solo non gli dice mai di chi è; ma un disegno che si " +
+            "trova nella Galleria, compreso uno che quel giocatore vi " +
+            "condivide, compare con il nome con cui è stato disegnato. Nelle " +
+            "Impostazioni puoi fare in modo che Solo non mostri nessuno dei " +
+            "tuoi disegni pubblici, oppure, dalla tua cronologia delle partite, " +
             "togliere da Solo un singolo disegno; un disegno fatto come ospite " +
             "viene mostrato allo stesso modo, e può essere tolto una volta che " +
             "hai un account.",
