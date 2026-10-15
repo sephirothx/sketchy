@@ -55,18 +55,24 @@ def servable_clauses() -> tuple:
     change after the game and be undone, which is why the pool does not
     store it."""
     drawn = aliased(PromptVersion)
+    # Correlated to the pool row itself, never to the EXISTS it sits in:
+    # left to auto-correlation it ran once over the whole pool, refused two
+    # merged drawers on PostgreSQL ("more than one row") and pinned one
+    # account's opt-out on every row (#1491 review).
     canonical_drawer = func.coalesce(
         select(IdentityAlias.target_user_id)
         .where(IdentityAlias.source_user_id == SoloPoolEntry.drawer_user_id)
+        .correlate(SoloPoolEntry)
         .scalar_subquery(),
         SoloPoolEntry.drawer_user_id,
     )
     return (
         exists().where(
             TurnDrawing.turn_id == SoloPoolEntry.turn_id,
+            # Kept, by whatever stores it (`ck_turn_drawings_ready_identity`):
+            # the door reads the bytes, and answers 404 if there are none. An
+            # administrator's erasure is `deleted` by its own CHECK.
             TurnDrawing.status == TurnDrawingStatus.READY.value,
-            TurnDrawing.payload.is_not(None),
-            TurnDrawing.moderation_erased_at.is_(None),
             # A moderator's hide is a judgement about strangers seeing it
             # (R-GAL-09), which is all Solo is.
             TurnDrawing.gallery_hidden_at.is_(None),

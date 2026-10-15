@@ -377,3 +377,55 @@ async def test_the_integrity_audit_reports_a_pool_that_drifted_from_its_facts(en
         (third.turn_id, "stale"),
         (private.turn_id, "unexpected"),
     }
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"status": "deleted", "payload": None, "object_key": None, "checksum_sha256": None,
+         "byte_size": None, "format_magic": None, "format_version": None, "deleted_at": NOW},
+        {"status": "unavailable", "payload": None, "object_key": None, "checksum_sha256": None,
+         "byte_size": None, "format_magic": None, "format_version": None,
+         "unavailable_reason": "recap_budget"},
+    ],
+)
+async def test_a_drawing_no_longer_kept_is_not_served_even_while_its_row_stands(env, values):
+    # A rebuild racing an erasure can put a row back (#1491 review): serving
+    # asks the drawing itself, so the row standing serves nothing.
+    users, history, solo, factory = env
+    *_, stranger, _, recorded = await _cast(users, factory, history)
+    await _set_drawing(factory, recorded.turn_id, **values)
+    assert UUID(recorded.turn_id) in await _pool(factory)
+    assert await _served(solo, stranger) == set()
+
+
+async def test_each_drawer_s_opt_out_is_their_own_with_merged_and_plain_drawers_side_by_side(env):
+    # Two merged guests and a plain drawer: one alias row per guest, and the
+    # opt-out of one canonical account reaches that account's drawings alone
+    # (#1491 review - an uncorrelated alias lookup failed on PostgreSQL with
+    # two merged drawers and pinned one opt-out on every row).
+    users, history, solo, factory = env
+    guesser = await player(users, factory, "Guesser")
+    stranger = await player(users, factory, "Stranger")
+    plain = await player(users, factory, "Plain")
+    owners = [await player(users, factory, f"Owner{i}") for i in range(2)]
+    guests = [await users.create_anonymous(display_name=f"Visitor{i}") for i in range(2)]
+    concept = await seed_concept(factory, {"en": "lighthouse"})
+    turns = {}
+    for name, drawer in (("plain", plain), ("first", guests[0]), ("second", guests[1])):
+        turns[name] = (
+            await record_turn(
+                history, drawer=drawer.id, guessers=[guesser.id], version_id=concept.versions["en"]
+            )
+        ).turn_id
+    async with factory() as session:
+        async with session.begin():
+            for guest, owner in zip(guests, owners, strict=True):
+                session.add(
+                    IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(owner.id))
+                )
+    assert await _served(solo, stranger) == set(turns.values())
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(UserSettings, UUID(owners[0].id))).solo_opt_out = True
+    assert await _served(solo, stranger) == {turns["plain"], turns["second"]}
