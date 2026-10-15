@@ -458,6 +458,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
     from app.services.room_codes import purge_retired_room_codes
     from app.services.runtime_metrics import purge_expired_events
     from app.services.shutdown import purge_expired_shutdown_abandonments
+    from app.repositories.sqlalchemy import release_held_solo_shares
 
     return (
         Sweep(
@@ -488,6 +489,11 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             exempt="codes of the removed persistent-room feature, which never re-enter the pool",
         ),
         Sweep("runtime_events", purge_expired_events),
+        Sweep(
+            "solo_held_shares",
+            release_held_solo_shares,
+            exempt="nothing is removed: a share held for an open Daily is released, not deleted",
+        ),
         Sweep(
             "bug_report_screenshots",
             expire_stale_bug_report_screenshots,

@@ -168,3 +168,9 @@ def daily_streak(
             streak += 1
         day -= timedelta(days=1)
     return streak
+
+
+def daily_release_at(day: date) -> datetime:
+    """When `day` has ended everywhere: the moment a Solo share of one of its
+    drawings, held meanwhile, enters the Gallery."""
+    return datetime.combine(day + timedelta(days=1), time.min, tzinfo=timezone.utc) + DAY_EDGE

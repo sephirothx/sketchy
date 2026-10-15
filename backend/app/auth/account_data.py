@@ -64,6 +64,7 @@ from app.db.models import (
     RoomMessage,
     ScoreEvent,
     SoloBest,
+    SoloGalleryShare,
     SoloDailyResult,
     SoloRun,
     SoloServe,
@@ -1120,6 +1121,7 @@ async def _write_export_artifact(
             "promptLanguage": settings.prompt_language,
             "extraPromptLanguages": list(settings.extra_prompt_languages),
             "locale": settings.locale,
+            "soloOptOut": settings.solo_opt_out,
             "createdAt": _timestamp(settings.created_at),
             "updatedAt": _timestamp(settings.updated_at),
         }
@@ -1812,14 +1814,26 @@ async def anonymize_account(
                 TurnRecord.drawer_user_id.in_(identity_ids)
             )
             own_drawings = set((await session.scalars(erased_drawings)).all())
-            others_shared = set(
-                (
-                    await session.scalars(
-                        select(TurnDrawingShare.turn_id).where(
-                            TurnDrawingShare.user_id.in_(identity_ids)
+            others_shared = (
+                set(
+                    (
+                        await session.scalars(
+                            select(TurnDrawingShare.turn_id).where(
+                                TurnDrawingShare.user_id.in_(identity_ids)
+                            )
                         )
-                    )
-                ).all()
+                    ).all()
+                )
+                # And what they shared from Solo (#1434), held or not.
+                | set(
+                    (
+                        await session.scalars(
+                            select(SoloGalleryShare.turn_id).where(
+                                SoloGalleryShare.user_id.in_(identity_ids)
+                            )
+                        )
+                    ).all()
+                )
             ) - own_drawings
             others_pinned = set(
                 (
@@ -1929,6 +1943,14 @@ async def anonymize_account(
                     or_(
                         TurnDrawingShare.user_id.in_(identity_ids),
                         TurnDrawingShare.turn_id.in_(erased_drawings),
+                    )
+                )
+            )
+            await session.execute(
+                delete(SoloGalleryShare).where(
+                    or_(
+                        SoloGalleryShare.user_id.in_(identity_ids),
+                        SoloGalleryShare.turn_id.in_(erased_drawings),
                     )
                 )
             )
