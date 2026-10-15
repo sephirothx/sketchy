@@ -82,6 +82,7 @@ def upgrade() -> None:
         sa.Column("position", sa.SmallInteger(), nullable=False),
         sa.Column("prompt", sa.String(length=64), nullable=False),
         sa.Column("prompt_language", sa.String(length=8), nullable=False),
+        sa.Column("forms", sa.Text(), nullable=False),
         sa.Column("served_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("settled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("outcome", sa.String(length=12), nullable=True),

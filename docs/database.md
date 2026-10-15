@@ -2142,7 +2142,7 @@ a turn id, so nobody can steer by it.
 `length` (`5 \| 10`, or NULL for unlimited) · `daily_date` (the player's local date, a
 Daily only) · `state` (`active \| ended \| abandoned`) · `end_reason`
 (`completed \| missed \| abandoned`, set exactly when the run is not active) · `position`
-(drawings served) · `solved` · `points` · `started_at` · `ended_at`.
+(drawings served, those dropped unseen not counted) · `solved` · `points` · `started_at` · `ended_at`.
 
 One player's Solo run (#1434). Play is local, so this is what the server keeps of it.
 `uq_solo_runs_one_active_free` — unique on `user_id` where a free run is active — holds a
@@ -2157,17 +2157,22 @@ tombstone, so its CASCADE never fires), its serves with it.
 `user_id` (CASCADE; the run's, copied) · `turn_id` (CASCADE, indexed) · `position` (from 1;
 unique per run) · `prompt` · `prompt_language` (what the player is shown at the end, in
 the language it was shown in — kept, so a run's history reads the same after a list
-changes) · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
+changes) · `forms` (the `JudgeTarget` JSON the drawing is judged by, as served, so a
+resumed run hands back exactly that, whatever the player's languages have done since;
+never exported) · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
 `solve_seconds` (the client's clock, bounded to 30) · `points` (100–300, set exactly when
 solved).
 
 One drawing served in a run. The serve id exists because a turn id is a key to the
 drawing's Gallery entry, which names its drawer (R-SOLO-04). A row is settled once, by
 the first report (`ck_solo_serves_settled`, and the route refuses a second); the server
-derives `points` from `solve_seconds` (R-SOLO-06). `ix_solo_serves_user_turn` is the free
-runs' seen-exclusion and the repeat order (the drawing seen longest ago). A drawing held
-ready and never settled is deleted when its run ends: a player who never saw it was not
-served it. Kept for as long as the account (owner's decision): it is what keeps a player
+derives `points` from `solve_seconds` (R-SOLO-06). The free runs' seen-exclusion is an
+anti-join the planner serves from `ix_solo_serves_turn_id` with the player as a filter;
+the repeat order (the drawing seen longest ago, only once a player has seen the whole
+pool) aggregates the player's serves — measured at 15–22 ms over a 4,000-drawing pool
+(#1492 review), the first thing to move if pools reach the hundred thousands. A drawing
+held ready and never settled is deleted when its run ends, and the run's `position`
+goes back by it: a player who never saw it was not served it. Kept for as long as the account (owner's decision): it is what keeps a player
 from being served the same drawing twice.
 
 ---

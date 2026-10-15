@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, delete, exists, func, select
+from sqlalchemy import and_, delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
@@ -31,7 +32,9 @@ from sqlalchemy.orm import aliased
 from app.db.models import (
     GameParticipant,
     IdentityAlias,
+    Prompt,
     PromptAlias,
+    PromptList,
     PromptVersion,
     PromptVersionAlias,
     SoloPoolEntry,
@@ -45,6 +48,7 @@ from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
     AccountState,
     PromptContentModerationState,
+    PromptLanguage,
     TurnDrawingStatus,
 )
 from app.prompt_content import prompt_match_variants
@@ -106,10 +110,32 @@ def servable_clauses() -> tuple:
     )
 
 
+def _in_official_list(version):
+    """A version some official (bundled) list plays. The official catalogue
+    is what every language's wording of a concept is read from: a player's
+    own list rewording a concept in a private working copy - unmoderated,
+    unpublished - must not become what strangers are judged against
+    (#1492 review)."""
+    return exists().where(
+        Prompt.prompt_version_id == version.id,
+        Prompt.prompt_list_id == PromptList.id,
+        PromptList.is_bundled.is_(True),
+    )
+
+
+def offerable_version(version, drawn_version_id):
+    """A version Solo may judge a guess against and show at the end: playable,
+    and either the very one the drawer drew or one in an official list."""
+    return and_(
+        _playable_version(version),
+        or_(version.id == drawn_version_id, _in_official_list(version)),
+    )
+
+
 def servable_to_clauses(identity_ids: Sequence[UUID], languages: Sequence[str]) -> tuple:
     """What a pool row must also be for this player: from a game none of
-    their identities sat in, and a concept with a version they can guess -
-    one of their play languages, or none at all (`zxx`)."""
+    their identities sat in, and a concept with an offerable version they can
+    guess - in one of their play languages, or in none at all (`zxx`)."""
     offered = aliased(PromptVersion)
     return (
         ~exists().where(
@@ -119,7 +145,7 @@ def servable_to_clauses(identity_ids: Sequence[UUID], languages: Sequence[str]) 
         exists().where(
             offered.concept_id == SoloPoolEntry.concept_id,
             offered.language.in_([*languages, AGNOSTIC_PROMPT_LANGUAGE]),
-            _playable_version(offered),
+            offerable_version(offered, SoloPoolEntry.prompt_version_id),
         ),
     )
 
@@ -150,7 +176,14 @@ async def play_languages(session: AsyncSession, user_id: UUID) -> tuple[str, ...
             .where(UserSettings.user_id == user_id, User.state == AccountState.REGISTERED.value)
         )
     ).first()
-    return () if row is None else (row[0], *row[1])
+    if row is not None:
+        return (row[0], *row[1])
+    # A registered account with no settings row yet plays the default, as
+    # its settings would say once written (R-PROMPT-11).
+    registered = await session.scalar(
+        select(User.id).where(User.id == user_id, User.state == AccountState.REGISTERED.value)
+    )
+    return (PromptLanguage.ENGLISH.value,) if registered is not None else ()
 
 
 @dataclass(frozen=True)
@@ -201,11 +234,11 @@ class AnswerForms:
     prompt: str
     language: str
 
-    def encoded(self, serve_id) -> str:
-        return encode_answers(serve_id, json.dumps(self.target, ensure_ascii=False))
+    def text(self) -> str:
+        return json.dumps(self.target, ensure_ascii=False)
 
 
-def _run_view(run: SoloRun, serves: Sequence[SoloServe], forms: dict) -> RunView:
+def _run_view(run: SoloRun, serves: Sequence[SoloServe]) -> RunView:
     return RunView(
         run_id=str(run.id),
         mode=run.mode,
@@ -216,16 +249,17 @@ def _run_view(run: SoloRun, serves: Sequence[SoloServe], forms: dict) -> RunView
         solved=run.solved,
         points=run.points,
         daily_date=run.daily_date.isoformat() if run.daily_date else None,
-        serves=tuple(_serve_view(serve, forms.get(serve.id)) for serve in serves),
+        serves=tuple(_serve_view(serve) for serve in serves),
     )
 
 
-def _serve_view(serve: SoloServe, encoded: str | None) -> ServeView:
+def _serve_view(serve: SoloServe) -> ServeView:
     settled = serve.outcome is not None
     return ServeView(
         serve_id=str(serve.id),
         position=serve.position,
-        forms=encoded or "",
+        # Only while it is open: once settled, the prompt is said plainly.
+        forms="" if settled else encode_answers(serve.id, serve.forms),
         outcome=serve.outcome,
         points=serve.points,
         prompt=serve.prompt if settled else None,
@@ -233,18 +267,76 @@ def _serve_view(serve: SoloServe, encoded: str | None) -> ServeView:
     )
 
 
+class OfficialMeanings:
+    """What each spelling means in each language's official lists, for the
+    false-friend guard (#1367): language -> spelling -> concepts.
+
+    By every spelling `prompt_match_variants` accepts, not the stored key - a
+    guess is accepted on those, and German "Lüge" is "luge" too, the French
+    sled, which the canonical key `luege` never meets (#1492 review). Hidden
+    versions count, as in a mixed room: a hidden word still means what it
+    means. A text in no language (`zxx`) is every language's word too. Read
+    once per language and kept for `TTL_SECONDS`: the official catalogue is
+    seeded with a deploy, not edited while one runs.
+    """
+
+    TTL_SECONDS = 600.0
+
+    def __init__(self) -> None:
+        self._by_language: dict[str, tuple[float, dict[str, frozenset[UUID]]]] = {}
+
+    async def of(self, session: AsyncSession, language: str) -> dict[str, frozenset[UUID]]:
+        now = time.monotonic()
+        held = self._by_language.get(language)
+        if held is not None and now - held[0] < self.TTL_SECONDS:
+            return held[1]
+        official = (
+            select(Prompt.prompt_version_id)
+            .join(PromptList, PromptList.id == Prompt.prompt_list_id)
+            .where(PromptList.is_bundled.is_(True))
+        )
+        in_language = PromptVersion.language.in_([language, AGNOSTIC_PROMPT_LANGUAGE])
+        rows = (
+            await session.execute(
+                select(PromptVersion.concept_id, PromptVersion.canonical_answer)
+                .where(in_language, PromptVersion.id.in_(official))
+                .union_all(
+                    select(PromptVersion.concept_id, PromptAlias.answer)
+                    .join(PromptVersionAlias, PromptVersionAlias.prompt_version_id == PromptVersion.id)
+                    .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+                    .where(in_language, PromptVersion.id.in_(official))
+                )
+            )
+        ).all()
+        owners: dict[str, set[UUID]] = {}
+        for concept, text in rows:
+            for spelling in prompt_match_variants(text, language):
+                owners.setdefault(spelling, set()).add(concept)
+        found = {spelling: frozenset(concepts) for spelling, concepts in owners.items()}
+        self._by_language[language] = (now, found)
+        return found
+
+
 async def answer_forms(
-    session: AsyncSession, concept_id: UUID, languages: Sequence[str]
+    session: AsyncSession,
+    concept_id: UUID,
+    languages: Sequence[str],
+    *,
+    drawn_version_id: UUID | None,
+    meanings: OfficialMeanings,
 ) -> AnswerForms | None:
     """The concept as this player guesses it (#1434): right in any of their
     play languages.
 
-    An agnostic version (`zxx`) is the one answer in every fold. Otherwise
-    the player's first-ranked language that has the concept is their own -
-    what they are shown at the end - and the rest are the others, each folded
-    its own way. A spelling of another language that is a different concept
-    in the player's own is taken out (#1367's false-friend guard): German
-    "Hut" is a hat, and must not win an English hut.
+    Each language's wording is the version the drawer drew, in its language,
+    and otherwise the newest version an official list plays - never a
+    player's private rewording (#1492 review). An agnostic version (`zxx`) is
+    the one answer in every fold. Otherwise the player's first-ranked
+    language that has the concept is their own - what they are shown at the
+    end - and the rest are the others, each folded its own way. A spelling of
+    another language that is a different concept in the player's own official
+    lists is taken out (#1367's false-friend guard): German "Hut" is a hat,
+    and must not win an English hut.
     """
     rows = (
         await session.execute(
@@ -252,14 +344,17 @@ async def answer_forms(
             .where(
                 PromptVersion.concept_id == concept_id,
                 PromptVersion.language.in_([*languages, AGNOSTIC_PROMPT_LANGUAGE]),
-                _playable_version(PromptVersion),
+                offerable_version(PromptVersion, drawn_version_id),
             )
             .order_by(PromptVersion.language, PromptVersion.version.desc())
         )
     ).all()
     newest: dict[str, tuple[UUID, str]] = {}
     for version_id, language, text in rows:
-        newest.setdefault(language, (version_id, text))
+        if version_id == drawn_version_id:
+            newest[language] = (version_id, text)
+        else:
+            newest.setdefault(language, (version_id, text))
     if not newest:
         return None
     alias_rows = (
@@ -285,34 +380,14 @@ async def answer_forms(
     ranked = [language for language in languages if language in newest]
     own_language, other_languages = ranked[0], ranked[1:]
     others = {language: form(language) for language in other_languages}
-    candidates = {
-        spelling
-        for language, other in others.items()
-        for text in (other["prompt"], *other["aliases"])
-        for spelling in prompt_match_variants(text, language)
-    }
     taken: set[str] = set()
-    if candidates:
-        # Every version counts, hidden ones too, as in a mixed room: a
-        # hidden word still means what it means to the player.
-        meanings = (
-            await session.execute(
-                select(PromptVersion.canonical_answer).where(
-                    PromptVersion.language == own_language,
-                    PromptVersion.concept_id != concept_id,
-                    PromptVersion.match_key.in_(candidates),
-                )
-                .union(
-                    select(PromptAlias.answer).where(
-                        PromptAlias.language == own_language,
-                        PromptAlias.concept_id != concept_id,
-                        PromptAlias.match_key.in_(candidates),
-                    )
-                )
-            )
-        ).scalars().all()
-        for text in meanings:
-            taken |= prompt_match_variants(text, own_language) & candidates
+    if others:
+        meaning = await meanings.of(session, own_language)
+        for language, other in others.items():
+            for text in (other["prompt"], *other["aliases"]):
+                for spelling in prompt_match_variants(text, language):
+                    if meaning.get(spelling, frozenset()) - {concept_id}:
+                        taken.add(spelling)
     own = form(own_language)
     target = {
         "language": own_language,
@@ -323,9 +398,14 @@ async def answer_forms(
     return AnswerForms(target, own["prompt"], own_language)
 
 
+# How often a start that met another start's run tries again.
+START_ATTEMPTS = 4
+
+
 class SoloRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
+        self._meanings = OfficialMeanings()
 
     async def servable_turn_ids(
         self, user_id: str | UUID, *, after_key: int = -1, limit: int = 50
@@ -356,7 +436,7 @@ class SoloRepository:
         """A new free run, abandoning the one in play (#1434): a 5 or 10 run
         left unfinished records nothing; an unlimited one ends at the streak
         it reached, which is a result like any other."""
-        for attempt in range(2):
+        for attempt in range(START_ATTEMPTS):
             try:
                 async with self._session_factory() as session:
                     async with session.begin():
@@ -378,11 +458,11 @@ class SoloRepository:
                         )
                         session.add(run)
                         await session.flush()
-                        return _run_view(run, (), {})
+                        return _run_view(run, ())
             except IntegrityError:
-                # Two starts at once: the other one's run is in play now, and
-                # this one abandons it on the retry.
-                if attempt:
+                # Starts at once: another one's run is in play now, and this
+                # one abandons it on the retry.
+                if attempt == START_ATTEMPTS - 1:
                     raise SoloRefused("conflict") from None
         raise SoloRefused("conflict")
 
@@ -391,14 +471,16 @@ class SoloRepository:
         run.state = "ended" if unlimited else "abandoned"
         run.end_reason = "abandoned"
         run.ended_at = now
-        await self._drop_open_serves(session, run.id)
+        await self._drop_open_serves(session, run)
 
-    async def _drop_open_serves(self, session: AsyncSession, run_id: UUID) -> None:
+    async def _drop_open_serves(self, session: AsyncSession, run: SoloRun) -> None:
         """Serves fetched ahead and never settled go with a run that ends:
-        a drawing the player never saw is not one they were served."""
-        await session.execute(
-            delete(SoloServe).where(SoloServe.run_id == run_id, SoloServe.settled_at.is_(None))
+        a drawing the player never saw is not one they were served, and the
+        run's count of drawings served says so (#1492 review)."""
+        dropped = await session.execute(
+            delete(SoloServe).where(SoloServe.run_id == run.id, SoloServe.settled_at.is_(None))
         )
+        run.position -= dropped.rowcount or 0
 
     async def active_free_run(self, user_id: str) -> RunView | None:
         """The free run a player can continue, with what it served."""
@@ -427,29 +509,7 @@ class SoloRepository:
                 select(SoloServe).where(SoloServe.run_id == run.id).order_by(SoloServe.position)
             )
         ).all()
-        forms: dict[UUID, str] = {}
-        open_serves = [serve for serve in serves if serve.outcome is None]
-        if open_serves:
-            languages = await play_languages(session, player)
-            concepts = dict(
-                (
-                    await session.execute(
-                        select(SoloPoolEntry.turn_id, SoloPoolEntry.concept_id).where(
-                            SoloPoolEntry.turn_id.in_([serve.turn_id for serve in open_serves])
-                        )
-                    )
-                ).all()
-            )
-            for serve in open_serves:
-                concept = concepts.get(serve.turn_id)
-                found = (
-                    await answer_forms(session, concept, languages or (serve.prompt_language,))
-                    if concept is not None
-                    else None
-                )
-                if found is not None:
-                    forms[serve.id] = found.encoded(serve.id)
-        return _run_view(run, serves, forms)
+        return _run_view(run, serves)
 
     async def serve_next(
         self, user_id: str, run_id: str, *, count: int, now: datetime
@@ -488,11 +548,12 @@ class SoloRepository:
                     run.position += 1
                     serve = SoloServe(
                         run_id=run.id, user_id=player, turn_id=turn_id, position=run.position,
-                        prompt=forms.prompt, prompt_language=forms.language, served_at=now,
+                        prompt=forms.prompt, prompt_language=forms.language,
+                        forms=forms.text(), served_at=now,
                     )
                     session.add(serve)
                     await session.flush()
-                    served.append(_serve_view(serve, forms.encoded(serve.id)))
+                    served.append(_serve_view(serve))
                 if not served and room > 0:
                     raise SoloRefused("empty")
                 return served
@@ -513,7 +574,9 @@ class SoloRepository:
         Two bounded index walks on `sample_key`, never a sort of the pool."""
         player = ids[0]
         seen = exists().where(SoloServe.user_id == player, SoloServe.turn_id == SoloPoolEntry.turn_id)
-        base = select(SoloPoolEntry.turn_id, SoloPoolEntry.concept_id).where(
+        base = select(
+            SoloPoolEntry.turn_id, SoloPoolEntry.concept_id, SoloPoolEntry.prompt_version_id
+        ).where(
             *servable_clauses(), *servable_to_clauses(ids, languages)
         )
         start = random.randrange(SAMPLE_KEY_SPACE)
@@ -524,7 +587,10 @@ class SoloRepository:
                 )
             ).first()
             if row is not None:
-                forms = await answer_forms(session, row.concept_id, languages)
+                forms = await answer_forms(
+                    session, row.concept_id, languages,
+                    drawn_version_id=row.prompt_version_id, meanings=self._meanings,
+                )
                 if forms is not None:
                     return row.turn_id, forms
         last_seen = (
@@ -542,7 +608,10 @@ class SoloRepository:
         for statement in (repeat.where(~in_run), repeat):
             row = (await session.execute(statement.limit(1))).first()
             if row is not None:
-                forms = await answer_forms(session, row.concept_id, languages)
+                forms = await answer_forms(
+                    session, row.concept_id, languages,
+                    drawn_version_id=row.prompt_version_id, meanings=self._meanings,
+                )
                 if forms is not None:
                     return row.turn_id, forms
         return None
@@ -563,14 +632,23 @@ class SoloRepository:
         async with self._session_factory() as session:
             async with session.begin():
                 player = (await identity_ids(session, UUID(user_id)))[0]
-                serve = await session.get(SoloServe, _uuid(serve_id))
-                if serve is None or serve.user_id != player:
-                    raise SoloRefused("missing")
+                # The run first, locked, and the serve read again under it:
+                # an abandon that deleted an open serve meanwhile is a
+                # conflict, not an error (#1492 review).
                 run = await session.scalar(
-                    select(SoloRun).where(SoloRun.id == serve.run_id).with_for_update()
+                    select(SoloRun)
+                    .join(SoloServe, SoloServe.run_id == SoloRun.id)
+                    .where(SoloServe.id == _uuid(serve_id), SoloServe.user_id == player)
+                    .with_for_update(of=SoloRun)
                 )
-                await session.refresh(serve)
-                if serve.outcome is not None or run.state != "active":
+                if run is None:
+                    raise SoloRefused("missing")
+                serve = await session.scalar(
+                    select(SoloServe)
+                    .where(SoloServe.id == _uuid(serve_id))
+                    .execution_options(populate_existing=True)
+                )
+                if serve is None or serve.outcome is not None or run.state != "active":
                     raise SoloRefused("conflict")
                 earlier_open = await session.scalar(
                     select(func.count()).where(
@@ -602,14 +680,14 @@ class SoloRepository:
                     run.end_reason = "completed" if run.length is not None else "missed"
                     run.ended_at = now
                     await session.flush()
-                    await self._drop_open_serves(session, run.id)
+                    await self._drop_open_serves(session, run)
                 await session.flush()
                 serves = (
                     await session.scalars(
                         select(SoloServe).where(SoloServe.run_id == run.id).order_by(SoloServe.position)
                     )
                 ).all()
-                return _serve_view(serve, None), _run_view(run, serves, {})
+                return _serve_view(serve), _run_view(run, serves)
 
     # --- the fourth drawing door (R-HIST-16) -------------------------------
 

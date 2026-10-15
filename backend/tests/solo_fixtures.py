@@ -11,7 +11,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from app.db.models import PromptConcept, PromptVersion, UserSettings, generate_uuid
+from app.db.models import (
+    Prompt,
+    PromptConcept,
+    PromptList,
+    PromptVersion,
+    UserSettings,
+    generate_uuid,
+)
+from app.prompt_content import prompt_match_key
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -36,10 +44,14 @@ async def seed_concept(
     *,
     rating: str = "everyone",
     state: str = "active",
+    official: bool = True,
 ) -> Concept:
     """One concept with a version per language: `{"en": "lighthouse"}`, or
     `{"en": ("dog", "puppy")}` for an answer with aliases (aliases are not
-    stored here; the tests that need them build them themselves)."""
+    stored here; the tests that need them build them themselves). Each
+    version is in an official list of its language unless `official` is
+    false - Solo reads every language's wording from the official catalogue,
+    and a turn's own version besides."""
     concept = Concept(id=generate_uuid())
     async with factory() as session:
         async with session.begin():
@@ -55,12 +67,28 @@ async def seed_concept(
                         language=language,
                         version=1,
                         canonical_answer=text,
-                        match_key=text.lower().replace(" ", ""),
+                        match_key=prompt_match_key(text, language),
                         content_rating=rating,
                         moderation_state=state,
                     )
                 )
                 concept.versions[language] = version_id
+                if official:
+                    list_id = generate_uuid()
+                    session.add(
+                        PromptList(
+                            id=list_id, slug=f"solo-{list_id}", name=f"Official {list_id}",
+                            description="", language=language, version=1,
+                            is_bundled=True,
+                        )
+                    )
+                    await session.flush()
+                    session.add(
+                        Prompt(
+                            prompt_list_id=list_id, concept_id=concept.id,
+                            prompt_version_id=version_id, text=text,
+                        )
+                    )
     return concept
 
 

@@ -20,7 +20,11 @@ from app.api.errors import install_refusal_handler
 from app.api.solo import create_solo_router, drawing_limiter, run_limiter, serve_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.db.models import (
+    Prompt,
     PromptAlias,
+    PromptList,
+    PromptVersion,
+    UserSettings,
     PromptUsageFact,
     PromptVersionAlias,
     SoloRun,
@@ -391,3 +395,148 @@ async def test_deleting_an_account_takes_its_runs_and_closes_its_drawings_to_oth
     async with factory() as session:
         assert await session.scalar(select(func.count()).select_from(SoloRun)) == 0
         assert await session.scalar(select(func.count()).select_from(SoloServe)) == 0
+
+
+async def test_the_false_friend_guard_reads_every_spelling_not_only_the_key(env):
+    # French "luge" is a sled; German "Lüge" (a lie) is "luege" by its key and
+    # "luge" by its plain fold. A German who types "Lüge" means the lie and
+    # must not win the French sled (#1492 review).
+    http, users, history, factory = env
+    drawer = await player(users, factory, "Drawer")
+    guesser = await player(users, factory, "Guesser")
+    sled = await seed_concept(factory, {"fr": "luge", "de": "Schlitten"})
+    await seed_concept(factory, {"de": "Lüge"})
+    await record_turn(history, drawer=drawer.id, guessers=[guesser.id], version_id=sled.versions["fr"])
+    bilingual = await player(users, factory, "Bilingual", languages=("de", "fr"))
+    await sign_in_as(http, factory, bilingual.id)
+    [serve] = await _serve(http, (await _start(http))["runId"])
+    target = _target(serve)
+    assert (target.language, target.own.answer) == ("de", "Schlitten")
+    assert "luge" in target.taken
+    assert judge("Lüge", target) == "another_language"
+    assert judge("Schlitten", target) == "correct"
+
+
+async def test_wording_is_the_drawn_version_or_the_official_one_never_a_private_rewording(env):
+    http, users, history, factory = env
+    drawer = await player(users, factory, "Drawer")
+    guesser = await player(users, factory, "Guesser")
+    concept = await seed_concept(factory, {"en": "hut", "de": "Hütte"})
+    # Newer versions nobody official plays: a player's private rewording.
+    async with factory() as session:
+        async with session.begin():
+            for language, text in (("en", "cabin"), ("de", "Kate")):
+                session.add(
+                    PromptVersion(
+                        id=generate_uuid(), concept_id=concept.id, language=language,
+                        version=2, canonical_answer=text, match_key=text.lower(),
+                    )
+                )
+    await record_turn(history, drawer=drawer.id, guessers=[guesser.id], version_id=concept.versions["en"])
+    stranger = await player(users, factory, "Stranger", languages=("en", "de"))
+    await sign_in_as(http, factory, stranger.id)
+    [serve] = await _serve(http, (await _start(http))["runId"])
+    target = _target(serve)
+    assert target.own.answer == "hut" and target.others["de"].answer == "Hütte"
+    assert judge("cabin", target) is None
+
+
+async def test_a_resumed_drawing_is_judged_as_it_was_served(env):
+    http, users, history, factory = env
+    await _pool_of(users, history, factory, 2)
+    stranger = await player(users, factory, "Stranger", languages=("en", "de"))
+    await sign_in_as(http, factory, stranger.id)
+    run = await _start(http, None)
+    [serve] = await _serve(http, run["runId"])
+    async with factory() as session:
+        async with session.begin():
+            settings = await session.get(UserSettings, UUID(stranger.id))
+            settings.prompt_language, settings.extra_prompt_languages = "pl", []
+    resumed = (await http.get("/api/solo/runs/active")).json()["run"]["serves"][0]
+    assert _target(resumed) == _target(serve)
+
+
+async def test_a_dropped_drawing_is_not_counted_as_served(env):
+    http, users, history, factory = env
+    await _pool_of(users, history, factory, 3)
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    run = await _start(http, None)
+    first, _held = await _serve(http, run["runId"], count=2)
+    ended = (await _settle(http, first["serveId"], "given_up", 4)).json()["run"]
+    # An unlimited run ends on giving up too, and the drawing held ready goes.
+    assert (ended["state"], ended["endReason"], ended["position"]) == ("ended", "missed", 1)
+
+
+async def test_a_thin_pool_repeats_the_drawing_seen_longest_ago(env, monkeypatch):
+    monkeypatch.setattr("app.repositories.solo.random.randrange", lambda _stop: 0)
+    http, users, history, factory = env
+    await _pool_of(users, history, factory, 3)
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    run = await _start(http, None)
+    order = []
+    for _ in range(3):
+        [serve] = await _serve(http, run["runId"])
+        await _settle(http, serve["serveId"])
+        order.append(serve["serveId"])
+    [repeat] = await _serve(http, run["runId"])
+    async with factory() as session:
+        turns = {
+            serve.id: serve.turn_id
+            for serve in (await session.scalars(select(SoloServe))).all()
+        }
+    assert turns[UUID(repeat["serveId"])] == turns[UUID(order[0])]
+
+
+async def test_another_player_s_run_and_a_settle_after_an_abandon_are_refused_cleanly(env):
+    http, users, history, factory = env
+    await _pool_of(users, history, factory, 3)
+    stranger = await player(users, factory, "Stranger")
+    other = await player(users, factory, "Other")
+    await sign_in_as(http, factory, stranger.id)
+    run = await _start(http)
+    _first, held = await _serve(http, run["runId"], count=2)
+    await sign_in_as(http, factory, other.id)
+    refused = await http.post(f"/api/solo/runs/{run['runId']}/serves")
+    assert refused.status_code == 404 and refused.json()["errorCode"] == "no_such_solo_run"
+    await sign_in_as(http, factory, stranger.id)
+    await _start(http)
+    # The abandon took the drawing held ready: reporting it is a refusal, not an error.
+    late = await _settle(http, held["serveId"])
+    assert late.status_code in (404, 409)
+
+
+async def test_the_drawn_version_is_the_wording_in_its_own_language(env):
+    # An official list reworded the concept since the game: the drawing was
+    # of the drawer's wording, and that is what its player is judged by.
+    http, users, history, factory = env
+    drawer = await player(users, factory, "Drawer")
+    guesser = await player(users, factory, "Guesser")
+    concept = await seed_concept(factory, {"en": "hut"})
+    newer = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptVersion(
+                    id=newer, concept_id=concept.id, language="en", version=2,
+                    canonical_answer="mountain hut", match_key="mountainhut",
+                )
+            )
+            listed = generate_uuid()
+            session.add(
+                PromptList(
+                    id=listed, slug=f"solo-{listed}", name="Official reworded", description="",
+                    language="en", version=1, is_bundled=True,
+                )
+            )
+            await session.flush()
+            session.add(
+                Prompt(prompt_list_id=listed, concept_id=concept.id, prompt_version_id=newer,
+                       text="mountain hut")
+            )
+    await record_turn(history, drawer=drawer.id, guessers=[guesser.id], version_id=concept.versions["en"])
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    [serve] = await _serve(http, (await _start(http))["runId"])
+    assert _target(serve).own.answer == "hut"

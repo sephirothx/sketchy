@@ -3647,6 +3647,10 @@ class SoloServe(Base):
     # shown in: kept, so a run's history reads the same after a list changes.
     prompt: Mapped[str] = mapped_column(String(64), nullable=False)
     prompt_language: Mapped[str] = mapped_column(String(8), nullable=False)
+    # The forms the drawing is judged by (`guess_judge.JudgeTarget` as JSON),
+    # as they were served: a resumed run hands back exactly these, whatever
+    # the player's languages or the lists have done since (#1492 review).
+    forms: Mapped[str] = mapped_column(Text, nullable=False)
     served_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     settled_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(12), nullable=True)
