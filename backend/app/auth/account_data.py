@@ -88,6 +88,7 @@ from app.services.gallery_ranking import refresh_share_projection
 from app.services.inbox import forget_subjects
 from app.services.prompt_reclaim import delete_owned_lists
 from app.services.prompt_takedowns import release_takedowns
+from app.services.solo_pool import erase_pool_rows
 from app.domain_values import (
     DataExportArtifactEncoding,
     AccountState,
@@ -1793,8 +1794,12 @@ async def anonymize_account(
                     gallery_share_count=0,
                     gallery_shared_at=None,
                     gallery_withdrawn_at=None,
+                    solo_withdrawn_at=None,
                 )
             )
+            # Nor is an erased drawing served in Solo (#1434): the pool is a
+            # projection of kept drawings, and erasure is final.
+            await erase_pool_rows(session, drawer_user_ids=identity_ids)
             # An erased drawing takes its reactions with it: they were about
             # the drawing, and there is nothing left for them to be about.
             # Reactions this account *gave* stay - they are facts about other

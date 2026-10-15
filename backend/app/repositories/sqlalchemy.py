@@ -141,6 +141,7 @@ from app.auth.erasure import (
     erased_identity_ids,
     require_live_account,
 )
+from app.services.solo_pool import erase_pool_rows, write_pool_rows
 from app.services.user_stats_projection import (
     adjust_reactions_received,
     fold_identity_into_account,
@@ -1273,9 +1274,11 @@ async def erase_drawing_for_moderation(
             gallery_share_count=0,
             gallery_shared_at=None,
             gallery_withdrawn_at=None,
+            solo_withdrawn_at=None,
             moderation_erased_at=now,
         )
     )
+    await erase_pool_rows(session, turn_ids=[turn_id])
     await session.execute(
         delete(TurnDrawingReaction).where(TurnDrawingReaction.turn_id == turn_id)
     )
@@ -3101,6 +3104,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         insert(ScoreEvent).execution_options(render_nulls=True),
                         score_event_rows,
                     )
+
+                # Solo's pool (#1434), with the game it comes from: a game
+                # is servable exactly when it is history.
+                await write_pool_rows(session, [record_id])
 
                 await increment_user_stats_projection(
                     session,
