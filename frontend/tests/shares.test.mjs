@@ -31,6 +31,15 @@ test("the drawer takes it out for everybody once anybody has shared it", () => {
   assert.equal(shareOffer({ ...drawer, withdrawn: true }), "share", "and may put it back");
 });
 
+test("the server's inGallery outranks the seats: a Solo share has none to list", () => {
+  const drawer = { ...situation, isDrawer: true };
+  assert.equal(shareOffer({ ...drawer, inGallery: true }), "takeOut", "held only by a Solo player's share");
+  assert.equal(shareOffer({ ...drawer, shares: ["other"], inGallery: false }), "share", "the seats are not the word");
+  const context = { mine: "me", drawer: "d", nameOf: () => null };
+  assert.deepEqual(shareCredit([], { ...context, inGallery: true }), { kind: "someone" });
+  assert.deepEqual(shareCredit([], { ...context, inGallery: false }), { kind: "none" });
+});
+
 test("after a withdrawal the others are told rather than offered", () => {
   assert.equal(shareOffer({ ...situation, withdrawn: true }), "withdrawn");
 });
