@@ -48,6 +48,7 @@ from app.api.admin_settings import create_admin_settings_router
 from app.api.operations import create_operations_router
 from app.api.inbox import create_inbox_router, drawers_told_about_game
 from app.api.user_settings import create_user_settings_router
+from app.api.solo import create_solo_router
 from app.api.friends import create_friends_router, create_recent_players_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
@@ -1133,6 +1134,7 @@ api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )
 api.include_router(create_user_settings_router(async_session_factory))
+api.include_router(create_solo_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service, friend_service)

@@ -235,6 +235,14 @@ class ErrorCode(StrEnum):
     NO_SUCH_GAME = "no_such_game"
     NO_SUCH_DRAWING = "no_such_drawing"
     DRAWING_UNREADABLE = "drawing_unreadable"
+
+    # Solo (#1434): a run that is not the caller's (every refusal of a serve
+    # is NO_SUCH_DRAWING, as on every drawing door), a run or serve whose
+    # state moved on - settled already, out of order, a run that ended - and
+    # a player for whom the pool has nothing at all.
+    NO_SUCH_SOLO_RUN = "no_such_solo_run"
+    SOLO_CONFLICT = "solo_conflict"
+    SOLO_POOL_EMPTY = "solo_pool_empty"
     # A seventh pin (R-PIN-02); carries `slots`. Nothing was changed.
     PINNED_DRAWINGS_FULL = "pinned_drawings_full"
 
