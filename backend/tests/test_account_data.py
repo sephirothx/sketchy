@@ -405,7 +405,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             session.add(
                 SoloServe(
                     run_id=solo_run.id, user_id=UUID(owner["id"]), turn_id=owner_turn.id,
-                    position=1, prompt="lighthouse", prompt_language="en",
+                    position=1, prompt="lighthouse", prompt_language="en", forms="{}",
                     served_at=STARTED, settled_at=STARTED + timedelta(seconds=9),
                     outcome="solved", solve_seconds=9.0, points=240,
                 )
