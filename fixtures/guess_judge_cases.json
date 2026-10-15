@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "What a guess is, as both judges must answer it: backend/app/guess_judge.py (backend/tests/test_guess_judge_corpus.py) and frontend/src/lib/guessJudge.ts (frontend/tests/guessJudge.test.mjs). `expected` is the Python judge's verdict - null for a plain wrong guess or chat. Change a rule on one side alone and the other fails; change it on both and regenerate with SKETCHY_REGENERATE_GUESS_CORPUS=1 pytest tests/test_guess_judge_corpus.py, then read the diff.",
+ "note": "What a guess is, as every judge of one must answer it: backend/app/guess_judge.py (held to it by backend/tests/test_guess_judge_corpus.py) and the TypeScript port Solo plays with. `expected` is the Python judge's verdict - null for a plain wrong guess or chat. A port must reproduce the Python behaviour pinned here, not an approximation: difflib's argument order, code-point lengths, str.isspace. Change a rule on one side alone and the other fails; change it on both and regenerate with SKETCHY_REGENERATE_GUESS_CORPUS=1 pytest tests/test_guess_judge_corpus.py, then read the diff.",
  "cases": [
   {
    "note": "english single word",
@@ -3208,6 +3208,174 @@
     ]
    },
    "expected": "close"
+  },
+  {
+   "note": "difflib's ratio depends on argument order: the guess goes first",
+   "text": "baranna",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "banana",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "difflib's ratio depends on argument order: the guess goes first",
+   "text": "clhuch",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "church",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "difflib's ratio depends on argument order: the guess goes first",
+   "text": "bagtete",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "baguette",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "difflib's ratio depends on argument order: the guess goes first",
+   "text": "btabt",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "bat",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "a 32-character guess is judged",
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxz",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "a 33-character guess is chat",
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxz",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": null
+  },
+  {
+   "note": "a doubled space folds away (#1416)",
+   "text": "abcdefghijklmnop  qrstuvwxyzabcde",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "abcdefghijklmnop qrstuvwxyzabcde",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "a doubled space does not make a near miss chat (#1416)",
+   "text": "abcdefghijklmnop  qrstuvwxyzabcdd",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "abcdefghijklmnop qrstuvwxyzabcde",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "length counts code points, not UTF-16 units",
+   "text": "🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍌",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎 🍎",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "close"
+  },
+  {
+   "note": "python whitespace: information separator",
+   "text": "dog\u001c",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "python whitespace: next line",
+   "text": "dog",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "dog",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
+  },
+  {
+   "note": "python whitespace inside a guess",
+   "text": "hang\u001fglider",
+   "target": {
+    "language": "en",
+    "own": {
+     "answer": "hang glider",
+     "aliases": []
+    },
+    "others": {},
+    "taken": []
+   },
+   "expected": "correct"
   }
  ]
 }

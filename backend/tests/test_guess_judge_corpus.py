@@ -1,10 +1,10 @@
 """The golden corpus both guess judges answer to (#1434).
 
-Solo judges a guess in the browser (`frontend/src/lib/guessJudge.ts`), a room
-on the server (`app/guess_judge.py`); `fixtures/guess_judge_cases.json` is the
-one list of what a guess is that holds both to the same answers. This side
-checks the Python judge still gives every recorded verdict, and
-`frontend/tests/guessJudge.test.mjs` checks the port does.
+A room judges a guess on the server (`app/guess_judge.py`); Solo will judge
+one in the browser, with a TypeScript port. `fixtures/guess_judge_cases.json`
+is the one list of what a guess is that holds both to the same answers. This
+side checks the Python judge still gives every recorded verdict; the port's
+own test will check it does.
 
 A deliberate change to a rule regenerates the verdicts from this judge:
 

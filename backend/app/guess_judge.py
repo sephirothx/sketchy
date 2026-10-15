@@ -1,9 +1,17 @@
 """Whether a guess names a prompt, and how near a wrong one came.
 
 Pure: no game, no room, no I/O. A room's `Game` and Solo (#1434) both judge
-through `judge`, so the two can never disagree about what a guess is - and
-the TypeScript port Solo plays with (`frontend/src/lib/guessJudge.ts`) is
-held to it by the shared corpus in `fixtures/guess_judge_cases.json`.
+through `judge`, so the two can never disagree about what a guess is.
+`fixtures/guess_judge_cases.json` records its verdicts, for the TypeScript
+port Solo plays with to be held to.
+
+A port has to reproduce the Python behaviour the corpus pins, not an
+approximation of it: `difflib`'s ratio depends on which string comes first
+(`_is_close_pair` passes the guess first); a length is counted in code points,
+not UTF-16 units (`fits_a_guess`); `str.split` breaks on every character
+`str.isspace` accepts, \x1c-\x1f and \x85 among them; and `_fold_accents`
+drops what `unicodedata.combining` says is a mark, which is not exactly
+Unicode's Mark category.
 
 A target is the prompt as one guesser plays it: their own language's answer
 and aliases, the other languages somebody in the game plays it in (a
@@ -58,7 +66,6 @@ def _accepted_spellings(text: str, language: str = "en") -> frozenset[str]:
     return prompt_match_variants(text, language)
 
 
-
 def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
     """Bounded Damerau-Levenshtein distance (optimal string alignment variant).
 
@@ -106,10 +113,9 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
     return previous.get(len_b, over_limit)
 
 
-
 def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
     """"close" if the guess is near a whole answer, "partial" if enough of a
-    multi-word answer's words are in it, else None (see `Game.guess_hint`).
+    multi-word answer's words are in it, else None (see `judge`).
     Both sides are `prompt_match_words` spellings, words apart."""
     # Close is measured with the separators gone, as acceptance compares:
     # "hang glider" and "hangglidr" are one typo apart, not two.
@@ -131,7 +137,6 @@ def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
     return None
 
 
-
 def fits_a_guess(text: str) -> bool:
     """Whether a message is short enough to be judged as a guess at all.
 
@@ -141,7 +146,6 @@ def fits_a_guess(text: str) -> bool:
     room as chat, unjudged (#1416).
     """
     return len(" ".join(text.split())) <= MAX_PROMPT_LENGTH
-
 
 
 def _is_close_pair(guess: str, target: str) -> bool:

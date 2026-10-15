@@ -517,7 +517,7 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
 def prompt_match_words(answer: str, language: str = "en") -> str:
     """`prompt_match_key` with its words kept apart: each run of separators
     is one space instead of none. What a near miss is measured on, since
-    "partly right" counts the words a guess got (`game._near_miss`)."""
+    "partly right" counts the words a guess got (`guess_judge._near_miss`)."""
     language = validate_prompt_list_language(language)
     folded = _fold_accents(_transliterate(_spelled_out(_collapsed(answer), language), language))
     # A dot or an apostrophe sits inside a word ("keeper's", "U.S.");
