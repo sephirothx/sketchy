@@ -258,6 +258,8 @@
   .solo-guess-input { flex-basis: 100%; }
   .solo-guess .btn { flex: 1 1 0; justify-content: center; }
   .solo-archive-day { grid-template-columns: auto 1fr; }
+  /* Two lines a day: a wider gap keeps one day from reading into the next. */
+  .solo-archive-list ol { gap: 14px; }
 }
 
 /* ----------------------------------------------------- result and summary */
