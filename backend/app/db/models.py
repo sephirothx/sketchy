@@ -4023,6 +4023,49 @@ class TurnDrawingShare(Base):
     )
 
 
+class SoloGalleryShare(Base):
+    """A Solo player putting a drawing they were served in the Gallery (#1434).
+
+    A share like any other (R-SHARE-01) - it counts toward the drawing's place
+    in the Gallery, is credited, and goes with the drawer's withdrawal or an
+    erasure - but made by somebody who sat in no seat of the game, so it hangs
+    off the account rather than a seat, and credits the account's own name.
+    Its own table rather than a seatless row in `turn_drawing_shares`, so
+    nothing that reads a share's seat - the room, the recap, history - ever
+    meets one without.
+
+    A share of a drawing in a Daily still open somewhere is **held**
+    (`release_at` set): it is not in the Gallery until that date has ended
+    everywhere, so the Daily's prompt is not on Gallery -> New while others
+    are still playing it. The retention sweep releases it.
+    """
+
+    __tablename__ = "solo_gallery_shares"
+    __table_args__ = (
+        Index(
+            "ix_solo_gallery_shares_held",
+            "release_at",
+            postgresql_where=sql_text("release_at IS NOT NULL"),
+            sqlite_where=sql_text("release_at IS NOT NULL"),
+        ),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # When a held share enters the Gallery; NULL once it is in.
+    release_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
 class GalleryShelfReview(Base):
     """A moderator's decision about one drawing's place on the lobby's shelf
     (#524, R-GAL-10): released or hidden, taken from the review queue the

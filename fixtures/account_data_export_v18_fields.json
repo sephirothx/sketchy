@@ -269,6 +269,7 @@
     "settings.locale",
     "settings.penPressure",
     "settings.promptLanguage",
+    "settings.soloOptOut",
     "settings.soundEffects",
     "settings.theme",
     "settings.timeFormat",

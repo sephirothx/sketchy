@@ -9,7 +9,7 @@ import secrets
 from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -60,6 +60,10 @@ from app.db.models import (
     TurnDrawing,
     ProfileDrawingPin,
     TurnDrawingReaction,
+    SoloDailySet,
+    SoloGalleryShare,
+    SoloPoolEntry,
+    SoloServe,
     TurnDrawingShare,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -813,6 +817,139 @@ async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...
     return (canonical, *aliases)
 
 
+@dataclass(frozen=True)
+class SoloShareResult:
+    """A Solo share write's answer: whether the drawing is in the Gallery,
+    whether the caller shares it, until when their share is held (a Daily
+    still open), and whether its drawer took it out. No seat, no name."""
+
+    in_gallery: bool
+    shared_by_me: bool
+    held_until: datetime | None
+    withdrawn: bool
+    notify_user_id: str | None = None
+
+
+async def release_held_solo_shares(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget=None,
+):
+    """Put in the Gallery the Solo shares held for a Daily whose date has now
+    ended everywhere (#1434): each drawing locked as a share write locks it,
+    the share released, the projection set again and the drawer told
+    (R-SHARE-09). A retention-loop sweep, so it runs hourly and reports like
+    one; a share whose drawing was withdrawn or erased meanwhile is already
+    gone with it."""
+    from app.services.sweeps import SweepReport
+
+    moment = now or datetime.now(timezone.utc)
+    started = time.monotonic()
+    released = 0
+    async with session_factory() as session:
+        due = (
+            await session.execute(
+                select(SoloGalleryShare.turn_id, SoloGalleryShare.user_id)
+                .where(
+                    SoloGalleryShare.release_at.is_not(None),
+                    SoloGalleryShare.release_at <= moment,
+                )
+                .order_by(SoloGalleryShare.release_at)
+                .limit(1000)
+            )
+        ).all()
+    for turn_id, user_id in due:
+        async with session_factory() as session:
+            async with session.begin():
+                turn = await session.get(TurnRecord, turn_id)
+                drawing_row = await session.scalar(
+                    select(TurnDrawing)
+                    .where(TurnDrawing.turn_id == turn_id)
+                    .options(defer(TurnDrawing.payload))
+                    .with_for_update()
+                )
+                share = await session.get(SoloGalleryShare, (turn_id, user_id))
+                if turn is None or drawing_row is None or share is None or share.release_at is None:
+                    continue
+                share.release_at = None
+                share.created_at = moment
+                await refresh_share_projection(session, drawing_row)
+                # The drawer's bell reads it on its next look (R-INBOX-03);
+                # a sweep has no socket to push from.
+                await _leave_share_notice(session, turn, now=moment)
+                released += 1
+    async with session_factory() as session:
+        oldest = await session.scalar(
+            select(func.min(SoloGalleryShare.release_at)).where(
+                SoloGalleryShare.release_at.is_not(None),
+                SoloGalleryShare.release_at <= moment,
+            )
+        )
+    oldest = _aware(oldest)
+    return SweepReport(
+        released,
+        name="solo_held_shares",
+        batches=1 if due else 0,
+        seconds=time.monotonic() - started,
+        exhausted=len(due) >= 1000,
+        oldest_overdue_seconds=(moment - oldest).total_seconds() if oldest else 0.0,
+    )
+
+
+async def _take_back_solo_share(
+    session: AsyncSession, turn: TurnRecord, identity_ids: Sequence[UUID], *, now: datetime
+) -> DrawingShareResult | None:
+    """A Solo player taking their own share of a drawing back out of the
+    Gallery (#1434): the drawing row locked as every share write locks it,
+    then the share gone and the projection set again. None when they hold no
+    share of it - the Gallery's 404."""
+    drawing_row = await session.scalar(
+        select(TurnDrawing)
+        .where(TurnDrawing.turn_id == turn.id)
+        .options(defer(TurnDrawing.payload))
+        .with_for_update()
+    )
+    if drawing_row is None:
+        return None
+    removed = await session.execute(
+        delete(SoloGalleryShare).where(
+            SoloGalleryShare.turn_id == turn.id,
+            SoloGalleryShare.user_id.in_(list(identity_ids)),
+        )
+    )
+    if not removed.rowcount:
+        return None
+    drawing_row.updated_at = now
+    await refresh_share_projection(session, drawing_row)
+    return DrawingShareResult(
+        turn_id=_public_id(turn.id),
+        shares=await _share_seats(session, turn.id),
+        withdrawn=drawing_row.gallery_withdrawn_at is not None,
+    )
+
+
+async def _solo_may_react(
+    session: AsyncSession, turn_id: UUID, identity_ids: Sequence[UUID]
+) -> bool:
+    """Whether Solo served this drawing to one of these identities, they
+    settled it, and it is still servable to anybody (R-SOLO-02)."""
+    from app.repositories.solo import servable_clauses
+
+    served = await session.scalar(
+        select(SoloServe.id)
+        .join(SoloPoolEntry, SoloPoolEntry.turn_id == SoloServe.turn_id)
+        .where(
+            SoloServe.turn_id == turn_id,
+            SoloServe.user_id.in_(list(identity_ids)),
+            SoloServe.settled_at.is_not(None),
+            *servable_clauses(),
+        )
+        .limit(1)
+    )
+    return served is not None
+
+
 def _gallery_predicate():
     """What "in the Gallery" means (R-GAL-01), in one place: a kept, readable
     drawing somebody shared (#1430) and no moderator hid. Over `TurnDrawing`
@@ -991,16 +1128,17 @@ async def _share_credits(
     session: AsyncSession, turn_ids: Sequence[UUID], viewer_ids: Sequence[UUID] = ()
 ) -> dict[UUID, _ShareCredit]:
     """The first sharer of each drawing on a page, through the seat's frozen
-    snapshot (#387), and whether the viewer shared it too. One statement over
-    the page's share rows - bounded by a room's seats per drawing, since only
-    somebody who sat in the game can share."""
+    snapshot (#387) - or, for a Solo player who sat in no seat, their
+    account's own name (#1434) - and whether the viewer shared it too. One
+    statement per kind over the page's share rows."""
     if not turn_ids:
         return {}
-    rows = (
+    seated = (
         await session.execute(
             select(
                 TurnDrawingShare.turn_id,
                 TurnDrawingShare.user_id,
+                TurnDrawingShare.created_at,
                 TurnDrawingShare.participant_id,
                 TurnRecord.drawer_participant_id,
                 GameParticipant.display_name_snapshot,
@@ -1010,26 +1148,56 @@ async def _share_credits(
             .join(TurnRecord, TurnRecord.id == TurnDrawingShare.turn_id)
             .join(GameParticipant, GameParticipant.id == TurnDrawingShare.participant_id)
             .where(TurnDrawingShare.turn_id.in_(list(turn_ids)))
-            .order_by(
-                TurnDrawingShare.turn_id,
-                TurnDrawingShare.created_at,
-                TurnDrawingShare.participant_id,
+        )
+    ).all()
+    solo = (
+        await session.execute(
+            select(
+                SoloGalleryShare.turn_id,
+                SoloGalleryShare.user_id,
+                SoloGalleryShare.created_at,
+                User.display_name,
+                User.name_color,
+            )
+            .join(User, User.id == SoloGalleryShare.user_id)
+            .where(
+                SoloGalleryShare.turn_id.in_(list(turn_ids)),
+                SoloGalleryShare.release_at.is_(None),
             )
         )
     ).all()
-    viewers = set(viewer_ids)
-    mine = {row.turn_id for row in rows if row.user_id in viewers}
-    credits: dict[UUID, _ShareCredit] = {}
-    for row in rows:
-        if row.turn_id in credits:
-            continue
-        credits[row.turn_id] = _ShareCredit(
-            display_name=row.display_name_snapshot,
-            name_color=row.name_color_snapshot,
-            is_anonymous=row.is_anonymous_snapshot,
-            is_drawer=row.participant_id == row.drawer_participant_id,
-            shared_by_viewer=row.turn_id in mine,
+    entries = [
+        (
+            row.turn_id, _aware(row.created_at), 0, str(row.participant_id), row.user_id,
+            _ShareCredit(
+                display_name=row.display_name_snapshot,
+                name_color=row.name_color_snapshot,
+                is_anonymous=row.is_anonymous_snapshot,
+                is_drawer=row.participant_id == row.drawer_participant_id,
+                shared_by_viewer=False,
+            ),
         )
+        for row in seated
+    ] + [
+        (
+            row.turn_id, _aware(row.created_at), 1, str(row.user_id), row.user_id,
+            _ShareCredit(
+                display_name=row.display_name,
+                name_color=row.name_color,
+                is_anonymous=False,
+                is_drawer=False,
+                shared_by_viewer=False,
+            ),
+        )
+        for row in solo
+    ]
+    viewers = set(viewer_ids)
+    mine = {entry[0] for entry in entries if entry[4] in viewers}
+    credits: dict[UUID, _ShareCredit] = {}
+    for turn_id, _at, _kind, _tie, _user, credit in sorted(entries, key=lambda e: e[:4]):
+        if turn_id in credits:
+            continue
+        credits[turn_id] = replace(credit, shared_by_viewer=turn_id in mine)
     return credits
 
 
@@ -1287,6 +1455,9 @@ async def erase_drawing_for_moderation(
     )
     await session.execute(
         delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == turn_id)
+    )
+    await session.execute(
+        delete(SoloGalleryShare).where(SoloGalleryShare.turn_id == turn_id)
     )
     # The drawer's "somebody shared your drawing" is about nothing they can
     # see any more; an entry offering View on an erased drawing is worse
@@ -3258,6 +3429,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         requesting_user_id: str,
         emoji: str | None,
         from_gallery: bool = False,
+        from_solo: bool = False,
     ) -> DrawingReactionResult | None:
         db_game_id = _optional_entity_id(game_id) if game_id is not None else None
         db_turn_id = _optional_entity_id(turn_id)
@@ -3266,7 +3438,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             return None
         if game_id is not None and db_game_id is None:
             return None
-        if db_game_id is None and not from_gallery:
+        if db_game_id is None and not (from_gallery or from_solo):
             return None
         if emoji is not None and emoji not in OFFERED_REACTION_EMOJI_CODES:
             return None
@@ -3344,6 +3516,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     # somebody shared. Not a seat - that is the point of the
                     # door.
                     if not _gallery_shows(drawing_row):
+                        return None
+                elif from_solo:
+                    # Solo's door (#1434): a drawing Solo served this player
+                    # and they have settled, still servable to anybody. Not a
+                    # seat either.
+                    if not await _solo_may_react(session, db_turn_id, identity_ids):
                         return None
                 elif seat is None:
                     return None
@@ -3455,7 +3633,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     _own_seat_in(turn, identity_ids).limit(1)
                 )
                 if seat is None:
-                    return None
+                    # A Solo player sat in no seat, and has a share to take
+                    # back only (#1434): their own, held or not.
+                    if shared:
+                        return None
+                    return await _take_back_solo_share(
+                        session, turn, identity_ids, now=now
+                    )
                 is_drawer = (
                     turn.drawer_participant_id == seat.id
                     or turn.drawer_user_id in identity_ids
@@ -3512,6 +3696,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     await session.execute(
                         delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == db_turn_id)
                     )
+                    # A Solo player's share too, held or not (#1434).
+                    await session.execute(
+                        delete(SoloGalleryShare).where(SoloGalleryShare.turn_id == db_turn_id)
+                    )
                     await session.execute(
                         delete(ProfileDrawingPin).where(
                             ProfileDrawingPin.turn_id == db_turn_id
@@ -3551,6 +3739,180 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 return DrawingShareResult(
                     turn_id=_public_id(db_turn_id),
                     shares=await _share_seats(session, db_turn_id),
+                    withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                    notify_user_id=_public_id(notify) if notify is not None else None,
+                )
+
+    async def set_solo_withdrawn(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+        withdrawn: bool,
+    ) -> bool | None:
+        """The drawer's take-out of one drawing from Solo (#1434): set or
+        cleared by the drawer alone, by seat or by account. Answers whether it
+        is out now, or None - the participant door's 404 - for anybody else,
+        and for a drawing that is not kept."""
+        db_game_id = _optional_entity_id(game_id)
+        db_turn_id = _optional_entity_id(turn_id)
+        db_user_id = _optional_entity_id(requesting_user_id)
+        if db_game_id is None or db_turn_id is None or db_user_id is None:
+            return None
+        async with self._session_factory() as session:
+            async with session.begin():
+                identity_ids = await _identity_ids(session, db_user_id)
+                turn = await session.scalar(
+                    select(TurnRecord).where(
+                        TurnRecord.id == db_turn_id, TurnRecord.game_id == db_game_id
+                    )
+                )
+                if turn is None:
+                    return None
+                seat = await session.scalar(_own_seat_in(turn, identity_ids).limit(1))
+                is_drawer = turn.drawer_user_id in identity_ids or (
+                    seat is not None and turn.drawer_participant_id == seat.id
+                )
+                if not is_drawer:
+                    return None
+                drawing_row = await session.scalar(
+                    select(TurnDrawing)
+                    .where(TurnDrawing.turn_id == db_turn_id)
+                    .options(defer(TurnDrawing.payload))
+                    .with_for_update()
+                )
+                if drawing_row is None or drawing_row.status != TurnDrawingStatus.READY.value:
+                    return None
+                now = datetime.now(timezone.utc)
+                if withdrawn and drawing_row.solo_withdrawn_at is None:
+                    drawing_row.solo_withdrawn_at = now
+                elif not withdrawn:
+                    drawing_row.solo_withdrawn_at = None
+                return drawing_row.solo_withdrawn_at is not None
+
+    async def set_solo_share(
+        self,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+        shared: bool,
+        now: datetime | None = None,
+    ) -> SoloShareResult | None:
+        """Share a drawing Solo served the caller to the Gallery, or take
+        their share back (#1434, R-SHARE-02 amended): under its drawer's
+        name, credited to the caller's own. Only once they settled it, only
+        while it is shareable and its drawer has not taken it out of the
+        Gallery (R-SHARE-04). A drawing in a Daily still open somewhere is
+        held until that date has ended everywhere, so the Daily's prompt is
+        not on Gallery -> New while others are playing it. None is the
+        door's 404."""
+        from app.repositories.solo import servable_clauses
+        from app.solo_rules import daily_release_at, open_dates
+
+        db_turn_id = _optional_entity_id(turn_id)
+        db_user_id = _optional_entity_id(requesting_user_id)
+        if db_turn_id is None or db_user_id is None:
+            return None
+        now = now or datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            async with session.begin():
+                identity_ids = await _identity_ids(session, db_user_id)
+                served = await session.scalar(
+                    select(SoloServe.id)
+                    .join(SoloPoolEntry, SoloPoolEntry.turn_id == SoloServe.turn_id)
+                    .where(
+                        SoloServe.turn_id == db_turn_id,
+                        SoloServe.user_id.in_(identity_ids),
+                        SoloServe.settled_at.is_not(None),
+                        *servable_clauses(),
+                    )
+                    .limit(1)
+                )
+                turn = await session.scalar(
+                    select(TurnRecord)
+                    .where(TurnRecord.id == db_turn_id)
+                    .options(selectinload(TurnRecord.game))
+                )
+                if served is None or turn is None:
+                    return None
+                # The erasure barrier's order, as every share write takes it:
+                # the accounts, shared and ascending, then the drawing row.
+                locked = {identity_ids[0]}
+                if turn.drawer_user_id is not None:
+                    locked.add(turn.drawer_user_id)
+                if await erased_identity_ids(session, locked):
+                    return None
+                drawing_row = await session.scalar(
+                    select(TurnDrawing)
+                    .where(TurnDrawing.turn_id == db_turn_id)
+                    .options(defer(TurnDrawing.payload))
+                    .with_for_update()
+                )
+                if drawing_row is None:
+                    return None
+                existing = await session.get(SoloGalleryShare, (db_turn_id, identity_ids[0]))
+                notify: UUID | None = None
+                if shared:
+                    if (
+                        turn.drawer_user_id in identity_ids
+                        or not _shareable(drawing_row, turn)
+                        or not _may_share(
+                            is_drawer=False,
+                            visibility=turn.game.visibility,
+                            withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                        )
+                    ):
+                        return None
+                    open_days = (
+                        await session.scalars(
+                            select(SoloDailySet.daily_date).where(
+                                SoloDailySet.turn_id == db_turn_id,
+                                SoloDailySet.daily_date.in_(open_dates(now)),
+                            )
+                        )
+                    ).all()
+                    release_at = daily_release_at(max(open_days)) if open_days else None
+                    if existing is None:
+                        session.add(
+                            SoloGalleryShare(
+                                turn_id=db_turn_id,
+                                user_id=identity_ids[0],
+                                created_at=now,
+                                release_at=release_at,
+                            )
+                        )
+                        if release_at is None:
+                            notify = await _leave_share_notice(session, turn, now=now)
+                elif existing is not None:
+                    await session.delete(existing)
+                else:
+                    await session.execute(
+                        delete(SoloGalleryShare).where(
+                            SoloGalleryShare.turn_id == db_turn_id,
+                            SoloGalleryShare.user_id.in_(identity_ids),
+                        )
+                    )
+                drawing_row.updated_at = now
+                await refresh_share_projection(session, drawing_row)
+                mine = await session.scalar(
+                    select(SoloGalleryShare.release_at).where(
+                        SoloGalleryShare.turn_id == db_turn_id,
+                        SoloGalleryShare.user_id.in_(identity_ids),
+                    )
+                )
+                held = (
+                    await session.scalar(
+                        select(func.count()).where(
+                            SoloGalleryShare.turn_id == db_turn_id,
+                            SoloGalleryShare.user_id.in_(identity_ids),
+                        )
+                    )
+                ) or 0
+                return SoloShareResult(
+                    in_gallery=drawing_row.gallery_share_count > 0,
+                    shared_by_me=bool(held),
+                    held_until=mine,
                     withdrawn=drawing_row.gallery_withdrawn_at is not None,
                     notify_user_id=_public_id(notify) if notify is not None else None,
                 )
@@ -3793,6 +4155,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         select(TurnDrawingShare.turn_id).where(
                             TurnDrawingShare.turn_id.in_(db_turn_ids),
                             TurnDrawingShare.user_id.in_(viewer_ids),
+                        )
+                    )
+                ).all()
+            ) | set(
+                (
+                    await session.scalars(
+                        select(SoloGalleryShare.turn_id).where(
+                            SoloGalleryShare.turn_id.in_(db_turn_ids),
+                            SoloGalleryShare.user_id.in_(viewer_ids),
+                            SoloGalleryShare.release_at.is_(None),
                         )
                     )
                 ).all()

@@ -1416,6 +1416,22 @@ class SoloRepository:
             "days": days,
         }
 
+    async def settled_turn(self, user_id: str, serve_id: str) -> UUID | None:
+        """The turn behind a serve of the caller's they have settled: what a
+        reaction, a share or a report from Solo is about. None otherwise."""
+        serve = _optional_uuid(serve_id)
+        if serve is None:
+            return None
+        async with self._session_factory() as session:
+            ids = await identity_ids(session, UUID(user_id))
+            return await session.scalar(
+                select(SoloServe.turn_id).where(
+                    SoloServe.id == serve,
+                    SoloServe.user_id.in_(list(ids)),
+                    SoloServe.settled_at.is_not(None),
+                )
+            )
+
     # --- the fourth drawing door (R-HIST-16) -------------------------------
 
     def _served_drawing(self, player_ids: Sequence[UUID], serve_id: UUID, *columns):

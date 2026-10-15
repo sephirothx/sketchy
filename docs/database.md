@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a5b6c7d8e9f2_solo_daily.py` (#1434). Both this line and the table
+`b6c7d8e9f0a3_solo_gallery_shares.py` (#1434). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-72 tables in nine domains.
+73 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -131,6 +131,7 @@ erDiagram
     solo_daily_days ||--o{ solo_daily_concepts : "every concept held"
     users ||--o{ solo_daily_results : "plays the Daily"
     users ||--o{ solo_bests : "best runs"
+    turn_records ||--o{ solo_gallery_shares : "shared from Solo"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -161,7 +162,7 @@ erDiagram
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
-| **Solo** | `solo_pool`, `solo_runs`, `solo_serves`, `solo_daily_days`, `solo_daily_sets`, `solo_daily_concepts`, `solo_daily_results`, `solo_bests` |
+| **Solo** | `solo_pool`, `solo_runs`, `solo_serves`, `solo_daily_days`, `solo_daily_sets`, `solo_daily_concepts`, `solo_daily_results`, `solo_bests`, `solo_gallery_shares` |
 
 ---
 
@@ -601,7 +602,8 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 plays in, in their order — never the default, never twice, at most seven; #1209) ·
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · `solo_opt_out` (false by default: the drawer said no to
-Solo serving any of their drawings, #1434) · timestamps.
+Solo serving any of their drawings, #1434; `soloOptOut` on the settings routes, R-SOLO-16) ·
+timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
 supported action set.
@@ -1722,7 +1724,7 @@ row.
 
 **Erased by an administrator** (#1419, R-MOD-22). `erase_drawing_for_moderation` writes
 the tombstone an account erasure writes — `status` `deleted`, the bytes and their
-identity nulled, the projections zeroed, the turn's reactions, shares, pins and Solo pool row deleted,
+identity nulled, the projections zeroed, the turn's reactions, shares (Solo's included), pins and Solo pool row deleted,
 the drawer's `drawing_shared` inbox entries forgotten — and stamps
 `moderation_erased_at`, and moves the drawer's `user_stats_daily.reactions_received` down
 by the reactions it deleted (counted under the drawing's lock). A row whose bytes had
@@ -2236,6 +2238,22 @@ no best: a best of 0 only says a run went nowhere. Rebuilt from `solo_runs` by:
 ```bash
 cd backend && .venv/bin/python -m app.services.solo_pool --bests
 ```
+
+### `solo_gallery_shares`
+`turn_id` (CASCADE) + `user_id` (CASCADE, indexed) composite **PK** · `created_at` ·
+`release_at` (partial index where set).
+
+A Solo player putting a drawing they were served in the Gallery (#1434, R-SOLO-15): a share
+like a seat's — counted toward `gallery_share_count` and `gallery_shared_at`, credited, taken
+out by the drawer's withdrawal and by erasure — but by **account**, since the sharer sat in
+no seat; its credit is the account's current name (R-SHARE-06 amended). A table of its own
+rather than a seatless row in `turn_drawing_shares`, so nothing that reads a share's seat —
+the room, the recap, history — ever meets one without. `gallery_ranking.gallery_share_rows`
+is the one union the projections, their rebuild and the audit count. A share of a drawing in
+a Daily still open anywhere is **held** (`release_at` = the date's end everywhere) and not
+counted; the hourly retention sweep `solo_held_shares` releases it (setting `created_at` to
+the release, so it enters New then) and tells the drawer (R-SHARE-09). Deleted with either
+account.
 
 ---
 
@@ -2965,6 +2983,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Solo runs, the drawings they served, Daily results and bests | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
 | The Daily's sets and the concepts each held | Permanent: the archive plays past days (#1470), and the 60-day rule reads the concepts | — | Permanently kept | — | — |
+| Solo shares held for an open Daily | Until the date has ended everywhere (`release_at`), then released into the Gallery — not deleted | 6 h | — | Hourly retention sweep releases them | `solo_held_shares` |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -3083,8 +3102,10 @@ Deletion:
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;
 - deletes the Solo pool rows of those erased drawings, and the account's own Solo runs
-  with the drawings they served, its Daily results and its bests (`solo_pool`,
-  `solo_runs`, `solo_serves`, `solo_daily_results`, `solo_bests` in §6);
+  with the drawings they served, its Daily results, its bests and its Solo shares, held
+  or not — and other players' Solo shares of its erased drawings (`solo_pool`,
+  `solo_runs`, `solo_serves`, `solo_daily_results`, `solo_bests`,
+  `solo_gallery_shares` in §6);
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting
