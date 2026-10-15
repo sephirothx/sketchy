@@ -144,14 +144,22 @@ def daily_start_key(day: date) -> int:
     return int.from_bytes(digest[:4], "big") % SAMPLE_KEY_SPACE
 
 
-def daily_streak(started_dates: list[date], today: date) -> int:
+def daily_streak(
+    started_dates: list[date], today: date, *, skipped: list[date] | tuple = ()
+) -> int:
     """How many days in a row ending today - or yesterday, while today's is
-    still to play - the player started the Daily on its own date. Computed
-    from their results each time it is asked, never kept as a counter (N-03)."""
+    still to play - the player started the Daily on its own date. A date that
+    had no Daily (too thin a pool) is stepped over: it breaks nobody's streak.
+    Computed from their results each time it is asked, never kept as a
+    counter (N-03)."""
     played = set(started_dates)
-    day = today if today in played else today - timedelta(days=1)
+    passed = set(skipped)
+    day = today
+    if day not in played:
+        day -= timedelta(days=1)
     streak = 0
-    while day in played:
-        streak += 1
+    while day in played or day in passed:
+        if day in played:
+            streak += 1
         day -= timedelta(days=1)
     return streak

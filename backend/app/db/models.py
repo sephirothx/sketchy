@@ -3744,6 +3744,10 @@ class SoloDailySet(Base):
     replaced_turn_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
+    # Its concept, which stays that day's for the 60-day reuse rule.
+    replaced_concept_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
     replaced_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 

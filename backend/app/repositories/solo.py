@@ -583,11 +583,19 @@ async def pick_daily(
     from the date's own starting key, wrapping round once, the same for
     every request."""
     start = daily_start_key(day) if start is None else start
+    window = and_(
+        SoloDailySet.daily_date > day - timedelta(days=DAILY_REUSE_DAYS),
+        SoloDailySet.daily_date < day + timedelta(days=DAILY_REUSE_DAYS),
+    )
+    # A concept a set replaced still was that day's Daily for whoever played
+    # it before the replacement (#1493 review).
     reused = (
         select(SoloDailySet.concept_id)
-        .where(
-            SoloDailySet.daily_date > day - timedelta(days=DAILY_REUSE_DAYS),
-            SoloDailySet.daily_date < day + timedelta(days=DAILY_REUSE_DAYS),
+        .where(window)
+        .union(
+            select(SoloDailySet.replaced_concept_id).where(
+                window, SoloDailySet.replaced_concept_id.is_not(None)
+            )
         )
         .scalar_subquery()
     )
@@ -636,15 +644,37 @@ async def pick_daily(
     return [(turn, concept, rate) for turn, concept, rate, _ in ordered]
 
 
+def _servable_set_rows(rows: Sequence[SoloDailySet]):
+    """The set rows whose drawing a Daily may still play for everybody: still
+    servable (R-SOLO-02), and its concept still nameable in every language -
+    a takedown of one language's wording would leave that language's
+    players a position they could never be served (#1493 review)."""
+    return select(SoloPoolEntry.turn_id).where(
+        SoloPoolEntry.turn_id.in_([row.turn_id for row in rows]),
+        *servable_clauses(),
+        _all_languages_or_agnostic(),
+    )
+
+
+async def _set_rows(session: AsyncSession, day: date, *, refresh: bool = False):
+    statement = (
+        select(SoloDailySet).where(SoloDailySet.daily_date == day).order_by(SoloDailySet.position)
+    )
+    if refresh:
+        statement = statement.execution_options(populate_existing=True)
+    return list((await session.scalars(statement)).all())
+
+
 async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[SoloDailySet] | None:
     """`day`'s five, chosen by the first request for the date and the same
     for everybody after it; None for a day with too few to choose from.
 
     The day row is what two first requests race for: the one that inserts it
     picks, in its transaction; the other waits on the key and reads. A drawing
-    that has stopped being servable since is replaced for everybody, under
-    the day row's lock, by the same walk."""
-    existing = await session.get(SoloDailyDay, day, with_for_update=True)
+    that has stopped being playable for everybody since is replaced for
+    everybody by the same walk - under the day row's lock, taken only then, so
+    the opens of an untouched Daily never queue behind one another."""
+    existing = await session.get(SoloDailyDay, day)
     if existing is None:
         picked = await pick_daily(session, day, count=DAILY_LENGTH)
         state = "set" if len(picked) == DAILY_LENGTH else "skipped"
@@ -668,27 +698,15 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
                 for index, (turn, concept, rate) in enumerate(picked)
             )
             await session.flush()
-        existing = await session.get(SoloDailyDay, day, with_for_update=True, populate_existing=True)
+        existing = await session.get(SoloDailyDay, day, populate_existing=True)
     if existing.state != "set":
         return None
-    rows = list(
-        (
-            await session.scalars(
-                select(SoloDailySet)
-                .where(SoloDailySet.daily_date == day)
-                .order_by(SoloDailySet.position)
-            )
-        ).all()
-    )
-    servable = set(
-        (
-            await session.scalars(
-                select(SoloPoolEntry.turn_id).where(
-                    SoloPoolEntry.turn_id.in_([row.turn_id for row in rows]), *servable_clauses()
-                )
-            )
-        ).all()
-    )
+    rows = await _set_rows(session, day)
+    if len(set((await session.scalars(_servable_set_rows(rows))).all())) == len(rows):
+        return rows
+    await session.get(SoloDailyDay, day, with_for_update=True, populate_existing=True)
+    rows = await _set_rows(session, day, refresh=True)
+    servable = set((await session.scalars(_servable_set_rows(rows))).all())
     for row in rows:
         if row.turn_id in servable:
             continue
@@ -698,12 +716,40 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
             start=(daily_start_key(day) + row.position) % SAMPLE_KEY_SPACE,
         )
         if not replacement:
+            # Nothing left to put there: the position stays as it was, its
+            # door closed, and a player can only give it up (R-SOLO-13).
             continue
         turn, concept, rate = replacement[0]
-        row.replaced_turn_id, row.replaced_at = row.turn_id, now
+        row.replaced_turn_id, row.replaced_concept_id, row.replaced_at = (
+            row.turn_id, row.concept_id, now
+        )
         row.turn_id, row.concept_id, row.solve_rate = turn, concept, rate
     await session.flush()
     return rows
+
+
+async def ensure_open_dailies(
+    session_factory: async_sessionmaker[AsyncSession], now: datetime
+) -> None:
+    """Pick the Daily of every date open somewhere that nobody has asked for
+    yet, so a free run's exclusion of open Dailies knows their concepts before
+    the first player of the new date arrives (#1493 review). Once per date."""
+    async with session_factory() as session:
+        known = set(
+            (
+                await session.scalars(
+                    select(SoloDailyDay.daily_date).where(
+                        SoloDailyDay.daily_date.in_(open_dates(now))
+                    )
+                )
+            ).all()
+        )
+    for day in open_dates(now):
+        if day in known:
+            continue
+        async with session_factory() as session:
+            async with session.begin():
+                await daily_set(session, day, now=now)
 
 
 # How often a start that met another start's run tries again.
@@ -823,6 +869,7 @@ class SoloRepository:
         A run with nothing to serve from its very first drawing ends there,
         recording nothing: left active it would sit in its length's row as a
         run in progress the player never saw a drawing of."""
+        await ensure_open_dailies(self._session_factory, now)
         async with self._session_factory() as session:
             async with session.begin():
                 await require_live_player(session, user_id)
@@ -903,8 +950,10 @@ class SoloRepository:
         seen = exists().where(SoloServe.user_id == player, SoloServe.turn_id == SoloPoolEntry.turn_id)
         # A Daily still open somewhere is nobody's free-run drawing: it
         # would hand its prompt to a player before their Daily (#1434).
+        # By concept, not drawing: another drawing of today's concept hands
+        # over the same prompt (#1493 review).
         in_open_daily = exists().where(
-            SoloDailySet.turn_id == SoloPoolEntry.turn_id,
+            SoloDailySet.concept_id == SoloPoolEntry.concept_id,
             SoloDailySet.daily_date.in_(open_dates(now)),
         )
         base = select(
@@ -1117,7 +1166,10 @@ class SoloRepository:
                 drawn_version_id=drawn.get(row.turn_id), meanings=self._meanings,
             )
             if forms is None:
-                continue
+                # Every set concept is nameable in every language
+                # (`_servable_set_rows`); a position left without a serve
+                # would hold the Daily open for good, so refuse instead.
+                raise SoloRefused("conflict")
             if serve is None:
                 session.add(
                     SoloServe(
@@ -1159,7 +1211,7 @@ class SoloRepository:
                     select(SoloDailyResult)
                     .where(SoloDailyResult.user_id == player)
                     .order_by(SoloDailyResult.daily_date.desc())
-                    .limit(400)
+                    .limit(60)
                 )
             ).all()
             bests = (
@@ -1170,6 +1222,25 @@ class SoloRepository:
                     SoloRun.user_id == player, SoloRun.mode == "free", SoloRun.state == "active"
                 )
             )
+            # Every date started on its own day, not the page of history: a
+            # streak is as long as it is. A date with no Daily breaks nobody's.
+            started = list(
+                (
+                    await session.scalars(
+                        select(SoloDailyResult.daily_date).where(
+                            SoloDailyResult.user_id == player,
+                            SoloDailyResult.started_on_date.is_(True),
+                        )
+                    )
+                ).all()
+            )
+            skipped = list(
+                (
+                    await session.scalars(
+                        select(SoloDailyDay.daily_date).where(SoloDailyDay.state == "skipped")
+                    )
+                ).all()
+            )
         return {
             "today": {
                 "date": today.isoformat(),
@@ -1178,10 +1249,8 @@ class SoloRepository:
             },
             "activeRunId": str(active.id) if active is not None else None,
             "bests": {best.length_key: best.best for best in bests},
-            "history": [daily_result_payload(row) for row in history[:60]],
-            "streak": daily_streak(
-                [row.daily_date for row in history if row.started_on_date], today
-            ),
+            "history": [daily_result_payload(row) for row in history],
+            "streak": daily_streak(started, today, skipped=skipped),
         }
 
     # --- the fourth drawing door (R-HIST-16) -------------------------------
