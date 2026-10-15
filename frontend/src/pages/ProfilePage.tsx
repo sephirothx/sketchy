@@ -50,7 +50,8 @@ import { friendListOwner, isFriend, profileFriendActionFor } from "../lib/friend
 import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
-import { ui } from "../content/ui/index.ts";
+import { soloCopyFor } from "../content/solo/index.ts";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
@@ -469,7 +470,7 @@ function GameRow({
                   disabled={soloBusy === turn.id}
                   onClick={() => void setSoloOut(turn.id, !turn.soloWithdrawn)}
                 >
-                  {turn.soloWithdrawn ? ui.solo.putBackInSolo : ui.solo.takeOutOfSolo}
+                  {turn.soloWithdrawn ? soloCopyFor(interfaceLocale()).putBackInSolo : soloCopyFor(interfaceLocale()).takeOutOfSolo}
                 </button>
               ) : null;
             const named = (
