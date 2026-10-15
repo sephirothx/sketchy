@@ -104,16 +104,26 @@ async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
         ))
     # A Solo player's share (#1434), by their account's own name: they sat in
     # no seat to take a frozen one from. Held shares are not standing yet.
-    solo = await session.execute(
+    # Each drawing's first only: anybody served it may have shared it.
+    ranked = (
         select(
             SoloGalleryShare.turn_id,
             SoloGalleryShare.created_at,
             SoloGalleryShare.user_id,
-            User.display_name,
-            User.name_color,
+            func.row_number()
+            .over(
+                partition_by=SoloGalleryShare.turn_id,
+                order_by=(SoloGalleryShare.created_at, SoloGalleryShare.user_id),
+            )
+            .label("rank"),
         )
-        .join(User, User.id == SoloGalleryShare.user_id)
-        .where(SoloGalleryShare.turn_id.in_(turn_ids), SoloGalleryShare.release_at.is_(None))
+        .where(SoloGalleryShare.turn_id.in_(turn_ids), SoloGalleryShare.entered_at.is_not(None))
+        .subquery()
+    )
+    solo = await session.execute(
+        select(ranked.c.turn_id, ranked.c.created_at, ranked.c.user_id, User.display_name, User.name_color)
+        .join(User, User.id == ranked.c.user_id)
+        .where(ranked.c.rank == 1)
     )
     for share in solo.all():
         found.append((

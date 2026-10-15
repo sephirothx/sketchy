@@ -207,7 +207,9 @@ async def test_a_report_from_solo_is_accepted_and_a_second_says_nothing_of_the_d
     http, users, history, solo, factory = env
     drawer, stranger, turn, serve = await _served(http, users, history, factory)
     report = await http.post(f"/api/solo/serves/{serve['serveId']}/report", json={"details": "rude"})
-    assert report.status_code == 201 and report.json()["id"]
+    # No report id from this door, ever: a new report and one already open
+    # must read the same (#1494 review).
+    assert report.status_code == 201 and report.json()["id"] is None
     # Another drawing by the same drawer: a 409 here would tell the reporter
     # the two anonymous drawings share a drawer.
     guesser = await player(users, factory, "Guesser2")
@@ -218,7 +220,10 @@ async def test_a_report_from_solo_is_accepted_and_a_second_says_nothing_of_the_d
     await http.post(f"/api/solo/serves/{second['serveId']}/result", json={"outcome": "solved", "seconds": 3})
     again = await http.post(f"/api/solo/serves/{second['serveId']}/report", json={})
     assert again.status_code == 201
-    assert set(again.json()) == {"id", "status", "createdAt"}
+    first, repeat = report.json(), again.json()
+    assert {k: v for k, v in first.items() if k != "createdAt"} == {
+        k: v for k, v in repeat.items() if k != "createdAt"
+    }
     async with factory() as session:
         reports = (await session.scalars(select(PlayerReport))).all()
         assert len(reports) == 1 and reports[0].turn_id == UUID(turn.turn_id)
@@ -242,3 +247,72 @@ async def test_the_reaction_write_s_solo_door_asks_for_a_settled_serve_itself(en
         None, turn.turn_id, requesting_user_id=stranger.id, emoji="wow", from_solo=True
     )
     assert allowed is not None and allowed.reaction_counts == {"wow": 1}
+
+
+
+async def test_the_gallery_says_a_drawing_held_only_by_a_solo_share_is_still_in_it(env):
+    http, users, history, solo, factory = env
+    drawer, stranger, turn, serve = await _served(http, users, history, factory)
+    await http.put(f"/api/solo/serves/{serve['serveId']}/share")
+    # A guesser of the game shares it too, then takes theirs back.
+    from app.db.models import GameParticipant
+
+    async with factory() as session:
+        seat_user = await session.scalar(
+            select(GameParticipant.user_id).where(
+                GameParticipant.game_id == UUID(turn.game_id),
+                GameParticipant.user_id != UUID(drawer.id),
+            )
+        )
+    await sign_in_as(http, factory, str(seat_user))
+    path = f"/api/games/{turn.game_id}/turns/{turn.turn_id}/share"
+    assert (await http.put(path)).json()["inGallery"] is True
+    taken = await http.delete(f"/api/gallery/{turn.turn_id}/share")
+    assert taken.json()["inGallery"] is True
+    # The drawer is offered Take out, not Share: the history says it is in.
+    await sign_in_as(http, factory, drawer.id)
+    detail = (await http.get(f"/api/games/{turn.game_id}")).json()
+    assert detail["turns"][0]["inGallery"] is True and detail["turns"][0]["shares"] == []
+
+
+async def test_a_solo_player_can_take_back_a_share_and_a_reaction_after_a_take_out(env):
+    http, users, history, solo, factory = env
+    drawer, stranger, turn, serve = await _served(http, users, history, factory)
+    base = f"/api/solo/serves/{serve['serveId']}"
+    await http.put(f"{base}/share")
+    await http.put(f"{base}/reaction", json={"emoji": "wow"})
+    await sign_in_as(http, factory, drawer.id)
+    await http.delete(f"/api/games/{turn.game_id}/turns/{turn.turn_id}/solo")
+    await sign_in_as(http, factory, stranger.id)
+    # Adding is closed; taking back never is.
+    assert (await http.put(f"{base}/reaction", json={"emoji": "heart"})).status_code == 404
+    assert (await http.delete(f"{base}/reaction")).json()["myReaction"] is None
+    assert (await http.delete(f"{base}/share")).json()["sharedByMe"] is False
+
+
+async def test_released_shares_are_credited_in_the_order_they_were_made(env):
+    http, users, history, solo, factory = env
+    drawer = await player(users, factory, "Drawer")
+    seats = [await player(users, factory, f"Guesser{i}") for i in range(2)]
+    for index in range(5):
+        concept = await seed_concept(factory, {"zxx": f"Name{index}"})
+        await record_turn(
+            history, drawer=drawer.id, guessers=[seat.id for seat in seats],
+            version_id=concept.versions["zxx"],
+        )
+    today = datetime.now(timezone.utc).date().isoformat()
+    sharers = []
+    for name in ("Zed", "Amy"):
+        who = await player(users, factory, name)
+        await sign_in_as(http, factory, who.id)
+        run = (await http.post(f"/api/solo/daily/{today}")).json()
+        first = run["serves"][0]
+        await http.post(f"/api/solo/serves/{first['serveId']}/result", json={"outcome": "solved", "seconds": 2})
+        held = (await http.put(f"/api/solo/serves/{first['serveId']}/share")).json()
+        sharers.append(who)
+    later = datetime.fromisoformat(held["heldUntil"]) + timedelta(minutes=1)
+    released = await release_held_solo_shares(factory, now=later)
+    assert int(released) == 2 and released.batches == 1
+    [entry] = (await http.get("/api/gallery")).json()["entries"]
+    # Zed shared first; a uuid order would credit whoever sorts first.
+    assert entry["sharedBy"]["displayName"] == sharers[0].display_name

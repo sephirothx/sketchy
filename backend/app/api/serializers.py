@@ -171,6 +171,8 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 # first, and whether its drawer took it out (#1430).
                 "shares": list(r.shares),
                 "shareWithdrawn": r.gallery_withdrawn,
+                # In the Gallery, a Solo player's share counted (#1434).
+                "inGallery": r.in_gallery,
             }
             for r in detail.turns
         ],

@@ -38,6 +38,10 @@ def upgrade() -> None:
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("release_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("entered_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint(
+            "(release_at IS NULL) = (entered_at IS NOT NULL)", name="ck_solo_gallery_shares_held"
+        ),
     )
     op.create_index("ix_solo_gallery_shares_user_id", "solo_gallery_shares", ["user_id"])
     op.create_index(

@@ -837,48 +837,87 @@ async def release_held_solo_shares(
     budget=None,
 ):
     """Put in the Gallery the Solo shares held for a Daily whose date has now
-    ended everywhere (#1434): each drawing locked as a share write locks it,
-    the share released, the projection set again and the drawer told
-    (R-SHARE-09). A retention-loop sweep, so it runs hourly and reports like
-    one; a share whose drawing was withdrawn or erased meanwhile is already
-    gone with it."""
+    ended everywhere (#1434): a drawing at a time, all its due shares in one
+    write, the projection set once and the drawer told once (R-SHARE-09). The
+    erasure barrier's order, as every share write takes it: the accounts -
+    the drawer's and the sharers' - shared and ascending, then the drawing
+    row (#1494 review). A share whose drawing was taken out of the Gallery or
+    stopped being shareable meanwhile goes instead. A retention-loop sweep,
+    so it runs hourly and reports like one."""
     from app.services.sweeps import SweepReport
 
     moment = now or datetime.now(timezone.utc)
     started = time.monotonic()
     released = 0
     async with session_factory() as session:
-        due = (
-            await session.execute(
-                select(SoloGalleryShare.turn_id, SoloGalleryShare.user_id)
-                .where(
-                    SoloGalleryShare.release_at.is_not(None),
-                    SoloGalleryShare.release_at <= moment,
+        due_turns = list(
+            (
+                await session.scalars(
+                    select(SoloGalleryShare.turn_id)
+                    .where(
+                        SoloGalleryShare.release_at.is_not(None),
+                        SoloGalleryShare.release_at <= moment,
+                    )
+                    .group_by(SoloGalleryShare.turn_id)
+                    .order_by(func.min(SoloGalleryShare.release_at))
+                    .limit(RELEASE_BATCH_DRAWINGS)
                 )
-                .order_by(SoloGalleryShare.release_at)
-                .limit(1000)
-            )
-        ).all()
-    for turn_id, user_id in due:
+            ).all()
+        )
+    for turn_id in due_turns:
         async with session_factory() as session:
             async with session.begin():
-                turn = await session.get(TurnRecord, turn_id)
+                turn = await session.scalar(
+                    select(TurnRecord).where(TurnRecord.id == turn_id).options(selectinload(TurnRecord.game))
+                )
+                sharers = (
+                    await session.scalars(
+                        select(SoloGalleryShare.user_id).where(
+                            SoloGalleryShare.turn_id == turn_id,
+                            SoloGalleryShare.release_at.is_not(None),
+                            SoloGalleryShare.release_at <= moment,
+                        )
+                    )
+                ).all()
+                if turn is None or not sharers:
+                    continue
+                accounts = set(sharers)
+                if turn.drawer_user_id is not None:
+                    accounts.add(turn.drawer_user_id)
+                await erased_identity_ids(session, accounts)
                 drawing_row = await session.scalar(
                     select(TurnDrawing)
                     .where(TurnDrawing.turn_id == turn_id)
                     .options(defer(TurnDrawing.payload))
                     .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
-                share = await session.get(SoloGalleryShare, (turn_id, user_id))
-                if turn is None or drawing_row is None or share is None or share.release_at is None:
+                due = (
+                    SoloGalleryShare.turn_id == turn_id,
+                    SoloGalleryShare.release_at.is_not(None),
+                    SoloGalleryShare.release_at <= moment,
+                )
+                if (
+                    drawing_row is None
+                    or not _shareable(drawing_row, turn)
+                    or not _may_share(
+                        is_drawer=False,
+                        visibility=turn.game.visibility,
+                        withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                    )
+                ):
+                    await session.execute(delete(SoloGalleryShare).where(*due))
                     continue
-                share.release_at = None
-                share.created_at = moment
+                result = await session.execute(
+                    update(SoloGalleryShare)
+                    .where(*due)
+                    .values(release_at=None, entered_at=moment)
+                )
+                released += result.rowcount or 0
                 await refresh_share_projection(session, drawing_row)
-                # The drawer's bell reads it on its next look (R-INBOX-03);
-                # a sweep has no socket to push from.
+                # The drawer's bell reads it on its next look (R-INBOX-03); a
+                # sweep has no socket to push from.
                 await _leave_share_notice(session, turn, now=moment)
-                released += 1
     async with session_factory() as session:
         oldest = await session.scalar(
             select(func.min(SoloGalleryShare.release_at)).where(
@@ -890,11 +929,16 @@ async def release_held_solo_shares(
     return SweepReport(
         released,
         name="solo_held_shares",
-        batches=1 if due else 0,
+        batches=len(due_turns),
         seconds=time.monotonic() - started,
-        exhausted=len(due) >= 1000,
+        exhausted=len(due_turns) >= RELEASE_BATCH_DRAWINGS,
         oldest_overdue_seconds=(moment - oldest).total_seconds() if oldest else 0.0,
     )
+
+
+# Drawings whose held Solo shares one sweep releases: each is one
+# transaction, whatever its count of shares.
+RELEASE_BATCH_DRAWINGS = 500
 
 
 async def _take_back_solo_share(
@@ -926,14 +970,20 @@ async def _take_back_solo_share(
         turn_id=_public_id(turn.id),
         shares=await _share_seats(session, turn.id),
         withdrawn=drawing_row.gallery_withdrawn_at is not None,
+        in_gallery=drawing_row.gallery_share_count > 0,
     )
 
 
 async def _solo_may_react(
-    session: AsyncSession, turn_id: UUID, identity_ids: Sequence[UUID]
+    session: AsyncSession,
+    turn_id: UUID,
+    identity_ids: Sequence[UUID],
+    *,
+    require_servable: bool = True,
 ) -> bool:
-    """Whether Solo served this drawing to one of these identities, they
-    settled it, and it is still servable to anybody (R-SOLO-02)."""
+    """Whether Solo served this drawing to one of these identities and they
+    settled it - and, to react rather than take a reaction back, that it is
+    still servable to anybody (R-SOLO-02)."""
     from app.repositories.solo import servable_clauses
 
     served = await session.scalar(
@@ -943,7 +993,7 @@ async def _solo_may_react(
             SoloServe.turn_id == turn_id,
             SoloServe.user_id.in_(list(identity_ids)),
             SoloServe.settled_at.is_not(None),
-            *servable_clauses(),
+            *(servable_clauses() if require_servable else ()),
         )
         .limit(1)
     )
@@ -1150,22 +1200,45 @@ async def _share_credits(
             .where(TurnDrawingShare.turn_id.in_(list(turn_ids)))
         )
     ).all()
+    # Solo shares are unbounded per drawing - anybody served it may share
+    # it - so only each drawing's first is read (#1494 review), and the
+    # viewer's own apart.
+    ranked = (
+        select(
+            SoloGalleryShare.turn_id,
+            SoloGalleryShare.user_id,
+            SoloGalleryShare.created_at,
+            func.row_number()
+            .over(
+                partition_by=SoloGalleryShare.turn_id,
+                order_by=(SoloGalleryShare.created_at, SoloGalleryShare.user_id),
+            )
+            .label("rank"),
+        )
+        .where(
+            SoloGalleryShare.turn_id.in_(list(turn_ids)),
+            SoloGalleryShare.entered_at.is_not(None),
+        )
+        .subquery()
+    )
     solo = (
         await session.execute(
-            select(
-                SoloGalleryShare.turn_id,
-                SoloGalleryShare.user_id,
-                SoloGalleryShare.created_at,
-                User.display_name,
-                User.name_color,
-            )
-            .join(User, User.id == SoloGalleryShare.user_id)
-            .where(
-                SoloGalleryShare.turn_id.in_(list(turn_ids)),
-                SoloGalleryShare.release_at.is_(None),
-            )
+            select(ranked.c.turn_id, ranked.c.user_id, ranked.c.created_at, User.display_name, User.name_color)
+            .join(User, User.id == ranked.c.user_id)
+            .where(ranked.c.rank == 1)
         )
     ).all()
+    solo_mine = set(
+        (
+            await session.scalars(
+                select(SoloGalleryShare.turn_id).where(
+                    SoloGalleryShare.turn_id.in_(list(turn_ids)),
+                    SoloGalleryShare.user_id.in_(list(viewer_ids)),
+                    SoloGalleryShare.entered_at.is_not(None),
+                )
+            )
+        ).all()
+    ) if viewer_ids else set()
     entries = [
         (
             row.turn_id, _aware(row.created_at), 0, str(row.participant_id), row.user_id,
@@ -1192,7 +1265,7 @@ async def _share_credits(
         for row in solo
     ]
     viewers = set(viewer_ids)
-    mine = {entry[0] for entry in entries if entry[4] in viewers}
+    mine = {entry[0] for entry in entries if entry[4] in viewers} | solo_mine
     credits: dict[UUID, _ShareCredit] = {}
     for turn_id, _at, _kind, _tie, _user, credit in sorted(entries, key=lambda e: e[:4]):
         if turn_id in credits:
@@ -3521,7 +3594,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     # Solo's door (#1434): a drawing Solo served this player
                     # and they have settled, still servable to anybody. Not a
                     # seat either.
-                    if not await _solo_may_react(session, db_turn_id, identity_ids):
+                    if not await _solo_may_react(
+                        session, db_turn_id, identity_ids, require_servable=emoji is not None
+                    ):
                         return None
                 elif seat is None:
                     return None
@@ -3741,6 +3816,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     shares=await _share_seats(session, db_turn_id),
                     withdrawn=drawing_row.gallery_withdrawn_at is not None,
                     notify_user_id=_public_id(notify) if notify is not None else None,
+                    in_gallery=drawing_row.gallery_share_count > 0,
                 )
 
     async def set_solo_withdrawn(
@@ -3818,6 +3894,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 identity_ids = await _identity_ids(session, db_user_id)
+                # Taking one's own share back never depends on the drawing
+                # still being servable: a drawer's opt-out must not strand a
+                # share the player can no longer reach (#1494 review).
                 served = await session.scalar(
                     select(SoloServe.id)
                     .join(SoloPoolEntry, SoloPoolEntry.turn_id == SoloServe.turn_id)
@@ -3825,7 +3904,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         SoloServe.turn_id == db_turn_id,
                         SoloServe.user_id.in_(identity_ids),
                         SoloServe.settled_at.is_not(None),
-                        *servable_clauses(),
+                        *(servable_clauses() if shared else ()),
                     )
                     .limit(1)
                 )
@@ -3880,6 +3959,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 user_id=identity_ids[0],
                                 created_at=now,
                                 release_at=release_at,
+                                entered_at=None if release_at is not None else now,
                             )
                         )
                         if release_at is None:
@@ -3923,7 +4003,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             return None
         async with self._session_factory() as session:
             withdrawn_at = await session.execute(
-                select(TurnDrawing.gallery_withdrawn_at).where(TurnDrawing.turn_id == db_turn_id)
+                select(TurnDrawing.gallery_withdrawn_at, TurnDrawing.gallery_share_count).where(
+                    TurnDrawing.turn_id == db_turn_id
+                )
             )
             row = withdrawn_at.first()
             if row is None:
@@ -3932,6 +4014,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 turn_id=_public_id(db_turn_id),
                 shares=await _share_seats(session, db_turn_id),
                 withdrawn=row[0] is not None,
+                in_gallery=row[1] > 0,
             )
 
     @database_operation_of("gallery_page")
@@ -4164,7 +4247,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         select(SoloGalleryShare.turn_id).where(
                             SoloGalleryShare.turn_id.in_(db_turn_ids),
                             SoloGalleryShare.user_id.in_(viewer_ids),
-                            SoloGalleryShare.release_at.is_(None),
+                            SoloGalleryShare.entered_at.is_not(None),
                         )
                     )
                 ).all()
@@ -4726,6 +4809,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     ).load_only(
                         TurnDrawing.status,
                         TurnDrawing.gallery_withdrawn_at,
+                        TurnDrawing.gallery_share_count,
                         TurnDrawing.moderation_erased_at,
                     ),
                     selectinload(GameRecord.turns).selectinload(
@@ -4839,6 +4923,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         gallery_withdrawn=(
                             r.drawing is not None
                             and r.drawing.gallery_withdrawn_at is not None
+                        ),
+                        in_gallery=(
+                            r.drawing is not None and r.drawing.gallery_share_count > 0
                         ),
                     )
                 )

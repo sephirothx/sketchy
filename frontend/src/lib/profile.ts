@@ -120,6 +120,8 @@ export interface GameTurn {
   shares: string[];
   /** Its drawer took it out of the Gallery: nobody else may share it again. */
   shareWithdrawn: boolean;
+  /** In the Gallery, a Solo player's share counted (#1434). */
+  inGallery: boolean;
 }
 
 export interface GameRuleSnapshot {
@@ -245,6 +247,8 @@ export interface HistoryShareResult {
   turnId: string;
   shares: string[];
   shareWithdrawn: boolean;
+  /** Held by a Solo player's share too, which no seat lists (#1434). */
+  inGallery: boolean;
 }
 
 /**

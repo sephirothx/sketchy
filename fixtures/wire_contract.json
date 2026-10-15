@@ -1952,6 +1952,7 @@
    "turnId"
   ],
   "api.profiles:share_payload": [
+   "inGallery",
    "shareWithdrawn",
    "turnId"
   ],
@@ -2038,6 +2039,7 @@
    "durationSeconds",
    "eligibilityReason",
    "hintsUsed",
+   "inGallery",
    "mySeatId",
    "nearMissCount",
    "participantOutcomes",

@@ -398,6 +398,8 @@ def share_payload(result: DrawingShareResult) -> dict:
         "turnId": result.turn_id,
         "shares": list(result.shares),
         "shareWithdrawn": result.withdrawn,
+        # Held by a Solo player's share too, which no seat lists (#1434).
+        "inGallery": result.in_gallery,
     }
 
 

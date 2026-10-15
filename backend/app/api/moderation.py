@@ -3872,6 +3872,10 @@ def create_moderation_router(
                     raise Refusal(
                         422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself."
                     )
+                # From Solo the answer is the same whatever happened - never a
+                # report id, which would differ between a new report and one
+                # already open, and so say the two drawings share a drawer
+                # (#1494 review).
                 quiet = {
                     "id": None,
                     "status": ReportStatus.PENDING.value,
@@ -3915,6 +3919,8 @@ def create_moderation_router(
                     if door == "solo":
                         return quiet
                     raise already from error
+            if door == "solo":
+                return quiet
             return {
                 "id": str(report.id),
                 "status": report.status,

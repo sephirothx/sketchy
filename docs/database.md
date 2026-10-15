@@ -2233,8 +2233,9 @@ cd backend && .venv/bin/python -m app.services.solo_pool --bests
 ```
 
 ### `solo_gallery_shares`
-`turn_id` (CASCADE) + `user_id` (CASCADE, indexed) composite **PK** · `created_at` ·
-`release_at` (partial index where set).
+`turn_id` (CASCADE) + `user_id` (CASCADE, indexed) composite **PK** · `created_at` (when it was
+shared: the credit order) · `release_at` (partial index where set) · `entered_at` (when it entered
+the Gallery; set exactly when `release_at` is not, `ck_solo_gallery_shares_held`).
 
 A Solo player putting a drawing they were served in the Gallery (#1434, R-SOLO-15): a share
 like a seat's — counted toward `gallery_share_count` and `gallery_shared_at`, credited, taken
@@ -2244,9 +2245,11 @@ rather than a seatless row in `turn_drawing_shares`, so nothing that reads a sha
 the room, the recap, history — ever meets one without. `gallery_ranking.gallery_share_rows`
 is the one union the projections, their rebuild and the audit count. A share of a drawing in
 a Daily still open anywhere is **held** (`release_at` = the date's end everywhere) and not
-counted; the hourly retention sweep `solo_held_shares` releases it (setting `created_at` to
-the release, so it enters New then) and tells the drawer (R-SHARE-09). Deleted with either
-account.
+counted; the hourly retention sweep `solo_held_shares` releases it — a drawing at a time, all its
+due shares in one write under the erasure barrier's lock order, the drawer told once
+(R-SHARE-09) — setting `entered_at`, which is what the projections and New read, while
+`created_at` keeps the credit order. Credit reads take only each drawing's first Solo share
+(`row_number()`), since anybody served a drawing may share it. Deleted with either account.
 
 ---
 
