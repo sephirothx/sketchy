@@ -17,11 +17,15 @@ from app.api import solo as solo_api
 from app.db.models import SoloDailyDay, SoloDailyResult, SoloRun
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
-from tests.test_solo_daily import _candidates, env  # noqa: F401 - the fixture
+from tests import test_solo_daily
 
 TODAY = datetime.now(timezone.utc).date()
 # Ended everywhere, whatever the clock says when the suite runs.
 PAST = TODAY - timedelta(days=3)
+
+# The Daily suite's app and seeding: the archive is that Daily, later.
+env = test_solo_daily.env
+_candidates = test_solo_daily._candidates
 
 
 def _noon(day):
