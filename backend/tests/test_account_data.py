@@ -35,6 +35,8 @@ from app.auth.routes import create_auth_router
 from app.canvas_history import PackedCanvasHistory
 from app.canvas_storage import stored_drawing_checksum
 from app.db.models import (
+    SoloBest,
+    SoloDailyResult,
     SoloRun,
     SoloServe,
     AuditEvent,
@@ -411,6 +413,20 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                 )
             )
             session.add(
+                SoloDailyResult(
+                    user_id=UUID(owner["id"]), daily_date=STARTED.date(), run_id=solo_run.id,
+                    positions_played=1, solved=1, points=240,
+                    marks=[{"position": 1, "outcome": "solved", "seconds": 9.0, "late": False}],
+                    started_on_date=True, started_at=STARTED,
+                )
+            )
+            session.add(
+                SoloBest(
+                    user_id=UUID(owner["id"]), length_key="5", best=1240, run_id=solo_run.id,
+                    achieved_at=STARTED,
+                )
+            )
+            session.add(
                 RoomMessage(
                     id=generate_uuid(),
                     room_instance_id=generate_uuid(),
@@ -669,6 +685,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         solo_run["id"], "lighthouse", 240,
     )
     assert not {"turnId", "gameId", "drawer"} & set(solo_serve)
+    [daily] = artifact["soloDailyResults"]
+    assert (daily["solved"], daily["points"], daily["marks"][0]["outcome"]) == (1, 240, "solved")
+    assert artifact["soloBests"] == [{"length": "5", "best": 1240, "achievedAt": daily["startedAt"]}]
 
     contract = json.loads(
         (REPO_ROOT / "fixtures" / "account_data_export_v18_fields.json").read_text(

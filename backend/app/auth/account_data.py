@@ -63,6 +63,8 @@ from app.db.models import (
     PromptVersionAlias,
     RoomMessage,
     ScoreEvent,
+    SoloBest,
+    SoloDailyResult,
     SoloRun,
     SoloServe,
     TurnDrawing,
@@ -120,7 +122,8 @@ from app.domain_values import (
 # offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
 # To 15 when a list carries its working copy's `prompts` instead of every
 # revision it was saved as (#1359). To 18 when Solo's runs and the drawings
-# they served joined it (`soloRuns`, `soloServes`, #1434) - without the turn,
+# they served joined it (`soloRuns`, `soloServes`, `soloDailyResults`,
+# `soloBests`, #1434) - without the turn,
 # which would name a stranger's drawing the player saw only anonymously.
 EXPORT_SCHEMA_VERSION = 18
 
@@ -1452,6 +1455,37 @@ async def _write_export_artifact(
             "settledAt": _timestamp(serve.settled_at) if serve.settled_at else None,
         },
     )
+    writer.key("soloDailyResults")
+    await _write_rows(
+        writer,
+        session,
+        select(SoloDailyResult)
+        .where(SoloDailyResult.user_id.in_(identity_ids))
+        .order_by(SoloDailyResult.daily_date),
+        lambda result: {
+            "date": result.daily_date.isoformat(),
+            "positionsPlayed": result.positions_played,
+            "solved": result.solved,
+            "points": result.points,
+            "marks": list(result.marks),
+            "startedOnDate": result.started_on_date,
+            "startedAt": _timestamp(result.started_at),
+            "completedAt": _timestamp(result.completed_at) if result.completed_at else None,
+        },
+    )
+    writer.key("soloBests")
+    await _write_rows(
+        writer,
+        session,
+        select(SoloBest)
+        .where(SoloBest.user_id.in_(identity_ids))
+        .order_by(SoloBest.length_key),
+        lambda best: {
+            "length": best.length_key,
+            "best": best.best,
+            "achievedAt": _timestamp(best.achieved_at),
+        },
+    )
     writer.key("exportRequests")
     await _write_rows(
         writer,
@@ -1848,6 +1882,10 @@ async def anonymize_account(
             # account's own Solo runs go too, with the drawings they served:
             # its play, not anybody's history.
             await erase_pool_rows(session, drawer_user_ids=identity_ids)
+            await session.execute(
+                delete(SoloDailyResult).where(SoloDailyResult.user_id.in_(identity_ids))
+            )
+            await session.execute(delete(SoloBest).where(SoloBest.user_id.in_(identity_ids)))
             await session.execute(delete(SoloRun).where(SoloRun.user_id.in_(identity_ids)))
             # An erased drawing takes its reactions with it: they were about
             # the drawing, and there is nothing left for them to be about.

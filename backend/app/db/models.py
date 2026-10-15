@@ -3459,6 +3459,11 @@ class TurnParticipantOutcome(Base):
     )
 
 
+# Which pool rows the Daily may pick from (#1434), as SQL the partial index and
+# the pick both say: at least two guessers, and at least a fifth named it.
+SOLO_DAILY_CANDIDATE = "guesser_count >= 2 AND correct_count * 5 >= guesser_count"
+
+
 class SoloPoolEntry(Base):
     """A drawing Solo may serve (#1434), as its finished game left it.
 
@@ -3479,6 +3484,15 @@ class SoloPoolEntry(Base):
         ),
         CheckConstraint(
             "sample_key >= 0 AND sample_key < 2147483648", name="ck_solo_pool_sample_key"
+        ),
+        # The Daily's candidates (#1434): two guessers or more, and a fifth of
+        # them or more named it. Partial, so the Daily's walk never reads a
+        # row it could not pick.
+        Index(
+            "ix_solo_pool_daily",
+            "sample_key",
+            postgresql_where=sql_text(SOLO_DAILY_CANDIDATE),
+            sqlite_where=sql_text(SOLO_DAILY_CANDIDATE),
         ),
     )
 
@@ -3566,6 +3580,15 @@ class SoloRun(Base):
         ),
         # A player's runs by kind: the active one, and the bests' rebuild.
         Index("ix_solo_runs_user_mode", "user_id", "mode", "length"),
+        # One Daily per player per date: resumed, never restarted.
+        Index(
+            "uq_solo_runs_one_daily",
+            "user_id",
+            "daily_date",
+            unique=True,
+            postgresql_where=sql_text("mode = 'daily'"),
+            sqlite_where=sql_text("mode = 'daily'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -3657,6 +3680,139 @@ class SoloServe(Base):
     # The client's own clock (#1434: play is local), bounded to the 30 s.
     solve_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class SoloDailyDay(Base):
+    """Whether a date has a Daily (#1434), decided by the first request for it.
+
+    The row is what two first requests race for: the one that inserts it
+    picks the set, in the same transaction; the other waits on the key and
+    reads what was picked. A day with fewer than five candidates is stored
+    as `skipped`, so it stays skipped for everybody even if the pool grows
+    later that day."""
+
+    __tablename__ = "solo_daily_days"
+    __table_args__ = (_values_check("state", ("set", "skipped"), "ck_solo_daily_days_state"),)
+
+    daily_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    state: Mapped[str] = mapped_column(String(8), nullable=False)
+    picked_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
+class SoloDailySet(Base):
+    """One of a date's five Daily drawings (#1434), the same for everybody.
+
+    Kept forever: the archive plays past days (#1470). A drawing that stops
+    being servable to anybody - withdrawn, hidden, erased, its drawer opted
+    out, its prompt taken down - is replaced for everybody; the row keeps the
+    turn it replaced and when, and results already played keep their marks.
+    """
+
+    __tablename__ = "solo_daily_sets"
+    __table_args__ = (
+        UniqueConstraint("daily_date", "concept_id", name="uq_solo_daily_sets_date_concept"),
+        CheckConstraint("position >= 1 AND position <= 5", name="ck_solo_daily_sets_position"),
+        # What the 60-day reuse rule and the free runs' open-Daily exclusion read.
+        Index("ix_solo_daily_sets_concept_date", "concept_id", "daily_date"),
+    )
+
+    daily_date: Mapped[date] = mapped_column(
+        Date, ForeignKey("solo_daily_days.daily_date", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The original game's share of guessers who named it, when it was picked:
+    # the set's order, easiest first.
+    solve_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    # The drawing this one replaced, when one stopped being servable. No
+    # foreign key: it may be erased, and it is only ever read with its date.
+    replaced_turn_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    replaced_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SoloDailyResult(Base):
+    """A player's Daily for one date (#1434): a fact that grows.
+
+    Written when the first drawing of it settles and added to as each of the
+    others does, so a Daily left half played keeps its progress. `marks` is
+    one entry per position played - its outcome, the seconds, and whether it
+    was played after the date had ended (`late`, from the archive) - which is
+    what the copied result is written from.
+    """
+
+    __tablename__ = "solo_daily_results"
+    __table_args__ = (
+        CheckConstraint(
+            "positions_played >= 0 AND positions_played <= 5 AND solved >= 0 "
+            "AND solved <= positions_played AND points >= 0",
+            name="ck_solo_daily_results_counts",
+        ),
+        CheckConstraint(
+            "(completed_at IS NOT NULL) = (positions_played = 5)",
+            name="ck_solo_daily_results_completed",
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    daily_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("solo_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    positions_played: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    solved: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    marks: Mapped[list[dict]] = mapped_column(PortableJSON, nullable=False, default=list)
+    # Started while the date was still today somewhere: what the streak counts.
+    started_on_date: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SoloBest(Base):
+    """A player's best free run of one length (#1434): points for 5 and 10,
+    drawings named for unlimited. A projection of their recorded runs,
+    raised in the transaction that ends a run and rebuilt from `solo_runs`
+    (`python -m app.services.solo_pool --bests`); never lowered."""
+
+    __tablename__ = "solo_bests"
+    __table_args__ = (
+        _values_check("length_key", ("5", "10", "unlimited"), "ck_solo_bests_length_key"),
+        CheckConstraint("best >= 0", name="ck_solo_bests_best"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    length_key: Mapped[str] = mapped_column(String(12), primary_key=True)
+    best: Mapped[int] = mapped_column(Integer, nullable=False)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("solo_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    achieved_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
 
 
 class TurnDrawingReaction(Base):
