@@ -158,3 +158,15 @@ test("a fraction maps back to a position: part way along a stroke, or into a win
   assert.ok(Math.abs(back.point - 2.5) < 1e-9);
   assert.deepEqual(replayPlan([]).positionAt(0.5), { action: 0, point: 0 });
 });
+
+test("Solo replays every drawing over the duration it names (#1434)", () => {
+  const doodle = replayPlan([path(10)], { seconds: 20 });
+  assert.equal(doodle.seconds, 20);
+  assert.equal(doodle.pointsPerSecond, 1);
+  const dense = replayPlan(Array.from({ length: 200 }, () => path(60)), { seconds: 20 });
+  assert.equal(dense.seconds, 20);
+  assert.equal(dense.pointsPerSecond, dense.total / 20);
+  // Nothing named, or nothing usable: the size decides as before.
+  assert.equal(replayPlan([path(10)], { seconds: 0 }).seconds, REPLAY_MIN_SECONDS);
+  assert.equal(replayPlan([path(10)], {}).seconds, REPLAY_MIN_SECONDS);
+});

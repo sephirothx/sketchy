@@ -40,6 +40,9 @@ export const LEGAL_ES: LegalDocuments = {
           "Tus partidas: las salas en las que jugaste, tus respuestas, puntos y " +
             "resultados, tus reacciones, los dibujos que hiciste y los dibujos " +
             "que compartiste en la Galería.",
+          "Solo: las partidas que juegas, qué dibujos se te mostraron y qué " +
+            "hiciste con cada uno, tus resultados del Reto diario y tus récords " +
+            "personales.",
           "El chat, en las salas y en el vestíbulo.",
           "Los mensajes de tu bandeja de entrada, sobre tu cuenta, tus dibujos " +
             "y tus amistades.",
@@ -101,6 +104,15 @@ export const LEGAL_ES: LegalDocuments = {
             "dibujo tuyo, y nadie podrá volver a compartirlo a menos que lo " +
             "hagas tú. Los dibujos de una sala privada solo los ven quienes " +
             "estaban en ella, salvo que compartas los tuyos.",
+          "En Solo, a un jugador que no estuvo en una partida pública se le " +
+            "puede mostrar uno de los dibujos de esa partida para que lo " +
+            "adivine, sin el nombre, la imagen ni ningún vínculo con quien lo " +
+            "dibujó. Únicamente sabe de quién es si lo comparte en la Galería, " +
+            "donde aparece con el nombre con el que se dibujó. En Ajustes " +
+            "puedes hacer que Solo no muestre ninguno de tus dibujos públicos, " +
+            "o quitar un dibujo concreto desde tu historial de partidas; un " +
+            "dibujo hecho como invitado se muestra del mismo modo, y puede " +
+            "quitarse una vez que tengas una cuenta.",
           "Si eliminas tu cuenta, se borran todos tus dibujos, salvo una copia " +
             "adjunta a una denuncia, que se queda con ella; para que se borre " +
             "uno solo, escribe a {contact}.",
@@ -157,6 +169,8 @@ export const LEGAL_ES: LegalDocuments = {
           "Entradas y salidas de las salas: 30 días.",
           "Correos que se te envían: 30 días.",
           "Exportaciones de datos que pidas: 7 días.",
+          "Partidas de Solo, resultados y récords personales: hasta que " +
+            "elimines tu cuenta.",
           "Las partidas terminadas —puntos, dibujos, reacciones— forman parte " +
             "del historial de todos los que jugaron, así que se conservan. Si " +
             "eliminas tu cuenta, tus dibujos se borran y tu lugar en esas " +
@@ -263,7 +277,8 @@ export const LEGAL_ES: LegalDocuments = {
         body: [
           "Lo que dibujas, escribes y publicas sigue siendo tuyo. Para que el " +
             "juego funcione, permites al operador guardarlo, mostrarlo y " +
-            "copiarlo dentro de Sketchy —en tu sala, en la Galería una vez que " +
+            "copiarlo dentro de Sketchy —en tu sala, en Solo sin tu nombre si la " +
+            "sala era pública, en la Galería una vez que " +
             "se comparte un dibujo, " +
             "en las listas de palabras que publiques y en las " +
             "copias que otros hagan de ellas—, de forma gratuita, en todo el " +

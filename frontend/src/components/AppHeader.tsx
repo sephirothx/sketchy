@@ -6,17 +6,7 @@ import { InboxBell } from "./InboxBell";
 import { AccountMenu } from "./AccountMenu";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { needsIdentity, useAuthStore } from "../store/authStore";
-import {
-  BackIcon,
-  BarChartIcon,
-  ChevronRightIcon,
-  GearIcon,
-  HomeIcon,
-  ImageIcon,
-  InfoIcon,
-  StarIcon,
-  Wordmark,
-} from "./icons";
+import { BackIcon, BarChartIcon, ChevronRightIcon, GearIcon, HomeIcon, ImageIcon, InfoIcon, StarIcon, UserIcon, Wordmark } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
 import { linksToGallery } from "../lib/lobbyControls.ts";
@@ -234,6 +224,8 @@ function SiteNav() {
 
   const pages: { to: string; label: string; icon: ReactNode }[] = [
     { to: "/", label: ui.lobbyBrowserPage.lobby, icon: <HomeIcon size={16} /> },
+    // Every visitor sees it: a guest is told there what an account unlocks.
+    { to: "/solo", label: ui.solo.solo, icon: <UserIcon size={16} /> },
     ...(hasSession ? [{ to: "/gallery", label: ui.galleryPage.gallery, icon: <ImageIcon size={16} /> }] : []),
     { to: "/community-lists", label: ui.appHeader.communityLink, icon: <StarIcon size={16} /> },
     { to: "/prompt-lists", label: ui.appHeader.promptStatsLink, icon: <BarChartIcon size={16} /> },

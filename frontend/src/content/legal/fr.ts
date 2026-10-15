@@ -43,6 +43,9 @@ export const LEGAL_FR: LegalDocuments = {
           "Tes parties : les salons où tu as joué, tes réponses, tes points et " +
             "résultats, tes réactions, les dessins que tu as faits et les " +
             "dessins que tu as partagés dans la Galerie.",
+          "Solo : les parties que tu joues, les dessins qui t'ont été montrés " +
+            "et ce que tu as fait de chacun, tes résultats au Défi du jour et " +
+            "tes records personnels.",
           "Le chat, dans les salons et dans le hall.",
           "Les messages de ta boîte de réception, au sujet de ton compte, de " +
             "tes dessins et de tes amitiés.",
@@ -108,6 +111,15 @@ export const LEGAL_FR: LegalDocuments = {
             "personne ne peut alors le partager de nouveau, sauf toi. Les dessins " +
             "d'un salon privé ne sont vus que par les personnes qui y étaient, " +
             "sauf si tu partages les tiens.",
+          "Dans Solo, un joueur qui n'était pas dans une partie publique peut " +
+            "se voir montrer l'un des dessins de cette partie à deviner, sans " +
+            "nom, image ni lien vers la personne qui l'a dessiné. Ce joueur " +
+            "n'apprend de qui il est que s'il le partage dans la Galerie, où il " +
+            "apparaît sous le nom sous lequel il a été dessiné. Dans les " +
+            "Paramètres, tu peux empêcher Solo de montrer tes dessins publics, " +
+            "ou retirer un seul dessin depuis ton historique des parties ; un " +
+            "dessin fait en tant qu'invité est montré de la même façon, et peut " +
+            "être retiré une fois que tu as un compte.",
           "Supprimer ton compte efface tous tes dessins, sauf une copie jointe " +
             "à un signalement, qui reste avec lui ; pour en faire effacer un " +
             "seul, écris à {contact}.",
@@ -168,6 +180,8 @@ export const LEGAL_FR: LegalDocuments = {
           "Entrées et sorties des salons : 30 jours.",
           "E-mails qui te sont envoyés : 30 jours.",
           "Exports de données que tu demandes : 7 jours.",
+          "Parties de Solo, résultats et records personnels : jusqu'à ce que " +
+            "tu supprimes ton compte.",
           "Les parties terminées – points, dessins, réactions – font partie de " +
             "l'historique de tous ceux qui ont joué, elles sont donc conservées. " +
             "Si tu supprimes ton compte, tes dessins sont effacés et ta place " +
@@ -279,7 +293,8 @@ export const LEGAL_FR: LegalDocuments = {
         body: [
           "Ce que tu dessines, écris et publies reste à toi. Pour que le jeu " +
             "fonctionne, tu autorises l'opérateur à le conserver, l'afficher et " +
-            "le copier au sein de Sketchy – dans ton salon, dans la Galerie une " +
+            "le copier au sein de Sketchy – dans ton salon, dans Solo sans ton nom " +
+            "si le salon était public, dans la Galerie une " +
             "fois un dessin partagé, " +
             "dans les listes de mots que tu publies et dans " +
             "les copies que d'autres en font –, gratuitement, dans le monde " +

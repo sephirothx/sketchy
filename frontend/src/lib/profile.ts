@@ -122,6 +122,8 @@ export interface GameTurn {
   shareWithdrawn: boolean;
   /** In the Gallery, a Solo player's share counted (#1434). */
   inGallery: boolean;
+  /** Its drawer took it out of Solo (#1434). */
+  soloWithdrawn: boolean;
 }
 
 export interface GameRuleSnapshot {

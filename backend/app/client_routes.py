@@ -33,6 +33,7 @@ CLIENT_ROUTES: tuple[str, ...] = (
     "/community-lists/:listId",
     "/gallery",
     "/gallery/:turnId",
+    "/solo",
     "/my-prompt-lists",
     "/profile",
     "/profile/:userId",

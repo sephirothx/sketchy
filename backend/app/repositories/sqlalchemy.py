@@ -4827,6 +4827,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         TurnDrawing.status,
                         TurnDrawing.gallery_withdrawn_at,
                         TurnDrawing.gallery_share_count,
+                        TurnDrawing.solo_withdrawn_at,
                         TurnDrawing.moderation_erased_at,
                     ),
                     selectinload(GameRecord.turns).selectinload(
@@ -4943,6 +4944,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         ),
                         in_gallery=(
                             r.drawing is not None and r.drawing.gallery_share_count > 0
+                        ),
+                        solo_withdrawn=(
+                            r.drawing is not None
+                            and r.drawing.solo_withdrawn_at is not None
                         ),
                     )
                 )

@@ -43,6 +43,9 @@ export const LEGAL_PL: LegalDocuments = {
           "Twoje gry: pokoje, w których toczyła się gra, twoje odpowiedzi, " +
             "punkty i wyniki, twoje reakcje, twoje rysunki oraz rysunki " +
             "udostępnione przez ciebie w Galerii.",
+          "Solo: twoje rozgrywki, to, jakie rysunki zostały ci pokazane, twoje " +
+            "odpowiedzi przy każdym z nich, twoje wyniki w Wyzwaniu dnia i " +
+            "twoje rekordy osobiste.",
           "Czat, w pokojach i w lobby.",
           "Wiadomości w twojej skrzynce, dotyczące twojego konta, twoich " +
             "rysunków i znajomych.",
@@ -105,6 +108,15 @@ export const LEGAL_PL: LegalDocuments = {
             "ponownie udostępnić, chyba że zrobisz to ty. Rysunki z pokoju " +
             "prywatnego widzą tylko osoby, które w nim były, chyba że udostępnisz " +
             "swoje.",
+          "W Solo graczowi, który nie brał udziału w publicznej grze, może " +
+            "zostać pokazany do zgadnięcia jeden z rysunków z tej gry, bez " +
+            "nazwy, zdjęcia ani żadnego powiązania z osobą, która go narysowała. " +
+            "Czyj to rysunek, gracz dowiaduje się tylko wtedy, gdy udostępni go " +
+            "w Galerii, gdzie pojawia się on pod nazwą, pod którą powstał. W " +
+            "Ustawieniach możesz sprawić, że Solo nie będzie pokazywać żadnego z " +
+            "twoich publicznych rysunków, albo zdjąć z Solo pojedynczy rysunek w " +
+            "swojej historii gier; rysunek stworzony jako gość jest pokazywany " +
+            "tak samo i można go zdjąć z Solo, gdy masz już konto.",
           "Usunięcie konta kasuje wszystkie twoje rysunki, oprócz kopii " +
             "dołączonej do zgłoszenia, która zostaje przy nim; żeby skasować " +
             "tylko jeden, napisz na adres {contact}.",
@@ -160,6 +172,7 @@ export const LEGAL_PL: LegalDocuments = {
           "Wejścia do pokoi i wyjścia z nich: 30 dni.",
           "Wysłane do ciebie e-maile: 30 dni.",
           "Zamówione eksporty danych: 7 dni.",
+          "Rozgrywki Solo, wyniki i rekordy osobiste: do usunięcia konta.",
           "Ukończone gry – punkty, rysunki, reakcje – są częścią historii " +
             "wszystkich, którzy grali, więc są przechowywane. Po usunięciu konta " +
             "twoje rysunki zostają skasowane, a twoje miejsce w tych grach " +
@@ -269,7 +282,8 @@ export const LEGAL_PL: LegalDocuments = {
         body: [
           "To, co rysujesz, piszesz i publikujesz, pozostaje twoje. Żeby gra " +
             "mogła działać, pozwalasz operatorowi przechowywać, pokazywać i " +
-            "kopiować to w ramach Sketchy – w twoim pokoju, w Galerii, gdy " +
+            "kopiować to w ramach Sketchy – w twoim pokoju, w Solo bez twojej " +
+            "nazwy, jeśli pokój był publiczny, w Galerii, gdy " +
             "rysunek zostanie udostępniony, " +
             "w listach haseł, które publikujesz, i w kopiach, " +
             "które robią z nich inni – bezpłatnie, na całym świecie i tak długo, " +

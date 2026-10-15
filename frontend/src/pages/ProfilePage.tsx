@@ -43,6 +43,7 @@ import {
   type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
+import { setSoloWithdrawn } from "../lib/solo";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
 import { friendListOwner, isFriend, profileFriendActionFor } from "../lib/friends";
@@ -222,6 +223,21 @@ function GameRow({
                     inGallery: result.inGallery,
                   }
                 : turn,
+            ),
+          }
+        : current,
+    );
+  }
+
+  // Out of Solo, or back in (#1434): the drawer's own, for one drawing.
+  async function setSoloOut(turnId: string, withdrawn: boolean) {
+    const out = await setSoloWithdrawn(game.id, turnId, withdrawn);
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            turns: current.turns.map((turn) =>
+              turn.id === turnId ? { ...turn, soloWithdrawn: out } : turn,
             ),
           }
         : current,
@@ -430,6 +446,19 @@ function GameRow({
                 onShare={(shared) => shareTurn(turn.id, shared)}
               />
             );
+            // Solo serves a public game's drawings to strangers (#1434): the
+            // drawer may take one out, or put it back.
+            const soloControlFor = (turn: GameTurn) =>
+              isMine(turn) && game.visibility === "public" && turn.drawingStatus === "ready" ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact"
+                  data-testid="solo-take-out"
+                  onClick={() => void setSoloOut(turn.id, !turn.soloWithdrawn)}
+                >
+                  {turn.soloWithdrawn ? ui.solo.putBackInSolo : ui.solo.takeOutOfSolo}
+                </button>
+              ) : null;
             const named = (
               seatId: string | null,
               fallbackName: string,
@@ -509,6 +538,7 @@ function GameRow({
                   <>
                     {shareControlFor(detail.turns[entry.index])}
                     {pinControlFor(detail.turns[entry.index])}
+                    {soloControlFor(detail.turns[entry.index])}
                   </>
                 )}
               />

@@ -20,7 +20,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon, UserIcon } from "../components/icons";
 import {
   rankedPromptLanguages,
   MIXED_PROMPT_LANGUAGE,
@@ -569,6 +569,18 @@ export function LobbyBrowserPage() {
                 <BoltIcon size={15} />
                 {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
               </button>
+              {/* The game of one (#1434): beside Quick play, the other way to
+                  be playing at once. */}
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact lobby-solo"
+                data-testid="lobby-solo"
+                disabled={Boolean(pendingJoin)}
+                onClick={() => navigate("/solo")}
+              >
+                <UserIcon size={15} />
+                {ui.solo.solo}
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-compact"
@@ -773,19 +785,31 @@ export function LobbyBrowserPage() {
           {error && !codeSheetOpen && (
             <p className="lobby-action-error" role="alert">{error}</p>
           )}
-          <button
-            type="button"
-            className="btn btn-warm btn-big lobby-quick-play"
-            data-testid="quick-play"
-            disabled={Boolean(pendingJoin)}
-            onClick={() => void handleQuickPlay()}
-          >
-            <BoltIcon size={16} />
-            {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
-          </button>
-          {/* Join by code, then Create room: the order the desktop's row
-              beside the room list has them in, so the two layouts are one
-              sequence rather than a mirror image. */}
+          {/* Quick play and Solo first, then Join by code and Create room:
+              the order the desktop's row beside the room list has them in,
+              so the two layouts are one sequence rather than a mirror image. */}
+          <div className="lobby-dock-top">
+            <button
+              type="button"
+              className="btn btn-warm btn-big lobby-quick-play"
+              data-testid="quick-play"
+              disabled={Boolean(pendingJoin)}
+              onClick={() => void handleQuickPlay()}
+            >
+              <BoltIcon size={16} />
+              {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-big lobby-solo"
+              data-testid="lobby-solo"
+              disabled={Boolean(pendingJoin)}
+              onClick={() => navigate("/solo")}
+            >
+              <UserIcon size={16} />
+              {ui.solo.solo}
+            </button>
+          </div>
           <div className="lobby-dock-row">
             <button
               type="button"
