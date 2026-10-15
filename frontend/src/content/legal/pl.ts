@@ -110,13 +110,14 @@ export const LEGAL_PL: LegalDocuments = {
             "swoje.",
           "W Solo graczowi, który nie brał udziału w publicznej grze, może " +
             "zostać pokazany do zgadnięcia jeden z rysunków z tej gry, bez " +
-            "nazwy, zdjęcia ani żadnego powiązania z osobą, która go narysowała. " +
-            "Czyj to rysunek, gracz dowiaduje się tylko wtedy, gdy udostępni go " +
-            "w Galerii, gdzie pojawia się on pod nazwą, pod którą powstał. W " +
-            "Ustawieniach możesz sprawić, że Solo nie będzie pokazywać żadnego z " +
-            "twoich publicznych rysunków, albo zdjąć z Solo pojedynczy rysunek w " +
-            "swojej historii gier; rysunek stworzony jako gość jest pokazywany " +
-            "tak samo i można go zdjąć z Solo, gdy masz już konto.",
+            "nazwy, zdjęcia ani żadnego powiązania z osobą, która go " +
+            "narysowała. Samo Solo nigdy nie zdradza, czyj to rysunek, ale " +
+            "rysunek, który jest w Galerii — także taki, który gracz sam tam " +
+            "udostępni — pojawia się tam pod nazwą, pod którą powstał. W " +
+            "Ustawieniach możesz sprawić, że Solo nie będzie pokazywać żadnego " +
+            "z twoich publicznych rysunków, albo zdjąć z Solo pojedynczy " +
+            "rysunek w swojej historii gier; rysunek stworzony jako gość jest " +
+            "pokazywany tak samo i można go zdjąć z Solo, gdy masz już konto.",
           "Usunięcie konta kasuje wszystkie twoje rysunki, oprócz kopii " +
             "dołączonej do zgłoszenia, która zostaje przy nim; żeby skasować " +
             "tylko jeden, napisz na adres {contact}.",

@@ -112,14 +112,15 @@ export const LEGAL_DE: LegalDocuments = {
             "du selbst. Zeichnungen aus einem privaten Raum sehen nur die, die " +
             "darin waren, außer du stellst deine eigenen in die Galerie.",
           "In Solo kann jemand, der nicht in einem öffentlichen Spiel war, " +
-            "eine Zeichnung daraus zum Raten gezeigt bekommen, ohne Namen, " +
-            "Bild oder Verweis darauf, wer sie gezeichnet hat. Wessen Zeichnung " +
-            "es ist, erfährt die Person nur, wenn sie sie in die Galerie stellt, " +
-            "wo sie unter dem Namen erscheint, unter dem sie gezeichnet wurde. " +
-            "In den Einstellungen kannst du festlegen, dass Solo keine deiner " +
+            "eine Zeichnung daraus zum Raten gezeigt bekommen, ohne Namen, Bild " +
+            "oder Verweis darauf, wer sie gezeichnet hat. Solo selbst verrät " +
+            "nie, wessen Zeichnung es ist; eine Zeichnung, die in der Galerie " +
+            "ist – auch eine, die die Person selbst hineinstellt –, erscheint " +
+            "dort aber unter dem Namen, unter dem sie gezeichnet wurde. In den " +
+            "Einstellungen kannst du festlegen, dass Solo keine deiner " +
             "öffentlichen Zeichnungen zeigt, oder in deinem Rundenverlauf eine " +
-            "einzelne Zeichnung aus Solo nehmen; eine Zeichnung, die du als Gast " +
-            "gemacht hast, wird genauso gezeigt und kann aus Solo genommen " +
+            "einzelne Zeichnung aus Solo nehmen; eine Zeichnung, die du als " +
+            "Gast gemacht hast, wird genauso gezeigt und kann aus Solo genommen " +
             "werden, sobald du ein Konto hast.",
           "Wenn du dein Konto löschst, wird jede deiner Zeichnungen gelöscht, " +
             "außer einer Kopie, die einer Meldung beigefügt ist und bei der " +

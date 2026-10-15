@@ -15,17 +15,30 @@ const STARTED_PREFIX = "sketchy_solo_started_";
  * When this drawing was first shown, remembered in the browser: a reload
  * continues its clock rather than starting it again. Lost storage (a private
  * window, a cleared site) starts it again - the server bounds what any clock
- * can report.
+ * can report. `drawing` tells the drawing behind the serve apart: a Daily
+ * replaced for everybody keeps its serve id and changes what it holds, and
+ * a new drawing gets a new clock.
  */
-export function serveStartedAt(serveId: string, now: number = Date.now()): number {
+export function serveStartedAt(serveId: string, drawing: string, now: number = Date.now()): number {
+  const tag = fingerprint(drawing);
   try {
-    const kept = Number(localStorage.getItem(STARTED_PREFIX + serveId));
-    if (Number.isFinite(kept) && kept > 0 && kept <= now) return kept;
-    localStorage.setItem(STARTED_PREFIX + serveId, String(now));
+    const [at, kept] = (localStorage.getItem(STARTED_PREFIX + serveId) ?? "").split("|");
+    const started = Number(at);
+    if (kept === tag && Number.isFinite(started) && started > 0 && started <= now) return started;
+    localStorage.setItem(STARTED_PREFIX + serveId, `${now}|${tag}`);
   } catch {
     // Storage refused: this showing's own clock.
   }
   return now;
+}
+
+/** A short stable tag for a string: enough to tell two drawings apart. */
+export function fingerprint(text: string): string {
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(36);
 }
 
 export function forgetServeStart(serveId: string): void {

@@ -112,15 +112,14 @@ export const LEGAL_NL: LegalDocuments = {
             "je eigen tekeningen deelt.",
           "In Solo kan een speler die niet in een openbaar spel zat, een " +
             "tekening uit dat spel te zien krijgen om te raden, zonder naam, " +
-            "afbeelding of verwijzing naar wie hem tekende. Wiens tekening het " +
-            "is, ontdekt die speler alleen als hij hem in de Galerij deelt, " +
-            "waar de tekening verschijnt onder de naam waaronder hij is getekend. " +
-            "In " +
-            "Instellingen kun je ervoor zorgen dat Solo geen enkele van je " +
-            "openbare tekeningen toont, of in je spelgeschiedenis één tekening " +
-            "uit Solo halen; een tekening die je als gast maakte, wordt op " +
-            "dezelfde manier getoond, en kan uit Solo worden gehaald zodra je " +
-            "een account hebt.",
+            "afbeelding of verwijzing naar wie hem tekende. Solo zelf vertelt " +
+            "nooit wiens tekening het is; maar een tekening die in de Galerij " +
+            "staat, ook een die die speler er zelf deelt, verschijnt daar onder " +
+            "de naam waaronder hij is getekend. In Instellingen kun je ervoor " +
+            "zorgen dat Solo geen enkele van je openbare tekeningen toont, of " +
+            "in je spelgeschiedenis één tekening uit Solo halen; een tekening " +
+            "die je als gast maakte, wordt op dezelfde manier getoond, en kan " +
+            "uit Solo worden gehaald zodra je een account hebt.",
           "Als je je account verwijdert, worden al je tekeningen gewist, " +
             "behalve een kopie die bij een melding hoort en daarbij blijft; wil " +
             "je er één laten wissen, schrijf dan naar {contact}.",

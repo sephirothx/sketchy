@@ -108,13 +108,14 @@ export const LEGAL_PT: LegalDocuments = {
             "não ser que partilhes os teus.",
           "No Solo, a um jogador que não esteve num jogo público pode ser " +
             "mostrado um dos desenhos desse jogo para adivinhar, sem o nome, a " +
-            "imagem ou qualquer ligação a quem o desenhou. Só fica a saber de " +
-            "quem é se o partilhar na Galeria, onde aparece com o nome com que " +
-            "foi desenhado. Nas Definições podes impedir que o Solo mostre " +
-            "qualquer um dos teus desenhos públicos, ou tirar do Solo um único " +
-            "desenho a partir do teu histórico de partidas; um desenho feito " +
-            "como convidado é mostrado da mesma forma, e pode ser tirado do " +
-            "Solo assim que tiveres uma conta.",
+            "imagem ou qualquer ligação a quem o desenhou. O Solo nunca lhe diz " +
+            "de quem é; mas um desenho que esteja na Galeria, incluindo um que " +
+            "esse jogador lá partilhe, aparece com o nome com que foi " +
+            "desenhado. Nas Definições podes impedir que o Solo mostre qualquer " +
+            "um dos teus desenhos públicos, ou tirar do Solo um único desenho a " +
+            "partir do teu histórico de partidas; um desenho feito como " +
+            "convidado é mostrado da mesma forma, e pode ser tirado do Solo " +
+            "assim que tiveres uma conta.",
           "Eliminar a tua conta apaga todos os teus desenhos, exceto uma cópia " +
             "anexada a uma denúncia, que fica com ela; para apagar apenas um, " +
             "escreve para {contact}.",

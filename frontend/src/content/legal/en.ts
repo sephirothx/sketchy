@@ -112,14 +112,14 @@ export const LEGAL_EN: LegalDocuments = {
             "any drawing of yours out of the Gallery, and nobody can share it " +
             "again unless you do. Drawings from a private room are seen only " +
             "by the people who were in it, unless you share your own.",
-          "In Solo, a player who was not in a public game may be shown one " +
-            "of its drawings to guess, with no name, picture or link to who " +
-            "drew it. They only learn whose it is if they share it to the " +
-            "Gallery, where it appears under the name it was drawn under. " +
-            "You can stop Solo showing any of your public drawings in " +
-            "Settings, or take a single drawing out of Solo from your game " +
-            "history; a drawing made as a guest is shown the same way, and " +
-            "can be taken out once you have an account.",
+          "In Solo, a player who was not in a public game may be shown one of " +
+            "its drawings to guess, with no name, picture or link to who drew " +
+            "it. Solo never tells them whose it is; but a drawing that is in " +
+            "the Gallery, including one they share there, appears under the " +
+            "name it was drawn under. You can stop Solo showing any of your " +
+            "public drawings in Settings, or take a single drawing out of Solo " +
+            "from your game history; a drawing made as a guest is shown the " +
+            "same way, and can be taken out once you have an account.",
           "Deleting your account erases every drawing you made, except a " +
             "copy attached to a report, which stays with the report; to have " +
             "a single drawing erased, write to {contact}.",

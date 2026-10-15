@@ -96,6 +96,12 @@ export async function serveNext(runId: string, count: 1 | 2 = 1): Promise<SoloSe
   return answer.serves;
 }
 
+/** A run as the server holds it: what a page reconciles with after a lost
+    answer. */
+export function fetchSoloRun(runId: string): Promise<SoloRun> {
+  return apiRequest(`/api/solo/runs/${encodeURIComponent(runId)}`);
+}
+
 /** Report what a drawing came to, by the client's own clock. */
 export function settleServe(
   serveId: string,

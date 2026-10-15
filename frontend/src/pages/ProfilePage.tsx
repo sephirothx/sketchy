@@ -22,7 +22,7 @@ import type { DrawingRecapMetadata, DrawingReaction } from "../types";
 import { reactionEligibility } from "../lib/reactions";
 import { isPinned, pinEligibility, shelfPresence, withPin, withoutPin } from "../lib/pinnedDrawings";
 import { useToast } from "../lib/toast";
-import { refusalSentence } from "../lib/refusals.ts";
+import { refusalSentence, refusalText } from "../lib/refusals.ts";
 import { useMyPins, usePinsStore } from "../store/pinsStore";
 import type { ProfilePin } from "../lib/pinnedDrawings";
 import {
@@ -189,6 +189,8 @@ function GameRow({
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  // The drawing whose Solo take-out is on its way: one at a time.
+  const [soloBusy, setSoloBusy] = useState<string | null>(null);
 
   async function reactToTurn(turnId: string, emoji: string | null) {
     const result = await setHistoryReaction(game.id, turnId, emoji);
@@ -231,7 +233,17 @@ function GameRow({
 
   // Out of Solo, or back in (#1434): the drawer's own, for one drawing.
   async function setSoloOut(turnId: string, withdrawn: boolean) {
-    const out = await setSoloWithdrawn(game.id, turnId, withdrawn);
+    if (soloBusy) return;
+    setSoloBusy(turnId);
+    let out: boolean;
+    try {
+      out = await setSoloWithdrawn(game.id, turnId, withdrawn);
+    } catch (failure) {
+      notify(refusalText(failure, ui.dialog.couldNotSave), "error");
+      return;
+    } finally {
+      setSoloBusy(null);
+    }
     setDetail((current) =>
       current
         ? {
@@ -454,6 +466,7 @@ function GameRow({
                   type="button"
                   className="btn btn-ghost btn-compact"
                   data-testid="solo-take-out"
+                  disabled={soloBusy === turn.id}
                   onClick={() => void setSoloOut(turn.id, !turn.soloWithdrawn)}
                 >
                   {turn.soloWithdrawn ? ui.solo.putBackInSolo : ui.solo.takeOutOfSolo}

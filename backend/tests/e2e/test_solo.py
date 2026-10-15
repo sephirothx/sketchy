@@ -31,7 +31,12 @@ from app.repositories.interfaces import (
     TurnRecordInput,
 )
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
-from tests.e2e.lobby_helpers import BASE_URL, register_account, use_guest_name
+from tests.e2e.lobby_helpers import (
+    BASE_URL,
+    answer_play_languages_question,
+    register_account,
+    use_guest_name,
+)
 from tests.e2e.staff_helpers import database_url
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "fill_replay_100.json"
@@ -183,10 +188,15 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(page.get_by_test_id("solo-feedback")).to_contain_text("zzqqxx")
             await expect(page.get_by_text("Drawing 2 of 5")).to_be_visible()
 
-            # A reload mid-Daily resumes it where it was.
+            # A reload mid-Daily resumes it where it was, its clock carrying on
+            # rather than starting again.
+            await page.wait_for_timeout(2500)
             await page.reload()
             await page.get_by_test_id("solo-play-daily").click()
             await expect(page.get_by_text("Drawing 2 of 5")).to_be_visible()
+            await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
+            left = int((await page.get_by_test_id("solo-clock").inner_text()).split()[0])
+            assert left <= 28, left
             for _ in range(4):
                 await give_up_and_continue(page)
 
@@ -212,18 +222,45 @@ async def test_a_daily_and_a_free_run_are_played_through():
 
 
 async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
+    await seed_solo_drawings(2)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context(viewport={"width": 412, "height": 915}, is_mobile=True, has_touch=True)
         page = await context.new_page()
+
+        async def fits(where: str) -> None:
+            width = await page.evaluate("() => document.documentElement.scrollWidth")
+            assert width <= 412, (where, width)
+
         try:
+            username = f"phone{uuid4().hex[:8]}"
             await page.goto(BASE_URL)
-            await use_guest_name(page, f"Phone{uuid4().hex[:6]}")
+            await use_guest_name(page, username.capitalize())
             await page.get_by_test_id("lobby-solo").click()
             await page.wait_for_url(f"{BASE_URL}/solo")
             await expect(page.get_by_test_id("solo-account-required")).to_be_visible()
-            width = await page.evaluate("() => document.documentElement.scrollWidth")
-            assert width <= 412, width
+            await fits("guest")
+
+            # The page's own way to an account, and then every view of a run
+            # fits too (R-SOLO-17).
+            await page.get_by_test_id("solo-account-required").get_by_role("button").click()
+            dialog = page.locator(".modal-card").filter(has_text="Password")
+            await dialog.wait_for(state="visible")
+            await dialog.locator("input").nth(0).fill(username)
+            await dialog.locator("input").nth(1).fill("a-good-password")
+            await dialog.locator('button[type="submit"]').click()
+            await dialog.wait_for(state="hidden")
+            await page.goto(BASE_URL)
+            await answer_play_languages_question(page)
+            await page.goto(f"{BASE_URL}/solo")
+            await expect(page.get_by_test_id("solo-free")).to_be_visible()
+            await fits("home")
+            await page.get_by_test_id("solo-free-5").click()
+            await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
+            await fits("play")
+            await page.get_by_test_id("solo-give-up").click()
+            await expect(page.get_by_test_id("solo-verdict")).to_be_visible()
+            await fits("card")
         finally:
             await context.close()
             await browser.close()

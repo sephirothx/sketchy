@@ -107,12 +107,13 @@ export const LEGAL_ES: LegalDocuments = {
           "En Solo, a un jugador que no estuvo en una partida pública se le " +
             "puede mostrar uno de los dibujos de esa partida para que lo " +
             "adivine, sin el nombre, la imagen ni ningún vínculo con quien lo " +
-            "dibujó. Únicamente sabe de quién es si lo comparte en la Galería, " +
-            "donde aparece con el nombre con el que se dibujó. En Ajustes " +
-            "puedes hacer que Solo no muestre ninguno de tus dibujos públicos, " +
-            "o quitar un dibujo concreto desde tu historial de partidas; un " +
-            "dibujo hecho como invitado se muestra del mismo modo, y puede " +
-            "quitarse una vez que tengas una cuenta.",
+            "dibujó. Solo nunca le dice de quién es; pero un dibujo que está en " +
+            "la Galería, incluido uno que ese jugador comparta allí, aparece " +
+            "con el nombre con el que se dibujó. En Ajustes puedes hacer que " +
+            "Solo no muestre ninguno de tus dibujos públicos, o quitar un " +
+            "dibujo concreto desde tu historial de partidas; un dibujo hecho " +
+            "como invitado se muestra del mismo modo, y puede quitarse una vez " +
+            "que tengas una cuenta.",
           "Si eliminas tu cuenta, se borran todos tus dibujos, salvo una copia " +
             "adjunta a una denuncia, que se queda con ella; para que se borre " +
             "uno solo, escribe a {contact}.",
