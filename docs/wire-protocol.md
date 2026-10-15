@@ -2416,6 +2416,43 @@ through the gallery door has no seat, so it is counted and named nowhere.
 | `DELETE` | `/api/gallery/{turn_id}/reaction` | Take the reaction back; same answer shape with `emoji: null` |
 | `DELETE` | `/api/gallery/{turn_id}/share` | Take a drawing back out of the Gallery from the Gallery (#1430, R-SHARE-04): its drawer's whole drawing, with every share and pin of it, or anybody else's own share. The turn alone is named, as everywhere on this door, but the caller must have sat in its game; every refusal is the same `404`. Answers `{turnId, inGallery}` — whether another share still holds it |
 
+### Solo — [`backend/app/api/solo.py`](../backend/app/api/solo.py)
+
+**Solo** (#1434, R-SOLO-01…10) is played in the browser and kept by the server: the server
+chooses each drawing and hands it over under a **serve id** — never the turn's, which would
+lead to its drawer (R-SOLO-04) — with the forms its prompt is judged by; the client
+replays it, runs the 30 s clock, judges guesses with a port of `app/guess_judge.py`, and
+reports what the drawing came to. Registered accounts only: no session is
+`401 sign_in_required`, a guest `403 account_required` with `params.action` = `solo` and
+the `X-Sketchy-Account-Required` header. A run that is not the caller's is
+`404 no_such_solo_run`; every refusal about a serve is `404 no_such_drawing`, as on every
+drawing door. A state that moved on — a serve settled already or out of order, a run that
+ended — is `409 solo_conflict`; a player the pool has nothing for is `409 solo_pool_empty`.
+Budgets are per **account** and process-local: runs 30 a minute, serves and results 120,
+drawing bytes 240 (`429 too_many_requests`).
+
+A **run** is `{runId, mode: free | daily, length: 5 | 10 | null, state: active | ended |
+abandoned, endReason: completed | missed | abandoned | null, position, solved, points,
+dailyDate, serves}`. A **serve** is `{serveId, position, forms, outcome: solved | given_up |
+timed_out | null, points, prompt, promptLanguage}`: `forms` while it is open, `prompt` and
+`promptLanguage` once it is settled, never both. `forms` is the JSON
+`{language, own: {prompt, aliases}, others: {lang: {prompt, aliases}}, taken}` — the
+player's first-ranked language that has the concept (the one `zxx` answer, folded in the
+player's first language, for an agnostic concept), their other play languages' forms,
+and the spellings the false-friend guard takes out (#1367) — UTF-8, XOR'd byte by byte
+with the serve id's sixteen bytes, base64'd (`solo_rules.encode_answers`,
+`lib/solo.ts decodeSoloForms`). Not a secret (R-SOLO-05): it keeps a glance at the network
+panel from spoiling the drawing.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/solo/runs` | `{length: 5 \| 10 \| null}` → `201` run. Starts a free run, abandoning the one in play: a 5 or 10 run as `abandoned`, an unlimited one as `ended` at its streak (R-SOLO-07). Strict body: anything else is `422` |
+| `GET` | `/api/solo/runs/active` | `{run}` — the free run there is to continue, with its serves (an open one with its `forms`, so a reload resumes it), or `null` |
+| `GET` | `/api/solo/runs/{run_id}` | The run, with its serves |
+| `POST` | `/api/solo/runs/{run_id}/serves?count=1\|2` | `{serves}` — the next drawings: never more than two open at once (the one played and the next, held ready), never past a finite run's length; `[]` when there is no room for one. Unseen drawings first, from a random point in the pool's order, wrapping round; then the ones seen longest ago (R-SOLO-07) |
+| `POST` | `/api/solo/serves/{serve_id}/result` | `{outcome: solved \| given_up \| timed_out, seconds: 0..30}` → `{serve, run}`. Once per serve, in order; the server derives `points` from `seconds` (R-SOLO-06). The run ends with its last drawing, or — unlimited — its first miss, and a drawing held ready goes with it |
+| `GET` | `/api/solo/serves/{serve_id}/drawing` | The bytes through the **fourth door** (R-SOLO-04): its own query — the caller's serve, the drawing still servable (R-SOLO-02) — with the participant route's `Cache-Control: private, no-cache`, `ETag` and `304` (R-HIST-24), and the same `404` for every refusal, signed out included |
+
 ### Inbox — [`backend/app/api/inbox.py`](../backend/app/api/inbox.py)
 
 Everything the app tells a player about their own account, in one list behind the
@@ -2680,7 +2717,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` (1) | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` (1) | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (5) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (17) | The export document, pinned by [`fixtures/account_data_export_v17_fields.json`](../fixtures/account_data_export_v17_fields.json) | The export's field surface changes |
+| Data export `schema_version` (18) | The export document, pinned by [`fixtures/account_data_export_v18_fields.json`](../fixtures/account_data_export_v18_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

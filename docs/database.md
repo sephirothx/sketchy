@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e3f4a5b6c7d0_solo_pool.py` (#1434). Both this line and the table
+`f4a5b6c7d8e1_solo_runs.py` (#1434). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-65 tables in nine domains.
+67 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -124,6 +124,9 @@ erDiagram
     turn_records ||--o{ turn_drawing_shares : "shared"
     game_participants ||--o{ turn_drawing_shares : "sharer seat"
     turn_records ||--o| solo_pool : "servable in Solo"
+    users ||--o{ solo_runs : "plays Solo"
+    solo_runs ||--o{ solo_serves : "served"
+    turn_records ||--o{ solo_serves : "served as"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -154,7 +157,7 @@ erDiagram
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
-| **Solo** | `solo_pool` |
+| **Solo** | `solo_pool`, `solo_runs`, `solo_serves` |
 
 ---
 
@@ -795,7 +798,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v17_fields.json`](../fixtures/account_data_export_v17_fields.json).
+pinned by [`fixtures/account_data_export_v18_fields.json`](../fixtures/account_data_export_v18_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -2134,6 +2137,39 @@ turn id (`solo_rules.sample_key`), so a rebuild puts every row back where it was
 random draw is a range probe on its index, never a sort of the table. Clients never see
 a turn id, so nobody can steer by it.
 
+### `solo_runs`
+`id` **PK** · `user_id` (CASCADE; the canonical account) · `mode` (`free \| daily`) ·
+`length` (`5 \| 10`, or NULL for unlimited) · `daily_date` (the player's local date, a
+Daily only) · `state` (`active \| ended \| abandoned`) · `end_reason`
+(`completed \| missed \| abandoned`, set exactly when the run is not active) · `position`
+(drawings served) · `solved` · `points` · `started_at` · `ended_at`.
+
+One player's Solo run (#1434). Play is local, so this is what the server keeps of it.
+`uq_solo_runs_one_active_free` — unique on `user_id` where a free run is active — holds a
+player to one free run in play: starting another abandons it (a 5 or 10 run as
+`abandoned`, recording nothing; an unlimited one as `ended` at its streak), and two
+starts at once meet the index and the loser retries. `ix_solo_runs_user_mode` serves the
+active-run read. Deleted with the account (explicitly: the `users` row stays as a
+tombstone, so its CASCADE never fires), its serves with it.
+
+### `solo_serves`
+`id` **PK** — the **serve id**, the only id a Solo client sees · `run_id` (CASCADE) ·
+`user_id` (CASCADE; the run's, copied) · `turn_id` (CASCADE, indexed) · `position` (from 1;
+unique per run) · `prompt` · `prompt_language` (what the player is shown at the end, in
+the language it was shown in — kept, so a run's history reads the same after a list
+changes) · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
+`solve_seconds` (the client's clock, bounded to 30) · `points` (100–300, set exactly when
+solved).
+
+One drawing served in a run. The serve id exists because a turn id is a key to the
+drawing's Gallery entry, which names its drawer (R-SOLO-04). A row is settled once, by
+the first report (`ck_solo_serves_settled`, and the route refuses a second); the server
+derives `points` from `solve_seconds` (R-SOLO-06). `ix_solo_serves_user_turn` is the free
+runs' seen-exclusion and the repeat order (the drawing seen longest ago). A drawing held
+ready and never settled is deleted when its run ends: a player who never saw it was not
+served it. Kept for as long as the account (owner's decision): it is what keeps a player
+from being served the same drawing twice.
+
 ---
 
 ## 7. Prompt provenance
@@ -2860,6 +2896,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Solo runs and the drawings they served | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -2977,7 +3014,8 @@ Deletion:
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;
-- deletes the Solo pool rows of those erased drawings (`solo_pool` in §6);
+- deletes the Solo pool rows of those erased drawings, and the account's own Solo runs
+  with the drawings they served (`solo_pool`, `solo_runs`, `solo_serves` in §6);
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting

@@ -322,6 +322,9 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Game not found.",
   no_such_drawing: "Drawing not found.",
   drawing_unreadable: "That drawing could not be read.",
+  no_such_solo_run: "That Solo run is not there any more.",
+  solo_conflict: "That changed in the meantime. Reload Solo and carry on.",
+  solo_pool_empty: "There is no drawing left to play right now. Try again later.",
   pinned_drawings_full: "Your pinned drawings are full. Unpin one from your profile first.",
 
   // Prompt lists

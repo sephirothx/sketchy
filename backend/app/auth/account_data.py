@@ -63,6 +63,8 @@ from app.db.models import (
     PromptVersionAlias,
     RoomMessage,
     ScoreEvent,
+    SoloRun,
+    SoloServe,
     TurnDrawing,
     ProfileDrawingPin,
     TurnDrawingReaction,
@@ -117,8 +119,10 @@ from app.domain_values import (
 # declines and the blocks and reports against them are gone. To 14 when an
 # offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
 # To 15 when a list carries its working copy's `prompts` instead of every
-# revision it was saved as (#1359).
-EXPORT_SCHEMA_VERSION = 17
+# revision it was saved as (#1359). To 18 when Solo's runs and the drawings
+# they served joined it (`soloRuns`, `soloServes`, #1434) - without the turn,
+# which would name a stranger's drawing the player saw only anonymously.
+EXPORT_SCHEMA_VERSION = 18
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -1406,6 +1410,48 @@ async def _write_export_artifact(
             "createdAt": _timestamp(event.created_at),
         },
     )
+    # Solo (#1434): the runs, and what each drawing served came to. Never
+    # the turn or its drawer - the player saw it anonymously - only the
+    # prompt they were shown.
+    writer.key("soloRuns")
+    await _write_rows(
+        writer,
+        session,
+        select(SoloRun)
+        .where(SoloRun.user_id.in_(identity_ids))
+        .order_by(SoloRun.started_at, SoloRun.id),
+        lambda run: {
+            "id": str(run.id),
+            "mode": run.mode,
+            "length": run.length,
+            "dailyDate": run.daily_date.isoformat() if run.daily_date else None,
+            "state": run.state,
+            "endReason": run.end_reason,
+            "solved": run.solved,
+            "points": run.points,
+            "startedAt": _timestamp(run.started_at),
+            "endedAt": _timestamp(run.ended_at) if run.ended_at else None,
+        },
+    )
+    writer.key("soloServes")
+    await _write_rows(
+        writer,
+        session,
+        select(SoloServe)
+        .where(SoloServe.user_id.in_(identity_ids))
+        .order_by(SoloServe.served_at, SoloServe.run_id, SoloServe.position),
+        lambda serve: {
+            "runId": str(serve.run_id),
+            "position": serve.position,
+            "prompt": serve.prompt,
+            "promptLanguage": serve.prompt_language,
+            "outcome": serve.outcome,
+            "solveSeconds": serve.solve_seconds,
+            "points": serve.points,
+            "servedAt": _timestamp(serve.served_at),
+            "settledAt": _timestamp(serve.settled_at) if serve.settled_at else None,
+        },
+    )
     writer.key("exportRequests")
     await _write_rows(
         writer,
@@ -1798,8 +1844,11 @@ async def anonymize_account(
                 )
             )
             # Nor is an erased drawing served in Solo (#1434): the pool is a
-            # projection of kept drawings, and erasure is final.
+            # projection of kept drawings, and erasure is final. The
+            # account's own Solo runs go too, with the drawings they served:
+            # its play, not anybody's history.
             await erase_pool_rows(session, drawer_user_ids=identity_ids)
+            await session.execute(delete(SoloRun).where(SoloRun.user_id.in_(identity_ids)))
             # An erased drawing takes its reactions with it: they were about
             # the drawing, and there is nothing left for them to be about.
             # Reactions this account *gave* stay - they are facts about other

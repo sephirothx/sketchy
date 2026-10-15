@@ -310,6 +310,9 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Partida no encontrada.",
   no_such_drawing: "Dibujo no encontrado.",
   drawing_unreadable: "No se pudo leer ese dibujo.",
+  no_such_solo_run: "Esa partida de Solo ya no existe.",
+  solo_conflict: "Eso ha cambiado mientras tanto. Recarga Solo y sigue.",
+  solo_pool_empty: "Ahora mismo no queda ningún dibujo para jugar. Inténtalo más tarde.",
   pinned_drawings_full: "Tus dibujos fijados están completos. Quita uno de tu perfil primero.",
 
   // Prompt lists
