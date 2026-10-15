@@ -42,6 +42,9 @@ export const LEGAL_DE: LegalDocuments = {
           "Deine Spiele: die Räume, in denen du gespielt hast, deine Tipps, " +
             "Punkte und Ergebnisse, deine Reaktionen, deine Zeichnungen und die " +
             "Zeichnungen, die du in die Galerie gestellt hast.",
+          "Solo: die Runden, die du spielst, welche Zeichnungen dir gezeigt " +
+            "wurden und was du aus jeder gemacht hast, deine Ergebnisse im " +
+            "Tagesrätsel und deine persönlichen Bestwerte.",
           "Der Chat, in Räumen und in der Lobby.",
           "Die Nachrichten in deinem Posteingang, zu deinem Konto, deinen " +
             "Zeichnungen und deinen Freundschaften.",
@@ -108,6 +111,16 @@ export const LEGAL_DE: LegalDocuments = {
             "Galerie nehmen, und dann kann niemand sie erneut hineinstellen, außer " +
             "du selbst. Zeichnungen aus einem privaten Raum sehen nur die, die " +
             "darin waren, außer du stellst deine eigenen in die Galerie.",
+          "In Solo kann jemand, der nicht in einem öffentlichen Spiel war, " +
+            "eine Zeichnung daraus zum Raten gezeigt bekommen, ohne Namen, " +
+            "Bild oder Verweis darauf, wer sie gezeichnet hat. Wessen Zeichnung " +
+            "es ist, erfährt die Person nur, wenn sie sie in die Galerie stellt, " +
+            "wo sie unter dem Namen erscheint, unter dem sie gezeichnet wurde. " +
+            "In den Einstellungen kannst du festlegen, dass Solo keine deiner " +
+            "öffentlichen Zeichnungen zeigt, oder in deinem Rundenverlauf eine " +
+            "einzelne Zeichnung aus Solo nehmen; eine Zeichnung, die du als Gast " +
+            "gemacht hast, wird genauso gezeigt und kann aus Solo genommen " +
+            "werden, sobald du ein Konto hast.",
           "Wenn du dein Konto löschst, wird jede deiner Zeichnungen gelöscht, " +
             "außer einer Kopie, die einer Meldung beigefügt ist und bei der " +
             "Meldung bleibt; soll nur eine einzelne gelöscht werden, schreib an " +
@@ -165,6 +178,8 @@ export const LEGAL_DE: LegalDocuments = {
           "Betreten und Verlassen von Räumen: 30 Tage.",
           "E-Mails an dich: 30 Tage.",
           "Datenexporte, die du anforderst: 7 Tage.",
+          "Solo-Runden, Ergebnisse und persönliche Bestwerte: bis du dein " +
+            "Konto löschst.",
           "Abgeschlossene Spiele – Punkte, Zeichnungen, Reaktionen – gehören zum " +
             "Verlauf aller, die mitgespielt haben, und bleiben deshalb erhalten. " +
             "Löschst du dein Konto, werden deine Zeichnungen gelöscht und dein " +
@@ -276,6 +291,7 @@ export const LEGAL_DE: LegalDocuments = {
           "Was du zeichnest, schreibst und veröffentlichst, bleibt deins. Damit " +
             "das Spiel funktioniert, erlaubst du dem Betreiber, es innerhalb von " +
             "Sketchy zu speichern, zu zeigen und zu kopieren – in deinem Raum, in " +
+            "Solo ohne deinen Namen, wenn der Raum öffentlich war, in " +
             "der Galerie, sobald eine Zeichnung hineingestellt ist, in " +
             "Begriffslisten, die du " +
             "veröffentlichst, und in Kopien, die andere davon machen –, " +

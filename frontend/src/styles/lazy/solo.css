@@ -1,0 +1,298 @@
+/* Solo (#1434): one page, four views - what it opens on, a drawing in play,
+   what a drawing came to, and a run that is over. The page and its heading
+   block follow the Gallery's recipe; the cards are `.surface-card`s. */
+
+.solo-page {
+  --page-width: 928px;
+  margin: 0 auto;
+  max-width: calc(var(--page-width) + 32px);
+  padding: 24px 16px 64px;
+}
+
+.solo-head { margin-bottom: 18px; }
+
+.solo-head h1 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  margin: 0 0 3px;
+}
+
+.solo-head p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 58ch;
+}
+
+/* ------------------------------------------------------------------- home */
+
+.solo-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+@media (max-width: 720px) {
+  .solo-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.solo-grid > .surface-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.solo-grid h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-card-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.solo-card-intro,
+.solo-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.solo-preview { font-size: 13px; }
+
+.solo-daily-play { align-self: stretch; margin-top: auto; }
+
+.solo-daily-done {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.solo-daily-points {
+  font-weight: 700;
+  margin: 0;
+}
+
+.solo-lengths {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.solo-length { justify-content: center; min-width: 0; }
+
+.solo-bests dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.solo-best {
+  display: flex;
+  justify-content: space-between;
+}
+
+.solo-best dt { color: var(--muted); }
+
+.solo-best dd {
+  font-weight: 700;
+  margin: 0;
+}
+
+.solo-history ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.solo-history-day {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+}
+
+.solo-history-date {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.solo-history-points {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* A Daily's five, as squares: named, missed, still to play. */
+.solo-marks {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.solo-mark {
+  border-radius: var(--radius-xs);
+  display: inline-block;
+  height: 16px;
+  width: 16px;
+}
+
+.solo-mark.is-solved { background: var(--success); }
+.solo-mark.is-missed { background: var(--danger); }
+.solo-mark.is-unplayed { background: var(--track); }
+
+/* ------------------------------------------------------------------- play */
+
+.solo-play,
+.solo-result,
+.solo-summary {
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+.solo-play-bar {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.solo-play-position {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.solo-clock {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.solo-clock.is-low { color: var(--danger); }
+
+.solo-clock-track {
+  background: var(--track);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.solo-clock-track span {
+  background: var(--warm);
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform 200ms linear;
+}
+
+.solo-canvas {
+  overflow: hidden;
+  padding: 0;
+}
+
+.solo-canvas canvas {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.solo-guess {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.solo-guess-input {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  flex: 1 1 auto;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.solo-feedback {
+  font-weight: 700;
+  margin: 8px 0 0;
+  min-height: 1.4em;
+}
+
+.solo-feedback.is-close { color: var(--warm-ink); }
+.solo-feedback.is-miss { color: var(--muted); }
+
+@media (max-width: 480px) {
+  .solo-guess { flex-wrap: wrap; }
+  .solo-guess-input { flex-basis: 100%; }
+  .solo-guess .btn { flex: 1 1 0; justify-content: center; }
+}
+
+/* ----------------------------------------------------- result and summary */
+
+.solo-result-card {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.solo-verdict {
+  font-weight: 800;
+  margin: 0;
+}
+
+.solo-verdict.is-solved { color: var(--success-ink); }
+.solo-verdict.is-missed { color: var(--danger); }
+
+.solo-it-was {
+  color: var(--muted);
+  margin: 0;
+}
+
+.solo-prompt {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.solo-points {
+  color: var(--warm-ink);
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.solo-result-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.solo-result-actions .is-pressed {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge);
+  color: var(--primary-ink);
+}
+
+.solo-next { margin-top: 8px; }
+
+.solo-new-best { margin: 0; }

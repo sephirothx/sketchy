@@ -2397,7 +2397,8 @@ reloaded rather than served an older contract.
 
 `GET /api/games/{game_id}` carries each turn's `reactions: [{seatId, emoji}]`, its
 `reactionCounts: {code: n}`, its `shares: [seatId]` (first first), `shareWithdrawn`
-(#1430) and `inGallery` (Solo shares counted, #1434), and the requester's own `mySeatId`, because the client cannot
+(#1430), `inGallery` (Solo shares counted, #1434) and `soloWithdrawn` (its drawer took
+it out of Solo, R-SOLO-16), and the requester's own `mySeatId`, because the client cannot
 work its seat out from `participants`: a seat kept by a merged guest identity carries that
 identity's id, not the account the requester is signed in as. Names for reactors come
 from `participants`, whose frozen snapshots are already tombstoned on deletion. The list

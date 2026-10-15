@@ -422,6 +422,8 @@ class TurnDetail:
     gallery_withdrawn: bool = False
     # Whether it is in the Gallery, Solo's shares counted (#1434).
     in_gallery: bool = False
+    # Its drawer took it out of Solo (#1434, R-SOLO-16).
+    solo_withdrawn: bool = False
 
 
 @dataclass(frozen=True)
