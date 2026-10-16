@@ -3816,6 +3816,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             ProfileDrawingPin.user_id.in_(identity_ids),
                         )
                     )
+                    # And their Solo share of it, held or not: a player who sat
+                    # in the game may be served it in the Daily and share it
+                    # from there, and Take back means all of theirs (#1494
+                    # review).
+                    await session.execute(
+                        delete(SoloGalleryShare).where(
+                            SoloGalleryShare.turn_id == db_turn_id,
+                            SoloGalleryShare.user_id.in_(identity_ids),
+                        )
+                    )
                 drawing_row.updated_at = now
                 await refresh_share_projection(session, drawing_row)
                 return DrawingShareResult(

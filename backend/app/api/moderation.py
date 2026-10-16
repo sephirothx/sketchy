@@ -3817,6 +3817,7 @@ def create_moderation_router(
         find_row,
         *,
         door: str,
+        on_report=None,
     ) -> dict:
         """What a report of a drawing from outside its game is (R-GAL-08,
         R-SOLO-15): the reporter names a drawing and nothing else, the server
@@ -3829,7 +3830,10 @@ def create_moderation_router(
         From Solo a report the reporter already has open about the same
         player is answered as accepted rather than `409`: there, the drawer
         is somebody the reporter must not be able to tell apart, and a 409
-        would say that two anonymous drawings share one."""
+        would say that two anonymous drawings share one. For the same reason
+        the reporter's own record of it is `on_report`'s - their serve -
+        written whether or not a report row is, and the row is marked
+        `via_solo`, which keeps it out of their export (#1494 review)."""
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
@@ -3872,6 +3876,8 @@ def create_moderation_router(
                     raise Refusal(
                         422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself."
                     )
+                if on_report is not None:
+                    await on_report(session)
                 # From Solo the answer is the same whatever happened - never a
                 # report id, which would differ between a new report and one
                 # already open, and so say the two drawings share a drawer
@@ -3898,23 +3904,28 @@ def create_moderation_router(
                     format_version=drawing.format_version or 0,
                     checksum_sha256=drawing.checksum_sha256 or "",
                 )
-                report = record_player_report(
-                    session,
-                    reporter_user_id=db_reporter_id,
-                    reported_user_id=target.id,
-                    game_id=turn.game_id,
-                    turn_id=turn.id,
-                    scope=ReportScope.UNSCOPED,
-                    room_instance_id=None,
-                    reason=ReportReason.OFFENSIVE_DRAWING.value,
-                    details=details,
-                    messages=[],
-                    drawing=captured,
-                    request_id=request_id,
-                    ip_hash=ip_hash,
-                )
                 try:
-                    await session.flush()
+                    # A savepoint: a report row that loses the one-open-report
+                    # race takes nothing else with it - from Solo, the
+                    # reporter's own record of the report stays.
+                    async with session.begin_nested():
+                        report = record_player_report(
+                            session,
+                            reporter_user_id=db_reporter_id,
+                            reported_user_id=target.id,
+                            game_id=turn.game_id,
+                            turn_id=turn.id,
+                            scope=ReportScope.UNSCOPED,
+                            room_instance_id=None,
+                            reason=ReportReason.OFFENSIVE_DRAWING.value,
+                            details=details,
+                            messages=[],
+                            drawing=captured,
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                        )
+                        report.via_solo = door == "solo"
+                        await session.flush()
                 except IntegrityError as error:
                     if door == "solo":
                         return quiet
@@ -3986,7 +3997,18 @@ def create_moderation_router(
                 )
             ).first()
 
-        return await _report_served_drawing(request, body.details, solo_row, door="solo")
+        async def remember(session):
+            # The reporter's own record, on their serve: what their export
+            # says they reported, with no report, turn or game id in it.
+            await session.execute(
+                update(SoloServe)
+                .where(SoloServe.id == db_serve_id)
+                .values(reported_at=datetime.now(timezone.utc), report_details=body.details)
+            )
+
+        return await _report_served_drawing(
+            request, body.details, solo_row, door="solo", on_report=remember
+        )
 
     @router.get("/moderation/gallery")
     async def gallery_review_queue(request: Request):

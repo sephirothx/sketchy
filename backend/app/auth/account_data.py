@@ -1263,7 +1263,10 @@ async def _write_export_artifact(
         writer,
         session,
         select(PlayerReport)
-        .where(PlayerReport.reporter_user_id.in_(identity_ids))
+        # Not one filed from Solo: it names the turn and game, which lead to
+        # a drawer Solo never names; the serve says it was reported instead
+        # (`soloServes[].reportedAt`, #1494 review).
+        .where(PlayerReport.reporter_user_id.in_(identity_ids), PlayerReport.via_solo.is_(False))
         .options(
             selectinload(PlayerReport.message_evidence),
             selectinload(PlayerReport.drawing_evidence),
@@ -1455,6 +1458,8 @@ async def _write_export_artifact(
             "points": serve.points,
             "servedAt": _timestamp(serve.served_at),
             "settledAt": _timestamp(serve.settled_at) if serve.settled_at else None,
+            "reportedAt": _timestamp(serve.reported_at) if serve.reported_at else None,
+            "reportDetails": serve.report_details,
         },
     )
     writer.key("soloDailyResults")
