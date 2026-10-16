@@ -118,6 +118,11 @@ DAILY_REUSE_DAYS = 60
 # server, which cannot see the player's zone, accepts any date that is today
 # somewhere.
 DAY_EDGE = timedelta(hours=14)
+# How long a date found too thin for a Daily waits before it is looked at
+# again, while it is still open: a date first asked for before the day's
+# games had finished would otherwise stay without one for good, though
+# nobody could have played it.
+SKIPPED_RETRY = timedelta(minutes=5)
 
 
 def date_is_open(day: date, now: datetime) -> bool:
