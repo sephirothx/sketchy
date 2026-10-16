@@ -211,6 +211,85 @@ async def test_a_held_share_outlives_a_hide_and_comes_back_with_the_unhide(env):
     assert entry["sharedBy"]["displayName"] == stranger.display_name
 
 
+async def test_a_guesser_who_shared_from_the_daily_takes_it_back_from_the_gallery(env):
+    """The Daily serves a player drawings from their own games: one who sat in
+    the game and shared it from Solo takes it back through the Gallery like
+    any share of theirs (#1494 review)."""
+    http, users, history, solo, factory = env
+    drawer = await player(users, factory, "Drawer")
+    seats = [await player(users, factory, f"Guesser{i}") for i in range(2)]
+    turns = []
+    for index in range(5):
+        concept = await seed_concept(factory, {"zxx": f"Own{index}"})
+        turns.append(await record_turn(
+            history, drawer=drawer.id, guessers=[seat.id for seat in seats],
+            version_id=concept.versions["zxx"],
+        ))
+    guesser = seats[0]
+    await sign_in_as(http, factory, guesser.id)
+    today = datetime.now(timezone.utc).date().isoformat()
+    first = (await http.post(f"/api/solo/daily/{today}")).json()["serves"][0]
+    await http.post(f"/api/solo/serves/{first['serveId']}/result", json={"outcome": "solved", "seconds": 2})
+    held = (await http.put(f"/api/solo/serves/{first['serveId']}/share")).json()
+    later = datetime.fromisoformat(held["heldUntil"]) + timedelta(minutes=1)
+    assert int(await release_held_solo_shares(factory, now=later)) == 1
+    [entry] = (await http.get("/api/gallery")).json()["entries"]
+    assert entry["sharedByMe"] is True
+
+    taken = await http.delete(f"/api/gallery/{entry['turnId']}/share")
+    assert taken.status_code == 200 and taken.json()["inGallery"] is False
+    assert (await http.get("/api/gallery")).json()["entries"] == []
+    async with factory() as session:
+        assert (await session.scalars(select(SoloGalleryShare))).all() == []
+
+
+async def test_a_solo_report_reaches_the_reporter_s_export_without_the_drawing_s_ids(env):
+    """Two drawings by one drawer, both reported from Solo: one report row
+    for a moderator, and in the reporter's export no report, turn or game id
+    and no count that says the two share a drawer - only their serves, each
+    marked reported (#1494 review)."""
+    import gzip
+    import json
+
+    from app.auth.account_data import create_data_export, process_pending_data_exports
+    from app.db.models import DataExport
+
+    http, users, history, solo, factory = env
+    drawer = await player(users, factory, "Drawer")
+    guesser = await player(users, factory, "Guesser")
+    turns = []
+    for word in ("lighthouse", "anchor"):
+        concept = await seed_concept(factory, {"en": word})
+        turns.append(await record_turn(
+            history, drawer=drawer.id, guessers=[guesser.id], version_id=concept.versions["en"]
+        ))
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    run = (await http.post("/api/solo/runs", json={"length": 5})).json()
+    serves = (await http.post(f"/api/solo/runs/{run['runId']}/serves?count=2")).json()["serves"]
+    for serve in serves:
+        await http.post(f"/api/solo/serves/{serve['serveId']}/result", json={"outcome": "given_up", "seconds": 3})
+        reported = await http.post(f"/api/solo/serves/{serve['serveId']}/report", json={"details": "rude"})
+        assert reported.status_code == 201 and reported.json()["id"] is None
+
+    async with factory() as session:
+        [report] = (await session.scalars(select(PlayerReport))).all()
+    assert report.via_solo is True
+
+    job = await create_data_export(factory, user_id=stranger.id)
+    assert await process_pending_data_exports(factory) == 1
+    async with factory() as session:
+        artifact = json.loads(gzip.decompress((await session.get(DataExport, job.id)).artifact))
+    assert artifact["reportsSubmitted"] == []
+    assert [(s["reportedAt"] is not None, s["reportDetails"]) for s in artifact["soloServes"]] == [
+        (True, "rude"), (True, "rude")
+    ]
+    encoded = json.dumps(artifact)
+    for turn in turns:
+        assert turn.turn_id not in encoded and turn.game_id not in encoded
+    assert str(report.id) not in encoded
+
+
 async def test_the_drawer_s_opt_out_and_take_out_close_solo_from_the_next_request(env):
     http, users, history, solo, factory = env
     drawer = await player(users, factory, "Drawer")

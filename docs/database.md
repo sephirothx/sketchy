@@ -1030,8 +1030,14 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 (`SET NULL`) · `reason` · `details` TEXT · `context_snapshot` (JSON) ·
 `scope` (`room \| lobby \| profile \| unscoped`) · `room_instance_id` ·
 `reported_avatar_key` · `decision_group_id` ·
-`status` (`pending \| resolved \| dismissed`) · `reviewed_by_user_id` ·
-`resolution_note` · timestamps.
+`status` (`pending \| resolved \| dismissed`) · `via_solo` (filed from Solo, #1434) ·
+`reviewed_by_user_id` · `resolution_note` · timestamps.
+
+A report filed from Solo is marked `via_solo` and left out of the reporter's export: its
+`game_id` and `turn_id` lead to a drawer Solo never names (R-SOLO-04). The reporter's own
+record of it is on their serve (`solo_serves.reported_at`, `report_details`), written whether
+or not a row was opened — one already open about the same drawer stands for a second, and a
+count of rows would say the two drawings share one (#1494 review).
 
 Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
 `ck_player_reports_not_self` forbids self-reports.
@@ -2175,7 +2181,8 @@ changes) · `forms` (the `JudgeTarget` JSON the drawing is judged by, as served,
 resumed run hands back exactly that, whatever the player's languages have done since;
 never exported) · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
 `solve_seconds` (the client's clock, bounded to 30) · `points` (100–300, set exactly when
-solved).
+solved) · `reported_at`, `report_details` (the player reported it, and what they wrote: their
+record of a Solo report, exported in place of the report row).
 
 One drawing served in a run. The serve id exists because a turn id is a key to the
 drawing's Gallery entry, which names its drawer (R-SOLO-04). A row is settled once, by

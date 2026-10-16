@@ -1040,6 +1040,12 @@ class PlayerReport(Base):
         server_default=ReportStatus.PENDING.value,
         nullable=False,
     )
+    # Filed from Solo (#1434): the reporter saw the drawing with no name, so
+    # their export reads the report off their serve, and never this row - its
+    # turn and game ids would lead to the drawer (#1494 review).
+    via_solo: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -3685,6 +3691,11 @@ class SoloServe(Base):
     # The client's own clock (#1434: play is local), bounded to the 30 s.
     solve_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # When the player reported this drawing, and what they wrote: their own
+    # record of it, kept whether or not a report row was opened - one already
+    # open about the same drawer takes the place of a second (#1494 review).
+    reported_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    report_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SoloDailyDay(Base):

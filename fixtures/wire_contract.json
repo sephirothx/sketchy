@@ -2375,6 +2375,8 @@
    "promptListId",
    "promptListName",
    "readAt",
+   "reportDetails",
+   "reportedAt",
    "requestedByMe",
    "requesterWasActor",
    "requesterWasTarget",
