@@ -28,8 +28,14 @@ from app.refusals import ErrorCode
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
 from app.request_text import ControlFreeModel
-from app.services.solo_access import free_run_door, solo_door_open
-from app.solo_rules import CLOCK_SECONDS, MAX_OPEN_SERVES, OUTCOMES, date_is_open
+from app.services.solo_access import SoloDoor, free_run_door, solo_door_open
+from app.solo_rules import (
+    CLOCK_SECONDS,
+    MAX_OPEN_SERVES,
+    OUTCOMES,
+    daily_release_at,
+    date_is_open,
+)
 
 # A human's pace: a run is a handful of requests a minute. Per account, since
 # every route needs one.
@@ -37,6 +43,8 @@ run_limiter = RateLimiter(limit=30, window_seconds=60)
 serve_limiter = RateLimiter(limit=120, window_seconds=60)
 # The bytes: one per drawing, and a revalidation on every open (R-HIST-24).
 drawing_limiter = RateLimiter(limit=240, window_seconds=60)
+# Past Dailies a page of the archive lists (#1470).
+ARCHIVE_PAGE = 30
 
 
 class FreeRunBody(ControlFreeModel):
@@ -82,6 +90,7 @@ def run_payload(run: RunView) -> dict:
         "solved": run.solved,
         "points": run.points,
         "dailyDate": run.daily_date,
+        "replay": run.replay,
         "serves": [serve_payload(serve) for serve in run.serves],
     }
 
@@ -208,16 +217,19 @@ def create_solo_router(
             raise refused(error, missing=ErrorCode.NO_SUCH_DRAWING) from error
         return {"serve": serve_payload(serve), "run": run_payload(run)}
 
-    def local_date(value: str) -> date:
-        """A player's local date, accepted only while it is today somewhere
-        (±14 h of UTC): the server cannot see the player's zone, and a date
-        that is nobody's today is somebody asking for another day's Daily."""
+    def parse_date(value: str) -> date:
         try:
-            day = date.fromisoformat(value)
+            return date.fromisoformat(value)
         except ValueError as error:
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a date.", field="date"
             ) from error
+
+    def local_date(value: str) -> date:
+        """A player's local date, accepted only while it is today somewhere
+        (±14 h of UTC): the server cannot see the player's zone, and a date
+        that is nobody's today is somebody asking for another day's Daily."""
+        day = parse_date(value)
         if not date_is_open(day, now()):
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That date is not today anywhere.",
@@ -225,23 +237,75 @@ def create_solo_router(
             )
         return day
 
-    @router.post("/daily/{day}")
-    async def open_daily(day: str, request: Request):
-        """Today's Daily (#1434): created with its five drawings the first
-        time, resumed after, never restarted. The same five for everybody."""
-        user = await account(request)
-        throttle(run_limiter, user)
-        local = local_date(day)
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="daily_today"):
+    def past_date(value: str) -> date:
+        """A date that has ended everywhere: the archive's (#1470). One still
+        today somewhere is today's door's, and a later one nobody's yet."""
+        day = parse_date(value)
+        if now() < daily_release_at(day):
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That date has not ended everywhere yet.",
+                field="date",
+            )
+        return day
+
+    def open_door(user: User, door: SoloDoor) -> None:
+        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
             raise Refusal(
                 403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
                 params={"action": "solo"},
             )
+
+    @router.get("/daily/archive")
+    async def archive(
+        request: Request,
+        today: str = Query(),
+        before: str | None = Query(default=None),
+    ):
+        """The past Dailies (#1470), newest first, a page at a time, each
+        with the player's result for it: none, part or all of it."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        local = local_date(today)
+        cursor_date = parse_date(before) if before is not None else None
+        open_door(user, "archive")
+        days, cursor = await solo.archive(
+            str(user.id), local, before=cursor_date, limit=ARCHIVE_PAGE, now=now()
+        )
+        return {"days": days, "next": cursor}
+
+    @router.post("/daily/{day}")
+    async def open_daily(day: str, request: Request):
+        """A date's Daily (#1434): created with its five drawings the first
+        time, resumed after, never restarted. The same five for everybody.
+        Today's through today's door; a date that has ended everywhere
+        through the archive's (#1470), where a Daily left unfinished is
+        finished, its late drawings marked so."""
+        user = await account(request)
+        throttle(run_limiter, user)
+        local = parse_date(day)
+        archived = not date_is_open(local, now())
+        local = past_date(day) if archived else local
+        open_door(user, "archive" if archived else "daily_today")
         try:
-            run = await solo.open_daily(str(user.id), local, now=now())
+            run = await solo.open_daily(str(user.id), local, now=now(), archive=archived)
         except SoloRefused as error:
             raise refused(error, missing=ErrorCode.NO_SUCH_DAILY) from error
         return run_payload(run)
+
+    @router.post("/daily/{day}/replay")
+    async def replay_daily(day: str, request: Request, run: str | None = Query(default=None)):
+        """A past Daily the player finished, played again for fun (#1470):
+        nothing it comes to is recorded. 409 while their own Daily for the
+        date is unfinished - that is finished through the date's door."""
+        user = await account(request)
+        throttle(run_limiter, user)
+        local = past_date(day)
+        open_door(user, "archive")
+        try:
+            replay = await solo.open_replay(str(user.id), local, now=now(), run_id=run)
+        except SoloRefused as error:
+            raise refused(error, missing=ErrorCode.NO_SUCH_DAILY) from error
+        return run_payload(replay)
 
     @router.get("/me")
     async def summary(request: Request, today: str = Query()):

@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b6c7d8e9f0a3_solo_gallery_shares.py` (#1434). Both this line and the table
+`c7d8e9f0a1b4_solo_replays.py` (#1470). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -2157,7 +2157,8 @@ a turn id, so nobody can steer by it.
 ### `solo_runs`
 `id` **PK** · `user_id` (CASCADE; the canonical account) · `mode` (`free \| daily`) ·
 `length` (`5 \| 10`, or NULL for unlimited) · `daily_date` (the player's local date, a
-Daily only) · `state` (`active \| ended \| abandoned`) · `end_reason`
+Daily only) · `replay` (a finished past Daily played again, a Daily only:
+`ck_solo_runs_replay`) · `state` (`active \| ended \| abandoned`) · `end_reason`
 (`completed \| missed \| abandoned`, set exactly when the run is not active) · `position`
 (drawings served, those dropped unseen not counted) · `solved` · `points` · `started_at` · `ended_at`.
 
@@ -2166,8 +2167,12 @@ One player's Solo run (#1434). Play is local, so this is what the server keeps o
 player to one free run in play: starting another abandons it (a 5 or 10 run as
 `abandoned`, recording nothing; an unlimited one as `ended` at its streak), and two
 starts at once meet the index and the loser retries. `ix_solo_runs_user_mode` serves the
-active-run read. Deleted with the account (explicitly: the `users` row stays as a
-tombstone, so its CASCADE never fires), its serves with it.
+active-run read. `uq_solo_runs_one_daily` — unique on (`user_id`, `daily_date`) for a
+Daily that is not a replay — is the one Daily per date (R-SOLO-12). A **replay** (#1470,
+R-SOLO-18) is a Daily run beside it that records nothing; `uq_solo_runs_one_active_replay`
+holds a player to one going, and starting one of another date abandons it. Deleted with
+the account (explicitly: the `users` row stays as a tombstone, so its CASCADE never fires),
+its serves with it.
 
 ### `solo_serves`
 `id` **PK** — the **serve id**, the only id a Solo client sees · `run_id` (CASCADE) ·
@@ -2205,7 +2210,9 @@ archive (#1470). Every pick and replacement first takes one transaction-scoped a
 (`DAILY_PICK_LOCK_ID`, PostgreSQL), so two dates open at once — today and tomorrow both are at
 noon UTC — never read the same unused concepts before either commits (#1493 review). Then the
 day row is what two first requests for one date race for: the one that inserts it
-(`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other reads. A day too thin is stored as `skipped`; while it is still open somewhere it is looked at again, under the same locks, once `SKIPPED_RETRY` (5 min) has passed since `picked_at` — nobody can have played it, and a date first asked for before its games finished would otherwise have no Daily for good. Once it has ended everywhere it stays skipped. A drawing that stops being
+(`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other reads. A day too thin is stored as `skipped`; while it is still open somewhere it is looked at again, under the same locks, once `SKIPPED_RETRY` (5 min) has passed since `picked_at` — nobody can have played it, and a date first asked for before its games finished would otherwise have no Daily for good. Once it has ended everywhere it stays skipped. Only a date asked for while it
+was open gets a row: the archive plays the Dailies there were and never picks a past date
+late (R-SOLO-18). A drawing that stops being
 playable for everybody is replaced for everybody (R-SOLO-13) under the day row's lock —
 taken only when something needs replacing, so the opens of an untouched Daily never queue
 — and the row keeps the drawing and the concept it replaced. `solo_daily_concepts` holds

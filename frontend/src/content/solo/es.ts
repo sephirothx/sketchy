@@ -32,6 +32,16 @@ export const SOLO_ES: SoloCopy = {
     streak: (p: { days: number }) => `${counted(p.days, { one: "día", other: "días" })} seguidos`,
     yourDailies: "Tus retos diarios",
     noDailiesYet: "Aquí aparecerán los retos diarios que juegues.",
+    pastDailies: "Retos diarios anteriores",
+    pastDailiesIntro:
+      "Juega un reto diario que te perdiste, termina uno que dejaste a medias o vuelve a jugar uno. Uno que te perdiste no cuenta para tus días seguidos, y volver a jugarlo no queda registrado.",
+    noPastDailies: "Todavía no hay retos diarios anteriores.",
+    playPast: "Jugar",
+    continuePast: "Continuar",
+    playAgain: "Volver a jugar",
+    showOlder: "Ver anteriores",
+    notRecorded: "No se registra",
+    playedAgain: "Jugado otra vez",
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Dibujo ${number(p.position)}` : `Dibujo ${number(p.position)} de ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

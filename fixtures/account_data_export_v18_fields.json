@@ -300,6 +300,7 @@
     "soloRuns[].length",
     "soloRuns[].mode",
     "soloRuns[].points",
+    "soloRuns[].replay",
     "soloRuns[].solved",
     "soloRuns[].startedAt",
     "soloRuns[].state",

@@ -32,6 +32,16 @@ export const SOLO_FR: SoloCopy = {
     streak: (p: { days: number }) => `${counted(p.days, { one: "jour", other: "jours" })} d’affilée`,
     yourDailies: "Tes défis du jour",
     noDailiesYet: "Les défis du jour que tu joues apparaîtront ici.",
+    pastDailies: "Anciens défis du jour",
+    pastDailiesIntro:
+      "Joue un défi du jour manqué, termine celui que tu as laissé ou rejoue-en un. Un défi manqué ne compte pas pour tes jours d’affilée, et le rejouer n’est pas enregistré.",
+    noPastDailies: "Il n’y a pas encore d’anciens défis du jour.",
+    playPast: "Jouer",
+    continuePast: "Continuer",
+    playAgain: "Rejouer",
+    showOlder: "Voir les plus anciens",
+    notRecorded: "Non enregistré",
+    playedAgain: "Rejoué",
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Dessin ${number(p.position)}` : `Dessin ${number(p.position)} sur ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

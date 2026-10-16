@@ -134,6 +134,25 @@
   font-weight: 700;
 }
 
+/* The archive's rows add what to do with the day (#1470); on a phone the
+   points and the button take a line of their own. */
+.solo-archive-list {
+  padding: 18px 20px;
+}
+
+.solo-archive-day {
+  grid-template-columns: auto 1fr auto auto;
+}
+
+.solo-open-archive {
+  justify-self: start;
+  margin-top: 12px;
+}
+
+.solo-play-replay {
+  margin-left: 8px;
+}
+
 /* A Daily's five, as squares: named, missed, still to play. */
 .solo-marks {
   display: inline-flex;
@@ -238,6 +257,9 @@
   .solo-guess { flex-wrap: wrap; }
   .solo-guess-input { flex-basis: 100%; }
   .solo-guess .btn { flex: 1 1 0; justify-content: center; }
+  .solo-archive-day { grid-template-columns: auto 1fr; }
+  /* Two lines a day: a wider gap keeps one day from reading into the next. */
+  .solo-archive-list ol { gap: 14px; }
 }
 
 /* ----------------------------------------------------- result and summary */
