@@ -9,7 +9,7 @@ drawing door's; a run that is not the caller's is a 404 of its own.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -27,7 +27,7 @@ from app.refusals import ErrorCode
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
 from app.request_text import ControlFreeModel
 from app.services.solo_access import free_run_door, solo_door_open
-from app.solo_rules import CLOCK_SECONDS, MAX_OPEN_SERVES, OUTCOMES
+from app.solo_rules import CLOCK_SECONDS, MAX_OPEN_SERVES, OUTCOMES, date_is_open
 
 # A human's pace: a run is a handful of requests a minute. Per account, since
 # every route needs one.
@@ -187,6 +187,49 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
         except SoloRefused as error:
             raise refused(error, missing=ErrorCode.NO_SUCH_DRAWING) from error
         return {"serve": serve_payload(serve), "run": run_payload(run)}
+
+    def local_date(value: str) -> date:
+        """A player's local date, accepted only while it is today somewhere
+        (±14 h of UTC): the server cannot see the player's zone, and a date
+        that is nobody's today is somebody asking for another day's Daily."""
+        try:
+            day = date.fromisoformat(value)
+        except ValueError as error:
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a date.", field="date"
+            ) from error
+        if not date_is_open(day, now()):
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That date is not today anywhere.",
+                field="date",
+            )
+        return day
+
+    @router.post("/daily/{day}")
+    async def open_daily(day: str, request: Request):
+        """Today's Daily (#1434): created with its five drawings the first
+        time, resumed after, never restarted. The same five for everybody."""
+        user = await account(request)
+        throttle(run_limiter, user)
+        local = local_date(day)
+        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="daily_today"):
+            raise Refusal(
+                403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
+                params={"action": "solo"},
+            )
+        try:
+            run = await solo.open_daily(str(user.id), local, now=now())
+        except SoloRefused as error:
+            raise refused(error, missing=ErrorCode.NO_SUCH_DAILY) from error
+        return run_payload(run)
+
+    @router.get("/me")
+    async def summary(request: Request, today: str = Query()):
+        """What Solo's page opens on: today's Daily, the free run there is to
+        continue, the bests, the Daily history and the streak."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        return await solo.summary(str(user.id), local_date(today), now=now())
 
     @router.get("/serves/{serve_id}/drawing")
     async def served_drawing(serve_id: str, request: Request):

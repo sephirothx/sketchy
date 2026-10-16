@@ -313,6 +313,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_solo_run: "Esa partida de Solo ya no existe.",
   solo_conflict: "Eso ha cambiado mientras tanto. Recarga Solo y sigue.",
   solo_pool_empty: "Ahora mismo no queda ningún dibujo para jugar. Inténtalo más tarde.",
+  solo_date_out_of_range: "El reto diario de ese día no está abierto.",
+  no_such_daily: "Hoy no hay reto diario. Prueba una partida libre.",
   pinned_drawings_full: "Tus dibujos fijados están completos. Quita uno de tu perfil primero.",
 
   // Prompt lists

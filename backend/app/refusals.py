@@ -243,6 +243,9 @@ class ErrorCode(StrEnum):
     NO_SUCH_SOLO_RUN = "no_such_solo_run"
     SOLO_CONFLICT = "solo_conflict"
     SOLO_POOL_EMPTY = "solo_pool_empty"
+    # The Daily: a date that is nobody's today, and a day too thin for one.
+    SOLO_DATE_OUT_OF_RANGE = "solo_date_out_of_range"
+    NO_SUCH_DAILY = "no_such_daily"
     # A seventh pin (R-PIN-02); carries `slots`. Nothing was changed.
     PINNED_DRAWINGS_FULL = "pinned_drawings_full"
 
