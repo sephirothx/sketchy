@@ -166,9 +166,12 @@ export function openDaily(date: string): Promise<SoloRun> {
   return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}`, { method: "POST" });
 }
 
-/** A past Daily the player finished, played again: nothing is recorded. */
-export function replayDaily(date: string): Promise<SoloRun> {
-  return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}/replay`, { method: "POST" });
+/** A past Daily the player finished, played again: nothing is recorded.
+    With `runId`, only that replay is brought up to date - never another
+    started - and a refusal means it is no longer the one going. */
+export function replayDaily(date: string, runId?: string): Promise<SoloRun> {
+  const query = runId === undefined ? "" : `?run=${encodeURIComponent(runId)}`;
+  return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}/replay${query}`, { method: "POST" });
 }
 
 /** One past Daily in the archive, with the player's result for it if any. */

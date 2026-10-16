@@ -261,3 +261,31 @@ async def test_a_replay_resumed_takes_a_drawing_replaced_since(env):
     again = (await http.post(f"/api/solo/daily/{PAST.isoformat()}/replay")).json()
     assert again["runId"] == replay["runId"]
     assert hidden not in await turns()
+
+
+async def test_recovering_a_replay_by_its_id_never_starts_another(env):
+    """A tab recovering its replay names it: if another tab began a replay
+    of another date meanwhile, the recovery is refused and nothing new is
+    started or abandoned (#1496 review)."""
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    stranger = await player(users, factory, "Stranger")
+    days = (PAST, PAST - timedelta(days=1))
+    for day in days:
+        begun = await solo.open_daily(stranger.id, day, now=_noon(day))
+        for serve in begun.serves:
+            await solo.settle(stranger.id, serve.serve_id, outcome="solved", seconds=4, now=_noon(day))
+    await sign_in_as(http, factory, stranger.id)
+    first = (await http.post(f"/api/solo/daily/{days[0].isoformat()}/replay")).json()
+    # Its own tab, still the replay going: brought up to date, the same run.
+    same = await http.post(f"/api/solo/daily/{days[0].isoformat()}/replay", params={"run": first["runId"]})
+    assert same.status_code == 200 and same.json()["runId"] == first["runId"]
+
+    other = (await http.post(f"/api/solo/daily/{days[1].isoformat()}/replay")).json()
+    stale = await http.post(f"/api/solo/daily/{days[0].isoformat()}/replay", params={"run": first["runId"]})
+    assert stale.status_code == 409
+    async with factory() as session:
+        replays = dict(
+            (await session.execute(select(SoloRun.id, SoloRun.state).where(SoloRun.replay.is_(True)))).all()
+        )
+    assert replays == {UUID(first["runId"]): "abandoned", UUID(other["runId"]): "active"}

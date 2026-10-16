@@ -247,13 +247,25 @@ export function SoloPage() {
   // Today's Daily, after a 404 on one of its drawings: the set may have
   // replaced it for everybody (R-SOLO-13), which opening it again picks up.
   const reopenDaily = async () => {
-    // A replay ended elsewhere is not reopened: that would start another.
     if (!run || run.mode !== "daily" || !run.dailyDate || run.state !== "active") return;
+    const held = run;
+    const date = run.dailyDate;
     try {
-      const fresh = await (run.replay ? replayDaily : openDaily)(run.dailyDate);
+      // A replay is brought up to date by its own id: by date alone the
+      // server would start another, abandoning one another tab began
+      // meanwhile (#1496 review).
+      const fresh = await (held.replay ? replayDaily(date, held.runId) : openDaily(date));
       setRun((current) => (current?.runId === fresh.runId ? fresh : current));
     } catch {
-      // The drawing stays as it is, and can be given up.
+      if (!held.replay) return; // The drawing stays as it is, and can be given up.
+      // No longer the replay going: show this one as it stands.
+      const fresh = await fetchSoloRun(held.runId).catch(() => null);
+      if (fresh && fresh.state !== "active") {
+        setCard(null);
+        setSummaryOf(fresh);
+        setRun(null);
+        void loadSummary();
+      }
     }
   };
 

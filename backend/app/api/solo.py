@@ -293,7 +293,7 @@ def create_solo_router(
         return run_payload(run)
 
     @router.post("/daily/{day}/replay")
-    async def replay_daily(day: str, request: Request):
+    async def replay_daily(day: str, request: Request, run: str | None = Query(default=None)):
         """A past Daily the player finished, played again for fun (#1470):
         nothing it comes to is recorded. 409 while their own Daily for the
         date is unfinished - that is finished through the date's door."""
@@ -302,10 +302,10 @@ def create_solo_router(
         local = past_date(day)
         open_door(user, "archive")
         try:
-            run = await solo.open_replay(str(user.id), local, now=now())
+            replay = await solo.open_replay(str(user.id), local, now=now(), run_id=run)
         except SoloRefused as error:
             raise refused(error, missing=ErrorCode.NO_SUCH_DAILY) from error
-        return run_payload(run)
+        return run_payload(replay)
 
     @router.get("/me")
     async def summary(request: Request, today: str = Query()):

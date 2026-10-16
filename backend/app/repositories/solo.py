@@ -1164,14 +1164,19 @@ class SoloRepository:
                     raise SoloRefused("conflict") from None
         raise SoloRefused("conflict")
 
-    async def open_replay(self, user_id: str, day: date, *, now: datetime) -> RunView:
+    async def open_replay(
+        self, user_id: str, day: date, *, now: datetime, run_id: str | None = None
+    ) -> RunView:
         """A past Daily the player finished, played again for fun (#1470):
         the same five, as they stand now, in a run that records nothing - no
         result, no streak, no best. The replay of that date going is resumed;
         one of another date is abandoned, as a second free run abandons the
         first. `conflict` while the player's own Daily for the date is
         unfinished, which is to be finished instead; `missing` for a date
-        with no Daily."""
+        with no Daily. With `run_id` it only brings that replay up to date -
+        a page recovering a drawing - and is `conflict` if it is no longer
+        the one going, rather than starting another and abandoning whatever
+        another tab began meanwhile (#1496 review)."""
         async with self._session_factory() as session:
             async with session.begin():
                 picked = await daily_set(session, day, now=now, create=False)
@@ -1202,6 +1207,11 @@ class SoloRepository:
                             )
                             .with_for_update()
                         )
+                        wanted = _optional_uuid(run_id) if run_id is not None else None
+                        if run_id is not None and (
+                            active is None or active.id != wanted or active.daily_date != day
+                        ):
+                            raise SoloRefused("conflict")
                         if active is not None and active.daily_date == day:
                             # Resumed as a Daily is: a drawing the set replaced
                             # since is swapped in (R-SOLO-13).
