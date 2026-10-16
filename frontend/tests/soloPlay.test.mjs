@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dailyMarks, fingerprint, forgetServeStart, serveStartedAt, untilLocalMidnight } from "../src/lib/soloPlay.ts";
+import {
+  LOCAL_DATE_CHECK_MS,
+  dailyMarks,
+  fingerprint,
+  forgetServeStart,
+  serveStartedAt,
+  untilLocalMidnight,
+  watchLocalDate,
+} from "../src/lib/soloPlay.ts";
 
 function withStorage(run) {
   const kept = new Map();
@@ -68,4 +76,32 @@ test("a Daily reads as five squares in the order it was played", () => {
 test("the next Daily is at the player's own midnight", () => {
   assert.equal(untilLocalMidnight(new Date(2026, 9, 15, 23, 59, 30)), 30_000);
   assert.equal(untilLocalMidnight(new Date(2026, 9, 15, 0, 0, 0)), 24 * 3600 * 1000);
+});
+
+test("a page open across midnight hears the new date, on the clock and on waking", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const previous = { document: globalThis.document, window: globalThis.window };
+  globalThis.document = new EventTarget();
+  globalThis.window = new EventTarget();
+  try {
+    let date = "2026-10-15";
+    const heard = [];
+    const stop = watchLocalDate((next) => heard.push(next), () => date);
+    t.mock.timers.tick(LOCAL_DATE_CHECK_MS);
+    assert.deepEqual(heard, [], "the same day says nothing");
+    date = "2026-10-16";
+    t.mock.timers.tick(LOCAL_DATE_CHECK_MS);
+    assert.deepEqual(heard, ["2026-10-16"], "midnight on the clock");
+    date = "2026-10-17";
+    globalThis.document.dispatchEvent(new Event("visibilitychange"));
+    assert.deepEqual(heard, ["2026-10-16", "2026-10-17"], "a tab woken after it");
+    stop();
+    date = "2026-10-18";
+    t.mock.timers.tick(LOCAL_DATE_CHECK_MS);
+    globalThis.window.dispatchEvent(new Event("focus"));
+    assert.equal(heard.length, 2, "stopped means stopped");
+  } finally {
+    globalThis.document = previous.document;
+    globalThis.window = previous.window;
+  }
 });

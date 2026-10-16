@@ -84,10 +84,15 @@ export function replayPlan(
 ): ReplayPlan {
   const costs = actions.map(cost);
   const total = costs.reduce((sum, value) => sum + value, 0);
-  const seconds = options.seconds !== undefined && options.seconds > 0
-    ? options.seconds
+  const fixed = options.seconds !== undefined && options.seconds > 0;
+  const seconds = fixed
+    ? (options.seconds as number)
     : Math.min(REPLAY_MAX_SECONDS, Math.max(REPLAY_MIN_SECONDS, total / 220));
-  const pointsPerSecond = Math.max(1, total / seconds);
+  // A named duration is kept whatever the drawing costs: the floor of a
+  // point a second would play a five-segment drawing in five seconds, and in
+  // Solo that is the answer early and the points that go with it (#1495
+  // review).
+  const pointsPerSecond = fixed && total > 0 ? total / seconds : Math.max(1, total / seconds);
   const before: number[] = [];
   let running = 0;
   for (const value of costs) {
