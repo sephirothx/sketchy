@@ -162,7 +162,10 @@ test("a fraction maps back to a position: part way along a stroke, or into a win
 test("Solo replays every drawing over the duration it names (#1434)", () => {
   const doodle = replayPlan([path(10)], { seconds: 20 });
   assert.equal(doodle.seconds, 20);
-  assert.equal(doodle.pointsPerSecond, 1);
+  assert.equal(doodle.pointsPerSecond, 9 / 20);
+  // The pool's smallest: five two-point paths, five segments, still 20 s.
+  const smallest = replayPlan(Array.from({ length: 5 }, () => path(2)), { seconds: 20 });
+  assert.equal(smallest.total / smallest.pointsPerSecond, 20);
   const dense = replayPlan(Array.from({ length: 200 }, () => path(60)), { seconds: 20 });
   assert.equal(dense.seconds, 20);
   assert.equal(dense.pointsPerSecond, dense.total / 20);

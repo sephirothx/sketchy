@@ -3,7 +3,7 @@
  * Daily's drawings read as marks. Pure apart from the clock's memory, so the
  * node suite can hold it to its edges.
  */
-import type { SoloDailyResult } from "./solo";
+import { localDateKey, type SoloDailyResult } from "./solo.ts";
 
 /** The clock a drawing is guessed against, and the part its strokes take. */
 export const SOLO_CLOCK_SECONDS = 30;
@@ -62,4 +62,35 @@ export function dailyMarks(result: SoloDailyResult): DailyMark[] {
 export function untilLocalMidnight(now: Date = new Date()): number {
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
   return midnight.getTime() - now.getTime();
+}
+
+/** How often a page open on Solo looks at the date, besides waking up. */
+export const LOCAL_DATE_CHECK_MS = 30_000;
+
+/**
+ * Call `onChange` with the player's new local date when it changes: the
+ * Daily rolls over at their midnight, and a page left open across it - or a
+ * tab woken after it - must ask for the new one (R-SOLO-12, #1495 review).
+ * Looked at every half minute and whenever the tab is shown or focused.
+ * Returns the way to stop.
+ */
+export function watchLocalDate(
+  onChange: (date: string) => void,
+  read: () => string = () => localDateKey(),
+): () => void {
+  let current = read();
+  const check = () => {
+    const now = read();
+    if (now === current) return;
+    current = now;
+    onChange(now);
+  };
+  const timer = setInterval(check, LOCAL_DATE_CHECK_MS);
+  document.addEventListener("visibilitychange", check);
+  window.addEventListener("focus", check);
+  return () => {
+    clearInterval(timer);
+    document.removeEventListener("visibilitychange", check);
+    window.removeEventListener("focus", check);
+  };
 }

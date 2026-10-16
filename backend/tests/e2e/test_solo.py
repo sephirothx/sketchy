@@ -267,3 +267,4 @@ async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
         finally:
             await context.close()
             await browser.close()
+

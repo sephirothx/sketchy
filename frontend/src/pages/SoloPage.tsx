@@ -45,6 +45,7 @@ import {
   forgetServeStart,
   serveStartedAt,
   untilLocalMidnight,
+  watchLocalDate,
 } from "../lib/soloPlay";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
@@ -85,7 +86,11 @@ export function SoloPage() {
   const [summaryOf, setSummaryOf] = useState<SoloRun | null>(null);
   // The best for the run's length before it ended: a new best beats it.
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
-  const today = localDateKey();
+  // The player's own date, watched: the Daily rolls over at their midnight,
+  // and a page left open across it - or a tab woken after it - must offer
+  // the new one rather than yesterday's result (R-SOLO-12, #1495 review).
+  const [today, setToday] = useState(() => localDateKey());
+  useEffect(() => watchLocalDate(setToday), []);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -99,7 +104,7 @@ export function SoloPage() {
   useEffect(() => {
     if (!hasResolved || !user || user.isAnonymous) return;
     let cancelled = false;
-    fetchSoloSummary(localDateKey())
+    fetchSoloSummary(today)
       .then((loaded) => {
         if (!cancelled) setSummary(loaded);
       })
@@ -109,7 +114,7 @@ export function SoloPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasResolved, user]);
+  }, [hasResolved, user, today]);
 
   const begin = async (action: () => Promise<SoloRun>) => {
     if (busy) return;
