@@ -40,6 +40,7 @@ from app.db.models import (
     PromptVersionAlias,
     SoloBest,
     SoloDailyDay,
+    SoloDailyConcept,
     SoloDailyResult,
     SoloDailySet,
     SoloPoolEntry,
@@ -569,21 +570,12 @@ async def pick_daily(
     every request."""
     start = daily_start_key(day) if start is None else start
     window = and_(
-        SoloDailySet.daily_date > day - timedelta(days=DAILY_REUSE_DAYS),
-        SoloDailySet.daily_date < day + timedelta(days=DAILY_REUSE_DAYS),
+        SoloDailyConcept.daily_date > day - timedelta(days=DAILY_REUSE_DAYS),
+        SoloDailyConcept.daily_date < day + timedelta(days=DAILY_REUSE_DAYS),
     )
-    # A concept a set replaced still was that day's Daily for whoever played
-    # it before the replacement (#1493 review).
-    reused = (
-        select(SoloDailySet.concept_id)
-        .where(window)
-        .union(
-            select(SoloDailySet.replaced_concept_id).where(
-                window, SoloDailySet.replaced_concept_id.is_not(None)
-            )
-        )
-        .scalar_subquery()
-    )
+    # Every concept a Daily held, replacements and what they replaced
+    # included: each was that day's for whoever played it then (#1493 review).
+    reused = select(SoloDailyConcept.concept_id).where(window).scalar_subquery()
     shared = exists().where(
         TurnDrawing.turn_id == SoloPoolEntry.turn_id, TurnDrawing.gallery_share_count > 0
     )
@@ -650,16 +642,37 @@ async def _set_rows(session: AsyncSession, day: date, *, refresh: bool = False):
     return list((await session.scalars(statement)).all())
 
 
+# The one lock every Daily pick and replacement takes (PostgreSQL), so two
+# dates open at once cannot each read the same unused concepts before either
+# commits: the 60-day rule is read after it, and sees what the other picked.
+DAILY_PICK_LOCK_ID = int.from_bytes(b"SOLODAY", "big")
+
+
+async def _lock_daily_picks(session: AsyncSession) -> None:
+    """Serialize choosing Daily drawings across every date, until commit.
+    SQLite has one writer already, and is a test database (#1493 review)."""
+    if session.get_bind().dialect.name == "postgresql":
+        await session.execute(
+            sql_text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": DAILY_PICK_LOCK_ID}
+        )
+
+
 async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[SoloDailySet] | None:
     """`day`'s five, chosen by the first request for the date and the same
     for everybody after it; None for a day with too few to choose from.
 
-    The day row is what two first requests race for: the one that inserts it
-    picks, in its transaction; the other waits on the key and reads. A drawing
+    A pick takes the Daily pick lock first, so picks for different dates
+    happen one at a time and each reads the concepts the others used; then
+    the day row is what two first requests for one date race for: the one
+    that inserts it picks, in its transaction; the other reads. A drawing
     that has stopped being playable for everybody since is replaced for
-    everybody by the same walk - under the day row's lock, taken only then, so
-    the opens of an untouched Daily never queue behind one another."""
+    everybody by the same walk, under the same lock and the day row's -
+    taken only then, so the opens of an untouched Daily never queue behind
+    one another."""
     existing = await session.get(SoloDailyDay, day)
+    if existing is None:
+        await _lock_daily_picks(session)
+        existing = await session.get(SoloDailyDay, day, populate_existing=True)
     if existing is None:
         picked = await pick_daily(session, day, count=DAILY_LENGTH)
         state = "set" if len(picked) == DAILY_LENGTH else "skipped"
@@ -682,6 +695,9 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
                 )
                 for index, (turn, concept, rate) in enumerate(picked)
             )
+            session.add_all(
+                SoloDailyConcept(daily_date=day, concept_id=concept) for _, concept, _ in picked
+            )
             await session.flush()
         existing = await session.get(SoloDailyDay, day, populate_existing=True)
     if existing.state != "set":
@@ -689,6 +705,7 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
     rows = await _set_rows(session, day)
     if len(set((await session.scalars(_servable_set_rows(rows))).all())) == len(rows):
         return rows
+    await _lock_daily_picks(session)
     await session.get(SoloDailyDay, day, with_for_update=True, populate_existing=True)
     rows = await _set_rows(session, day, refresh=True)
     servable = set((await session.scalars(_servable_set_rows(rows))).all())
@@ -709,6 +726,8 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
             row.turn_id, row.concept_id, now
         )
         row.turn_id, row.concept_id, row.solve_rate = turn, concept, rate
+        # Never already the date's: the walk leaves out every concept it held.
+        session.add(SoloDailyConcept(daily_date=day, concept_id=concept))
     await session.flush()
     return rows
 
@@ -1226,7 +1245,8 @@ class SoloRepository:
     def _served_drawing(self, player_ids: Sequence[UUID], serve_id: UUID, *columns):
         """A served drawing the player may still see: their serve, and the
         drawing still servable to anybody - a hide, a take-out, an opt-out or
-        an erasure closes the door at once, as on every other door.
+        an erasure closes the door at once, as on every other door - and, for
+        a Daily, still one every language can name.
 
         The row read is an alias, so the servable clauses' own subquery over
         `turn_drawings` stays a subquery rather than correlating to it."""
@@ -1234,11 +1254,17 @@ class SoloRepository:
         return (
             select(*(getattr(drawing, name) for name in columns))
             .join(SoloServe, SoloServe.turn_id == drawing.turn_id)
+            .join(SoloRun, SoloRun.id == SoloServe.run_id)
             .join(SoloPoolEntry, SoloPoolEntry.turn_id == SoloServe.turn_id)
             .where(
                 SoloServe.id == serve_id,
                 SoloServe.user_id.in_(list(player_ids)),
                 *servable_clauses(),
+                # A Daily's drawing also needs its concept nameable in every
+                # language: one with no replacement after a language's
+                # wording came down stays in the set, and its door closes for
+                # everybody, as R-SOLO-13 says (#1493 review).
+                or_(SoloRun.mode != "daily", _all_languages_or_agnostic()),
             )
         )
 

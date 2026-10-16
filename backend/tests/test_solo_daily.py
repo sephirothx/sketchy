@@ -11,6 +11,7 @@ import asyncio
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -557,3 +558,103 @@ async def test_deleting_an_account_takes_its_daily_results_and_bests(env):
     async with factory() as session:
         for model in (SoloRun, SoloServe, SoloDailyResult, SoloBest):
             assert await session.scalar(select(func.count()).select_from(model)) == 0, model
+
+
+async def test_every_concept_a_position_held_stays_the_day_s_through_two_replacements(env):
+    """A position replaced A -> B -> C keeps A that day's: restoring A's
+    drawing must not make A tomorrow's (#1493 review)."""
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 7, tag="d")
+    early = await player(users, factory, "Early")
+    await solo.open_daily(early.id, DAY, now=NOON)
+    first = (await _set(factory))[0]
+    original_turn, original_concept = first.turn_id, first.concept_id
+
+    async def hide(turn_id, at=NOON):
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(TurnDrawing).where(TurnDrawing.turn_id == turn_id).values(gallery_hidden_at=at)
+            )
+
+    for _ in range(2):
+        await hide((await _set(factory))[0].turn_id)
+        await solo.open_daily(early.id, DAY, now=NOON)
+    replaced = (await _set(factory))[0]
+    assert replaced.concept_id != original_concept and replaced.replaced_concept_id != original_concept
+    await hide(original_turn, at=None)
+
+    # Four fresh candidates and A: with A held back the next day is too thin.
+    await _candidates(users, history, factory, 4, tag="n")
+    async with factory() as session, session.begin():
+        from app.repositories.solo import daily_set
+        tomorrow = await daily_set(session, DAY + timedelta(days=1), now=NOON + timedelta(days=1))
+    assert tomorrow is None
+
+
+async def test_a_daily_drawing_left_unnameable_in_a_language_closes_its_door_for_everybody(env):
+    """No spare to replace it with: the drawing stays in the set, and every
+    player's serve of it stops showing it (R-SOLO-13, #1493 review)."""
+    http, users, history, solo, factory = env
+    every = {lang: f"u-{lang}" for lang in ("en", "de", "es", "fr", "it", "nl", "pl", "pt")}
+    await _candidates(users, history, factory, 4, tag="y")
+    _, _, [eight] = await _candidates(users, history, factory, 1, forms=every, tag="f")
+    polish = await player(users, factory, "Polish", languages=("pl",))
+    stranger = await player(users, factory, "Stranger")
+    runs = [await solo.open_daily(who.id, DAY, now=NOON) for who in (polish, stranger)]
+
+    async def door(who, run):
+        turns = await _served_turns(factory, run.run_id)
+        serve = run.serves[turns.index(UUID(eight.turn_id))]
+        return await solo.served_drawing(who.id, serve.serve_id)
+
+    assert await door(polish, runs[0]) is not None
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(PromptVersion)
+            .where(PromptVersion.language == "pl", PromptVersion.canonical_answer == "u-pl")
+            .values(moderation_state="hidden")
+        )
+    assert UUID(eight.turn_id) in {row.turn_id for row in await _set(factory)}
+    assert await door(polish, runs[0]) is None
+    assert await door(stranger, runs[1]) is None
+
+
+async def test_two_dates_picked_at_once_never_share_a_concept(env, monkeypatch):
+    """Today and tomorrow are both open at noon UTC: two first opens at once,
+    with five candidates between them, must not both take all five (#1493
+    review). PostgreSQL only: it is the database two transactions overlap
+    in; SQLite has one writer."""
+    http, users, history, solo, factory = env
+    async with factory() as session:
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("concurrent transactions are PostgreSQL's")
+    await _candidates(users, history, factory, 5)
+    import app.repositories.solo as solo_module
+    from app.repositories.solo import daily_set
+
+    # Each pick waits, briefly, for the other to have picked as well: without
+    # the lock both read the same five before either writes, every time; with
+    # it the second cannot start until the first commits, and the wait runs out.
+    original, both, picks = solo_module.pick_daily, asyncio.Event(), []
+
+    async def overlapping(*args, **kwargs):
+        rows = await original(*args, **kwargs)
+        picks.append(rows)
+        if len(picks) >= 2:
+            both.set()
+        try:
+            await asyncio.wait_for(both.wait(), 0.5)
+        except TimeoutError:
+            pass
+        return rows
+
+    monkeypatch.setattr(solo_module, "pick_daily", overlapping)
+
+    async def pick(day):
+        async with factory() as session, session.begin():
+            return await daily_set(session, day, now=NOON)
+
+    picked = await asyncio.gather(pick(DAY), pick(DAY + timedelta(days=1)))
+    assert sum(rows is not None for rows in picked) == 1
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SoloDailySet)) == 5
