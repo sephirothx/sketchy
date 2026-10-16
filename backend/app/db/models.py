@@ -3744,11 +3744,36 @@ class SoloDailySet(Base):
     replaced_turn_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
-    # Its concept, which stays that day's for the 60-day reuse rule.
+    # Its concept: the latest replaced. Every concept the date's Daily ever
+    # held is in `solo_daily_concepts`, which the 60-day rule reads.
     replaced_concept_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     replaced_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SoloDailyConcept(Base):
+    """Every concept a date's Daily has held (#1434): the five it was picked
+    with, and each a replacement brought in. Kept as long as the date's row.
+
+    The 60-day reuse rule reads this rather than the set: a position replaced
+    twice keeps only its latest predecessor, and a concept a player already
+    saw that day stays that day's however many replacements followed (#1493
+    review)."""
+
+    __tablename__ = "solo_daily_concepts"
+    __table_args__ = (
+        Index("ix_solo_daily_concepts_concept_date", "concept_id", "daily_date"),
+    )
+
+    daily_date: Mapped[date] = mapped_column(
+        Date, ForeignKey("solo_daily_days.daily_date", ondelete="CASCADE"), primary_key=True
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
 
 
 class SoloDailyResult(Base):

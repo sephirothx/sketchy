@@ -86,6 +86,24 @@ def upgrade() -> None:
         "ix_solo_daily_sets_concept_date", "solo_daily_sets", ["concept_id", "daily_date"]
     )
     op.create_table(
+        "solo_daily_concepts",
+        sa.Column(
+            "daily_date",
+            sa.Date(),
+            sa.ForeignKey("solo_daily_days.daily_date", ondelete="CASCADE"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "concept_id",
+            _UUID,
+            sa.ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
+    )
+    op.create_index(
+        "ix_solo_daily_concepts_concept_date", "solo_daily_concepts", ["concept_id", "daily_date"]
+    )
+    op.create_table(
         "solo_daily_results",
         sa.Column(
             "user_id", _UUID, sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
@@ -136,6 +154,8 @@ def downgrade() -> None:
     op.drop_table("solo_bests")
     op.drop_index("ix_solo_daily_results_run_id", table_name="solo_daily_results")
     op.drop_table("solo_daily_results")
+    op.drop_index("ix_solo_daily_concepts_concept_date", table_name="solo_daily_concepts")
+    op.drop_table("solo_daily_concepts")
     op.drop_index("ix_solo_daily_sets_concept_date", table_name="solo_daily_sets")
     op.drop_index("ix_solo_daily_sets_turn_id", table_name="solo_daily_sets")
     op.drop_table("solo_daily_sets")

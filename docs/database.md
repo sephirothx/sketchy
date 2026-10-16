@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-71 tables in nine domains.
+72 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -128,6 +128,7 @@ erDiagram
     solo_runs ||--o{ solo_serves : "served"
     turn_records ||--o{ solo_serves : "served as"
     solo_daily_days ||--o{ solo_daily_sets : "five"
+    solo_daily_days ||--o{ solo_daily_concepts : "every concept held"
     users ||--o{ solo_daily_results : "plays the Daily"
     users ||--o{ solo_bests : "best runs"
 
@@ -160,7 +161,7 @@ erDiagram
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
-| **Solo** | `solo_pool`, `solo_runs`, `solo_serves`, `solo_daily_days`, `solo_daily_sets`, `solo_daily_results`, `solo_bests` |
+| **Solo** | `solo_pool`, `solo_runs`, `solo_serves`, `solo_daily_days`, `solo_daily_sets`, `solo_daily_concepts`, `solo_daily_results`, `solo_bests` |
 
 ---
 
@@ -2186,20 +2187,25 @@ held ready and never settled is deleted when its run ends, and the run's `positi
 goes back by it: a player who never saw it was not served it. Kept for as long as the account (owner's decision): it is what keeps a player
 from being served the same drawing twice.
 
-### `solo_daily_days` and `solo_daily_sets`
+### `solo_daily_days`, `solo_daily_sets` and `solo_daily_concepts`
 `solo_daily_days`: `daily_date` **PK** · `state` (`set \| skipped`) · `picked_at`.
 `solo_daily_sets`: `daily_date` (CASCADE) + `position` (1–5) composite **PK** · `turn_id`
 (CASCADE, indexed) · `concept_id` (CASCADE) · `solve_rate` · `replaced_turn_id`,
-`replaced_concept_id` (no foreign keys) · `replaced_at`; unique (`daily_date`, `concept_id`); `ix_solo_daily_sets_concept_date`.
+`replaced_concept_id` (no foreign keys; the latest replaced) · `replaced_at`; unique (`daily_date`, `concept_id`); `ix_solo_daily_sets_concept_date`.
+`solo_daily_concepts`: `daily_date` (CASCADE) + `concept_id` (CASCADE) composite **PK**; `ix_solo_daily_concepts_concept_date`.
 
 The Daily (#1434, R-SOLO-11): the same five drawings for everybody, kept **forever** for the
-archive (#1470). The day row is what two first requests race for: the one that inserts it
-(`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other waits on the key and
-reads. A day too thin is stored as `skipped` and stays so. A drawing that stops being
+archive (#1470). Every pick and replacement first takes one transaction-scoped advisory lock
+(`DAILY_PICK_LOCK_ID`, PostgreSQL), so two dates open at once — today and tomorrow both are at
+noon UTC — never read the same unused concepts before either commits (#1493 review). Then the
+day row is what two first requests for one date race for: the one that inserts it
+(`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other reads. A day too thin is stored as `skipped` and stays so. A drawing that stops being
 playable for everybody is replaced for everybody (R-SOLO-13) under the day row's lock —
 taken only when something needs replacing, so the opens of an untouched Daily never queue
-— and the row keeps the drawing and the concept it replaced; the replaced concept still
-counts toward the 60-day reuse rule, which reads by date range (the primary key).
+— and the row keeps the drawing and the concept it replaced. `solo_daily_concepts` holds
+every concept a date's Daily ever held, the five picked and each replacement, because a
+position replaced twice keeps only its latest predecessor on the set row; it is what the
+60-day reuse rule reads, by concept and date (#1493 review).
 `ix_solo_daily_sets_concept_date` serves the free runs' exclusion of every concept in a
 Daily still open somewhere.
 
@@ -2954,7 +2960,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Solo runs, the drawings they served, Daily results and bests | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
-| The Daily's sets | Permanent: the archive plays past days (#1470) | — | Permanently kept | — | — |
+| The Daily's sets and the concepts each held | Permanent: the archive plays past days (#1470), and the 60-day rule reads the concepts | — | Permanently kept | — | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
