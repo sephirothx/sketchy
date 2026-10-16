@@ -21,7 +21,7 @@ import random
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, delete, exists, func, or_, select, text as sql_text
@@ -64,6 +64,7 @@ from app.repositories.interfaces import TurnDrawingDetail
 from app.solo_rules import (
     DAILY_LENGTH,
     DAILY_REUSE_DAYS,
+    SKIPPED_RETRY,
     MAX_OPEN_SERVES,
     SAMPLE_KEY_SPACE,
     SOLO_CONTENT_RATING,
@@ -672,9 +673,33 @@ async def _lock_daily_picks(session: AsyncSession) -> None:
         )
 
 
+def skipped_retry_due(day_row: SoloDailyDay, now: datetime) -> bool:
+    """Whether a date stored with no Daily is due another look: still open
+    somewhere, and not looked at within `SKIPPED_RETRY`."""
+    looked = day_row.picked_at
+    if looked.tzinfo is None:
+        looked = looked.replace(tzinfo=timezone.utc)
+    return date_is_open(day_row.daily_date, now) and now - looked >= SKIPPED_RETRY
+
+
+async def _write_set(session: AsyncSession, day: date, picked) -> None:
+    session.add_all(
+        SoloDailySet(
+            daily_date=day, position=index + 1, turn_id=turn, concept_id=concept,
+            solve_rate=rate,
+        )
+        for index, (turn, concept, rate) in enumerate(picked)
+    )
+    session.add_all(
+        SoloDailyConcept(daily_date=day, concept_id=concept) for _, concept, _ in picked
+    )
+    await session.flush()
+
+
 async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[SoloDailySet] | None:
     """`day`'s five, chosen by the first request for the date and the same
-    for everybody after it; None for a day with too few to choose from.
+    for everybody after it; None for a day with too few to choose from - a
+    day looked at again, while it is open, every `SKIPPED_RETRY`.
 
     A pick takes the Daily pick lock first, so picks for different dates
     happen one at a time and each reads the concepts the others used; then
@@ -703,18 +728,24 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
             .returning(SoloDailyDay.daily_date)
         )
         if inserted.first() is not None and state == "set":
-            session.add_all(
-                SoloDailySet(
-                    daily_date=day, position=index + 1, turn_id=turn, concept_id=concept,
-                    solve_rate=rate,
-                )
-                for index, (turn, concept, rate) in enumerate(picked)
-            )
-            session.add_all(
-                SoloDailyConcept(daily_date=day, concept_id=concept) for _, concept, _ in picked
-            )
-            await session.flush()
+            await _write_set(session, day, picked)
         existing = await session.get(SoloDailyDay, day, populate_existing=True)
+    if existing.state == "skipped" and skipped_retry_due(existing, now):
+        # Nobody can have played a date with no Daily, so looking again
+        # changes nothing for anybody: a date asked for before its games had
+        # finished gets one once they have (#1434). Under the same lock as a
+        # first pick, and the day row's, so one request does it.
+        await _lock_daily_picks(session)
+        existing = await session.get(
+            SoloDailyDay, day, with_for_update=True, populate_existing=True
+        )
+        if existing.state == "skipped" and skipped_retry_due(existing, now):
+            picked = await pick_daily(session, day, count=DAILY_LENGTH)
+            existing.picked_at = now
+            if len(picked) == DAILY_LENGTH:
+                existing.state = "set"
+                await _write_set(session, day, picked)
+            await session.flush()
     if existing.state != "set":
         return None
     rows = await _set_rows(session, day)
@@ -1208,6 +1239,14 @@ class SoloRepository:
         """What Solo's page opens on: today's Daily and how far it got, the
         free run there is to continue, the bests, the Daily history and the
         streak - the streak computed from the history here, never kept."""
+        async with self._session_factory() as session:
+            day = await session.get(SoloDailyDay, today)
+        if day is not None and day.state == "skipped" and skipped_retry_due(day, now):
+            # The page would say there is no Daily and offer nothing to press:
+            # look again first (`daily_set`).
+            async with self._session_factory() as session:
+                async with session.begin():
+                    await daily_set(session, today, now=now)
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
             day = await session.get(SoloDailyDay, today)

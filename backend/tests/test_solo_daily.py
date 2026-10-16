@@ -140,25 +140,47 @@ async def test_a_daily_is_picked_once_by_the_first_two_requests_at_once(env):
         assert await session.scalar(select(func.count()).select_from(SoloDailySet)) == 5
 
 
-async def test_a_thin_day_is_skipped_and_stays_skipped(env):
+async def test_a_thin_day_is_looked_at_again_while_it_is_open(env):
+    """A date first asked for before its games had finished is skipped; while
+    it is still open it is looked at again every SKIPPED_RETRY - nobody can
+    have played it - and gets a Daily once there are five candidates. The
+    page's summary does the looking too, since it is what offers Play."""
     http, users, history, solo, factory = env
+    from app.repositories.solo import SoloRefused
+    from app.solo_rules import SKIPPED_RETRY
+
     await _candidates(users, history, factory, 4)
     stranger = await player(users, factory, "Stranger")
-    from app.repositories.solo import SoloRefused
-
-    try:
-        await solo.open_daily(stranger.id, DAY, now=NOON)
-    except SoloRefused as error:
-        assert error.kind == "missing"
-    else:
-        raise AssertionError("a day with four candidates has no Daily")
+    for at in (NOON, NOON + SKIPPED_RETRY / 2):
+        try:
+            await solo.open_daily(stranger.id, DAY, now=at)
+        except SoloRefused as error:
+            assert error.kind == "missing"
+        else:
+            raise AssertionError("a day with four candidates has no Daily")
     await _candidates(users, history, factory, 3, tag="b")
-    try:
-        await solo.open_daily(stranger.id, DAY, now=NOON)
-    except SoloRefused:
-        pass
-    else:
-        raise AssertionError("a skipped day stays skipped")
+    # Within the wait it stays as it was, however many arrived.
+    assert (await solo.summary(stranger.id, DAY, now=NOON + SKIPPED_RETRY / 2))["today"]["state"] == "unavailable"
+    later = NOON + SKIPPED_RETRY
+    assert (await solo.summary(stranger.id, DAY, now=later))["today"]["state"] == "not_started"
+    run = await solo.open_daily(stranger.id, DAY, now=later)
+    assert len(run.serves) == 5
+    async with factory() as session:
+        assert (await session.get(SoloDailyDay, DAY)).state == "set"
+
+
+async def test_a_thin_day_that_has_ended_stays_without_a_daily(env):
+    """Once a date has ended everywhere it is not picked late: the archive
+    plays the Dailies there were (#1470)."""
+    http, users, history, solo, factory = env
+    from app.repositories.solo import daily_set
+
+    await _candidates(users, history, factory, 4)
+    async with factory() as session, session.begin():
+        assert await daily_set(session, DAY, now=NOON) is None
+    await _candidates(users, history, factory, 3, tag="b")
+    async with factory() as session, session.begin():
+        assert await daily_set(session, DAY, now=NOON + timedelta(days=3)) is None
     async with factory() as session:
         assert (await session.get(SoloDailyDay, DAY)).state == "skipped"
 
