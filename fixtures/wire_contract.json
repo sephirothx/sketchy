@@ -2052,6 +2052,7 @@
    "ruleSnapshot",
    "seatId",
    "shareWithdrawn",
+   "soloWithdrawn",
    "strokeCount",
    "terminalState",
    "turnNumber",

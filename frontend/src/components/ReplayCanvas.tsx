@@ -21,6 +21,8 @@ interface ReplayCanvasProps {
   onDone?: () => void;
   downloadPrompt?: string | null;
   label?: string;
+  /** A fixed duration in place of the size-based one (`replayPlan`). */
+  durationSeconds?: number;
 }
 
 /**
@@ -35,12 +37,12 @@ interface ReplayCanvasProps {
  * fraction set from outside (a scrub) redraws from white up to it.
  */
 export const ReplayCanvas = forwardRef<CanvasRef, ReplayCanvasProps>(function ReplayCanvas(
-  { actions, fraction, playing, onFraction, onDone, downloadPrompt = null, label },
+  { actions, fraction, playing, onFraction, onDone, downloadPrompt = null, label, durationSeconds },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bufferRef = useRef<ImageData | null>(null);
-  const planRef = useRef<ReplayPlan>(replayPlan(actions));
+  const planRef = useRef<ReplayPlan>(replayPlan(actions, { seconds: durationSeconds }));
   const cursor = useRef({ action: actions.length, point: 0 });
   // The last fraction this canvas reported. A prop that differs from it was
   // set by somebody else, and the picture has to be redrawn to match.
@@ -56,7 +58,7 @@ export const ReplayCanvas = forwardRef<CanvasRef, ReplayCanvasProps>(function Re
     const ctx = context();
     const buffer = (bufferRef.current = ctx?.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT) ?? null);
     if (!ctx || !buffer) return;
-    const plan = (planRef.current = replayPlan(actions));
+    const plan = (planRef.current = replayPlan(actions, { seconds: durationSeconds }));
     cursor.current = plan.positionAt(fraction);
     renderCanvasActionsUpTo(buffer.data, actions, cursor.current);
     ctx.putImageData(buffer, 0, 0);

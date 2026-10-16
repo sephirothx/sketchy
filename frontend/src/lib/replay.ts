@@ -73,13 +73,26 @@ function cost(action: DecodedCanvasAction): number {
  * The pace a replay runs at: the drawing's points spread over a duration
  * that grows with its size between a floor and a ceiling, so every drawing
  * plays for a few seconds and a stroke's speed is proportional to its
- * length. Pure, so the suite can hold it to its edges.
+ * length. `seconds` fixes the duration instead - Solo (#1434) replays every
+ * drawing over the same 20 s, since its clock is the same for every drawing
+ * and stroke timing is not stored to pace it by. Pure, so the suite can hold
+ * it to its edges.
  */
-export function replayPlan(actions: readonly DecodedCanvasAction[]): ReplayPlan {
+export function replayPlan(
+  actions: readonly DecodedCanvasAction[],
+  options: { seconds?: number } = {},
+): ReplayPlan {
   const costs = actions.map(cost);
   const total = costs.reduce((sum, value) => sum + value, 0);
-  const seconds = Math.min(REPLAY_MAX_SECONDS, Math.max(REPLAY_MIN_SECONDS, total / 220));
-  const pointsPerSecond = Math.max(1, total / seconds);
+  const fixed = options.seconds !== undefined && options.seconds > 0;
+  const seconds = fixed
+    ? (options.seconds as number)
+    : Math.min(REPLAY_MAX_SECONDS, Math.max(REPLAY_MIN_SECONDS, total / 220));
+  // A named duration is kept whatever the drawing costs: the floor of a
+  // point a second would play a five-segment drawing in five seconds, and in
+  // Solo that is the answer early and the points that go with it (#1495
+  // review).
+  const pointsPerSecond = fixed && total > 0 ? total / seconds : Math.max(1, total / seconds);
   const before: number[] = [];
   let running = 0;
   for (const value of costs) {

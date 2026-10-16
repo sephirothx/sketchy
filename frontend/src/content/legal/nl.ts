@@ -42,6 +42,9 @@ export const LEGAL_NL: LegalDocuments = {
           "Je spellen: de kamers waarin je speelde, je gokken, punten en " +
             "uitslagen, je reacties, de tekeningen die je maakte en de " +
             "tekeningen die je in de Galerij deelde.",
+          "Solo: de rondes die je speelt, welke tekeningen je te zien kreeg en " +
+            "wat je van elk ervan maakte, je uitslagen van de Dagpuzzel en je " +
+            "persoonlijke records.",
           "De chat, in kamers en in de lobby.",
           "De berichten in je inbox, over je account, je tekeningen en je " +
             "vriendschappen.",
@@ -107,6 +110,16 @@ export const LEGAL_NL: LegalDocuments = {
             "halen, en dan kan niemand hem opnieuw delen, behalve jij. Tekeningen " +
             "uit een privékamer zien alleen de mensen die erin zaten, tenzij je " +
             "je eigen tekeningen deelt.",
+          "In Solo kan een speler die niet in een openbaar spel zat, een " +
+            "tekening uit dat spel te zien krijgen om te raden, zonder naam, " +
+            "afbeelding of verwijzing naar wie hem tekende. Solo zelf vertelt " +
+            "nooit wiens tekening het is; maar een tekening die in de Galerij " +
+            "staat, ook een die die speler er zelf deelt, verschijnt daar onder " +
+            "de naam waaronder hij is getekend. In Instellingen kun je ervoor " +
+            "zorgen dat Solo geen enkele van je openbare tekeningen toont, of " +
+            "in je spelgeschiedenis één tekening uit Solo halen; een tekening " +
+            "die je als gast maakte, wordt op dezelfde manier getoond, en kan " +
+            "uit Solo worden gehaald zodra je een account hebt.",
           "Als je je account verwijdert, worden al je tekeningen gewist, " +
             "behalve een kopie die bij een melding hoort en daarbij blijft; wil " +
             "je er één laten wissen, schrijf dan naar {contact}.",
@@ -164,6 +177,8 @@ export const LEGAL_NL: LegalDocuments = {
           "Binnenkomen en verlaten van kamers: 30 dagen.",
           "E-mails aan jou: 30 dagen.",
           "Gegevensexports die je aanvraagt: 7 dagen.",
+          "Solo-rondes, uitslagen en persoonlijke records: tot je je account " +
+            "verwijdert.",
           "Afgeronde spellen – punten, tekeningen, reacties – horen bij de " +
             "geschiedenis van iedereen die meespeelde, dus die blijven bewaard. " +
             "Als je je account verwijdert, worden je tekeningen gewist en wordt " +
@@ -273,7 +288,8 @@ export const LEGAL_NL: LegalDocuments = {
         body: [
           "Wat je tekent, schrijft en publiceert, blijft van jou. Zodat het " +
             "spel kan werken, geef je de exploitant toestemming het binnen " +
-            "Sketchy te bewaren, te tonen en te kopiëren – in je kamer, in de " +
+            "Sketchy te bewaren, te tonen en te kopiëren – in je kamer, in Solo " +
+            "zonder je naam als de kamer openbaar was, in de " +
             "Galerij zodra een tekening is gedeeld, in woordenlijsten die je " +
             "publiceert en " +
             "in kopieën die anderen ervan maken –, kosteloos, wereldwijd en " +

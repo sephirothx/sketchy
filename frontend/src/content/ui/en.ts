@@ -2750,6 +2750,9 @@ export const EN = {
   clock: {
     unknown: "Unknown",
   },
+  solo: {
+    solo: "Solo",
+  },
   protocol: {
     theServerWasUpdated: "The server was updated.",
   },

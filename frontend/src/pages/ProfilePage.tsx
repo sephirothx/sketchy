@@ -22,7 +22,7 @@ import type { DrawingRecapMetadata, DrawingReaction } from "../types";
 import { reactionEligibility } from "../lib/reactions";
 import { isPinned, pinEligibility, shelfPresence, withPin, withoutPin } from "../lib/pinnedDrawings";
 import { useToast } from "../lib/toast";
-import { refusalSentence } from "../lib/refusals.ts";
+import { refusalSentence, refusalText } from "../lib/refusals.ts";
 import { useMyPins, usePinsStore } from "../store/pinsStore";
 import type { ProfilePin } from "../lib/pinnedDrawings";
 import {
@@ -43,13 +43,15 @@ import {
   type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
+import { setSoloWithdrawn } from "../lib/solo";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
 import { friendListOwner, isFriend, profileFriendActionFor } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
-import { ui } from "../content/ui/index.ts";
+import { soloCopyFor } from "../content/solo/index.ts";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
@@ -188,6 +190,8 @@ function GameRow({
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  // The drawing whose Solo take-out is on its way: one at a time.
+  const [soloBusy, setSoloBusy] = useState<string | null>(null);
 
   async function reactToTurn(turnId: string, emoji: string | null) {
     const result = await setHistoryReaction(game.id, turnId, emoji);
@@ -222,6 +226,31 @@ function GameRow({
                     inGallery: result.inGallery,
                   }
                 : turn,
+            ),
+          }
+        : current,
+    );
+  }
+
+  // Out of Solo, or back in (#1434): the drawer's own, for one drawing.
+  async function setSoloOut(turnId: string, withdrawn: boolean) {
+    if (soloBusy) return;
+    setSoloBusy(turnId);
+    let out: boolean;
+    try {
+      out = await setSoloWithdrawn(game.id, turnId, withdrawn);
+    } catch (failure) {
+      notify(refusalText(failure, ui.dialog.couldNotSave), "error");
+      return;
+    } finally {
+      setSoloBusy(null);
+    }
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            turns: current.turns.map((turn) =>
+              turn.id === turnId ? { ...turn, soloWithdrawn: out } : turn,
             ),
           }
         : current,
@@ -430,6 +459,20 @@ function GameRow({
                 onShare={(shared) => shareTurn(turn.id, shared)}
               />
             );
+            // Solo serves a public game's drawings to strangers (#1434): the
+            // drawer may take one out, or put it back.
+            const soloControlFor = (turn: GameTurn) =>
+              isMine(turn) && game.visibility === "public" && turn.drawingStatus === "ready" ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact"
+                  data-testid="solo-take-out"
+                  disabled={soloBusy === turn.id}
+                  onClick={() => void setSoloOut(turn.id, !turn.soloWithdrawn)}
+                >
+                  {turn.soloWithdrawn ? soloCopyFor(interfaceLocale()).putBackInSolo : soloCopyFor(interfaceLocale()).takeOutOfSolo}
+                </button>
+              ) : null;
             const named = (
               seatId: string | null,
               fallbackName: string,
@@ -509,6 +552,7 @@ function GameRow({
                   <>
                     {shareControlFor(detail.turns[entry.index])}
                     {pinControlFor(detail.turns[entry.index])}
+                    {soloControlFor(detail.turns[entry.index])}
                   </>
                 )}
               />

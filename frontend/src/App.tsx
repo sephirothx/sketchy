@@ -33,6 +33,7 @@ import {
   PromptStatsPage,
   RulesPage,
   SettingsOverlay,
+  SoloPage,
 } from "./routeModules";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
@@ -105,6 +106,7 @@ function AppRoutes() {
         <Route path="/community-lists/:listId" element={<CommunityCataloguePage />} />
         <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/gallery/:turnId" element={<GalleryDrawingPage />} />
+        <Route path="/solo" element={<SoloPage />} />
         <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/profile/:userId" element={<ProfilePage />} />

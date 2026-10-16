@@ -2730,6 +2730,9 @@ export const NL: Catalogue = {
   clock: {
     unknown: "Onbekend",
   },
+  solo: {
+    solo: "Solo",
+  },
   protocol: {
     theServerWasUpdated: "De server is bijgewerkt.",
   },

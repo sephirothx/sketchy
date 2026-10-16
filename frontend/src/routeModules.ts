@@ -22,6 +22,7 @@ const load = {
   communityCatalogue: () => import("./pages/CommunityCataloguePage"),
   gallery: () => import("./pages/GalleryPage"),
   galleryDrawing: () => import("./pages/GalleryDrawingPage"),
+  solo: () => import("./pages/SoloPage"),
   myPromptLists: () => import("./pages/MyPromptListsPage"),
   profile: () => import("./pages/ProfilePage"),
   accountRecovery: () => import("./pages/AccountRecoveryPage"),
@@ -45,6 +46,7 @@ export const GalleryPage = lazy(() => load.gallery().then((m) => ({ default: m.G
 export const GalleryDrawingPage = lazy(() =>
   load.galleryDrawing().then((m) => ({ default: m.GalleryDrawingPage })),
 );
+export const SoloPage = lazy(() => load.solo().then((m) => ({ default: m.SoloPage })));
 export const MyPromptListsPage = lazy(() => load.myPromptLists().then((m) => ({ default: m.MyPromptListsPage })));
 export const ProfilePage = lazy(() => load.profile().then((m) => ({ default: m.ProfilePage })));
 export const AccountRecoveryPage = lazy(() =>
@@ -78,6 +80,7 @@ export function prefetchRouteFor(pathname: string): Promise<unknown> {
     "prompt-lists": load.promptStats,
     "community-lists": load.communityCatalogue,
     gallery: pathname.split("/").length > 2 ? load.galleryDrawing : load.gallery,
+    solo: load.solo,
     "my-prompt-lists": load.myPromptLists,
     profile: load.profile,
     settings: load.settingsOverlay,

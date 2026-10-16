@@ -153,7 +153,9 @@ async def test_one_press_names_a_first_time_visitor_and_plays():
                     .map((button) => button.disabled);
                 }"""
             )
-            assert len(in_flight) == 3 and all(in_flight), in_flight
+            # Quick play, Solo, Create a room and the code: leaving for Solo
+            # mid-press would strand the seat as surely as another room.
+            assert len(in_flight) == 4 and all(in_flight), in_flight
 
             await page.wait_for_selector('[data-testid="waiting-room"]', timeout=15000)
             await page.wait_for_selector(f'[data-testid="room-players-region"]:has-text("QpFirst{tag}")')

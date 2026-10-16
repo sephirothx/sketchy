@@ -803,6 +803,23 @@
   filter: saturate(0.6);
 }
 
+/* The dock's first row: Quick play, wide, and Solo beside it (#1434). */
+.lobby-dock-top {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-dock-top > .lobby-quick-play {
+  flex: 2 1 0;
+  min-width: 0;
+}
+
+.lobby-dock-top > .lobby-solo {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+}
+
 /* The dock's second row: the two that were there, side by side under it. */
 .lobby-dock-row {
   display: flex;
