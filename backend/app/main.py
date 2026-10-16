@@ -1134,7 +1134,14 @@ api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )
 api.include_router(create_user_settings_router(async_session_factory))
-api.include_router(create_solo_router(async_session_factory))
+api.include_router(
+    create_solo_router(
+        async_session_factory,
+        game_history_repo=game_history_repo,
+        on_inbox_changed=push_inbox_changed,
+        on_gallery_changed=gallery_shelf.invalidate,
+    )
+)
 api.include_router(create_room_preset_router(room_preset_service))
 api.include_router(
     create_user_blocks_router(async_session_factory, block_service, friend_service)

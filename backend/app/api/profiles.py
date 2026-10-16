@@ -398,6 +398,8 @@ def share_payload(result: DrawingShareResult) -> dict:
         "turnId": result.turn_id,
         "shares": list(result.shares),
         "shareWithdrawn": result.withdrawn,
+        # Held by a Solo player's share too, which no seat lists (#1434).
+        "inGallery": result.in_gallery,
     }
 
 
@@ -709,6 +711,34 @@ def create_profile_router(
         """Take one's own share back - or, for the drawer, take the drawing out
         of the Gallery altogether (R-SHARE-04)."""
         return await _write_share(game_id, turn_id, request, False)
+
+    async def _write_solo_take_out(
+        game_id: str, turn_id: str, request: Request, withdrawn: bool
+    ) -> dict:
+        """The drawer taking one drawing out of Solo, or putting it back
+        (#1434, R-SOLO-02). The drawer alone, by seat or by account; every
+        other caller is the participant door's 404 (R-HIST-16)."""
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        result = await game_history_repo.set_solo_withdrawn(
+            game_id, turn_id, requesting_user_id=requesting_user_id, withdrawn=withdrawn
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return {"turnId": turn_id, "soloWithdrawn": result}
+
+    @router.put("/games/{game_id}/turns/{turn_id}/solo")
+    async def put_back_in_solo(game_id: str, turn_id: str, request: Request):
+        """Let Solo serve this drawing again (#1434)."""
+        return await _write_solo_take_out(game_id, turn_id, request, False)
+
+    @router.delete("/games/{game_id}/turns/{turn_id}/solo")
+    async def take_out_of_solo(game_id: str, turn_id: str, request: Request):
+        """Take this drawing out of Solo: no stranger is served it from the
+        next request on, and the Daily replaces it for everybody (#1434)."""
+        return await _write_solo_take_out(game_id, turn_id, request, True)
 
     @router.put("/me/pins")
     async def set_my_pins(body: PinsBody, request: Request):

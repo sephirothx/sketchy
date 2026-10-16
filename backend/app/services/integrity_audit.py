@@ -79,7 +79,6 @@ from app.db.models import (
     SoloPoolEntry,
     TurnDrawing,
     TurnDrawingReaction,
-    TurnDrawingShare,
     TurnParticipantOutcome,
     TurnRecord,
     User,
@@ -88,7 +87,7 @@ from app.db.models import (
 )
 from app.domain_values import AccountState, AuditTargetType
 from app.services.drawing_storage import DrawingCursor, verify_stored_drawings
-from app.services.gallery_ranking import aware, hot_score
+from app.services.gallery_ranking import aware, gallery_share_rows, hot_score
 from app.services.readiness import LoopHealth
 from app.services.solo_pool import pool_query
 from app.services.user_stats_projection import _rebuild_accounts
@@ -274,17 +273,14 @@ async def _drawing_projections_slice(session: AsyncSession, cursor: str | None) 
             )
         ).all()
     )
+    rows_of = gallery_share_rows()
     shares = {
         turn_id: (int(count), aware(first))
         for turn_id, count, first in (
             await session.execute(
-                select(
-                    TurnDrawingShare.turn_id,
-                    func.count(),
-                    func.min(TurnDrawingShare.created_at),
-                )
-                .where(TurnDrawingShare.turn_id.in_(turn_ids))
-                .group_by(TurnDrawingShare.turn_id)
+                select(rows_of.c.turn_id, func.count(), func.min(rows_of.c.created_at))
+                .where(rows_of.c.turn_id.in_(turn_ids))
+                .group_by(rows_of.c.turn_id)
             )
         ).all()
     }

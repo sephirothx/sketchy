@@ -36,6 +36,7 @@ from app.canvas_storage import (
 )
 from app.api.gallery import gallery_entry_payload
 from app.api.profiles import serve_drawing
+from app.repositories.solo import identity_ids as solo_identity_ids
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
@@ -71,6 +72,8 @@ from app.auth.erasure import (
     require_live_account,
 )
 from app.db.models import (
+    SoloPoolEntry,
+    SoloServe,
     AuditEvent,
     GameRecord,
     IdentityAlias,
@@ -3808,20 +3811,29 @@ def create_moderation_router(
 
     # ------------------------------------------------------------ the Gallery
 
-    @router.post("/gallery/{turn_id}/report", status_code=201)
-    async def report_gallery_drawing(
-        turn_id: str, body: GalleryReportBody, request: Request
-    ):
-        """Report a drawing from the Gallery (R-GAL-08).
+    async def _report_served_drawing(
+        request: Request,
+        details: str | None,
+        find_row,
+        *,
+        door: str,
+        on_report=None,
+    ) -> dict:
+        """What a report of a drawing from outside its game is (R-GAL-08,
+        R-SOLO-15): the reporter names a drawing and nothing else, the server
+        resolves the drawer from it, so filing a complaint is not a way to
+        learn an account id (R-MOD-02), and the turn's stored drawing is
+        copied in as the evidence (R-MOD-14). `find_row` is the door's own
+        query - the Gallery's predicate, or the reporter's Solo serve - and
+        answers (turn, drawing) or None, the door's 404.
 
-        The reporter names the **turn** and nothing else: the server resolves
-        the drawer from it, so filing a complaint is not a way to learn an
-        account id (R-MOD-02). The turn's stored drawing is copied in as the
-        evidence, the way a live report copies the canvas (R-MOD-14): a
-        moderator sees exactly what was reported even after the drawer
-        erases it. Only a drawing the Gallery shows can be reported from it;
-        everything else is the Gallery's 404.
-        """
+        From Solo a report the reporter already has open about the same
+        player is answered as accepted rather than `409`: there, the drawer
+        is somebody the reporter must not be able to tell apart, and a 409
+        would say that two anonymous drawings share one. For the same reason
+        the reporter's own record of it is `on_report`'s - their serve -
+        written whether or not a report row is, and the row is marked
+        `via_solo`, which keeps it out of their export (#1494 review)."""
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
@@ -3833,26 +3845,18 @@ def create_moderation_router(
             )
         db_reporter_id = UUID(reporter_id)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        try:
-            db_turn_id = UUID(turn_id)
-        except ValueError:
-            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from None
+        already = Refusal(
+            409,
+            ErrorCode.ALREADY_REPORTED,
+            "You have already reported this player, and a moderator has not reviewed it yet.",
+        )
         async with session_factory() as session:
             async with session.begin():
                 try:
                     await require_live_account(session, db_reporter_id)
                 except AccountErasedError:
                     raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
-                # Only what the Gallery shows (R-GAL-08): its own predicate,
-                # so a drawing shared from a private game is reportable and
-                # one nobody shared is not.
-                row = (
-                    await session.execute(
-                        select(TurnRecord, TurnDrawing)
-                        .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
-                        .where(TurnRecord.id == db_turn_id, *_gallery_predicate())
-                    )
-                ).first()
+                row = await find_row(session, db_reporter_id)
                 if row is None:
                     raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
                 turn, drawing = row
@@ -3872,18 +3876,24 @@ def create_moderation_router(
                     raise Refusal(
                         422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself."
                     )
+                if on_report is not None:
+                    await on_report(session)
+                # From Solo the answer is the same whatever happened - never a
+                # report id, which would differ between a new report and one
+                # already open, and so say the two drawings share a drawer
+                # (#1494 review).
+                quiet = {
+                    "id": None,
+                    "status": ReportStatus.PENDING.value,
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                }
                 already_open = await open_report_id(
                     session, reporter_user_id=db_reporter_id, reported_user_id=target.id
                 )
                 if already_open is not None:
-                    raise Refusal(
-                        409,
-                        ErrorCode.ALREADY_REPORTED,
-                        (
-                            "You have already reported this player, and a "
-                            "moderator has not reviewed it yet."
-                        ),
-                    )
+                    if door == "solo":
+                        return quiet
+                    raise already
                 captured = CapturedDrawing(
                     turn_id=turn.id,
                     round_number=turn.round_number,
@@ -3894,37 +3904,111 @@ def create_moderation_router(
                     format_version=drawing.format_version or 0,
                     checksum_sha256=drawing.checksum_sha256 or "",
                 )
-                report = record_player_report(
-                    session,
-                    reporter_user_id=db_reporter_id,
-                    reported_user_id=target.id,
-                    game_id=turn.game_id,
-                    turn_id=turn.id,
-                    scope=ReportScope.UNSCOPED,
-                    room_instance_id=None,
-                    reason=ReportReason.OFFENSIVE_DRAWING.value,
-                    details=body.details,
-                    messages=[],
-                    drawing=captured,
-                    request_id=request_id,
-                    ip_hash=ip_hash,
-                )
                 try:
-                    await session.flush()
+                    # A savepoint: a report row that loses the one-open-report
+                    # race takes nothing else with it - from Solo, the
+                    # reporter's own record of the report stays.
+                    async with session.begin_nested():
+                        report = record_player_report(
+                            session,
+                            reporter_user_id=db_reporter_id,
+                            reported_user_id=target.id,
+                            game_id=turn.game_id,
+                            turn_id=turn.id,
+                            scope=ReportScope.UNSCOPED,
+                            room_instance_id=None,
+                            reason=ReportReason.OFFENSIVE_DRAWING.value,
+                            details=details,
+                            messages=[],
+                            drawing=captured,
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                        )
+                        report.via_solo = door == "solo"
+                        await session.flush()
                 except IntegrityError as error:
-                    raise Refusal(
-                        409,
-                        ErrorCode.ALREADY_REPORTED,
-                        (
-                            "You have already reported this player, and a "
-                            "moderator has not reviewed it yet."
-                        ),
-                    ) from error
+                    if door == "solo":
+                        return quiet
+                    raise already from error
+            if door == "solo":
+                return quiet
             return {
                 "id": str(report.id),
                 "status": report.status,
                 "createdAt": report.created_at.isoformat(),
             }
+
+    @router.post("/gallery/{turn_id}/report", status_code=201)
+    async def report_gallery_drawing(
+        turn_id: str, body: GalleryReportBody, request: Request
+    ):
+        """Report a drawing from the Gallery (R-GAL-08). Only a drawing the
+        Gallery shows can be reported from it; everything else is the
+        Gallery's 404."""
+        try:
+            db_turn_id = UUID(turn_id)
+        except ValueError:
+            db_turn_id = None
+
+        async def gallery_row(session, _reporter):
+            # Its own predicate, so a drawing shared from a private game is
+            # reportable and one nobody shared is not.
+            if db_turn_id is None:
+                return None
+            return (
+                await session.execute(
+                    select(TurnRecord, TurnDrawing)
+                    .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                    .where(TurnRecord.id == db_turn_id, *_gallery_predicate())
+                )
+            ).first()
+
+        return await _report_served_drawing(request, body.details, gallery_row, door="gallery")
+
+    @router.post("/solo/serves/{serve_id}/report", status_code=201)
+    async def report_solo_drawing(
+        serve_id: str, body: GalleryReportBody, request: Request
+    ):
+        """Report a drawing Solo served the reporter (R-SOLO-15): named by the
+        serve, never the turn, and only once it is settled - the prompt is
+        part of what a report shows a moderator. Every refusal is the door's
+        404."""
+        try:
+            db_serve_id = UUID(serve_id)
+        except ValueError:
+            db_serve_id = None
+
+        async def solo_row(session, reporter):
+            if db_serve_id is None:
+                return None
+            ids = await solo_identity_ids(session, reporter)
+            return (
+                await session.execute(
+                    select(TurnRecord, TurnDrawing)
+                    .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                    .join(SoloServe, SoloServe.turn_id == TurnRecord.id)
+                    .join(SoloPoolEntry, SoloPoolEntry.turn_id == TurnRecord.id)
+                    .where(
+                        SoloServe.id == db_serve_id,
+                        SoloServe.user_id.in_(list(ids)),
+                        SoloServe.settled_at.is_not(None),
+                        TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    )
+                )
+            ).first()
+
+        async def remember(session):
+            # The reporter's own record, on their serve: what their export
+            # says they reported, with no report, turn or game id in it.
+            await session.execute(
+                update(SoloServe)
+                .where(SoloServe.id == db_serve_id)
+                .values(reported_at=datetime.now(timezone.utc), report_details=body.details)
+            )
+
+        return await _report_served_drawing(
+            request, body.details, solo_row, door="solo", on_report=remember
+        )
 
     @router.get("/moderation/gallery")
     async def gallery_review_queue(request: Request):

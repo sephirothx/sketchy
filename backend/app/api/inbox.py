@@ -37,6 +37,7 @@ from app.db.models import (
     Friendship,
     GameParticipant,
     InboxEntry,
+    SoloGalleryShare,
     TurnDrawing,
     TurnDrawingShare,
     TurnRecord,
@@ -63,16 +64,23 @@ def _person(user: User | None) -> dict | None:
     return {"userId": str(user.id), "displayName": user.display_name, "nameColor": user.name_color}
 
 
+def _aware(moment: datetime | None) -> datetime | None:
+    if moment is not None and moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
 async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
     """Each drawing's earliest share still standing that is not its drawer's
     - who an entry names, read now so a sharer who took theirs back or was
     erased is never the one named (R-SHARE-09)."""
     if not turn_ids:
         return {}
-    named: dict = {}
+    found: list[tuple] = []
     rows = await session.execute(
         select(
             TurnDrawingShare.turn_id,
+            TurnDrawingShare.created_at,
             TurnDrawingShare.participant_id,
             TurnRecord.drawer_participant_id,
             GameParticipant.display_name_snapshot,
@@ -82,20 +90,49 @@ async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
         .join(TurnRecord, TurnRecord.id == TurnDrawingShare.turn_id)
         .join(GameParticipant, GameParticipant.id == TurnDrawingShare.participant_id)
         .where(TurnDrawingShare.turn_id.in_(turn_ids))
-        .order_by(
-            TurnDrawingShare.turn_id,
-            TurnDrawingShare.created_at,
-            TurnDrawingShare.participant_id,
-        )
     )
     for share in rows.all():
-        if share.turn_id in named or share.participant_id == share.drawer_participant_id:
+        if share.participant_id == share.drawer_participant_id:
             continue
-        named[share.turn_id] = {
-            "displayName": share.display_name_snapshot,
-            "nameColor": share.name_color_snapshot,
-            "isAnonymous": share.is_anonymous_snapshot,
-        }
+        found.append((
+            share.turn_id, _aware(share.created_at), 0, str(share.participant_id),
+            {
+                "displayName": share.display_name_snapshot,
+                "nameColor": share.name_color_snapshot,
+                "isAnonymous": share.is_anonymous_snapshot,
+            },
+        ))
+    # A Solo player's share (#1434), by their account's own name: they sat in
+    # no seat to take a frozen one from. Held shares are not standing yet.
+    # Each drawing's first only: anybody served it may have shared it.
+    ranked = (
+        select(
+            SoloGalleryShare.turn_id,
+            SoloGalleryShare.created_at,
+            SoloGalleryShare.user_id,
+            func.row_number()
+            .over(
+                partition_by=SoloGalleryShare.turn_id,
+                order_by=(SoloGalleryShare.created_at, SoloGalleryShare.user_id),
+            )
+            .label("rank"),
+        )
+        .where(SoloGalleryShare.turn_id.in_(turn_ids), SoloGalleryShare.entered_at.is_not(None))
+        .subquery()
+    )
+    solo = await session.execute(
+        select(ranked.c.turn_id, ranked.c.created_at, ranked.c.user_id, User.display_name, User.name_color)
+        .join(User, User.id == ranked.c.user_id)
+        .where(ranked.c.rank == 1)
+    )
+    for share in solo.all():
+        found.append((
+            share.turn_id, _aware(share.created_at), 1, str(share.user_id),
+            {"displayName": share.display_name, "nameColor": share.name_color, "isAnonymous": False},
+        ))
+    named: dict = {}
+    for turn_id, *_order, credit in sorted(found, key=lambda entry: entry[:4]):
+        named.setdefault(turn_id, credit)
     return named
 
 

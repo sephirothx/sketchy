@@ -159,3 +159,69 @@ export function openDaily(date: string): Promise<SoloRun> {
 export function fetchSoloSummary(today: string): Promise<SoloSummary> {
   return apiRequest(`/api/solo/me?today=${encodeURIComponent(today)}`);
 }
+
+/** A reaction from Solo: the counts and the player's own pick, naming nobody. */
+export interface SoloReaction {
+  myReaction: string | null;
+  reactionCounts: Record<string, number>;
+}
+
+/** React to a drawing Solo served the player, once it is settled. */
+export function reactToServe(serveId: string, emoji: string | null): Promise<SoloReaction> {
+  const path = `/api/solo/serves/${encodeURIComponent(serveId)}/reaction`;
+  return emoji === null
+    ? apiRequest(path, { method: "DELETE" })
+    : apiRequest(path, { method: "PUT", body: { emoji } });
+}
+
+/** A share from Solo: whether the drawing is in the Gallery, whether the
+    player shares it, until when their share waits for an open Daily, and
+    whether its drawer took it out of the Gallery. */
+export interface SoloShare {
+  inGallery: boolean;
+  sharedByMe: boolean;
+  heldUntil: string | null;
+  shareWithdrawn: boolean;
+}
+
+/** Share a drawing Solo served the player to the Gallery, under its drawer's
+    name, or take the player's share back. */
+export function shareServe(serveId: string, shared: boolean): Promise<SoloShare> {
+  return apiRequest(`/api/solo/serves/${encodeURIComponent(serveId)}/share`, {
+    method: shared ? "PUT" : "DELETE",
+  });
+}
+
+/** Report a drawing Solo served the player. Answered as accepted even when
+    they already reported its drawer: a refusal would say who drew it. */
+export function reportServe(
+  serveId: string,
+  details: string | null,
+): Promise<{ id: string | null; status: string; createdAt: string }> {
+  return apiRequest(`/api/solo/serves/${encodeURIComponent(serveId)}/report`, {
+    method: "POST",
+    body: details ? { details } : {},
+  });
+}
+
+/** The drawer's way out for every public drawing at once. */
+export async function setSoloOptOut(optOut: boolean): Promise<boolean> {
+  const settings = await apiRequest<{ soloOptOut: boolean }>("/api/users/me/settings", {
+    method: "PATCH",
+    body: { soloOptOut: optOut },
+  });
+  return settings.soloOptOut;
+}
+
+/** The drawer's way out for one drawing: take it out of Solo, or put it back. */
+export async function setSoloWithdrawn(
+  gameId: string,
+  turnId: string,
+  withdrawn: boolean,
+): Promise<boolean> {
+  const answer = await apiRequest<{ soloWithdrawn: boolean }>(
+    `/api/games/${encodeURIComponent(gameId)}/turns/${encodeURIComponent(turnId)}/solo`,
+    { method: withdrawn ? "DELETE" : "PUT" },
+  );
+  return answer.soloWithdrawn;
+}

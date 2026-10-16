@@ -190,6 +190,9 @@ class UserSettingsPatch(ControlFreeModel):
         max_length=MAX_EXTRA_PROMPT_LANGUAGES,
     )
     locale: LocaleCode | None = Field(default=None, alias="locale")
+    # Whether Solo may serve this player's public drawings to strangers
+    # (#1434): an account's choice, never seeded from a browser.
+    solo_opt_out: bool | None = Field(default=None, alias="soloOptOut")
 
     @field_validator("key_bindings")
     @classmethod
@@ -223,6 +226,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "promptLanguage": settings.prompt_language,
         "extraPromptLanguages": list(settings.extra_prompt_languages),
         "locale": settings.locale,
+        "soloOptOut": settings.solo_opt_out,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

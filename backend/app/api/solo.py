@@ -10,6 +10,7 @@ drawing door's; a run that is not the caller's is a 404 of its own.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID
 
@@ -25,6 +26,7 @@ from app.db.models import User
 from app.domain_values import AccountState
 from app.refusals import ErrorCode
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
+from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
 from app.request_text import ControlFreeModel
 from app.services.solo_access import free_run_door, solo_door_open
 from app.solo_rules import CLOCK_SECONDS, MAX_OPEN_SERVES, OUTCOMES, date_is_open
@@ -84,9 +86,27 @@ def run_payload(run: RunView) -> dict:
     }
 
 
-def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> APIRouter:
+class SoloReactionBody(ControlFreeModel):
+    """Which emoji, by code: the Gallery's reaction body."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    emoji: str = Field(min_length=1, max_length=16)
+
+
+def create_solo_router(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    game_history_repo=None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None,
+    on_gallery_changed: Callable[[], None] | None = None,
+) -> APIRouter:
+    """`game_history_repo` writes reactions and shares, which are the
+    drawing's own facts whoever makes them; `on_inbox_changed` tells a
+    drawer's open tabs that somebody shared their drawing."""
     router = APIRouter(prefix="/api/solo")
     solo = SoloRepository(session_factory)
+    history = game_history_repo or SqlAlchemyGameHistoryRepository(session_factory)
 
     async def account(request: Request) -> User:
         """The registered account behind the request, or the refusal saying
@@ -230,6 +250,68 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
         user = await account(request)
         throttle(serve_limiter, user)
         return await solo.summary(str(user.id), local_date(today), now=now())
+
+    async def settled(serve_id: str, user: User) -> str:
+        turn_id = await solo.settled_turn(str(user.id), serve_id)
+        if turn_id is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return str(turn_id)
+
+    async def write_reaction(serve_id: str, request: Request, emoji: str | None) -> dict:
+        """Solo's door for a reaction (R-SOLO-15): a drawing Solo served the
+        caller and they settled, still servable. It counts like a Gallery
+        reaction (R-REACT-05). The answer names nobody - only the counts and
+        the caller's own pick."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        turn_id = await settled(serve_id, user)
+        result = await history.set_drawing_reaction(
+            None, turn_id, requesting_user_id=str(user.id), emoji=emoji, from_solo=True
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        if on_gallery_changed is not None:
+            on_gallery_changed()
+        return {"myReaction": result.emoji, "reactionCounts": dict(result.reaction_counts)}
+
+    @router.put("/serves/{serve_id}/reaction")
+    async def react(serve_id: str, body: SoloReactionBody, request: Request):
+        return await write_reaction(serve_id, request, body.emoji)
+
+    @router.delete("/serves/{serve_id}/reaction")
+    async def unreact(serve_id: str, request: Request):
+        return await write_reaction(serve_id, request, None)
+
+    async def write_share(serve_id: str, request: Request, shared: bool) -> dict:
+        """Share a drawing Solo served the caller to the Gallery, under its
+        drawer's name, or take their share back (R-SOLO-15). A Daily's
+        drawing waits until that date has ended everywhere (`heldUntil`)."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        turn_id = await settled(serve_id, user)
+        result = await history.set_solo_share(
+            turn_id, requesting_user_id=str(user.id), shared=shared
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        if result.notify_user_id is not None and on_inbox_changed is not None:
+            await on_inbox_changed(result.notify_user_id)
+        if on_gallery_changed is not None:
+            on_gallery_changed()
+        return {
+            "inGallery": result.in_gallery,
+            "sharedByMe": result.shared_by_me,
+            "heldUntil": result.held_until.isoformat() if result.held_until else None,
+            "shareWithdrawn": result.withdrawn,
+        }
+
+    @router.put("/serves/{serve_id}/share")
+    async def share(serve_id: str, request: Request):
+        return await write_share(serve_id, request, True)
+
+    @router.delete("/serves/{serve_id}/share")
+    async def unshare(serve_id: str, request: Request):
+        return await write_share(serve_id, request, False)
 
     @router.get("/serves/{serve_id}/drawing")
     async def served_drawing(serve_id: str, request: Request):

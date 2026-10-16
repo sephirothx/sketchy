@@ -1774,6 +1774,9 @@
    "decidedBy",
    "priorDecisions"
   ],
+  "api.moderation:_report_served_drawing": [
+   "createdAt"
+  ],
   "api.moderation:_reported_player_context": [
    "activeSuspension",
    "avatarUrl",
@@ -1834,9 +1837,6 @@
   ],
   "api.moderation:remove_reported_avatar": [
    "blockedUntil"
-  ],
-  "api.moderation:report_gallery_drawing": [
-   "createdAt"
   ],
   "api.moderation:review_prompt_content_report": [
    "displayName"
@@ -1919,9 +1919,15 @@
   "api.operations:player_activity": [
    "displayName"
   ],
+  "api.profiles:_write_solo_take_out": [
+   "soloWithdrawn",
+   "turnId"
+  ],
   "api.profiles:create_profile_router": [
    "hasMore",
-   "playLanguages"
+   "playLanguages",
+   "soloWithdrawn",
+   "turnId"
   ],
   "api.profiles:pin_entry_payload": [
    "drawerDisplayName",
@@ -1946,6 +1952,7 @@
    "turnId"
   ],
   "api.profiles:share_payload": [
+   "inGallery",
    "shareWithdrawn",
    "turnId"
   ],
@@ -2032,6 +2039,7 @@
    "durationSeconds",
    "eligibilityReason",
    "hintsUsed",
+   "inGallery",
    "mySeatId",
    "nearMissCount",
    "participantOutcomes",
@@ -2130,6 +2138,14 @@
    "nameColor",
    "pendingRole"
   ],
+  "api.solo:create_solo_router": [
+   "heldUntil",
+   "inGallery",
+   "myReaction",
+   "reactionCounts",
+   "shareWithdrawn",
+   "sharedByMe"
+  ],
   "api.solo:run_payload": [
    "dailyDate",
    "endReason",
@@ -2138,6 +2154,16 @@
   "api.solo:serve_payload": [
    "promptLanguage",
    "serveId"
+  ],
+  "api.solo:write_reaction": [
+   "myReaction",
+   "reactionCounts"
+  ],
+  "api.solo:write_share": [
+   "heldUntil",
+   "inGallery",
+   "shareWithdrawn",
+   "sharedByMe"
   ],
   "api.user_blocks:_block_payload": [
    "createdAt",
@@ -2155,6 +2181,7 @@
    "keyBindings",
    "penPressure",
    "promptLanguage",
+   "soloOptOut",
    "soundEffects",
    "timeFormat",
    "updatedAt"
@@ -2348,6 +2375,8 @@
    "promptListId",
    "promptListName",
    "readAt",
+   "reportDetails",
+   "reportedAt",
    "requestedByMe",
    "requesterWasActor",
    "requesterWasTarget",
@@ -2356,6 +2385,7 @@
    "runId",
    "servedAt",
    "settledAt",
+   "soloOptOut",
    "solveSeconds",
    "soundEffects",
    "starredAt",
