@@ -126,7 +126,7 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
 
     @router.post("/runs", status_code=201)
     async def start_free_run(body: FreeRunBody, request: Request):
-        """Start a free run, abandoning the one in play."""
+        """Start a free run, abandoning the one of its length in play."""
         user = await account(request)
         throttle(run_limiter, user)
         door = free_run_door(body.length)
@@ -140,14 +140,6 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
         except SoloRefused as error:
             raise refused(error) from error
         return run_payload(run)
-
-    @router.get("/runs/active")
-    async def active_free_run(request: Request):
-        """The free run there is to continue, or null."""
-        user = await account(request)
-        throttle(serve_limiter, user)
-        run = await solo.active_free_run(str(user.id))
-        return {"run": run_payload(run) if run is not None else None}
 
     @router.get("/runs/{run_id}")
     async def get_run(run_id: str, request: Request):

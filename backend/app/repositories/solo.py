@@ -433,9 +433,10 @@ class SoloRepository:
     # --- runs -------------------------------------------------------------
 
     async def start_free_run(self, user_id: str, *, length: int | None, now: datetime) -> RunView:
-        """A new free run, abandoning the one in play (#1434): a 5 or 10 run
-        left unfinished records nothing; an unlimited one ends at the streak
-        it reached, which is a result like any other."""
+        """A new free run, abandoning the one of its length in play (#1434):
+        a 5 or 10 run left unfinished records nothing; an unlimited one ends
+        at the streak it reached, which is a result like any other. Runs of
+        the other lengths go on - one of each can be in play at once."""
         for attempt in range(START_ATTEMPTS):
             try:
                 async with self._session_factory() as session:
@@ -447,6 +448,9 @@ class SoloRepository:
                                 SoloRun.user_id == player,
                                 SoloRun.mode == "free",
                                 SoloRun.state == "active",
+                                SoloRun.length.is_(None)
+                                if length is None
+                                else SoloRun.length == length,
                             )
                             .with_for_update()
                         )
@@ -460,8 +464,8 @@ class SoloRepository:
                         await session.flush()
                         return _run_view(run, ())
             except IntegrityError:
-                # Starts at once: another one's run is in play now, and this
-                # one abandons it on the retry.
+                # Starts of one length at once: another one's run is in play
+                # now, and this one abandons it on the retry.
                 if attempt == START_ATTEMPTS - 1:
                     raise SoloRefused("conflict") from None
         raise SoloRefused("conflict")
@@ -481,19 +485,6 @@ class SoloRepository:
             delete(SoloServe).where(SoloServe.run_id == run.id, SoloServe.settled_at.is_(None))
         )
         run.position -= dropped.rowcount or 0
-
-    async def active_free_run(self, user_id: str) -> RunView | None:
-        """The free run a player can continue, with what it served."""
-        async with self._session_factory() as session:
-            player = (await identity_ids(session, UUID(user_id)))[0]
-            run = await session.scalar(
-                select(SoloRun).where(
-                    SoloRun.user_id == player, SoloRun.mode == "free", SoloRun.state == "active"
-                )
-            )
-            if run is None:
-                return None
-            return await self._view_with_serves(session, run, player)
 
     async def get_run(self, user_id: str, run_id: str) -> RunView:
         async with self._session_factory() as session:

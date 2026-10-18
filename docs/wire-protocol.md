@@ -2446,9 +2446,8 @@ panel from spoiling the drawing.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/solo/runs` | `{length: 5 \| 10 \| null}` → `201` run. Starts a free run, abandoning the one in play: a 5 or 10 run as `abandoned`, an unlimited one as `ended` at its streak (R-SOLO-07). Strict body: anything else is `422` |
-| `GET` | `/api/solo/runs/active` | `{run}` — the free run there is to continue, with its serves (an open one with its `forms`, so a reload resumes it), or `null` |
-| `GET` | `/api/solo/runs/{run_id}` | The run, with its serves |
+| `POST` | `/api/solo/runs` | `{length: 5 \| 10 \| null}` → `201` run. Starts a free run, abandoning the one of its length in play — a 5 or 10 run as `abandoned`, an unlimited one as `ended` at its streak — and leaving the other lengths' going (R-SOLO-07). Strict body: anything else is `422` |
+| `GET` | `/api/solo/runs/{run_id}` | The run, with its serves — an open one with its `forms`, so Continue and a reload resume it |
 | `POST` | `/api/solo/runs/{run_id}/serves?count=1\|2` | `{serves}` — the next drawings: never more than two open at once (the one played and the next, held ready), never past a finite run's length; `[]` when there is no room for one. Unseen drawings first, from a random point in the pool's order, wrapping round; then the ones seen longest ago (R-SOLO-07) |
 | `POST` | `/api/solo/serves/{serve_id}/result` | `{outcome: solved \| given_up \| timed_out, seconds: 0..30}` → `{serve, run}`. Once per serve, in order; the server derives `points` from `seconds` (R-SOLO-06). The run ends with its last drawing, or — unlimited — its first miss, and a drawing held ready goes with it |
 | `GET` | `/api/solo/serves/{serve_id}/drawing` | The bytes through the **fourth door** (R-SOLO-04): its own query — the caller's serve, the drawing still servable (R-SOLO-02) — with the participant route's `Cache-Control: private, no-cache`, `ETag` and `304` (R-HIST-24), and the same `404` for every refusal, signed out included |

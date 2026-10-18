@@ -2145,11 +2145,13 @@ Daily only) · `state` (`active \| ended \| abandoned`) · `end_reason`
 (drawings served, those dropped unseen not counted) · `solved` · `points` · `started_at` · `ended_at`.
 
 One player's Solo run (#1434). Play is local, so this is what the server keeps of it.
-`uq_solo_runs_one_active_free` — unique on `user_id` where a free run is active — holds a
-player to one free run in play: starting another abandons it (a 5 or 10 run as
-`abandoned`, recording nothing; an unlimited one as `ended` at its streak), and two
-starts at once meet the index and the loser retries. `ix_solo_runs_user_mode` serves the
-active-run read. Deleted with the account (explicitly: the `users` row stays as a
+`uq_solo_runs_one_active_per_length` — unique on `(user_id, coalesce(length, 0))` where a
+free run is active — holds a player to one free run in play of each length: starting one
+abandons the one of its length (a 5 or 10 run as `abandoned`, recording nothing; an
+unlimited one as `ended` at its streak), and two starts of a length at once meet the
+index and the loser retries. The `coalesce` is there because unlimited is NULL and a
+unique index never sees two NULLs clash. `ix_solo_runs_user_mode` serves the active-run
+reads. Deleted with the account (explicitly: the `users` row stays as a
 tombstone, so its CASCADE never fires), its serves with it.
 
 ### `solo_serves`

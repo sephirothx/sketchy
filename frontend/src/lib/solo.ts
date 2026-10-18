@@ -81,12 +81,6 @@ export function startFreeRun(length: 5 | 10 | null): Promise<SoloRun> {
   return apiRequest("/api/solo/runs", { method: "POST", body: { length } });
 }
 
-/** The free run there is to continue, if any. */
-export async function fetchActiveFreeRun(): Promise<SoloRun | null> {
-  const answer = await apiRequest<{ run: SoloRun | null }>("/api/solo/runs/active");
-  return answer.run;
-}
-
 /** The next drawings of a run: one, or two to hold the next one ready. */
 export async function serveNext(runId: string, count: 1 | 2 = 1): Promise<SoloServe[]> {
   const answer = await apiRequest<{ serves: SoloServe[] }>(

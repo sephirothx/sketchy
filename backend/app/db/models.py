@@ -3531,7 +3531,9 @@ class SoloRun(Base):
 
     Play is local, so a run is what the server keeps of it: which drawings it
     served (`solo_serves`), what each came to, and whether it is still going.
-    A player has at most one active free run; starting another abandons it.
+    A player has at most one active free run of each length - Quick (5),
+    Classic (10) and Endless (unlimited) - so up to three at once; starting
+    one of a length abandons the one of that length.
     The account is the canonical one, so a merge never splits a run.
     """
 
@@ -3556,10 +3558,13 @@ class SoloRun(Base):
             "position >= 0 AND solved >= 0 AND solved <= position AND points >= 0",
             name="ck_solo_runs_counts",
         ),
-        # One free run in play per player: starting another abandons it.
+        # One free run in play per player and length: starting another of
+        # that length abandons it. Unlimited is NULL, and NULLs never clash in
+        # a unique index, so the length is compared as 0 for it.
         Index(
-            "uq_solo_runs_one_active_free",
+            "uq_solo_runs_one_active_per_length",
             "user_id",
+            sql_text("coalesce(length, 0)"),
             unique=True,
             postgresql_where=sql_text("state = 'active' AND mode = 'free'"),
             sqlite_where=sql_text("state = 'active' AND mode = 'free'"),

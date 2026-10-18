@@ -7,7 +7,9 @@ in order, deriving the points itself.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
@@ -15,6 +17,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.api.errors import install_refusal_handler
 from app.api.solo import create_solo_router, drawing_limiter, run_limiter, serve_limiter
@@ -34,6 +37,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.guess_judge import AnswerForm, JudgeTarget, judge
+from app.repositories.solo import SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
 from app.solo_rules import decode_answers
 from tests.dbfixtures import create_test_db
@@ -252,37 +256,83 @@ async def test_an_unlimited_run_ends_at_its_first_miss_and_drops_the_drawing_hel
         assert await session.get(SoloServe, UUID(third["serveId"])) is None
 
 
-async def test_starting_a_run_abandons_the_one_in_play(env):
+async def test_starting_a_run_abandons_only_the_one_of_its_length(env):
     http, users, history, factory = env
-    await _pool_of(users, history, factory, 3)
+    await _pool_of(users, history, factory, 6)
     stranger = await player(users, factory, "Stranger")
     await sign_in_as(http, factory, stranger.id)
     five = await _start(http, 5)
     [serve] = await _serve(http, five["runId"])
     await _settle(http, serve["serveId"])
-    active = (await http.get("/api/solo/runs/active")).json()["run"]
-    assert active["runId"] == five["runId"] and active["serves"][0]["outcome"] == "solved"
 
     unlimited = await _start(http, None)
     [serve] = await _serve(http, unlimited["runId"])
     await _settle(http, serve["serveId"])
     [held] = await _serve(http, unlimited["runId"])
+    ten = await _start(http, 10)
+
+    async def states() -> dict:
+        async with factory() as session:
+            return {
+                run.id: (run.state, run.end_reason, run.solved)
+                for run in (await session.scalars(select(SoloRun))).all()
+            }
+
+    # One of each length goes on at once: Quick, Classic and Endless.
+    assert {state for state, _, _ in (await states()).values()} == {"active"}
+    resumed = (await http.get(f"/api/solo/runs/{unlimited['runId']}")).json()
     # Continue shows the drawing in play with its forms, so a reload resumes it.
-    resumed = (await http.get("/api/solo/runs/active")).json()["run"]
     assert resumed["serves"][-1]["serveId"] == held["serveId"]
     assert resumed["serves"][-1]["forms"]
 
-    await _start(http, 10)
-    async with factory() as session:
-        runs = {
-            run.id: (run.state, run.end_reason, run.solved)
-            for run in (await session.scalars(select(SoloRun))).all()
-        }
+    await _start(http, 5)
+    await _start(http, None)
+    runs = await states()
     # A 5 run left unfinished records nothing; an unlimited one ends at its streak.
     assert runs[UUID(five["runId"])] == ("abandoned", "abandoned", 1)
     assert runs[UUID(unlimited["runId"])] == ("ended", "abandoned", 1)
+    assert runs[UUID(ten["runId"])] == ("active", None, 0)
+    assert sum(state == "active" for state, _, _ in runs.values()) == 3
     async with factory() as session:
         assert await session.get(SoloServe, UUID(held["serveId"])) is None
+
+
+async def test_starts_at_once_leave_one_run_of_each_length(env):
+    """PostgreSQL only: it is the database two transactions overlap in;
+    SQLite's one shared test connection would roll one start back with
+    another's conflict."""
+    _http, users, _history, factory = env
+    async with factory() as session:
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("concurrent transactions are PostgreSQL's")
+    stranger = await player(users, factory, "Stranger")
+    solo, now = SoloRepository(factory), datetime.now(timezone.utc)
+    await asyncio.gather(
+        *(solo.start_free_run(stranger.id, length=length, now=now) for length in (None, None, 5, 5, 10))
+    )
+    async with factory() as session:
+        active = (
+            await session.scalars(select(SoloRun.length).where(SoloRun.state == "active"))
+        ).all()
+    assert sorted(active, key=lambda length: length or 99) == [5, 10, None]
+
+
+async def test_the_index_holds_one_unlimited_run_too(env):
+    # Unlimited is NULL, and a unique index never sees two NULLs clash: the
+    # index compares the length as 0 for it, or two Endless runs go on.
+    _http, users, _history, factory = env
+    stranger = await player(users, factory, "Stranger")
+    now = datetime.now(timezone.utc)
+    with pytest.raises(IntegrityError):
+        async with factory() as session:
+            async with session.begin():
+                for _ in range(2):
+                    session.add(
+                        SoloRun(
+                            user_id=UUID(stranger.id), mode="free", length=None, state="active",
+                            position=0, solved=0, points=0, started_at=now,
+                        )
+                    )
 
 
 async def test_a_player_the_pool_has_nothing_for_is_told_so(env):
@@ -452,7 +502,7 @@ async def test_a_resumed_drawing_is_judged_as_it_was_served(env):
         async with session.begin():
             settings = await session.get(UserSettings, UUID(stranger.id))
             settings.prompt_language, settings.extra_prompt_languages = "pl", []
-    resumed = (await http.get("/api/solo/runs/active")).json()["run"]["serves"][0]
+    resumed = (await http.get(f"/api/solo/runs/{run['runId']}")).json()["serves"][0]
     assert _target(resumed) == _target(serve)
 
 

@@ -61,9 +61,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "uq_solo_runs_one_active_free",
+        "uq_solo_runs_one_active_per_length",
         "solo_runs",
-        ["user_id"],
+        ["user_id", sa.text("coalesce(length, 0)")],
         unique=True,
         postgresql_where=sa.text(_ACTIVE_FREE),
         sqlite_where=sa.text(_ACTIVE_FREE),
@@ -113,5 +113,5 @@ def downgrade() -> None:
     op.drop_index("ix_solo_serves_user_turn", table_name="solo_serves")
     op.drop_table("solo_serves")
     op.drop_index("ix_solo_runs_user_mode", table_name="solo_runs")
-    op.drop_index("uq_solo_runs_one_active_free", table_name="solo_runs")
+    op.drop_index("uq_solo_runs_one_active_per_length", table_name="solo_runs")
     op.drop_table("solo_runs")
