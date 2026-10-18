@@ -384,7 +384,10 @@ async def test_bests_only_go_up_and_rebuild_from_the_runs(env):
     await play(None, [("solved", 3), ("solved", 3), ("timed_out", 30)])
     assert await bests() == {"5": 1500, "unlimited": 2}
     await play(None, [("solved", 3)] * 3)
+    # Another length leaves the unlimited run going; another unlimited ends it.
     await solo.start_free_run(stranger.id, length=10, now=NOON)
+    assert await bests() == {"5": 1500, "unlimited": 2}
+    await solo.start_free_run(stranger.id, length=None, now=NOON)
     assert await bests() == {"5": 1500, "unlimited": 3}
 
     async with factory() as session:
@@ -394,7 +397,12 @@ async def test_bests_only_go_up_and_rebuild_from_the_runs(env):
     assert await bests() == {"5": 1500, "unlimited": 3}
     summary = await solo.summary(stranger.id, DAY, now=NOON)
     assert summary["bests"] == {"5": 1500, "unlimited": 3}
-    assert summary["activeRunId"] is not None
+    # One a length, in the page's order, each with what it has come to.
+    assert [(run["length"], run["outcomes"]) for run in summary["activeRuns"]] == [
+        (5, ["solved", "solved"]),
+        (10, []),
+        (None, []),
+    ]
 
 
 async def test_only_a_concept_every_language_can_name_is_the_daily(env):
@@ -680,3 +688,55 @@ async def test_two_dates_picked_at_once_never_share_a_concept(env, monkeypatch):
     assert sum(rows is not None for rows in picked) == 1
     async with factory() as session:
         assert await session.scalar(select(func.count()).select_from(SoloDailySet)) == 5
+
+
+def test_the_longest_streak_steps_over_a_day_with_no_daily_too():
+    from app.solo_rules import longest_daily_streak
+
+    played = [date(2026, 10, d) for d in (1, 2, 3, 6, 7, 9, 10, 11, 12)]
+    assert longest_daily_streak([]) == 0
+    assert longest_daily_streak(played) == 4
+    # The 8th had no Daily: 6 to 12 is one run of six played days.
+    assert longest_daily_streak(played, skipped=[date(2026, 10, 8)]) == 6
+    # A skipped day only bridges; it is never a day played.
+    assert longest_daily_streak([date(2026, 10, 1)], skipped=[date(2026, 10, 2)]) == 1
+
+
+async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 6)
+    stranger = await player(users, factory, "Stranger")
+    run = await solo.open_daily(stranger.id, DAY, now=NOON)
+    await solo.settle(stranger.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=NOON)
+    await solo.settle(stranger.id, run.serves[1].serve_id, outcome="timed_out", seconds=30, now=NOON)
+
+    month = await solo.month(stranger.id, date(2026, 10, 1), DAY + timedelta(days=2))
+    assert month["month"] == "2026-10" and month["first"] == DAY.isoformat()
+    # Every date up to the player's today, and no further.
+    assert [day["date"] for day in month["days"]][-1] == "2026-10-17"
+    assert len(month["days"]) == 17
+    played = {day["date"]: day for day in month["days"]}
+    assert played["2026-10-15"]["daily"] is True
+    assert played["2026-10-15"]["result"]["solved"] == 1
+    # Nobody asked for the 14th: it had no Daily, which is no missed day.
+    assert played["2026-10-14"] == {"date": "2026-10-14", "daily": False, "result": None}
+    september = await solo.month(stranger.id, date(2026, 9, 1), DAY)
+    assert len(september["days"]) == 30 and not any(day["result"] for day in september["days"])
+
+    summary = await solo.summary(stranger.id, DAY, now=NOON)
+    assert summary["stats"] == {
+        "dailiesPlayed": 1, "drawingsPlayed": 2, "drawingsNamed": 1, "longestStreak": 1,
+    }
+
+    await sign_in_as(http, factory, stranger.id)
+    today = datetime.now(timezone.utc).date()
+    later = (today.replace(day=28) + timedelta(days=4)).isoformat()[:7]
+    for value in (later, "2026-13", "2026-1", "nope"):
+        refused = await http.get(
+            "/api/solo/daily/month", params={"today": today.isoformat(), "month": value}
+        )
+        assert refused.status_code == 422, value
+    answered = await http.get(
+        "/api/solo/daily/month", params={"today": today.isoformat(), "month": today.isoformat()[:7]}
+    )
+    assert answered.status_code == 200 and len(answered.json()["days"]) == today.day

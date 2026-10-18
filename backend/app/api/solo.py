@@ -221,11 +221,30 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
 
     @router.get("/me")
     async def summary(request: Request, today: str = Query()):
-        """What Solo's page opens on: today's Daily, the free run there is to
-        continue, the bests, the Daily history and the streak."""
+        """What Solo's page opens on: today's Daily, the free runs there are
+        to continue, the bests, the streak and the Dailies' totals."""
         user = await account(request)
         throttle(serve_limiter, user)
         return await solo.summary(str(user.id), local_date(today), now=now())
+
+    @router.get("/daily/month")
+    async def month(request: Request, today: str = Query(), month: str = Query()):
+        """One month of the caller's Dailies for the calendar, up to their
+        `today` (validated as `/me`'s): a month after it is refused."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        local = local_date(today)
+        try:
+            first = date.fromisoformat(f"{month}-01")
+        except ValueError as error:
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a month.", field="month"
+            ) from error
+        if len(month) != 7 or first > local:
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That month has not begun.", field="month"
+            )
+        return await solo.month(str(user.id), first, local)
 
     @router.get("/serves/{serve_id}/drawing")
     async def served_drawing(serve_id: str, request: Request):

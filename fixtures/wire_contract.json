@@ -2740,7 +2740,12 @@
    "positionsPlayed"
   ],
   "repositories.solo:summary": [
-   "activeRunId"
+   "activeRuns",
+   "dailiesPlayed",
+   "drawingsNamed",
+   "drawingsPlayed",
+   "longestStreak",
+   "runId"
   ],
   "rooms:_player_entry": [
    "avatarUrl",

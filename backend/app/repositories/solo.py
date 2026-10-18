@@ -71,6 +71,7 @@ from app.solo_rules import (
     SOLVED,
     daily_start_key,
     daily_streak,
+    longest_daily_streak,
     date_is_open,
     encode_answers,
     open_dates,
@@ -440,6 +441,12 @@ def daily_result_payload(result: SoloDailyResult) -> dict:
             for mark in result.marks
         ],
     }
+
+
+def _month_end(first: date) -> date:
+    """The last date of `first`'s month."""
+    following = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return following - timedelta(days=1)
 
 
 def _length_key(length: int | None) -> str:
@@ -1237,8 +1244,10 @@ class SoloRepository:
 
     async def summary(self, user_id: str, today: date, *, now: datetime) -> dict:
         """What Solo's page opens on: today's Daily and how far it got, the
-        free run there is to continue, the bests, the Daily history and the
-        streak - the streak computed from the history here, never kept."""
+        free runs there are to continue (one a length) with how far each got,
+        the bests, the streak and what the player's Dailies came to - each
+        computed from the results here, never kept (N-03). The days
+        themselves are `month`'s."""
         async with self._session_factory() as session:
             day = await session.get(SoloDailyDay, today)
         if day is not None and day.state == "skipped" and skipped_retry_due(day, now):
@@ -1264,22 +1273,38 @@ class SoloRepository:
                 state = "in_progress"
             else:
                 state = "not_started"
-            history = (
-                await session.scalars(
-                    select(SoloDailyResult)
-                    .where(SoloDailyResult.user_id == player)
-                    .order_by(SoloDailyResult.daily_date.desc())
-                    .limit(60)
+            played = (
+                await session.execute(
+                    select(
+                        func.count(),
+                        func.coalesce(func.sum(SoloDailyResult.positions_played), 0),
+                        func.coalesce(func.sum(SoloDailyResult.solved), 0),
+                    ).where(SoloDailyResult.user_id == player)
                 )
-            ).all()
+            ).one()
             bests = (
                 await session.scalars(select(SoloBest).where(SoloBest.user_id == player))
             ).all()
-            active = await session.scalar(
-                select(SoloRun).where(
-                    SoloRun.user_id == player, SoloRun.mode == "free", SoloRun.state == "active"
+            active = (
+                await session.scalars(
+                    select(SoloRun).where(
+                        SoloRun.user_id == player, SoloRun.mode == "free", SoloRun.state == "active"
+                    )
                 )
-            )
+            ).all()
+            outcomes: dict[UUID, list[str]] = {run.id: [] for run in active}
+            if active:
+                for run_id, outcome in (
+                    await session.execute(
+                        select(SoloServe.run_id, SoloServe.outcome)
+                        .where(
+                            SoloServe.run_id.in_(list(outcomes)),
+                            SoloServe.settled_at.is_not(None),
+                        )
+                        .order_by(SoloServe.run_id, SoloServe.position)
+                    )
+                ).all():
+                    outcomes[run_id].append(outcome)
             # Every date started on its own day, not the page of history: a
             # streak is as long as it is. A date with no Daily breaks nobody's.
             started = list(
@@ -1305,10 +1330,77 @@ class SoloRepository:
                 "state": state,
                 "result": daily_result_payload(result) if result is not None else None,
             },
-            "activeRunId": str(active.id) if active is not None else None,
+            # Quick, Classic, Endless: the page's order.
+            "activeRuns": [
+                {
+                    "runId": str(run.id),
+                    "length": run.length,
+                    "solved": run.solved,
+                    "points": run.points,
+                    "outcomes": outcomes[run.id],
+                }
+                for run in sorted(active, key=lambda run: (run.length is None, run.length or 0))
+            ],
             "bests": {best.length_key: best.best for best in bests},
-            "history": [daily_result_payload(row) for row in history],
             "streak": daily_streak(started, today, skipped=skipped),
+            "stats": {
+                "dailiesPlayed": played[0],
+                "drawingsPlayed": int(played[1]),
+                "drawingsNamed": int(played[2]),
+                "longestStreak": longest_daily_streak(started, skipped=skipped),
+            },
+        }
+
+    async def month(self, user_id: str, first: date, today: date) -> dict:
+        """One month of the player's Dailies, for the page's calendar: each
+        date of it up to `today`, whether it had a Daily, and the player's
+        result for it if any. `first` is the player's first Daily, so the
+        calendar knows how far back there is anything to show."""
+        last = min(today, _month_end(first))
+        async with self._session_factory() as session:
+            player = (await identity_ids(session, UUID(user_id)))[0]
+            had = set(
+                (
+                    await session.scalars(
+                        select(SoloDailyDay.daily_date).where(
+                            SoloDailyDay.daily_date.between(first, last),
+                            SoloDailyDay.state == "set",
+                        )
+                    )
+                ).all()
+            )
+            results = {
+                row.daily_date: row
+                for row in (
+                    await session.scalars(
+                        select(SoloDailyResult).where(
+                            SoloDailyResult.user_id == player,
+                            SoloDailyResult.daily_date.between(first, last),
+                        )
+                    )
+                ).all()
+            }
+            earliest = await session.scalar(
+                select(func.min(SoloDailyResult.daily_date)).where(
+                    SoloDailyResult.user_id == player
+                )
+            )
+        days = []
+        day = first
+        while day <= last:
+            result = results.get(day)
+            days.append(
+                {
+                    "date": day.isoformat(),
+                    "daily": day in had,
+                    "result": daily_result_payload(result) if result is not None else None,
+                }
+            )
+            day += timedelta(days=1)
+        return {
+            "month": first.isoformat()[:7],
+            "first": earliest.isoformat() if earliest is not None else None,
+            "days": days,
         }
 
     # --- the fourth drawing door (R-HIST-16) -------------------------------

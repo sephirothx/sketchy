@@ -168,3 +168,21 @@ def daily_streak(
             streak += 1
         day -= timedelta(days=1)
     return streak
+
+
+def longest_daily_streak(started_dates: list[date], *, skipped: list[date] | tuple = ()) -> int:
+    """The most days in a row the player ever started the Daily on its own
+    date, by the same rule as `daily_streak`: a date with no Daily is stepped
+    over. Computed each time it is asked, never kept (N-03)."""
+    played = sorted(set(started_dates))
+    passed = set(skipped)
+    longest = run = 0
+    previous: date | None = None
+    for day in played:
+        gap = previous + timedelta(days=1) if previous is not None else None
+        while gap is not None and gap < day and gap in passed:
+            gap += timedelta(days=1)
+        run = run + 1 if gap == day else 1
+        longest = max(longest, run)
+        previous = day
+    return longest
