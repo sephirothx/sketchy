@@ -76,7 +76,7 @@ function uuidBytes(id: string): Uint8Array {
   return bytes;
 }
 
-/** Start a free run, abandoning the one in play. */
+/** Start a free run, abandoning the one of its length in play. */
 export function startFreeRun(length: 5 | 10 | null): Promise<SoloRun> {
   return apiRequest("/api/solo/runs", { method: "POST", body: { length } });
 }

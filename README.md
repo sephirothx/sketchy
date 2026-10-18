@@ -107,14 +107,17 @@ keyboard that takes half the screen, and one thumb.
   The **Daily** is five drawings, the same for everybody in every language, picked from
   drawings that most of their room could name, easiest first; it rolls over at your own
   midnight, is resumed rather than restarted, keeps its progress if you leave it half
-  played, and can be copied as a row of squares. A **Free run** is 5, 10 or unlimited
-  drawings, and an unlimited one ends at the first miss. A personal best is kept for each
-  length, and a streak of days in a row; nobody is ranked against anybody else. Play is
+  played, and can be copied as a row of squares. A **Free run** is **Quick** (5 drawings),
+  **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
+  play at once, each with how far it got and its own **Continue** or **Start over**. A
+  personal best is kept for each length, and a streak of days in a row; a calendar shows
+  each Daily you played, shaded by how many you named, with the totals and your longest
+  streak. Nobody is ranked against anybody else. Play is
   local: the browser judges each guess with a port of the room's judge, and the server records what
   each drawing came to and works out the points. Once a drawing is over you can react to
   it, report it, or share it to the Gallery, where it appears under its drawer's name.
   A drawer can stop Solo showing their drawings in **Settings**, or take one out from
-  their game history. Unlimited runs and past Dailies are meant to become supporter
+  their game history. Endless and past Dailies are meant to become supporter
   perks; for now they are open to everybody.
 - Gallery — the drawings players shared, shown at `/gallery` to anyone
   signed in, guests included, whether or not they were in the game: a feed of framed
@@ -2756,16 +2759,18 @@ includes the saved configuration and archive state.
 ### Solo
 
 1. **Solo** (`/solo`, from the lobby's **Solo** button or the header): choose the
-   **Daily** or a **Free run** of 5, 10 or unlimited drawings. A guest is asked to create an
-   account first.
+   **Daily** or a **Free run**: **Quick** (5 drawings), **Classic** (10) or **Endless**. A
+   run left half-way waits in its row with **Continue**; **Start over** begins that
+   length again. A guest is asked to create an account first.
 2. Each drawing replays over 20 seconds inside a 30-second clock; the last ten seconds show
    it finished. Type guesses as in a room: a wrong one is not a miss, and a near one says
    so. Name it to score `round(100 + 200 × remaining / 30)` points; run out of time or press
    **Give up** and it is a miss. A reload carries on with the same drawing and the same
    clock.
-3. After each drawing: the prompt, the points, and **React**, **Share to Gallery** and
-   **Report**. A share of a Daily drawing waits until that Daily is over everywhere.
-4. A run ends with its last drawing, or an unlimited one with its first miss: its total,
+3. After each drawing, the drawing stays on screen, finished, framed green or red: under
+   it the prompt, the time it took or why it ended, the points, and **React**, **Share**
+   and **Report**. A share of a Daily drawing waits until that Daily is over everywhere.
+4. A run ends with its last drawing, or an Endless one with its first miss: its total,
    whether it beat your best, and for the Daily a result to copy and the time until the
    next one.
 

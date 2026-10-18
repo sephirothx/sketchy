@@ -5,7 +5,18 @@ import { AppHeader } from "../components/AppHeader";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
 import { ReplayCanvas } from "../components/ReplayCanvas";
 import { ReportDrawingDialog } from "../components/ReportDrawingDialog";
-import { CopyIcon, FlagIcon, ImageIcon, UserIcon } from "../components/icons";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  CopyIcon,
+  FlagIcon,
+  ImageIcon,
+  UndoIcon,
+  UserIcon,
+  XIcon,
+} from "../components/icons";
 import { EmptyState } from "../components/ui/EmptyState";
 import { soloCopyFor } from "../content/solo/index.ts";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
@@ -19,8 +30,8 @@ import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import {
   decodeSoloForms,
-  fetchActiveFreeRun,
   fetchSoloDrawing,
+  fetchSoloMonth,
   fetchSoloRun,
   fetchSoloSummary,
   localDateKey,
@@ -31,7 +42,11 @@ import {
   settleServe,
   shareServe,
   startFreeRun,
+  type SoloActiveRun,
+  type SoloCalendarDay,
   type SoloDailyResult,
+  type SoloDailyStats,
+  type SoloMonth,
   type SoloOutcome,
   type SoloRun,
   type SoloServe,
@@ -42,6 +57,7 @@ import {
   SOLO_CLOCK_SECONDS,
   SOLO_REPLAY_SECONDS,
   dailyMarks,
+  type DailyMark,
   forgetServeStart,
   serveStartedAt,
   untilLocalMidnight,
@@ -80,9 +96,16 @@ export function SoloPage() {
   const [run, setRun] = useState<SoloRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // The drawing just settled, shown until Next: what it was, and what the
-  // player can do with it now.
-  const [card, setCard] = useState<SoloServe | null>(null);
+  // The drawing just settled, shown until Next: what it was, how long it
+  // took, and what the player can do with it now.
+  const [card, setCard] = useState<{
+    serve: SoloServe;
+    seconds: number;
+    drawing: DecodedCanvasAction[] | null;
+  } | null>(null);
+  // The drawing in play, decoded: the card shows it as it settles, so it is
+  // not fetched again.
+  const shownDrawing = useRef<{ serveId: string; actions: DecodedCanvasAction[] } | null>(null);
   const [summaryOf, setSummaryOf] = useState<SoloRun | null>(null);
   // The best for the run's length before it ended: a new best beats it.
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
@@ -178,14 +201,14 @@ export function SoloPage() {
           }
         : current,
     );
-    setCard(answer.serve);
+    const shown = shownDrawing.current;
+    setCard({ serve: answer.serve, seconds, drawing: shown?.serveId === serve.serveId ? shown.actions : null });
   };
 
   const next = async () => {
     if (!run || busy) return;
     if (run.state !== "active") {
-      const key = run.length === null ? "unlimited" : run.length === 5 ? "5" : "10";
-      setPreviousBest(summary?.bests[key]);
+      setPreviousBest(summary?.bests[lengthKey(run.length as SoloLength)]);
       setCard(null);
       setSummaryOf(run);
       setRun(null);
@@ -282,7 +305,9 @@ export function SoloPage() {
       ) : run && card ? (
         <SoloCard
           run={run}
-          serve={card}
+          serve={card.serve}
+          seconds={card.seconds}
+          drawing={card.drawing}
           onNext={() => void next()}
           busy={busy}
           registered={Boolean(user && !user.isAnonymous)}
@@ -295,6 +320,9 @@ export function SoloPage() {
           upcoming={run.serves.find((serve) => serve.outcome === null && serve !== playing) ?? null}
           onSettle={(outcome, seconds) => settled(playing, outcome, seconds)}
           onMissing={() => void reopenDaily()}
+          onDrawing={(actions) => {
+            shownDrawing.current = { serveId: playing.serveId, actions };
+          }}
         />
       ) : summaryOf ? (
         <SoloSummaryView
@@ -306,17 +334,12 @@ export function SoloPage() {
       ) : (
         <SoloHome
           summary={summary}
+          today={today}
           error={error}
           busy={busy}
           onDaily={() => void begin(() => openDaily(today))}
           onFree={(length) => void begin(() => startFreeRun(length))}
-          onContinue={() =>
-            void begin(async () => {
-              const active = await fetchActiveFreeRun();
-              if (!active) throw new Error(words().couldNotLoad);
-              return active;
-            })
-          }
+          onContinue={(runId) => void begin(() => fetchSoloRun(runId))}
         />
       )}
 
@@ -333,9 +356,11 @@ export function SoloPage() {
   );
 }
 
-/** What Solo opens on: today's Daily, the free runs, the bests, the streak. */
+/** What Solo opens on: today's Daily, a row for each free-run length with
+    the run in play and the best, and the calendar of the player's Dailies. */
 function SoloHome({
   summary,
+  today,
   error,
   busy,
   onDaily,
@@ -343,138 +368,436 @@ function SoloHome({
   onContinue,
 }: {
   summary: SoloSummary | null;
+  today: string;
   error: string | null;
   busy: boolean;
   onDaily: () => void;
-  onFree: (length: 5 | 10 | null) => void;
-  onContinue: () => void;
+  onFree: (length: SoloLength) => void;
+  onContinue: (runId: string) => void;
 }) {
-  const todayState = summary?.today.state ?? "not_started";
-  const result = summary?.today.result ?? null;
   return (
     <div className="solo-home" aria-busy={summary === null && !error}>
-      <div className="solo-head">
-        <h1>{ui.solo.solo}</h1>
-        <p>{words().intro}</p>
-      </div>
+      <h1 className="visually-hidden">{ui.solo.solo}</h1>
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
+      <div className="solo-columns">
+        <div className="solo-main">
+          <DailyCard summary={summary} busy={busy} onDaily={onDaily} />
+          <section className="surface-card solo-free" data-testid="solo-free" aria-labelledby="solo-free-title">
+            <h2 id="solo-free-title">{words().freeRun}</h2>
+            {FREE_LENGTHS.map((length) => (
+              <FreeRunRow
+                key={lengthKey(length)}
+                length={length}
+                run={summary?.activeRuns.find((active) => active.length === length) ?? null}
+                best={summary?.bests[lengthKey(length)]}
+                disabled={busy || summary === null}
+                onStart={() => onFree(length)}
+                onContinue={onContinue}
+              />
+            ))}
+          </section>
+          <p className="solo-note solo-preview">{words().supporterPreview}</p>
+        </div>
+        <SoloCalendar today={today} stats={summary?.stats ?? null} />
+      </div>
+    </div>
+  );
+}
 
-      <div className="solo-grid">
-        <section className="surface-card solo-daily" data-testid="solo-daily">
-          <div className="solo-card-head">
-            <h2>{words().daily}</h2>
-            {summary && summary.streak > 0 && (
-              <span className="chip chip-warm" data-testid="solo-streak">
-                {words().streak({ days: summary.streak })}
-              </span>
-            )}
-          </div>
-          <p className="solo-card-intro">{words().dailyIntro}</p>
-          {todayState === "unavailable" ? (
-            <p className="solo-note">{words().noDailyToday}</p>
-          ) : todayState === "done" && result ? (
-            <div className="solo-daily-done">
-              <DailyMarks result={result} />
-              <p className="solo-daily-points">{words().dailyDone({ points: result.points })}</p>
-              <CopyResultButton result={result} />
-              <NextDailyCountdown />
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-warm btn-big solo-daily-play"
-              data-testid="solo-play-daily"
-              disabled={busy || summary === null}
-              onClick={onDaily}
+type SoloLength = 5 | 10 | null;
+
+/** Quick, Classic, Endless: the page's order, and the keys bests use. */
+const FREE_LENGTHS: SoloLength[] = [5, 10, null];
+
+function lengthKey(length: SoloLength): "5" | "10" | "unlimited" {
+  return length === null ? "unlimited" : length === 5 ? "5" : "10";
+}
+
+function lengthName(length: SoloLength): string {
+  return length === null ? words().endless : length === 5 ? words().quick : words().classic;
+}
+
+/** Today's Daily: its five as rings - named, missed, the one up next, the
+    ones to come - and the one thing to do with it now. */
+function DailyCard({ summary, busy, onDaily }: { summary: SoloSummary | null; busy: boolean; onDaily: () => void }) {
+  const state = summary?.today.state ?? "not_started";
+  const result = summary?.today.result ?? null;
+  const marks = result ? dailyMarks(result) : (Array(5).fill("unplayed") as DailyMark[]);
+  const next = state === "done" || state === "unavailable" ? -1 : marks.indexOf("unplayed");
+  return (
+    <section className="surface-card solo-daily" data-testid="solo-daily" aria-labelledby="solo-daily-title">
+      <div className="solo-card-head">
+        <h2 id="solo-daily-title">{words().daily}</h2>
+        {summary && summary.streak > 0 && (
+          <span className="chip chip-warm" data-testid="solo-streak">
+            {words().streak({ days: summary.streak })}
+          </span>
+        )}
+      </div>
+      {state === "unavailable" ? (
+        <p className="solo-note">{words().noDailyToday}</p>
+      ) : (
+        <ol
+          className="solo-rings"
+          aria-label={result ? words().youNamed({ solved: result.solved, total: 5 }) : words().daily}
+        >
+          {marks.map((mark, index) => (
+            <li
+              key={index}
+              className={`solo-ring is-${mark}${index === next ? " is-next" : ""}`}
+              aria-label={
+                mark === "solved" ? words().named : mark === "missed" ? words().missed : String(index + 1)
+              }
             >
-              {todayState === "in_progress" && result
-                ? words().continueDaily({ played: result.positionsPlayed })
-                : todayState === "in_progress"
-                  ? words().continueDaily({ played: 0 })
-                  : words().playDaily}
-            </button>
-          )}
-        </section>
+              {mark === "solved" ? (
+                <CheckIcon size={26} />
+              ) : mark === "missed" ? (
+                <XIcon size={24} />
+              ) : (
+                <span aria-hidden="true">{index + 1}</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="solo-daily-foot">
+        {state === "done" && result ? (
+          <>
+            <span className="solo-daily-points">{words().dailyDone({ points: result.points })}</span>
+            <CopyResultButton result={result} />
+          </>
+        ) : state === "unavailable" ? null : (
+          <button
+            type="button"
+            className="btn btn-warm btn-big solo-daily-play"
+            data-testid="solo-play-daily"
+            disabled={busy || summary === null}
+            onClick={onDaily}
+          >
+            {state === "in_progress"
+              ? words().continueDaily({ left: 5 - (result?.positionsPlayed ?? 0) })
+              : words().playDaily}
+          </button>
+        )}
+        <NextDailyCountdown />
+      </div>
+    </section>
+  );
+}
 
-        <section className="surface-card solo-free" data-testid="solo-free">
-          <div className="solo-card-head">
-            <h2>{words().freeRun}</h2>
-          </div>
-          <p className="solo-card-intro">{words().freeRunIntro}</p>
-          {summary?.activeRunId && (
+/** One free-run length: its name, the run in play if there is one and how
+    far it got, the best, and Start - or Start over and Continue. */
+function FreeRunRow({
+  length,
+  run,
+  best,
+  disabled,
+  onStart,
+  onContinue,
+}: {
+  length: SoloLength;
+  run: SoloActiveRun | null;
+  best: number | undefined;
+  disabled: boolean;
+  onStart: () => void;
+  onContinue: (runId: string) => void;
+}) {
+  const key = lengthKey(length);
+  return (
+    <div className={`solo-run${run ? " has-run" : ""}`} data-testid={`solo-run-${key}`}>
+      <span className="solo-run-glyph" aria-hidden="true">
+        {length === null ? "∞" : length}
+      </span>
+      <div className="solo-run-body">
+        <div className="solo-run-title">
+          <h3>{lengthName(length)}</h3>
+          {run && (
+            <span className="solo-run-progress" data-testid={`solo-run-progress-${key}`}>
+              {length === null
+                ? words().inARow({ count: run.solved })
+                : words().runProgress({ played: run.outcomes.length, length, points: run.points })}
+            </span>
+          )}
+        </div>
+        {run && <RunStrip run={run} />}
+      </div>
+      <div className="solo-run-best">
+        {best !== undefined && (
+          <>
+            <span className="section-label">{words().best}</span>
+            <span className="solo-run-best-value" data-testid={`solo-best-${key}`}>
+              {formatNumber(best)}
+            </span>
+          </>
+        )}
+      </div>
+      <div className="solo-run-actions">
+        {run ? (
+          <>
             <button
               type="button"
-              className="btn btn-primary solo-continue"
-              data-testid="solo-continue-run"
-              disabled={busy}
-              onClick={onContinue}
+              className="btn btn-secondary btn-icon"
+              aria-label={words().startOverNamed({ name: lengthName(length) })}
+              title={words().startOver}
+              data-testid={`solo-restart-${key}`}
+              disabled={disabled}
+              onClick={onStart}
+            >
+              <UndoIcon size={18} />
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary solo-run-main"
+              data-testid={`solo-continue-${key}`}
+              disabled={disabled}
+              onClick={() => onContinue(run.runId)}
             >
               {words().continueRun}
             </button>
-          )}
-          <div className="solo-lengths" role="group" aria-label={words().freeRun}>
-            {([5, 10, null] as const).map((length) => (
-              <button
-                key={String(length)}
-                type="button"
-                className="btn btn-secondary solo-length"
-                data-testid={`solo-free-${length ?? "unlimited"}`}
-                disabled={busy || summary === null}
-                onClick={() => onFree(length)}
-              >
-                {length === null ? words().unlimited : words().drawingsCount({ count: length })}
-              </button>
-            ))}
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-secondary solo-run-main"
+            aria-label={words().startNamed({ name: lengthName(length) })}
+            data-testid={`solo-free-${key}`}
+            disabled={disabled}
+            onClick={onStart}
+          >
+            {words().start}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Most segments an Endless strip draws: a long streak shows its latest. */
+const ENDLESS_SEGMENTS = 10;
+
+/** A run's drawings as segments: named, missed, still to come. */
+function RunStrip({ run }: { run: SoloActiveRun }) {
+  const segments: ("solved" | "missed" | "unplayed")[] = run.outcomes.map((outcome) =>
+    outcome === "solved" ? "solved" : "missed",
+  );
+  const drawn =
+    run.length === null
+      ? segments.slice(-ENDLESS_SEGMENTS)
+      : [...segments, ...Array<"unplayed">(Math.max(0, run.length - segments.length)).fill("unplayed")];
+  return (
+    <span className={`solo-strip${run.length === null ? " is-endless" : ""}`} aria-hidden="true">
+      {drawn.map((segment, index) => (
+        <span key={index} className={`solo-strip-segment is-${segment}`} />
+      ))}
+    </span>
+  );
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat(interfaceLocale()).format(value);
+}
+
+/** `YYYY-MM` of a `YYYY-MM-DD`. */
+function monthOf(date: string): string {
+  return date.slice(0, 7);
+}
+
+function shiftMonth(month: string, by: number): string {
+  const [year, number] = month.split("-").map(Number);
+  const moved = new Date(year, number - 1 + by, 1);
+  return `${moved.getFullYear()}-${String(moved.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The player's Dailies a month at a time, back to their first: each date
+ * shaded by how many they named, a missed Daily dashed, today ringed; and
+ * what all of them came to.
+ */
+function SoloCalendar({ today, stats }: { today: string; stats: SoloDailyStats | null }) {
+  // The month looked at, for the today it was picked on: a new day can be a
+  // new month, and the calendar follows the player's today back to it.
+  const [picked, setPicked] = useState(() => ({ today, month: monthOf(today) }));
+  const month = picked.today === today ? picked.month : monthOf(today);
+  const setMonth = (move: (current: string) => string) => setPicked({ today, month: move(month) });
+  const [loaded, setLoaded] = useState<SoloMonth | null>(null);
+  const [unreadFor, setUnreadFor] = useState<string | null>(null);
+  const unread = unreadFor === `${today}/${month}`;
+  useEffect(() => {
+    let cancelled = false;
+    fetchSoloMonth(today, month)
+      .then((answer) => {
+        if (!cancelled) setLoaded(answer);
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadFor(`${today}/${month}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [today, month]);
+
+  const locale = interfaceLocale();
+  const [year, monthNumber] = month.split("-").map(Number);
+  const first = new Date(year, monthNumber - 1, 1);
+  const title = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    ...(year === Number(today.slice(0, 4)) ? {} : { year: "numeric" }),
+  }).format(first);
+  // Monday first: the week the interface's eight languages start on.
+  const weekdays = Array.from({ length: 7 }, (_, index) =>
+    new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2024, 0, 1 + index)),
+  );
+  const lead = (first.getDay() + 6) % 7;
+  const daysIn = new Date(year, monthNumber, 0).getDate();
+  const shown = loaded?.month === month ? loaded : null;
+  const byDate = new Map((shown?.days ?? []).map((day) => [day.date, day]));
+  const earliest = loaded?.first ?? null;
+  const canGoBack = earliest !== null && monthOf(earliest) < month;
+  const canGoForward = month < monthOf(today);
+  const named = stats && stats.drawingsPlayed > 0 ? stats.drawingsNamed / stats.drawingsPlayed : null;
+
+  return (
+    <section className="surface-card solo-calendar" data-testid="solo-calendar" aria-labelledby="solo-calendar-title">
+      <div className="solo-card-head">
+        <h2 id="solo-calendar-title">{title}</h2>
+        <div className="solo-calendar-nav">
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon btn-compact"
+            aria-label={words().previousMonth}
+            data-testid="solo-calendar-previous"
+            disabled={!canGoBack}
+            onClick={() => setMonth((current) => shiftMonth(current, -1))}
+          >
+            <ChevronLeftIcon size={16} />
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon btn-compact"
+            aria-label={words().nextMonth}
+            data-testid="solo-calendar-next"
+            disabled={!canGoForward}
+            onClick={() => setMonth((current) => shiftMonth(current, 1))}
+          >
+            <ChevronRightIcon size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="solo-calendar-grid" role="list" aria-busy={shown === null && !unread}>
+        {weekdays.map((weekday, index) => (
+          <span key={`w${index}`} className="solo-calendar-weekday" aria-hidden="true">
+            {weekday}
+          </span>
+        ))}
+        {Array.from({ length: lead }, (_, index) => (
+          <span key={`l${index}`} aria-hidden="true" />
+        ))}
+        {Array.from({ length: daysIn }, (_, index) => {
+          const date = `${month}-${String(index + 1).padStart(2, "0")}`;
+          const day = byDate.get(date);
+          const look = calendarLook(date, day, today, earliest);
+          return (
+            <span
+              key={date}
+              role="listitem"
+              className={`solo-calendar-day is-${look}${date === today ? " is-today" : ""}`}
+              data-testid="solo-calendar-day"
+              data-date={date}
+              aria-current={date === today ? "date" : undefined}
+              aria-label={words().calendarDay({ date: dayLabel(date), status: calendarStatus(look, day) })}
+            >
+              {index + 1}
+            </span>
+          );
+        })}
+      </div>
+      {unread && <p className="solo-note">{words().couldNotLoad}</p>}
+      <div className="solo-calendar-legend" aria-hidden="true">
+        <span>{words().legendNamed}</span>
+        <span className="solo-calendar-key is-named-1" />
+        <span className="solo-calendar-key is-named-2" />
+        <span className="solo-calendar-key is-named-3" />
+        <span>{words().legendMore}</span>
+        <span className="solo-calendar-missed-key">
+          <span className="solo-calendar-key is-missed" />
+          {words().legendMissed}
+        </span>
+      </div>
+      {stats && stats.dailiesPlayed > 0 && (
+        <dl className="solo-calendar-stats" data-testid="solo-stats">
+          <div>
+            <dt>{words().dailiesPlayed}</dt>
+            <dd>{formatNumber(stats.dailiesPlayed)}</dd>
           </div>
-          <p className="solo-note solo-preview">{words().supporterPreview}</p>
-        </section>
-      </div>
+          <div>
+            <dt>{words().namedShare}</dt>
+            <dd>{new Intl.NumberFormat(locale, { style: "percent" }).format(named ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>{words().longestStreak}</dt>
+            <dd>{formatNumber(stats.longestStreak)}</dd>
+          </div>
+        </dl>
+      )}
+    </section>
+  );
+}
 
-      <div className="solo-grid">
-        <section className="surface-card solo-bests" data-testid="solo-bests">
-          <h2>{words().bests}</h2>
-          <dl>
-            {(
-              [
-                ["5", words().bestFive],
-                ["10", words().bestTen],
-                ["unlimited", words().bestUnlimited],
-              ] as const
-            ).map(([key, label]) => {
-              const best = summary?.bests[key];
-              return (
-                <div key={key} className="solo-best">
-                  <dt>{label}</dt>
-                  <dd>
-                    {best === undefined
-                      ? words().noBestYet
-                      : key === "unlimited"
-                        ? words().inARow({ count: best })
-                        : words().pointsValue({ points: best })}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </section>
+type CalendarLook = "future" | "none" | "missed" | "named-0" | "named-1" | "named-2" | "named-3" | "open";
 
-        <section className="surface-card solo-history" data-testid="solo-history">
-          <h2>{words().yourDailies}</h2>
-          {summary && summary.history.length === 0 ? (
-            <p className="solo-note">{words().noDailiesYet}</p>
-          ) : (
-            <ol>
-              {(summary?.history ?? []).slice(0, 14).map((day) => (
-                <li key={day.date} className="solo-history-day">
-                  <span className="solo-history-date">{dayLabel(day.date)}</span>
-                  <DailyMarks result={day} />
-                  <span className="solo-history-points">{words().pointsValue({ points: day.points })}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-      </div>
+/** How a date reads: one to come, one with no Daily for this player, a Daily
+    they let pass, or how much of one they named. */
+function calendarLook(
+  date: string,
+  day: SoloCalendarDay | undefined,
+  today: string,
+  earliest: string | null,
+): CalendarLook {
+  if (date > today) return "future";
+  const result = day?.result ?? null;
+  if (result) {
+    const solved = result.solved;
+    return solved === 0 ? "named-0" : solved <= 2 ? "named-1" : solved <= 4 ? "named-2" : "named-3";
+  }
+  if (date === today) return "open";
+  // Only a Daily there was, after the player's first: before it, Solo was
+  // not theirs yet, and a missed day would be no news.
+  if (day?.daily && earliest !== null && date > earliest) return "missed";
+  return "none";
+}
+
+function calendarStatus(look: CalendarLook, day: SoloCalendarDay | undefined): string {
+  if (day?.result) return words().youNamed({ solved: day.result.solved, total: 5 });
+  return look === "missed" ? words().legendMissed : look === "open" ? words().daily : words().noDaily;
+}
+
+/** A run's name, as its rows and its drawings are headed: the Daily, or the
+    free run's length. */
+function runName(run: SoloRun): string {
+  return run.mode === "daily" ? words().daily : lengthName(run.length as SoloLength);
+}
+
+/** Above a drawing, in play or settled: which run and which drawing, and a
+    dot for each of the run's - named, missed, this one, the ones to come. */
+function RunHeader({ run, position }: { run: SoloRun; position: number }) {
+  const cameTo = new Map(
+    run.serves.filter((serve) => serve.outcome !== null).map((serve) => [serve.position, serve.outcome]),
+  );
+  const count = run.length ?? Math.max(position, ...cameTo.keys());
+  const from = run.length === null ? Math.max(1, count - ENDLESS_SEGMENTS + 1) : 1;
+  return (
+    <div className="solo-run-head">
+      <span className="solo-play-position">
+        {runName(run)} · {words().drawingOf({ position, length: run.length })}
+      </span>
+      <span className="solo-dots" aria-hidden="true">
+        {Array.from({ length: count - from + 1 }, (_, index) => {
+          const at = from + index;
+          const outcome = cameTo.get(at);
+          const look = outcome === undefined ? "unplayed" : outcome === "solved" ? "solved" : "missed";
+          return <span key={at} className={`solo-dot is-${look}${at === position ? " is-current" : ""}`} />;
+        })}
+      </span>
     </div>
   );
 }
@@ -563,12 +886,15 @@ function SoloPlay({
   upcoming,
   onSettle,
   onMissing,
+  onDrawing,
 }: {
   run: SoloRun;
   serve: SoloServe;
   upcoming: SoloServe | null;
   onSettle: (outcome: SoloOutcome, seconds: number) => Promise<void>;
   onMissing: () => void;
+  /** The drawing, decoded, for the card that follows to show. */
+  onDrawing: (actions: DecodedCanvasAction[]) => void;
 }) {
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -587,6 +913,10 @@ function SoloPlay({
   const input = useRef<HTMLInputElement>(null);
   const target = useMemo(() => (serve.forms ? decodeSoloForms(serve.serveId, serve.forms) : null), [serve]);
   const upcomingId = upcoming?.serveId ?? null;
+  const onDrawingRef = useRef(onDrawing);
+  useEffect(() => {
+    onDrawingRef.current = onDrawing;
+  }, [onDrawing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -601,6 +931,7 @@ function SoloPlay({
         const start = serveStartedAt(serve.serveId, serve.forms ?? "");
         setFailed(false);
         setActions(decoded);
+        onDrawingRef.current(decoded);
         setStartedAt(start);
         setFraction(Math.min(1, (Date.now() - start) / 1000 / SOLO_REPLAY_SECONDS));
       })
@@ -689,7 +1020,9 @@ function SoloPlay({
   return (
     <div className="solo-play" data-testid="solo-play">
       <div className="solo-play-bar">
-        <span className="solo-play-position">{words().drawingOf({ position: serve.position, length: run.length })}</span>
+        <span className="solo-play-position">
+          {runName(run)} · {words().drawingOf({ position: serve.position, length: run.length })}
+        </span>
         <span
           className={`solo-clock${remaining <= 10 ? " is-low" : ""}`}
           data-testid="solo-clock"
@@ -781,36 +1114,56 @@ function SoloPlay({
 }
 
 /**
- * What a drawing came to: the prompt, the points, and what the player may do
+ * What a drawing came to, under the drawing itself, finished: what it was,
+ * how long it took or why it ended, the points, and what the player may do
  * with it now - react, share it to the Gallery under its drawer's name, or
  * report it (R-SOLO-15). Never who drew it.
  */
 function SoloCard({
   run,
   serve,
+  seconds,
+  drawing,
   onNext,
   busy,
   registered,
 }: {
   run: SoloRun;
   serve: SoloServe;
+  seconds: number;
+  /** The drawing as it was played, decoded; fetched again if not given. */
+  drawing: DecodedCanvasAction[] | null;
   onNext: () => void;
   busy: boolean;
   registered: boolean;
 }) {
   // The field the player was typing in is gone: the verdict takes focus, so
   // a screen reader says what the drawing came to.
-  const verdict = useRef<HTMLParagraphElement>(null);
+  const verdict = useRef<HTMLDivElement>(null);
   useEffect(() => {
     verdict.current?.focus();
   }, []);
   const { notify } = useToast();
+  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(drawing);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [mine, setMine] = useState<string | null>(null);
   const [share, setShare] = useState<SoloShare | null>(null);
   const [reporting, setReporting] = useState(false);
   const solved = serve.outcome === "solved";
   const over = run.state !== "active";
+
+  useEffect(() => {
+    if (actions) return;
+    let cancelled = false;
+    void fetchSoloDrawing(serve.serveId)
+      .then((bytes) => {
+        if (!cancelled) setActions(decodeCanvasHistory(bytes));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [actions, serve.serveId]);
 
   const toggleShare = async () => {
     try {
@@ -822,64 +1175,95 @@ function SoloCard({
 
   return (
     <div className="solo-result" data-testid="solo-card">
-      <div className="surface-card solo-result-card">
-        <p
-          ref={verdict}
-          tabIndex={-1}
-          className={`solo-verdict${solved ? " is-solved" : " is-missed"}`}
-          data-testid="solo-verdict"
-        >
-          {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
-        </p>
-        <p className="solo-it-was">{words().itWas}</p>
-        <h1 className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</h1>
-        {solved && serve.points !== null && (
-          <p className="solo-points" data-testid="solo-points">{words().plusPoints({ points: serve.points })}</p>
-        )}
-        <p className="solo-note">{words().anonymity}</p>
-        <div className="solo-result-actions">
-          <DrawingReactionControl
-            reactions={[]}
-            myReactorId={null}
-            counts={counts}
-            mine={mine}
-            eligibility={reactionEligibility({ isRegistered: registered })}
-            onReact={async (emoji) => {
-              const answer = await reactToServe(serve.serveId, emoji);
-              setCounts(answer.reactionCounts);
-              setMine(answer.myReaction);
-            }}
-            placement="panel"
-          />
-          {!share?.shareWithdrawn && (
-            <button
-              type="button"
-              className={`btn btn-secondary btn-compact${share?.sharedByMe ? " is-pressed" : ""}`}
-              aria-pressed={share?.sharedByMe ?? false}
-              data-testid="solo-share"
-              onClick={() => void toggleShare()}
-            >
-              <ImageIcon size={15} />
-              {share?.sharedByMe ? words().sharedToGallery : words().shareToGallery}
-            </button>
+      <RunHeader run={run} position={serve.position} />
+      <div className={`solo-result-frame ${solved ? "is-solved" : "is-missed"}`}>
+        <div className="solo-canvas" data-testid="solo-card-drawing">
+          {actions ? (
+            <ReplayCanvas
+              actions={actions}
+              fraction={1}
+              playing={false}
+              onFraction={() => undefined}
+              durationSeconds={SOLO_REPLAY_SECONDS}
+              label={serve.prompt ?? ui.solo.solo}
+            />
+          ) : (
+            <div className="solo-canvas-skeleton" />
           )}
+        </div>
+        <div className="solo-verdict-strip">
+          <span className="solo-verdict-mark" aria-hidden="true">
+            {solved ? <CheckIcon size={22} /> : <XIcon size={20} />}
+          </span>
+          <div ref={verdict} tabIndex={-1} className="solo-verdict-text">
+            <span className="visually-hidden" data-testid="solo-verdict">
+              {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
+            </span>
+            <h1 className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</h1>
+            <span className="solo-verdict-detail">
+              {solved ? (
+                <>
+                  <ClockIcon size={15} />
+                  {words().secondsTaken({ seconds })}
+                </>
+              ) : serve.outcome === "timed_out" ? (
+                words().timeUp
+              ) : (
+                words().gaveUp
+              )}
+            </span>
+          </div>
+          {solved && serve.points !== null && (
+            <span className="solo-points" data-testid="solo-points">
+              <span aria-hidden="true">+{formatNumber(serve.points)}</span>
+              <span className="visually-hidden">{words().plusPoints({ points: serve.points })}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="solo-result-actions">
+        <DrawingReactionControl
+          reactions={[]}
+          myReactorId={null}
+          counts={counts}
+          mine={mine}
+          eligibility={reactionEligibility({ isRegistered: registered })}
+          onReact={async (emoji) => {
+            const answer = await reactToServe(serve.serveId, emoji);
+            setCounts(answer.reactionCounts);
+            setMine(answer.myReaction);
+          }}
+          placement="panel"
+          label={words().react}
+        />
+        {!share?.shareWithdrawn && (
           <button
             type="button"
-            className="btn btn-ghost btn-compact btn-icon"
-            aria-label={words().report}
-            title={words().report}
-            data-testid="solo-report"
-            onClick={() => setReporting(true)}
+            className={`btn btn-secondary${share?.sharedByMe ? " is-pressed" : ""}`}
+            aria-pressed={share?.sharedByMe ?? false}
+            data-testid="solo-share"
+            onClick={() => void toggleShare()}
           >
-            <FlagIcon size={14} />
+            <ImageIcon size={17} />
+            {share?.sharedByMe ? words().shared : words().share}
           </button>
-        </div>
-        {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{words().shareHeld}</p>}
-        {share?.shareWithdrawn && <p className="solo-note">{words().shareTakenOut}</p>}
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          aria-label={words().report}
+          data-testid="solo-report"
+          onClick={() => setReporting(true)}
+        >
+          <FlagIcon size={16} />
+          {words().reportShort}
+        </button>
         <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" disabled={busy} onClick={onNext}>
           {over ? words().seeResult : words().next}
         </button>
       </div>
+      {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{words().shareHeld}</p>}
+      {share?.shareWithdrawn && <p className="solo-note">{words().shareTakenOut}</p>}
       {reporting && (
         <ReportDrawingDialog submit={(details) => reportServe(serve.serveId, details)} onClose={() => setReporting(false)} />
       )}

@@ -3,7 +3,7 @@
    block follow the Gallery's recipe; the cards are `.surface-card`s. */
 
 .solo-page {
-  --page-width: 928px;
+  --page-width: 1040px;
   margin: 0 auto;
   max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
@@ -26,27 +26,28 @@
 
 /* ------------------------------------------------------------------- home */
 
-.solo-grid {
+/* The Daily and the free runs on the left, the calendar on the right; one
+   column on a narrow screen, the calendar last. */
+.solo-columns {
+  align-items: start;
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 16px;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
-@media (max-width: 720px) {
-  .solo-grid { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .solo-columns { grid-template-columns: minmax(0, 1fr); }
 }
 
-.solo-grid > .surface-card {
+.solo-main {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 18px 20px;
+  gap: 16px;
+  min-width: 0;
 }
 
-.solo-grid h2 {
+.solo-home h2 {
   font-family: var(--font-display);
-  font-size: 20px;
   font-weight: 600;
   margin: 0;
 }
@@ -59,7 +60,6 @@
   justify-content: space-between;
 }
 
-.solo-card-intro,
 .solo-note {
   color: var(--muted);
   font-size: 14px;
@@ -68,69 +68,299 @@
 
 .solo-preview { font-size: 13px; }
 
-.solo-daily-play { align-self: stretch; margin-top: auto; }
-
-.solo-daily-done {
-  align-items: flex-start;
+.solo-daily {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 18px;
+  padding: 24px;
 }
 
-.solo-daily-points {
-  font-weight: 700;
-  margin: 0;
-}
+.solo-daily h2 { font-size: 28px; }
 
-.solo-lengths {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.solo-length { justify-content: center; min-width: 0; }
-
-.solo-bests dl {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-}
-
-.solo-best {
+/* The Daily's five as rings: named, missed, the one up next, those to come. */
+.solo-rings {
   display: flex;
-  justify-content: space-between;
-}
-
-.solo-best dt { color: var(--muted); }
-
-.solo-best dd {
-  font-weight: 700;
-  margin: 0;
-}
-
-.solo-history ol {
-  display: grid;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 12px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.solo-history-day {
+.solo-ring {
   align-items: center;
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.solo-ring.is-solved { background: var(--success-button); color: var(--on-success); }
+.solo-ring.is-missed { background: var(--danger-button); color: var(--on-danger); }
+
+.solo-ring.is-unplayed {
+  border: 3px dashed var(--line-strong);
+  color: var(--faint);
+}
+
+.solo-ring.is-next {
+  border: 4px solid var(--warm);
+  color: var(--warm-ink);
+}
+
+.solo-daily-foot {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.solo-daily-play { flex: 1 1 220px; }
+
+.solo-daily-points { font-weight: 800; }
+
+.solo-countdown {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* One row a free-run length: what it is, how far the run in play got, the
+   best, and what to do. */
+.solo-free {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 8px;
+}
+
+.solo-free h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.solo-run {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 44px minmax(0, 1fr) 84px auto;
+  padding: 12px 0;
+}
+
+.solo-run:last-child { border-bottom: 0; }
+
+.solo-run-glyph {
+  align-items: center;
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+  color: var(--primary-ink);
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  height: 44px;
+  justify-content: center;
+}
+
+.solo-run-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.solo-run-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.solo-run-title h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-run-progress {
+  color: var(--primary-ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+/* A run's drawings as segments; an Endless run's latest, at a fixed width. */
+.solo-strip {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+}
+
+.solo-strip-segment {
+  border-radius: 3px;
+  flex: 1 1 0;
+}
+
+.solo-strip.is-endless .solo-strip-segment { flex: 0 0 24px; }
+
+.solo-strip-segment.is-solved { background: var(--success); }
+.solo-strip-segment.is-missed { background: var(--danger); }
+.solo-strip-segment.is-unplayed { box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+.solo-run-best {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+}
+
+.solo-run-best-value {
+  color: var(--warm-ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.solo-run-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.solo-run-main { min-width: 104px; }
+
+/* A phone: the rings shrink to stay on one line, and a run in play puts
+   Start over and Continue on a line under the rest. */
+@media (max-width: 480px) {
+  .solo-rings { gap: 8px; }
+  .solo-ring { font-size: 19px; height: 50px; width: 50px; }
+  .solo-run { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
+  .solo-run-main { min-width: 0; }
+  .solo-run.has-run { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .solo-run.has-run .solo-run-actions { grid-column: 1 / -1; }
+  .solo-run.has-run .solo-run-main { flex: 1 1 auto; }
+}
+
+/* The calendar of the player's Dailies, and what they came to. */
+.solo-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.solo-calendar h2 {
+  font-size: 22px;
+  text-transform: capitalize;
+}
+
+.solo-calendar-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.solo-calendar-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.solo-calendar-weekday {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.solo-calendar-day {
+  align-items: center;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  color: var(--muted);
+  display: flex;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  justify-content: center;
+}
+
+/* Shaded by how many of the five were named; one let pass is dashed. */
+.solo-calendar-day.is-future { color: var(--line-strong); }
+.solo-calendar-day.is-missed { border: 1px dashed var(--line-strong); }
+.solo-calendar-day.is-named-0 { background: var(--track); color: var(--ink); }
+
+.solo-calendar-day.is-named-1,
+.solo-calendar-key.is-named-1 { background: color-mix(in srgb, var(--success) 30%, var(--card)); color: var(--ink); }
+
+.solo-calendar-day.is-named-2,
+.solo-calendar-key.is-named-2 { background: color-mix(in srgb, var(--success) 62%, var(--card)); color: var(--ink); }
+
+.solo-calendar-day.is-named-3,
+.solo-calendar-key.is-named-3 { background: var(--success-button); color: var(--on-success); }
+
+.solo-calendar-day.is-today { box-shadow: inset 0 0 0 3px var(--warm); }
+.solo-calendar-day.is-today.is-open { background: var(--warm-soft); color: var(--warm-ink); }
+
+.solo-calendar-legend {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.solo-calendar-key {
+  border-radius: var(--radius-xs);
+  box-sizing: border-box;
+  display: inline-block;
+  height: 14px;
+  width: 14px;
+}
+
+.solo-calendar-key.is-missed { border: 1px dashed var(--line-strong); }
+
+.solo-calendar-missed-key {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.solo-calendar-stats {
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 10px;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding-top: 14px;
+  text-align: center;
 }
 
-.solo-history-date {
+/* The number above its label, read label first. */
+.solo-calendar-stats div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.solo-calendar-stats dd {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-calendar-stats dt {
   color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.solo-history-points {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -242,6 +472,164 @@
 
 /* ----------------------------------------------------- result and summary */
 
+/* Above a drawing, in play or settled: which run and drawing, and its dots. */
+.solo-run-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.solo-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.solo-dot {
+  border-radius: 50%;
+  height: 14px;
+  width: 14px;
+}
+
+.solo-dot.is-solved { background: var(--success); }
+.solo-dot.is-missed { background: var(--danger); }
+.solo-dot.is-unplayed { box-shadow: inset 0 0 0 2px var(--line-strong); }
+.solo-dot.is-current.is-solved { box-shadow: 0 0 0 3px var(--success-soft); }
+.solo-dot.is-current.is-missed { box-shadow: 0 0 0 3px var(--danger-soft); }
+
+/* What a drawing came to: the drawing, finished, in a frame of the verdict's
+   colour, and a strip under it saying what it was. */
+.solo-result-frame {
+  background: var(--card);
+  border: 2px solid var(--success);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.solo-result-frame.is-missed { border-color: var(--danger); }
+
+.solo-result-frame .solo-canvas { border-radius: 0; }
+
+/* The frame is the drawing's edge: the canvas's own border and corners go,
+   as the drawing recap's do. */
+.solo-result-frame .canvas-wrapper,
+.solo-result-frame .canvas-stack { max-width: none; width: 100%; }
+.solo-result-frame .canvas-stack { border: 0; border-radius: 0; }
+
+.solo-verdict-strip {
+  align-items: center;
+  background: var(--success-soft);
+  border-top: 1px solid color-mix(in srgb, var(--success) 25%, var(--success-soft));
+  display: flex;
+  gap: 16px;
+  padding: 14px 20px;
+}
+
+.is-missed .solo-verdict-strip {
+  background: var(--danger-soft);
+  border-top-color: color-mix(in srgb, var(--danger) 25%, var(--danger-soft));
+}
+
+.solo-verdict-mark {
+  align-items: center;
+  background: var(--success-button);
+  border-radius: 50%;
+  color: var(--on-success);
+  display: flex;
+  flex-shrink: 0;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.is-missed .solo-verdict-mark { background: var(--danger-button); color: var(--on-danger); }
+
+.solo-verdict-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.solo-prompt {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.05;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.solo-verdict-detail {
+  align-items: center;
+  color: var(--success-ink);
+  display: flex;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.is-missed .solo-verdict-detail { color: var(--danger); }
+
+.solo-points {
+  color: var(--success-ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* React, Share and Report as a row of the same buttons, each saying what it
+   does; Next at the far end. */
+.solo-result-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.solo-result-actions .is-pressed {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge);
+  color: var(--primary-ink);
+}
+
+.solo-result-actions .reaction-toggle.has-label {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 800;
+  height: 44px;
+  padding: 0 16px;
+}
+
+.solo-result-actions .reaction-toggle.has-label .reaction-toggle-empty {
+  align-items: center;
+  color: inherit;
+  gap: 8px;
+}
+
+.solo-result-actions .solo-next { margin-left: auto; margin-top: 0; }
+
+@media (max-width: 480px) {
+  .solo-result-actions .solo-next { flex-basis: 100%; margin-left: 0; }
+  .solo-verdict-strip { padding: 12px 14px; gap: 12px; }
+  .solo-prompt { font-size: 26px; }
+  .solo-points { font-size: 24px; }
+}
+
+/* A run that is over. */
 .solo-result-card {
   align-items: center;
   display: flex;
@@ -250,6 +638,8 @@
   padding: 24px 20px;
   text-align: center;
 }
+
+.solo-result-card .solo-result-actions { justify-content: center; margin-top: 0; }
 
 .solo-verdict {
   font-weight: 800;
@@ -264,34 +654,7 @@
   margin: 0;
 }
 
-.solo-prompt {
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 600;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.solo-points {
-  color: var(--warm-ink);
-  font-size: 18px;
-  font-weight: 800;
-  margin: 0;
-}
-
-.solo-result-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.solo-result-actions .is-pressed {
-  background: var(--primary-soft);
-  border-color: var(--primary-edge);
-  color: var(--primary-ink);
-}
+.solo-result-card .solo-prompt { font-size: 32px; }
 
 .solo-next { margin-top: 8px; }
 
@@ -324,4 +687,5 @@
 /* The verdict and the summary's heading take focus from the page so a screen
    reader says them (tabindex -1, as `.ops-tabpanel`): read, never a control,
    so no ring. */
-.solo-verdict:focus { outline: none; }
+.solo-verdict:focus,
+.solo-verdict-text:focus { outline: none; }

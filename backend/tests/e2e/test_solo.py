@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -144,7 +145,7 @@ async def open_prompt(username: str) -> str:
 async def give_up_and_continue(page: Page) -> None:
     await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
     await page.get_by_test_id("solo-give-up").click()
-    await expect(page.get_by_test_id("solo-verdict")).to_be_visible()
+    await expect(page.get_by_test_id("solo-card")).to_be_visible()
     await page.get_by_test_id("solo-next").click()
 
 
@@ -178,6 +179,8 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(page.get_by_test_id("solo-verdict")).to_have_text("You got it!")
             await expect(page.get_by_test_id("solo-prompt")).to_have_text(prompt)
             await expect(page.get_by_test_id("solo-points")).to_contain_text("points")
+            # The drawing stays on screen, finished, under what it was.
+            await page.get_by_test_id("solo-card-drawing").locator("canvas").wait_for()
             await page.get_by_test_id("solo-next").click()
 
             # A wrong guess is not a miss: the clock runs on.
@@ -207,13 +210,29 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(daily.get_by_test_id("solo-copy-result")).to_be_visible()
             await expect(daily.get_by_test_id("solo-countdown")).to_be_visible()
             await expect(daily.get_by_test_id("solo-streak")).to_have_text("1 day in a row")
+            # The calendar shades today by the one named, and counts the Daily.
+            today = await page.evaluate(
+                "() => { const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'),"
+                " String(d.getDate()).padStart(2, '0')].join('-') }"
+            )
+            cell = page.locator(f'[data-testid="solo-calendar-day"][data-date="{today}"]')
+            await expect(cell).to_have_class(re.compile(r"\bis-named-1\b"))
+            await expect(page.get_by_test_id("solo-stats")).to_contain_text("1")
 
             # A five-drawing free run: the Daily's drawings stay out of it
             # while the Daily is open, so the sixth seeded one is played, and
             # repeats fill the rest.
             await page.get_by_test_id("solo-free-5").click()
             await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
-            for _ in range(5):
+            await give_up_and_continue(page)
+            # Left half-way, the run waits in its row - Quick's - while
+            # Classic and Endless have none, and Continue picks it up.
+            await page.reload()
+            await expect(page.get_by_test_id("solo-run-progress-5")).to_contain_text("1/5")
+            await expect(page.get_by_test_id("solo-free-10")).to_be_visible()
+            await page.get_by_test_id("solo-continue-5").click()
+            await expect(page.get_by_text("Drawing 2 of 5")).to_be_visible()
+            for _ in range(4):
                 await give_up_and_continue(page)
             await expect(page.get_by_test_id("solo-summary")).to_contain_text("Run over")
         finally:
@@ -262,7 +281,7 @@ async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
             await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
             await fits("play")
             await page.get_by_test_id("solo-give-up").click()
-            await expect(page.get_by_test_id("solo-verdict")).to_be_visible()
+            await expect(page.get_by_test_id("solo-card")).to_be_visible()
             await fits("card")
         finally:
             await context.close()
