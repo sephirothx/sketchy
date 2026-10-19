@@ -2230,7 +2230,8 @@ rows on every read. Deleted with the account.
 
 A **projection**: raised in the transaction that ends a free run — the
 points of a finished 5 or 10 run, the drawings named in an unlimited one however it
-ended — and never lowered (R-SOLO-14). Rebuilt from `solo_runs` by:
+ended — and never lowered (R-SOLO-14). A run that scored nothing, or named nothing, is
+no best: a best of 0 only says a run went nowhere. Rebuilt from `solo_runs` by:
 
 ```bash
 cd backend && .venv/bin/python -m app.services.solo_pool --bests
