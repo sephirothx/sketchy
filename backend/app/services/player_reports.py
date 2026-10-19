@@ -402,7 +402,7 @@ async def notice_drawings(
 
 
 async def open_report_id(
-    session: AsyncSession, *, reporter_user_id: UUID, reported_user_id: UUID
+    session: AsyncSession, *, reporter_user_id: UUID, reported_user_id: UUID, via_solo: bool = False
 ) -> UUID | None:
     """The pending report this reporter already holds against this person.
 
@@ -415,6 +415,11 @@ async def open_report_id(
     which is what the partial unique index, keyed on raw ids, cannot see
     either. Both sides are read as whole identity sets: the canonical
     account and every identity merged into it.
+
+    Solo's reports are counted apart from every other door's (`via_solo`):
+    a Solo report names a drawer the reporter never saw, so one open there
+    must not turn a report from the Gallery or a room into a 409 - that
+    answer would say who drew the Solo drawing (#1494 review).
     """
     reporters = await _identity_set(session, reporter_user_id)
     reported = await _identity_set(session, reported_user_id)
@@ -423,6 +428,7 @@ async def open_report_id(
             PlayerReport.reporter_user_id.in_(reporters),
             PlayerReport.reported_user_id.in_(reported),
             PlayerReport.status == ReportStatus.PENDING.value,
+            PlayerReport.via_solo.is_(via_solo),
         )
     )
 

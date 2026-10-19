@@ -1086,10 +1086,13 @@ carries one and a pending report does not, the same shape as
 UUIDv7, which is what lets the closed-case stream page decisions from an ordered walk of
 the partial index `ix_player_reports_decision_group` rather than aggregating every report
 ever decided to find the newest ones.
-`uq_player_reports_open_target (reporter_user_id, reported_user_id)` is a **partial
-unique index**: one reporter holds **one open report per player**. Saying it again while
-a moderator has yet to look adds no evidence and buries the queue; once decided, the
-same reporter may raise a new one, because that is a new incident.
+`uq_player_reports_open_target (reporter_user_id, reported_user_id, via_solo)` is a
+**partial unique index**: one reporter holds **one open report per player**, Solo's
+counted apart. Saying it again while a moderator has yet to look adds no evidence and
+buries the queue; once decided, the same reporter may raise a new one, because that is a
+new incident. `via_solo` is in the key because a Solo report names a drawer the reporter
+never saw: counted together, an open Solo report would turn a report of the same person
+from the Gallery or a room into a `409`, and so say who drew the Solo drawing (#1494).
 
 Submitted context is preserved as **versioned, reporter-supplied evidence** — it is not
 treated as a server-verified fact merely because it was stored. Review is one-way: a

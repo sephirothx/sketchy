@@ -3888,7 +3888,10 @@ def create_moderation_router(
                     "createdAt": datetime.now(timezone.utc).isoformat(),
                 }
                 already_open = await open_report_id(
-                    session, reporter_user_id=db_reporter_id, reported_user_id=target.id
+                    session,
+                    reporter_user_id=db_reporter_id,
+                    reported_user_id=target.id,
+                    via_solo=door == "solo",
                 )
                 if already_open is not None:
                     if door == "solo":

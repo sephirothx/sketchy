@@ -952,11 +952,15 @@ class PlayerReport(Base):
         # reports carry. Saying it again while a moderator has yet to look
         # adds no evidence and buries the queue; once the report is resolved
         # or dismissed the same reporter may raise a new one, because that is
-        # a new incident rather than the same complaint repeated.
+        # a new incident rather than the same complaint repeated. Solo's
+        # reports are counted apart (`via_solo`): one there must never change
+        # another door's answer, or a 409 there would name an anonymous
+        # drawer (#1494 review).
         Index(
             "uq_player_reports_open_target",
             "reporter_user_id",
             "reported_user_id",
+            "via_solo",
             unique=True,
             postgresql_where=text("status = 'pending'"),
             sqlite_where=text("status = 'pending'"),

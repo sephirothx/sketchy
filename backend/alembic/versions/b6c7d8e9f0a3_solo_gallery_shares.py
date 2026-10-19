@@ -28,6 +28,15 @@ _UUID = sa.Uuid(as_uuid=True, native_uuid=True)
 _HELD = "release_at IS NOT NULL"
 
 
+def _open_target(columns: list[str], *, drop_first: bool = True) -> None:
+    if drop_first:
+        op.drop_index("uq_player_reports_open_target", table_name="player_reports")
+    op.create_index(
+        "uq_player_reports_open_target", "player_reports", columns, unique=True,
+        postgresql_where=sa.text("status = 'pending'"), sqlite_where=sa.text("status = 'pending'"),
+    )
+
+
 def upgrade() -> None:
     # A Solo report is the reporter's on their serve, and the report row is
     # marked so their export leaves it out: its ids would lead to the drawer.
@@ -35,6 +44,9 @@ def upgrade() -> None:
         "player_reports",
         sa.Column("via_solo", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
+    # One open report per reporter and player, counted apart for Solo: a Solo
+    # report must never make another door's report a 409 (#1494 review).
+    _open_target(["reporter_user_id", "reported_user_id", "via_solo"])
     op.add_column("solo_serves", sa.Column("reported_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("solo_serves", sa.Column("report_details", sa.Text(), nullable=True))
     op.create_table(
@@ -67,6 +79,7 @@ def downgrade() -> None:
     with op.batch_alter_table("solo_serves") as batch:
         batch.drop_column("report_details")
         batch.drop_column("reported_at")
+    _open_target(["reporter_user_id", "reported_user_id"], drop_first=True)
     with op.batch_alter_table("player_reports") as batch:
         batch.drop_column("via_solo")
     op.drop_index("ix_solo_gallery_shares_held", table_name="solo_gallery_shares")

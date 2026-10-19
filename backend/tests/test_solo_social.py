@@ -346,6 +346,22 @@ async def test_a_report_from_solo_is_accepted_and_a_second_says_nothing_of_the_d
         assert await session.scalar(select(func.count()).select_from(PlayerReport)) == 1
 
 
+async def test_a_solo_report_never_turns_another_door_s_report_into_a_409(env):
+    """An open Solo report must not make a Gallery report of the same person
+    a 409: reporting a known player's Gallery drawing would then say whether
+    they drew the anonymous one (#1494 review)."""
+    http, users, history, solo, factory = env
+    drawer, stranger, turn, serve = await _served(http, users, history, factory)
+    shared = await http.put(f"/api/solo/serves/{serve['serveId']}/share")
+    assert shared.status_code == 200 and shared.json()["inGallery"] is True, shared.text
+    assert (await http.post(f"/api/solo/serves/{serve['serveId']}/report", json={})).status_code == 201
+    gallery = await http.post(f"/api/gallery/{turn.turn_id}/report", json={})
+    assert gallery.status_code == 201, gallery.text
+    # The Gallery's own one-open-report rule still holds.
+    again = await http.post(f"/api/gallery/{turn.turn_id}/report", json={})
+    assert again.status_code == 409
+
+
 async def test_the_reaction_write_s_solo_door_asks_for_a_settled_serve_itself(env):
     # The route resolves the serve first; the write must not trust that it did.
     http, users, history, solo, factory = env
