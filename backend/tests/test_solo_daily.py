@@ -397,11 +397,10 @@ async def test_bests_only_go_up_and_rebuild_from_the_runs(env):
     assert await bests() == {"5": 1500, "unlimited": 3}
     summary = await solo.summary(stranger.id, DAY, now=NOON)
     assert summary["bests"] == {"5": 1500, "unlimited": 3}
-    # One a length, in the page's order, each with what it has come to.
+    # One a length, each with what it has come to; the 10 and the unlimited
+    # just started have served nothing yet, so there is nothing to continue.
     assert [(run["length"], run["outcomes"]) for run in summary["activeRuns"]] == [
         (5, ["solved", "solved"]),
-        (10, []),
-        (None, []),
     ]
 
 
@@ -740,3 +739,19 @@ async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
         "/api/solo/daily/month", params={"today": today.isoformat(), "month": today.isoformat()[:7]}
     )
     assert answered.status_code == 200 and len(answered.json()["days"]) == today.day
+
+
+async def test_a_run_that_went_nowhere_is_no_best_and_nothing_to_continue(env):
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 3, guessers=1)
+    stranger = await player(users, factory, "Stranger")
+    # An Endless run that missed its first drawing names nothing.
+    run = await solo.start_free_run(stranger.id, length=None, now=NOON)
+    [serve] = await solo.serve_next(stranger.id, run.run_id, count=1, now=NOON)
+    await solo.settle(stranger.id, serve.serve_id, outcome="given_up", seconds=3, now=NOON)
+    # A Quick run started and never served a drawing.
+    await solo.start_free_run(stranger.id, length=5, now=NOON)
+    summary = await solo.summary(stranger.id, DAY, now=NOON)
+    assert summary["bests"] == {} and summary["activeRuns"] == []
+    async with factory() as session:
+        assert (await session.scalars(select(SoloBest))).all() == []

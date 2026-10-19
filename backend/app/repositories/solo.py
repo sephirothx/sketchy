@@ -456,12 +456,14 @@ def _length_key(length: int | None) -> str:
 def run_best(run: SoloRun) -> int | None:
     """What a free run counts for, or None if it counts for nothing: points
     for a 5 or 10 run that was finished, drawings named for an unlimited one
-    however it ended (#1434)."""
+    however it ended (#1434). Nothing named, nothing scored, is no best: a
+    best of 0 is only a run that went nowhere."""
     if run.mode != "free" or run.state != "ended":
         return None
-    if run.length is None:
-        return run.solved
-    return run.points if run.end_reason == "completed" else None
+    value = run.solved if run.length is None else (
+        run.points if run.end_reason == "completed" else None
+    )
+    return value or None
 
 
 async def _raise_best(session: AsyncSession, run: SoloRun, *, now: datetime) -> None:
@@ -1285,10 +1287,15 @@ class SoloRepository:
             bests = (
                 await session.scalars(select(SoloBest).where(SoloBest.user_id == player))
             ).all()
+            # A run that has served nothing is one the page is about to serve,
+            # or one the pool had nothing for: either way nothing to continue.
             active = (
                 await session.scalars(
                     select(SoloRun).where(
-                        SoloRun.user_id == player, SoloRun.mode == "free", SoloRun.state == "active"
+                        SoloRun.user_id == player,
+                        SoloRun.mode == "free",
+                        SoloRun.state == "active",
+                        SoloRun.position > 0,
                     )
                 )
             ).all()
@@ -1341,7 +1348,7 @@ class SoloRepository:
                 }
                 for run in sorted(active, key=lambda run: (run.length is None, run.length or 0))
             ],
-            "bests": {best.length_key: best.best for best in bests},
+            "bests": {best.length_key: best.best for best in bests if best.best > 0},
             "streak": daily_streak(started, today, skipped=skipped),
             "stats": {
                 "dailiesPlayed": played[0],
