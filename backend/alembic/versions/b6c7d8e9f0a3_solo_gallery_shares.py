@@ -75,7 +75,30 @@ def upgrade() -> None:
     )
 
 
+# A reporter's open Solo report and open report from another door about the
+# same player: allowed here, not before.
+_TWIN_REPORTS = """
+SELECT count(*) FROM player_reports AS solo
+JOIN player_reports AS other
+  ON other.reporter_user_id = solo.reporter_user_id
+ AND other.reported_user_id = solo.reported_user_id
+WHERE solo.via_solo AND NOT other.via_solo
+  AND solo.status = 'pending' AND other.status = 'pending'
+"""
+
+
 def downgrade() -> None:
+    # The older index holds one open report per reporter and player. Closing
+    # one of a pair here would be a moderation decision nobody made, and
+    # deleting it would lose its evidence: refuse, before anything changes,
+    # until a moderator has decided one of each pair (#1494 review).
+    twins = op.get_bind().execute(sa.text(_TWIN_REPORTS)).scalar()
+    if twins:
+        raise RuntimeError(
+            f"{twins} reporter/player pair(s) hold an open Solo report and another open "
+            "report. The schema before this revision allows one open report per pair; "
+            "decide one report of each pair, then downgrade again."
+        )
     with op.batch_alter_table("solo_serves") as batch:
         batch.drop_column("report_details")
         batch.drop_column("reported_at")

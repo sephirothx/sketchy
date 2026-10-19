@@ -1092,7 +1092,9 @@ counted apart. Saying it again while a moderator has yet to look adds no evidenc
 buries the queue; once decided, the same reporter may raise a new one, because that is a
 new incident. `via_solo` is in the key because a Solo report names a drawer the reporter
 never saw: counted together, an open Solo report would turn a report of the same person
-from the Gallery or a room into a `409`, and so say who drew the Solo drawing (#1494).
+from the Gallery or a room into a `409`, and so say who drew the Solo drawing (#1494). Downgrading past
+`b6c7d8e9f0a3` refuses while any pair holds both an open Solo report and another: the
+older index allows one, and closing either would be a moderation decision nobody made.
 
 Submitted context is preserved as **versioned, reporter-supplied evidence** — it is not
 treated as a server-verified fact merely because it was stored. Review is one-way: a
