@@ -344,6 +344,11 @@ async def test_a_player_the_pool_has_nothing_for_is_told_so(env):
     refused = await http.post(f"/api/solo/runs/{run['runId']}/serves")
     assert refused.status_code == 409
     assert refused.json()["errorCode"] == "solo_pool_empty"
+    # Nothing was ever served: the run ends rather than wait in its row as
+    # one in progress, and records nothing.
+    async with factory() as session:
+        ended = await session.get(SoloRun, UUID(run["runId"]))
+    assert (ended.state, ended.end_reason, ended.position) == ("abandoned", "abandoned", 0)
 
 
 async def test_the_forms_are_the_player_s_languages_with_aliases_and_false_friends_out(env):

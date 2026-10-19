@@ -507,7 +507,11 @@ class SoloRepository:
     ) -> list[ServeView]:
         """Serve up to `count` more drawings in a free run, so the client can
         hold one ahead: never more than `MAX_OPEN_SERVES` unsettled, never
-        past a finite run's length."""
+        past a finite run's length.
+
+        A run with nothing to serve from its very first drawing ends there,
+        recording nothing: left active it would sit in its length's row as a
+        run in progress the player never saw a drawing of."""
         async with self._session_factory() as session:
             async with session.begin():
                 ids = await identity_ids(session, UUID(user_id))
@@ -546,8 +550,13 @@ class SoloRepository:
                     await session.flush()
                     served.append(_serve_view(serve))
                 if not served and room > 0:
-                    raise SoloRefused("empty")
-                return served
+                    if run.position > 0:
+                        raise SoloRefused("empty")
+                    run.state, run.end_reason, run.ended_at = "abandoned", "abandoned", now
+                else:
+                    return served
+        # Committed first: the run ends, and then the player is told why.
+        raise SoloRefused("empty")
 
     async def _pick(
         self,

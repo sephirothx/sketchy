@@ -2427,7 +2427,7 @@ reports what the drawing came to. Registered accounts only: no session is
 the `X-Sketchy-Account-Required` header. A run that is not the caller's is
 `404 no_such_solo_run`; every refusal about a serve is `404 no_such_drawing`, as on every
 drawing door. A state that moved on — a serve settled already or out of order, a run that
-ended — is `409 solo_conflict`; a player the pool has nothing for is `409 solo_pool_empty`.
+ended — is `409 solo_conflict`; a player the pool has nothing for is `409 solo_pool_empty` — and a free run that gets that for its very first drawing is ended (`abandoned`, recording nothing), so it never waits in its length's row as one in progress.
 Budgets are per **account** and process-local: starting a run 30 a minute; serving,
 reporting and reading runs 120, one bucket; drawing bytes 240 (`429 too_many_requests`).
 
