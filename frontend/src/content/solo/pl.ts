@@ -28,6 +28,12 @@ export const SOLO_PL: SoloCopy = {
     startNamed: (p: { name: string }) => `${p.name}: zacznij`,
     startOver: "Zacznij od nowa",
     startOverNamed: (p: { name: string }) => `${p.name}: zacznij od nowa`,
+    startOverTitle: (p: { name: string }) => `${p.name}: zacząć od nowa?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `Trwająca gra kończy się tutaj i nic z niej nie zostaje: ${number(p.played)} z ${number(p.length)}, ${counted(p.points, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `Trwająca gra kończy się tutaj, na ${number(p.count)} z rzędu. To nadal liczy się do twojego rekordu.`,
+    startOverEndlessNothing: "Trwająca gra kończy się tutaj, nie odgadnięto jeszcze żadnego rysunku.",
     continueRun: "Kontynuuj",
     continueNamed: (p: { name: string }) => `${p.name}: kontynuuj`,
     runProgress: (p: { played: number; length: number; points: number }) =>

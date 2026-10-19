@@ -28,6 +28,12 @@ export const SOLO_ES: SoloCopy = {
     startNamed: (p: { name: string }) => `${p.name}: empezar`,
     startOver: "Empezar de nuevo",
     startOverNamed: (p: { name: string }) => `${p.name}: empezar de nuevo`,
+    startOverTitle: (p: { name: string }) => `${p.name}: ¿empezar de nuevo?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `La partida en curso termina aquí y no se guarda nada: ${number(p.played)} de ${number(p.length)} jugados, ${counted(p.points, { one: "punto", other: "puntos" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `La partida en curso termina aquí, con ${number(p.count)} ${plural(p.count, { one: "seguido", other: "seguidos" })}, y eso sigue contando para tu récord.`,
+    startOverEndlessNothing: "La partida en curso termina aquí, sin ningún acierto todavía.",
     continueRun: "Continuar",
     continueNamed: (p: { name: string }) => `${p.name}: continuar`,
     runProgress: (p: { played: number; length: number; points: number }) =>

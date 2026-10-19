@@ -28,6 +28,12 @@ export const SOLO_DE: SoloCopy = {
     startNamed: (p: { name: string }) => `${p.name}: starten`,
     startOver: "Neu starten",
     startOverNamed: (p: { name: string }) => `${p.name}: neu starten`,
+    startOverTitle: (p: { name: string }) => `${p.name}: neu starten?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `Der laufende Durchgang endet hier, und nichts davon bleibt: ${number(p.played)} von ${number(p.length)} gespielt, ${counted(p.points, { one: "Punkt", other: "Punkte" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `Der laufende Durchgang endet hier bei ${number(p.count)} in Folge. Das zählt trotzdem für deinen Bestwert.`,
+    startOverEndlessNothing: "Der laufende Durchgang endet hier, bisher ist noch nichts erraten.",
     continueRun: "Weiter",
     continueNamed: (p: { name: string }) => `${p.name}: weiter`,
     runProgress: (p: { played: number; length: number; points: number }) =>

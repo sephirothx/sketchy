@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthDialog } from "../components/AccountMenu";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AppHeader } from "../components/AppHeader";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
 import { ReplayCanvas } from "../components/ReplayCanvas";
@@ -527,6 +528,10 @@ function FreeRunRow({
   onContinue: (runId: string) => void;
 }) {
   const key = lengthKey(length);
+  // Starting over ends the run in play: a 5 or 10 counts for nothing, so it
+  // is asked first rather than lost to a tap beside Continue. Asked about
+  // one run: if that run goes meanwhile, so does the question.
+  const [confirmingRun, setConfirmingRun] = useState<string | null>(null);
   return (
     <div className={`solo-run${run ? " has-run" : ""}`} data-testid={`solo-run-${key}`}>
       <span className="solo-run-glyph" aria-hidden="true">
@@ -565,7 +570,7 @@ function FreeRunRow({
               title={words().startOver}
               data-testid={`solo-restart-${key}`}
               disabled={disabled}
-              onClick={onStart}
+              onClick={() => setConfirmingRun(run.runId)}
             >
               <UndoIcon size={18} />
             </button>
@@ -593,6 +598,27 @@ function FreeRunRow({
           </button>
         )}
       </div>
+      {run && confirmingRun === run.runId && (
+        <ConfirmationDialog
+          title={words().startOverTitle({ name: lengthName(length) })}
+          description={
+            length === null
+              ? run.solved > 0
+                ? words().startOverEndless({ count: run.solved })
+                : words().startOverEndlessNothing
+              : words().startOverFinite({ played: run.outcomes.length, length, points: run.points })
+          }
+          confirmLabel={words().startOver}
+          // An Endless run keeps what it reached as a result; a 5 or 10
+          // loses everything it came to.
+          tone={length === null ? "primary" : "danger"}
+          onCancel={() => setConfirmingRun(null)}
+          onConfirm={() => {
+            setConfirmingRun(null);
+            onStart();
+          }}
+        />
+      )}
     </div>
   );
 }

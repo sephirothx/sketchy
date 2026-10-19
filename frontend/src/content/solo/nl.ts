@@ -28,6 +28,12 @@ export const SOLO_NL: SoloCopy = {
     startNamed: (p: { name: string }) => `${p.name}: starten`,
     startOver: "Opnieuw beginnen",
     startOverNamed: (p: { name: string }) => `${p.name}: opnieuw beginnen`,
+    startOverTitle: (p: { name: string }) => `${p.name}: opnieuw beginnen?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `Het lopende spel stopt hier en er blijft niets van over: ${number(p.played)} van ${number(p.length)} gespeeld, ${counted(p.points, { one: "punt", other: "punten" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `Het lopende spel stopt hier bij ${number(p.count)} op rij. Dat telt nog steeds mee voor je record.`,
+    startOverEndlessNothing: "Het lopende spel stopt hier, er is nog niets geraden.",
     continueRun: "Verder",
     continueNamed: (p: { name: string }) => `${p.name}: verder`,
     runProgress: (p: { played: number; length: number; points: number }) =>

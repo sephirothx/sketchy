@@ -28,6 +28,12 @@ export const SOLO_PT: SoloCopy = {
     startNamed: (p: { name: string }) => `${p.name}: começar`,
     startOver: "Recomeçar",
     startOverNamed: (p: { name: string }) => `${p.name}: recomeçar`,
+    startOverTitle: (p: { name: string }) => `${p.name}: recomeçar?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `A partida em curso acaba aqui e não fica nada: ${number(p.played)} de ${number(p.length)} jogados, ${counted(p.points, { one: "ponto", other: "pontos" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `A partida em curso acaba aqui, com ${number(p.count)} ${plural(p.count, { one: "seguido", other: "seguidos" })}, e isso continua a contar para o teu recorde.`,
+    startOverEndlessNothing: "A partida em curso acaba aqui, ainda sem nenhum acerto.",
     continueRun: "Continuar",
     continueNamed: (p: { name: string }) => `${p.name}: continuar`,
     runProgress: (p: { played: number; length: number; points: number }) =>

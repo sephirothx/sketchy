@@ -230,6 +230,10 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await page.reload()
             await expect(page.get_by_test_id("solo-run-progress-5")).to_contain_text("1/5")
             await expect(page.get_by_test_id("solo-free-10")).to_be_visible()
+            # Start over asks first, and Cancel keeps the run.
+            await page.get_by_test_id("solo-restart-5").click()
+            await page.get_by_role("alertdialog").get_by_role("button", name="Cancel").click()
+            await expect(page.get_by_test_id("solo-run-progress-5")).to_contain_text("1/5")
             await page.get_by_test_id("solo-continue-5").click()
             await expect(page.get_by_text("Drawing 2 of 5")).to_be_visible()
             for _ in range(4):

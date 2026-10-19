@@ -32,6 +32,12 @@ export const SOLO_EN = {
     startNamed: (p: { name: string }) => `Start ${p.name}`,
     startOver: "Start over",
     startOverNamed: (p: { name: string }) => `Start ${p.name} over`,
+    startOverTitle: (p: { name: string }) => `${p.name}: start over?`,
+    startOverFinite: (p: { played: number; length: number; points: number }) =>
+      `The run in play ends here and keeps nothing: ${number(p.played)} of ${number(p.length)} played, ${counted(p.points, { one: "point", other: "points" })}.`,
+    startOverEndless: (p: { count: number }) =>
+      `The run in play ends here, at ${number(p.count)} in a row. That still counts toward your best.`,
+    startOverEndlessNothing: "The run in play ends here, with nothing named yet.",
     continueRun: "Continue",
     continueNamed: (p: { name: string }) => `Continue ${p.name}`,
     runProgress: (p: { played: number; length: number; points: number }) =>
