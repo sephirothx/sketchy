@@ -674,8 +674,11 @@ DAILY_PICK_LOCK_ID = int.from_bytes(b"SOLODAY", "big")
 
 
 async def _lock_daily_picks(session: AsyncSession) -> None:
-    """Serialize choosing Daily drawings across every date, until commit.
-    SQLite has one writer already, and is a test database (#1493 review)."""
+    """Serialize choosing Daily drawings across every date, until commit, on
+    PostgreSQL. SQLite deliberately has no equivalent: it is the development
+    and test database, and in WAL mode taking its write lock after the
+    transaction has read fails instead of waiting - a fix there would trade
+    a repeated concept for an error (#1493 review, R-SOLO-11)."""
     if session.get_bind().dialect.name == "postgresql":
         await session.execute(
             sql_text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": DAILY_PICK_LOCK_ID}

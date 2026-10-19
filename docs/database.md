@@ -2197,7 +2197,10 @@ from being served the same drawing twice.
 The Daily (#1434, R-SOLO-11): the same five drawings for everybody, kept **forever** for the
 archive (#1470). Every pick and replacement first takes one transaction-scoped advisory lock
 (`DAILY_PICK_LOCK_ID`, PostgreSQL), so two dates open at once — today and tomorrow both are at
-noon UTC — never read the same unused concepts before either commits (#1493 review). Then the
+noon UTC — never read the same unused concepts before either commits (#1493 review). SQLite
+has no such lock, deliberately: it is the development and test database, it runs in WAL mode
+where taking its write lock after a transaction has read fails rather than waits, and the
+60-day rule is a guarantee of the deployment, which is PostgreSQL. Then the
 day row is what two first requests for one date race for: the one that inserts it
 (`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other reads. A day too thin is stored as `skipped`; while it is still open somewhere it is looked at again, under the same locks, once `SKIPPED_RETRY` (5 min) has passed since `picked_at` — nobody can have played it, and a date first asked for before its games finished would otherwise have no Daily for good. Once it has ended everywhere it stays skipped. A drawing that stops being
 playable for everybody is replaced for everybody (R-SOLO-13) under the day row's lock —
