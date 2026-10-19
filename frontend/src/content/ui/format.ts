@@ -31,6 +31,13 @@ export type Formatters = {
   counted: (count: number, forms: PluralForms) => string;
 };
 
+/** The locale Intl is asked for, for an interface language: Portuguese here
+    is Portugal's, and bare "pt" is Brazil to Intl - its plural rules count 0
+    as one ("0 ponto") and its numbers group differently. */
+export function intlLocale(locale: string): string {
+  return locale === "pt" ? "pt-PT" : locale;
+}
+
 /** The formatters for one locale, built once per catalogue module.
 
 `ordinalSuffixes` is per language and is the locale's own business: English
@@ -41,9 +48,7 @@ export function formattersFor(
   locale: string,
   ordinalSuffixes: Partial<Record<Intl.LDMLPluralRule, string>> = {},
 ): Formatters {
-  // Portuguese here is Portugal's: bare "pt" is Brazil to Intl, whose plural
-  // rules count 0 as one ("0 ponto") where Portugal says "0 pontos".
-  const tag = locale === "pt" ? "pt-PT" : locale;
+  const tag = intlLocale(locale);
   const rules = new Intl.PluralRules(tag);
   const ordinals = new Intl.PluralRules(tag, { type: "ordinal" });
   const numbers = new Intl.NumberFormat(tag);

@@ -19,6 +19,7 @@ import {
 } from "../components/icons";
 import { EmptyState } from "../components/ui/EmptyState";
 import { soloCopyFor } from "../content/solo/index.ts";
+import { intlLocale } from "../content/ui/format.ts";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { ApiError } from "../lib/api";
@@ -94,7 +95,11 @@ export function SoloPage() {
 
   const [summary, setSummary] = useState<SoloSummary | null>(null);
   const [run, setRun] = useState<SoloRun | null>(null);
+  // Why the last thing the player tried did not happen - cleared by their
+  // next action - apart from why the page itself could not load, which the
+  // next load that works clears.
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // The drawing just settled, shown until Next: what it was, how long it
   // took, and what the player can do with it now.
@@ -117,12 +122,12 @@ export function SoloPage() {
 
   const loadSummary = useCallback(async () => {
     try {
-      // The error stays: it says why the last thing the player tried did
-      // not happen, and a refreshed page does not answer that. Their next
-      // action clears it.
+      // An action's error stays: a refreshed page does not answer why it
+      // did not happen. Their next action clears it.
       setSummary(await fetchSoloSummary(localDateKey()));
+      setLoadError(null);
     } catch (failure) {
-      setError(refusalText(failure, words().couldNotLoad));
+      setLoadError(refusalText(failure, words().couldNotLoad));
     }
   }, []);
 
@@ -131,10 +136,12 @@ export function SoloPage() {
     let cancelled = false;
     fetchSoloSummary(today)
       .then((loaded) => {
-        if (!cancelled) setSummary(loaded);
+        if (cancelled) return;
+        setSummary(loaded);
+        setLoadError(null);
       })
       .catch((failure) => {
-        if (!cancelled) setError(refusalText(failure, words().couldNotLoad));
+        if (!cancelled) setLoadError(refusalText(failure, words().couldNotLoad));
       });
     return () => {
       cancelled = true;
@@ -348,7 +355,7 @@ export function SoloPage() {
         <SoloHome
           summary={summary}
           today={today}
-          error={error}
+          error={error ?? loadError}
           busy={busy}
           onDaily={() => void begin(() => openDaily(today))}
           onFree={(length) => void begin(() => startFreeRun(length))}
@@ -413,7 +420,7 @@ function SoloHome({
         </div>
         <SoloCalendar
           today={today}
-          todayHasDaily={summary !== null && summary.today.state !== "unavailable"}
+          todayHasDaily={summary === null ? null : summary.today.state !== "unavailable"}
           stats={summary?.stats ?? null}
         />
       </div>
@@ -612,7 +619,7 @@ function RunStrip({ run }: { run: SoloActiveRun }) {
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat(interfaceLocale()).format(value);
+  return new Intl.NumberFormat(intlLocale(interfaceLocale())).format(value);
 }
 
 /** The first day of the week for the interface's language, 1 Monday to 7
@@ -648,8 +655,8 @@ function SoloCalendar({
 }: {
   today: string;
   /** From the summary, which picks today's Daily: the month may not know of
-      it yet, before anybody has opened it. */
-  todayHasDaily: boolean;
+      it yet, before anybody has opened it. Null until the summary is here. */
+  todayHasDaily: boolean | null;
   stats: SoloDailyStats | null;
 }) {
   // The month looked at, for the today it was picked on: a new day can be a
@@ -674,7 +681,9 @@ function SoloCalendar({
     };
   }, [today, month]);
 
-  const locale = interfaceLocale();
+  // Intl's locale for the interface's language: Portugal's Portuguese, so
+  // its numbers read as the page's words do.
+  const locale = intlLocale(interfaceLocale());
   const [year, monthNumber] = month.split("-").map(Number);
   const first = new Date(year, monthNumber - 1, 1);
   const monthName = new Intl.DateTimeFormat(locale, {
@@ -683,8 +692,8 @@ function SoloCalendar({
   }).format(first);
   // The month's own first letter only: "diciembre de 2025", not "De".
   const title = monthName.charAt(0).toLocaleUpperCase(locale) + monthName.slice(1);
-  // The week starts where the interface's language starts it - Sunday in
-  // American English, Monday in the other seven - where the browser says.
+  // The week starts where the interface's language starts it: Sunday in
+  // American English, Monday in the other seven (`weekStart`).
   const start = weekStart(locale);
   const weekdays = Array.from({ length: 7 }, (_, index) =>
     new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2024, 0, start + index)),
@@ -794,7 +803,7 @@ function calendarLook(
   day: SoloCalendarDay | undefined,
   today: string,
   earliest: string | null,
-  todayHasDaily: boolean,
+  todayHasDaily: boolean | null,
 ): CalendarLook {
   if (date > today) return "future";
   const result = day?.result ?? null;
@@ -802,7 +811,7 @@ function calendarLook(
     const solved = result.solved;
     return solved === 0 ? "named-0" : solved <= 2 ? "named-1" : solved <= 4 ? "named-2" : "named-3";
   }
-  if (date === today) return todayHasDaily ? "open" : "none";
+  if (date === today) return (todayHasDaily ?? Boolean(day?.daily)) ? "open" : "none";
   // Only a Daily there was, after the player's first: before it, Solo was
   // not theirs yet, and a missed day would be no news.
   if (day?.daily && earliest !== null && date > earliest) return "missed";
