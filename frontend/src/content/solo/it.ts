@@ -29,6 +29,7 @@ export const SOLO_IT: SoloCopy = {
     startOver: "Ricomincia",
     startOverNamed: (p: { name: string }) => `${p.name}: ricomincia`,
     continueRun: "Continua",
+    continueNamed: (p: { name: string }) => `${p.name}: continua`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punto", other: "punti" })}`,
     supporterPreview: "Infinita e le sfide del giorno passate diventeranno vantaggi per chi sostiene Sketchy. Fino ad allora sono aperte a tutti.",
@@ -40,6 +41,8 @@ export const SOLO_IT: SoloCopy = {
     legendMore: "di più",
     legendMissed: "giorno saltato",
     noDaily: "Nessuna Sfida del giorno",
+    stillToCome: "Ancora da venire",
+    toPlayToday: "Sfida del giorno, da giocare",
     calendarDay: (p: { date: string; status: string }) => `${p.date}: ${p.status}`,
     dailiesPlayed: "Sfide giocate",
     namedShare: "indovinati",

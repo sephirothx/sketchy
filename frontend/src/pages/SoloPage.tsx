@@ -144,6 +144,12 @@ export function SoloPage() {
     setBusy(true);
     try {
       let next = await action();
+      if (next.state !== "active" && next.mode === "free") {
+        // Ended elsewhere since the page last looked - finished, or started
+        // over in another tab: its row was stale, and the page catches up.
+        void loadSummary();
+        return;
+      }
       if (next.mode === "free" && !next.serves.some((serve) => serve.outcome === null)) {
         const served = await serveNext(next.runId, 2);
         next = { ...next, serves: [...next.serves, ...served] };
@@ -153,6 +159,9 @@ export function SoloPage() {
       setRun(next);
     } catch (failure) {
       setError(refusalText(failure, words().couldNotLoad));
+      // What was offered may have changed under it: a run ended by Start
+      // over before the pool turned out empty, say.
+      void loadSummary();
     } finally {
       setBusy(false);
     }
@@ -177,6 +186,7 @@ export function SoloPage() {
         // tab - and this drawing went with it: what the run came to is all
         // there is to show.
         forgetServeStart(serve.serveId);
+        setPreviousBest(summary?.bests[lengthKey(fresh.length as SoloLength)]);
         setCard(null);
         setSummaryOf(fresh);
         setRun(null);
@@ -548,6 +558,7 @@ function FreeRunRow({
             <button
               type="button"
               className="btn btn-primary solo-run-main"
+              aria-label={words().continueNamed({ name: lengthName(length) })}
               data-testid={`solo-continue-${key}`}
               disabled={disabled}
               onClick={() => onContinue(run.runId)}
@@ -597,6 +608,21 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat(interfaceLocale()).format(value);
 }
 
+/** The first day of the week for `locale`, 1 Monday to 7 Sunday: the
+    browser's week info where it has it, Monday where it has not. 2024-01-01
+    was a Monday, so `new Date(2024, 0, start)` is that weekday. */
+function weekStart(locale: string): number {
+  try {
+    const info = new Intl.Locale(locale) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay: number };
+      weekInfo?: { firstDay: number };
+    };
+    return info.getWeekInfo?.().firstDay ?? info.weekInfo?.firstDay ?? 1;
+  } catch {
+    return 1;
+  }
+}
+
 /** `YYYY-MM` of a `YYYY-MM-DD`. */
 function monthOf(date: string): string {
   return date.slice(0, 7);
@@ -639,15 +665,19 @@ function SoloCalendar({ today, stats }: { today: string; stats: SoloDailyStats |
   const locale = interfaceLocale();
   const [year, monthNumber] = month.split("-").map(Number);
   const first = new Date(year, monthNumber - 1, 1);
-  const title = new Intl.DateTimeFormat(locale, {
+  const monthName = new Intl.DateTimeFormat(locale, {
     month: "long",
     ...(year === Number(today.slice(0, 4)) ? {} : { year: "numeric" }),
   }).format(first);
-  // Monday first: the week the interface's eight languages start on.
+  // The month's own first letter only: "diciembre de 2025", not "De".
+  const title = monthName.charAt(0).toLocaleUpperCase(locale) + monthName.slice(1);
+  // The week starts where the interface's language starts it - Sunday in
+  // American English, Monday in the other seven - where the browser says.
+  const start = weekStart(locale);
   const weekdays = Array.from({ length: 7 }, (_, index) =>
-    new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2024, 0, 1 + index)),
+    new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2024, 0, start + index)),
   );
-  const lead = (first.getDay() + 6) % 7;
+  const lead = (first.getDay() - (start % 7) + 7) % 7;
   const daysIn = new Date(year, monthNumber, 0).getDate();
   const shown = loaded?.month === month ? loaded : null;
   const byDate = new Map((shown?.days ?? []).map((day) => [day.date, day]));
@@ -759,7 +789,7 @@ function calendarLook(
     const solved = result.solved;
     return solved === 0 ? "named-0" : solved <= 2 ? "named-1" : solved <= 4 ? "named-2" : "named-3";
   }
-  if (date === today) return "open";
+  if (date === today) return day?.daily ? "open" : "none";
   // Only a Daily there was, after the player's first: before it, Solo was
   // not theirs yet, and a missed day would be no news.
   if (day?.daily && earliest !== null && date > earliest) return "missed";
@@ -768,7 +798,8 @@ function calendarLook(
 
 function calendarStatus(look: CalendarLook, day: SoloCalendarDay | undefined): string {
   if (day?.result) return words().youNamed({ solved: day.result.solved, total: 5 });
-  return look === "missed" ? words().legendMissed : look === "open" ? words().daily : words().noDaily;
+  if (look === "future") return words().stillToCome;
+  return look === "missed" ? words().legendMissed : look === "open" ? words().toPlayToday : words().noDaily;
 }
 
 /** A run's name, as its rows and its drawings are headed: the Daily, or the
@@ -1145,6 +1176,7 @@ function SoloCard({
   }, []);
   const { notify } = useToast();
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(drawing);
+  const [unloadable, setUnloadable] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [mine, setMine] = useState<string | null>(null);
   const [share, setShare] = useState<SoloShare | null>(null);
@@ -1157,9 +1189,16 @@ function SoloCard({
     let cancelled = false;
     void fetchSoloDrawing(serve.serveId)
       .then((bytes) => {
-        if (!cancelled) setActions(decodeCanvasHistory(bytes));
+        if (cancelled) return;
+        const decoded = decodeCanvasHistory(bytes);
+        if (decoded) setActions(decoded);
+        else setUnloadable(true);
       })
-      .catch(() => undefined);
+      // Gone for everybody since (R-SOLO-13), or not to be had now: said,
+      // rather than an empty frame.
+      .catch(() => {
+        if (!cancelled) setUnloadable(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -1187,6 +1226,10 @@ function SoloCard({
               durationSeconds={SOLO_REPLAY_SECONDS}
               label={serve.prompt ?? ui.solo.solo}
             />
+          ) : unloadable ? (
+            <div className="solo-canvas-failed">
+              <p className="solo-note">{words().couldNotLoadDrawing}</p>
+            </div>
           ) : (
             <div className="solo-canvas-skeleton" />
           )}
@@ -1200,7 +1243,8 @@ function SoloCard({
               {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
             </span>
             <h1 className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</h1>
-            <span className="solo-verdict-detail">
+            {/* A miss's detail is its verdict again: said once. */}
+            <span className="solo-verdict-detail" aria-hidden={solved ? undefined : true}>
               {solved ? (
                 <>
                   <ClockIcon size={15} />

@@ -29,6 +29,7 @@ export const SOLO_FR: SoloCopy = {
     startOver: "Recommencer",
     startOverNamed: (p: { name: string }) => `${p.name} : recommencer`,
     continueRun: "Reprendre",
+    continueNamed: (p: { name: string }) => `${p.name} : reprendre`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "point", other: "points" })}`,
     supporterPreview: "Sans fin et les anciens défis du jour seront bientôt réservés à ceux qui soutiennent Sketchy. D’ici là, ils sont ouverts à tous.",
@@ -40,6 +41,8 @@ export const SOLO_FR: SoloCopy = {
     legendMore: "plus",
     legendMissed: "jour manqué",
     noDaily: "Pas de Défi du jour",
+    stillToCome: "À venir",
+    toPlayToday: "Défi du jour, à jouer",
     calendarDay: (p: { date: string; status: string }) => `${p.date} : ${p.status}`,
     dailiesPlayed: "Défis joués",
     namedShare: "trouvés",

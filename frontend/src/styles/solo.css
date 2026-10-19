@@ -257,10 +257,7 @@
   padding: 20px;
 }
 
-.solo-calendar h2 {
-  font-size: 22px;
-  text-transform: capitalize;
-}
+.solo-calendar h2 { font-size: 22px; }
 
 .solo-calendar-nav {
   display: flex;
@@ -294,7 +291,7 @@
 }
 
 /* Shaded by how many of the five were named; one let pass is dashed. */
-.solo-calendar-day.is-future { color: var(--line-strong); }
+.solo-calendar-day.is-future { color: var(--faint); }
 .solo-calendar-day.is-missed { border: 1px dashed var(--line-strong); }
 .solo-calendar-day.is-named-0 { background: var(--track); color: var(--ink); }
 

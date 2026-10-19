@@ -29,6 +29,7 @@ export const SOLO_PL: SoloCopy = {
     startOver: "Zacznij od nowa",
     startOverNamed: (p: { name: string }) => `${p.name}: zacznij od nowa`,
     continueRun: "Kontynuuj",
+    continueNamed: (p: { name: string }) => `${p.name}: kontynuuj`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
     supporterPreview: "Bez końca i dawne wyzwania dnia staną się dodatkami dla osób wspierających Sketchy. Do tego czasu są dostępne dla wszystkich.",
@@ -40,6 +41,8 @@ export const SOLO_PL: SoloCopy = {
     legendMore: "więcej",
     legendMissed: "opuszczony dzień",
     noDaily: "Brak Wyzwania dnia",
+    stillToCome: "Jeszcze przed nami",
+    toPlayToday: "Dzisiejsze Wyzwanie dnia, do zagrania",
     calendarDay: (p: { date: string; status: string }) => `${p.date}: ${p.status}`,
     dailiesPlayed: "Rozegrane wyzwania",
     namedShare: "odgadnięte",

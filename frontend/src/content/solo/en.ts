@@ -33,6 +33,7 @@ export const SOLO_EN = {
     startOver: "Start over",
     startOverNamed: (p: { name: string }) => `Start ${p.name} over`,
     continueRun: "Continue",
+    continueNamed: (p: { name: string }) => `Continue ${p.name}`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "point", other: "points" })}`,
     supporterPreview: "Endless and past Dailies are going to be supporter perks. Until then they are open to everybody.",
@@ -44,6 +45,8 @@ export const SOLO_EN = {
     legendMore: "more",
     legendMissed: "missed day",
     noDaily: "No Daily",
+    stillToCome: "Still to come",
+    toPlayToday: "Today's Daily, to play",
     calendarDay: (p: { date: string; status: string }) => `${p.date}: ${p.status}`,
     dailiesPlayed: "Dailies played",
     namedShare: "named",

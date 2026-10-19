@@ -29,6 +29,7 @@ export const SOLO_DE: SoloCopy = {
     startOver: "Neu starten",
     startOverNamed: (p: { name: string }) => `${p.name}: neu starten`,
     continueRun: "Weiter",
+    continueNamed: (p: { name: string }) => `${p.name}: weiter`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "Punkt", other: "Punkte" })}`,
     supporterPreview: "Endlos und frühere Tagesrätsel werden bald Vorteile für Unterstützende. Bis dahin stehen sie allen offen.",
@@ -40,6 +41,8 @@ export const SOLO_DE: SoloCopy = {
     legendMore: "mehr",
     legendMissed: "verpasster Tag",
     noDaily: "Kein Tagesrätsel",
+    stillToCome: "Steht noch bevor",
+    toPlayToday: "Heutiges Tagesrätsel, noch zu spielen",
     calendarDay: (p: { date: string; status: string }) => `${p.date}: ${p.status}`,
     dailiesPlayed: "Tagesrätsel gespielt",
     namedShare: "erraten",

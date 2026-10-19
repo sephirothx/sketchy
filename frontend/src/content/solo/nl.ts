@@ -29,6 +29,7 @@ export const SOLO_NL: SoloCopy = {
     startOver: "Opnieuw beginnen",
     startOverNamed: (p: { name: string }) => `${p.name}: opnieuw beginnen`,
     continueRun: "Verder",
+    continueNamed: (p: { name: string }) => `${p.name}: verder`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punt", other: "punten" })}`,
     supporterPreview: "Eindeloos en eerdere dagpuzzels worden straks voordelen voor supporters. Tot dan staan ze voor iedereen open.",
@@ -40,6 +41,8 @@ export const SOLO_NL: SoloCopy = {
     legendMore: "meer",
     legendMissed: "gemiste dag",
     noDaily: "Geen Dagpuzzel",
+    stillToCome: "Nog niet",
+    toPlayToday: "Dagpuzzel van vandaag, nog te spelen",
     calendarDay: (p: { date: string; status: string }) => `${p.date}: ${p.status}`,
     dailiesPlayed: "Dagpuzzels gespeeld",
     namedShare: "geraden",
@@ -70,7 +73,7 @@ export const SOLO_NL: SoloCopy = {
     resultText: (p: { daily: string; date: string; marks: string; points: number }) =>
       `Sketchy ${p.daily} ${p.date}\n${p.marks} ${number(p.points)}`,
     shareHeld: "Gedeeld: hij komt in de galerij zodra de Dagpuzzel van vandaag overal voorbij is.",
-    react: "Reageren",
+    react: "Reageer",
     share: "Delen",
     shared: "Gedeeld",
     reportShort: "Melden",
