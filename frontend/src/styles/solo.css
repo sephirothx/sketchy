@@ -194,7 +194,9 @@
   font-weight: 800;
 }
 
-/* A run's drawings as segments; an Endless run's latest, at a fixed width. */
+/* A run's drawings as segments; an Endless run's latest, 24 px each where
+   there is room and narrower where there is not, so ten never run under the
+   best beside them (#1495 review). */
 .solo-strip {
   display: flex;
   gap: 3px;
@@ -206,7 +208,7 @@
   flex: 1 1 0;
 }
 
-.solo-strip.is-endless .solo-strip-segment { flex: 0 0 24px; }
+.solo-strip.is-endless .solo-strip-segment { flex: 0 1 24px; min-width: 4px; }
 
 .solo-strip-segment.is-solved { background: var(--success); }
 .solo-strip-segment.is-missed { background: var(--danger); }
