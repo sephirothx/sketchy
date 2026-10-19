@@ -516,6 +516,20 @@ class SoloRepository:
             async with session.begin():
                 ids = await identity_ids(session, UUID(user_id))
                 player = ids[0]
+                # Every free run of the player's in play, in one order: their
+                # Quick and Endless served at once would each miss the other's
+                # uncommitted serve and hand out the same drawing as unseen
+                # (R-SOLO-07). One order, so two such serves never deadlock.
+                await session.execute(
+                    select(SoloRun.id)
+                    .where(
+                        SoloRun.user_id == player,
+                        SoloRun.mode == "free",
+                        SoloRun.state == "active",
+                    )
+                    .order_by(SoloRun.id)
+                    .with_for_update()
+                )
                 run = await session.scalar(
                     select(SoloRun).where(SoloRun.id == _uuid(run_id)).with_for_update()
                 )

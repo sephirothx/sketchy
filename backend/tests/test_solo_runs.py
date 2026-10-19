@@ -317,6 +317,50 @@ async def test_starts_at_once_leave_one_run_of_each_length(env):
     assert sorted(active, key=lambda length: length or 99) == [5, 10, None]
 
 
+async def test_two_runs_served_at_once_never_hand_out_one_drawing_twice(env, monkeypatch):
+    """A player's Quick and Endless served at the same moment: each serve
+    must see the other's, or both take the same unseen drawing (R-SOLO-07).
+    PostgreSQL only, where the two transactions overlap."""
+    _http, users, history, factory = env
+    async with factory() as session:
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("concurrent transactions are PostgreSQL's")
+    await _pool_of(users, history, factory, 2)
+    stranger = await player(users, factory, "Stranger")
+    solo, now = SoloRepository(factory), datetime.now(timezone.utc)
+    quick = await solo.start_free_run(stranger.id, length=5, now=now)
+    endless = await solo.start_free_run(stranger.id, length=None, now=now)
+    import app.repositories.solo as solo_module
+
+    # Both walks start at the same point: without serialising, both take the
+    # first drawing by sample key. Each pick waits, briefly, for the other to
+    # reach its pick too: without the lock both read before either writes;
+    # with it the second cannot start until the first commits, and the wait
+    # runs out.
+    monkeypatch.setattr(solo_module.random, "randrange", lambda _space: 0)
+    original, arrived, both = solo_module.SoloRepository._pick, [], asyncio.Event()
+
+    async def pick_together(self, *args, **kwargs):
+        arrived.append(1)
+        if len(arrived) == 2:
+            both.set()
+        try:
+            await asyncio.wait_for(both.wait(), timeout=0.5)
+        except TimeoutError:
+            pass
+        return await original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solo_module.SoloRepository, "_pick", pick_together)
+    served = await asyncio.gather(
+        solo.serve_next(stranger.id, quick.run_id, count=1, now=now),
+        solo.serve_next(stranger.id, endless.run_id, count=1, now=now),
+    )
+    async with factory() as session:
+        turns = (await session.scalars(select(SoloServe.turn_id))).all()
+    assert [len(batch) for batch in served] == [1, 1]
+    assert len(set(turns)) == 2, turns
+
+
 async def test_the_index_holds_one_unlimited_run_too(env):
     # Unlimited is NULL, and a unique index never sees two NULLs clash: the
     # index compares the length as 0 for it, or two Endless runs go on.

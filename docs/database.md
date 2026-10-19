@@ -2148,7 +2148,8 @@ One player's Solo run (#1434). Play is local, so this is what the server keeps o
 `uq_solo_runs_one_active_per_length` — unique on `(user_id, coalesce(length, 0))` where a
 free run is active — holds a player to one free run in play of each length: starting one
 abandons the one of its length (a 5 or 10 run as `abandoned`, recording nothing; an
-unlimited one as `ended` at its streak), and two starts of a length at once meet the
+unlimited one as `ended` at its streak) — and a run whose very first serve finds nothing
+is ended there as `abandoned` too, so it never waits as one in progress — and two starts of a length at once meet the
 index and the loser retries. The `coalesce` is there because unlimited is NULL and a
 unique index never sees two NULLs clash. `ix_solo_runs_user_mode` serves the active-run
 reads. Deleted with the account (explicitly: the `users` row stays as a
