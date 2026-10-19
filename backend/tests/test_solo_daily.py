@@ -755,3 +755,26 @@ async def test_a_run_that_went_nowhere_is_no_best_and_nothing_to_continue(env):
     assert summary["bests"] == {} and summary["activeRuns"] == []
     async with factory() as session:
         assert (await session.scalars(select(SoloBest))).all() == []
+
+
+async def test_a_due_retry_is_picked_before_a_free_run_serves(env):
+    """Every open date stored as skipped, five candidates arrive, the retry
+    falls due: a free run must not serve one of the five before the retry
+    picks them as a Daily, or it hands out that Daily's answer (#1493 review)."""
+    http, users, history, solo, factory = env
+    from app.repositories.solo import SoloRefused, ensure_open_dailies
+    from app.solo_rules import SKIPPED_RETRY
+
+    await _candidates(users, history, factory, 4)
+    await ensure_open_dailies(factory, NOON)
+    async with factory() as session:
+        assert {row.state for row in (await session.scalars(select(SoloDailyDay))).all()} == {"skipped"}
+    await _candidates(users, history, factory, 1, tag="b")
+    other = await player(users, factory, "Other")
+    later = NOON + SKIPPED_RETRY
+    run = await solo.start_free_run(other.id, length=5, now=later)
+    with pytest.raises(SoloRefused) as refused:
+        await solo.serve_next(other.id, run.run_id, count=1, now=later)
+    assert refused.value.kind == "empty"
+    async with factory() as session:
+        assert "set" in {row.state for row in (await session.scalars(select(SoloDailyDay))).all()}

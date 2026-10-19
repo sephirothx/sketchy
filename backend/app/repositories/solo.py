@@ -791,20 +791,22 @@ async def ensure_open_dailies(
     session_factory: async_sessionmaker[AsyncSession], now: datetime
 ) -> None:
     """Pick the Daily of every date open somewhere that nobody has asked for
-    yet, so a free run's exclusion of open Dailies knows their concepts before
-    the first player of the new date arrives (#1493 review). Once per date."""
+    yet - and look again at one stored as skipped whose retry is due - so a
+    free run's exclusion of open Dailies knows their concepts before the first
+    player of the new date arrives (#1493 review). A free run that served a
+    drawing a due retry was about to pick would hand out a Daily's answer."""
     async with session_factory() as session:
-        known = set(
-            (
+        settled = {
+            row.daily_date
+            for row in (
                 await session.scalars(
-                    select(SoloDailyDay.daily_date).where(
-                        SoloDailyDay.daily_date.in_(open_dates(now))
-                    )
+                    select(SoloDailyDay).where(SoloDailyDay.daily_date.in_(open_dates(now)))
                 )
             ).all()
-        )
+            if row.state == "set" or not skipped_retry_due(row, now)
+        }
     for day in open_dates(now):
-        if day in known:
+        if day in settled:
             continue
         async with session_factory() as session:
             async with session.begin():
