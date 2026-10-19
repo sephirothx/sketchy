@@ -7,7 +7,7 @@ import type { SoloCopy } from "./en.ts";
 // No ordinals on this page: the suffixes are never read.
 const { counted, number, plural } = formattersFor("pt", { other: "" });
 // A solve time, to the tenth of a second.
-const tenths = new Intl.NumberFormat("pt", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const tenths = new Intl.NumberFormat("pt-PT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export const SOLO_PT: SoloCopy = {
     intro: "Adivinha desenhos de partidas públicas em que não estiveste. Quem os desenhou fica em segredo.",

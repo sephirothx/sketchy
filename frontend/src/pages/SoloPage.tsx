@@ -117,8 +117,10 @@ export function SoloPage() {
 
   const loadSummary = useCallback(async () => {
     try {
+      // The error stays: it says why the last thing the player tried did
+      // not happen, and a refreshed page does not answer that. Their next
+      // action clears it.
       setSummary(await fetchSoloSummary(localDateKey()));
-      setError(null);
     } catch (failure) {
       setError(refusalText(failure, words().couldNotLoad));
     }
@@ -142,6 +144,7 @@ export function SoloPage() {
   const begin = async (action: () => Promise<SoloRun>) => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
       let next = await action();
       if (next.state !== "active" && next.mode === "free") {
@@ -408,7 +411,11 @@ function SoloHome({
           </section>
           <p className="solo-note solo-preview">{words().supporterPreview}</p>
         </div>
-        <SoloCalendar today={today} stats={summary?.stats ?? null} />
+        <SoloCalendar
+          today={today}
+          todayHasDaily={summary !== null && summary.today.state !== "unavailable"}
+          stats={summary?.stats ?? null}
+        />
       </div>
     </div>
   );
@@ -608,19 +615,14 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat(interfaceLocale()).format(value);
 }
 
-/** The first day of the week for `locale`, 1 Monday to 7 Sunday: the
-    browser's week info where it has it, Monday where it has not. 2024-01-01
-    was a Monday, so `new Date(2024, 0, start)` is that weekday. */
+/** The first day of the week for the interface's language, 1 Monday to 7
+    Sunday: Sunday for its English, which is American; Monday for the other
+    seven, Portugal's and Spain's included. Fixed rather than asked of the
+    browser: `Intl.Locale("pt")` is Brazil's week, and Firefox has no week
+    info at all. 2024-01-01 was a Monday, so `new Date(2024, 0, start)` is
+    that weekday. */
 function weekStart(locale: string): number {
-  try {
-    const info = new Intl.Locale(locale) as Intl.Locale & {
-      getWeekInfo?: () => { firstDay: number };
-      weekInfo?: { firstDay: number };
-    };
-    return info.getWeekInfo?.().firstDay ?? info.weekInfo?.firstDay ?? 1;
-  } catch {
-    return 1;
-  }
+  return locale.split("-")[0] === "en" ? 7 : 1;
 }
 
 /** `YYYY-MM` of a `YYYY-MM-DD`. */
@@ -639,7 +641,17 @@ function shiftMonth(month: string, by: number): string {
  * shaded by how many they named, a missed Daily dashed, today ringed; and
  * what all of them came to.
  */
-function SoloCalendar({ today, stats }: { today: string; stats: SoloDailyStats | null }) {
+function SoloCalendar({
+  today,
+  todayHasDaily,
+  stats,
+}: {
+  today: string;
+  /** From the summary, which picks today's Daily: the month may not know of
+      it yet, before anybody has opened it. */
+  todayHasDaily: boolean;
+  stats: SoloDailyStats | null;
+}) {
   // The month looked at, for the today it was picked on: a new day can be a
   // new month, and the calendar follows the player's today back to it.
   const [picked, setPicked] = useState(() => ({ today, month: monthOf(today) }));
@@ -725,7 +737,7 @@ function SoloCalendar({ today, stats }: { today: string; stats: SoloDailyStats |
         {Array.from({ length: daysIn }, (_, index) => {
           const date = `${month}-${String(index + 1).padStart(2, "0")}`;
           const day = byDate.get(date);
-          const look = calendarLook(date, day, today, earliest);
+          const look = calendarLook(date, day, today, earliest, todayHasDaily);
           return (
             <span
               key={date}
@@ -782,6 +794,7 @@ function calendarLook(
   day: SoloCalendarDay | undefined,
   today: string,
   earliest: string | null,
+  todayHasDaily: boolean,
 ): CalendarLook {
   if (date > today) return "future";
   const result = day?.result ?? null;
@@ -789,7 +802,7 @@ function calendarLook(
     const solved = result.solved;
     return solved === 0 ? "named-0" : solved <= 2 ? "named-1" : solved <= 4 ? "named-2" : "named-3";
   }
-  if (date === today) return day?.daily ? "open" : "none";
+  if (date === today) return todayHasDaily ? "open" : "none";
   // Only a Daily there was, after the player's first: before it, Solo was
   // not theirs yet, and a missed day would be no news.
   if (day?.daily && earliest !== null && date > earliest) return "missed";
@@ -799,7 +812,11 @@ function calendarLook(
 function calendarStatus(look: CalendarLook, day: SoloCalendarDay | undefined): string {
   if (day?.result) return words().youNamed({ solved: day.result.solved, total: 5 });
   if (look === "future") return words().stillToCome;
-  return look === "missed" ? words().legendMissed : look === "open" ? words().toPlayToday : words().noDaily;
+  if (look === "missed") return words().legendMissed;
+  if (look === "open") return words().toPlayToday;
+  // A past day that had a Daily the player never played, before their
+  // first: a Daily, not "no Daily".
+  return day?.daily ? words().daily : words().noDaily;
 }
 
 /** A run's name, as its rows and its drawings are headed: the Daily, or the

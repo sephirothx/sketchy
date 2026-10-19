@@ -41,9 +41,12 @@ export function formattersFor(
   locale: string,
   ordinalSuffixes: Partial<Record<Intl.LDMLPluralRule, string>> = {},
 ): Formatters {
-  const rules = new Intl.PluralRules(locale);
-  const ordinals = new Intl.PluralRules(locale, { type: "ordinal" });
-  const numbers = new Intl.NumberFormat(locale);
+  // Portuguese here is Portugal's: bare "pt" is Brazil to Intl, whose plural
+  // rules count 0 as one ("0 ponto") where Portugal says "0 pontos".
+  const tag = locale === "pt" ? "pt-PT" : locale;
+  const rules = new Intl.PluralRules(tag);
+  const ordinals = new Intl.PluralRules(tag, { type: "ordinal" });
+  const numbers = new Intl.NumberFormat(tag);
   const plural = (count: number, forms: PluralForms): string =>
     forms[rules.select(count)] ?? forms.other;
   return {
