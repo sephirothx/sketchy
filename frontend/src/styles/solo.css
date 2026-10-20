@@ -368,11 +368,16 @@
 }
 
 /* Round, as the ring it holds: today's mark, a hover and the focus ring are
-   drawn on this cell's edge, a circle round the day's own ring. */
+   drawn on this cell's edge, a circle round the day's own ring. No bigger
+   than a phone's: a wider column spreads the days out rather than blowing
+   their rings up round a small date. */
 .solo-calendar-day {
   align-items: center;
   aspect-ratio: 1;
   border-radius: 50%;
+  justify-self: center;
+  max-width: 48px;
+  width: 100%;
   box-sizing: border-box;
   color: var(--muted);
   display: flex;
@@ -395,13 +400,17 @@
 /* Above the ring, centred on its digits (.cap-centred, primitives.css). */
 .solo-calendar-date { position: relative; }
 
+/* The ring, inset by a share of the cell rather than a fixed margin, so it
+   scales with it: a perfect day's star reaches 6.2 of the mark's 40 units
+   past its top right (11.6% of the cell), inside the 12.5% left round it,
+   so it stays in its own day's square at any size. */
 .solo-calendar-mark {
-  height: calc(100% - 10px);
-  left: 5px;
+  height: 75%;
+  left: 12.5%;
   overflow: visible;
   position: absolute;
-  top: 5px;
-  width: calc(100% - 10px);
+  top: 12.5%;
+  width: 75%;
 }
 
 .solo-calendar-arc {
