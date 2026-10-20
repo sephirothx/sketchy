@@ -37,7 +37,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.guess_judge import AnswerForm, JudgeTarget, judge
-from app.repositories.solo import SoloRepository
+from app.repositories.solo import SoloRefused, SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
 from app.solo_rules import decode_answers
 from tests.dbfixtures import create_test_db
@@ -491,6 +491,34 @@ async def test_deleting_an_account_takes_its_runs_and_closes_its_drawings_to_oth
 
     # The player goes: their runs and serves go with them.
     await anonymize_account(factory, user_id=stranger.id)
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SoloRun)) == 0
+        assert await session.scalar(select(func.count()).select_from(SoloServe)) == 0
+
+
+async def test_a_write_already_past_the_door_is_refused_once_its_account_is_deleted(env):
+    # The route asks whether the account is live before the repository's
+    # transaction; a deletion that commits in between leaves a tombstone row,
+    # and each write must look again rather than build on it (R-PRIV-15).
+    from app.auth.account_data import anonymize_account
+
+    http, users, history, factory = env
+    await _pool_of(users, history, factory, 2)
+    gone = await player(users, factory, "Gone")
+    await sign_in_as(http, factory, gone.id)
+    run = await _start(http)
+    [serve] = await _serve(http, run["runId"])
+    await anonymize_account(factory, user_id=gone.id)
+
+    solo, now = SoloRepository(factory), datetime.now(timezone.utc)
+    for write in (
+        lambda: solo.start_free_run(str(gone.id), length=10, now=now),
+        lambda: solo.serve_next(str(gone.id), run["runId"], count=1, now=now),
+        lambda: solo.settle(str(gone.id), serve["serveId"], outcome="solved", seconds=5.0, now=now),
+    ):
+        with pytest.raises(SoloRefused) as refused:
+            await write()
+        assert refused.value.kind == "erased"
     async with factory() as session:
         assert await session.scalar(select(func.count()).select_from(SoloRun)) == 0
         assert await session.scalar(select(func.count()).select_from(SoloServe)) == 0

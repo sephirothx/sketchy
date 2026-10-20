@@ -119,6 +119,10 @@ def create_solo_router(session_factory: async_sessionmaker[AsyncSession]) -> API
             return Refusal(404, missing, "Not found.")
         if error.kind == "empty":
             return Refusal(409, ErrorCode.SOLO_POOL_EMPTY, "Nothing left to serve right now.")
+        if error.kind == "erased":
+            # Deleted while the request was on its way: signed out, as every
+            # other write answers an erased account (moderation, lists).
+            return Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return Refusal(409, ErrorCode.SOLO_CONFLICT, "That changed in the meantime.")
 
     def now() -> datetime:

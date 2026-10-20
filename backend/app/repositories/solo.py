@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     GameParticipant,
     IdentityAlias,
@@ -150,6 +151,19 @@ def servable_to_clauses(identity_ids: Sequence[UUID], languages: Sequence[str]) 
     )
 
 
+async def require_live_player(session: AsyncSession, user_id: str) -> None:
+    """Refuse, inside a Solo write's own transaction, an account deleted
+    since its request was let in (R-PRIV-15): the route's check is before
+    the transaction, and a deletion that commits in between leaves the user
+    row as a tombstone that an insert would happily point at. The row is read
+    under a share lock, so a deletion in progress is waited for, never raced.
+    Every Solo write that adds to what the player owns asks this first."""
+    try:
+        await require_live_account(session, user_id)
+    except AccountErasedError:
+        raise SoloRefused("erased") from None
+
+
 async def identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...]:
     """The canonical account and every identity merged into it."""
     canonical = (
@@ -218,7 +232,8 @@ class RunView:
 class SoloRefused(Exception):
     """A Solo write that cannot apply: `missing` for a run or serve that is
     not the caller's (always a 404 outside), `conflict` for one whose state
-    refuses it, `empty` when there is nothing left to serve."""
+    refuses it, `empty` when there is nothing left to serve, `erased` for an
+    account deleted since the request was let in."""
 
     def __init__(self, kind: str) -> None:
         super().__init__(kind)
@@ -441,6 +456,7 @@ class SoloRepository:
             try:
                 async with self._session_factory() as session:
                     async with session.begin():
+                        await require_live_player(session, user_id)
                         player = (await identity_ids(session, UUID(user_id)))[0]
                         active = await session.scalar(
                             select(SoloRun)
@@ -514,6 +530,7 @@ class SoloRepository:
         run in progress the player never saw a drawing of."""
         async with self._session_factory() as session:
             async with session.begin():
+                await require_live_player(session, user_id)
                 ids = await identity_ids(session, UUID(user_id))
                 player = ids[0]
                 # Every free run of the player's in play, in one order: their
@@ -645,6 +662,7 @@ class SoloRepository:
         unlimited, its first miss."""
         async with self._session_factory() as session:
             async with session.begin():
+                await require_live_player(session, user_id)
                 player = (await identity_ids(session, UUID(user_id)))[0]
                 # The run first, locked, and the serve read again under it:
                 # an abandon that deleted an open serve meanwhile is a
