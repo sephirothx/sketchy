@@ -111,7 +111,8 @@ keyboard that takes half the screen, and one thumb.
   **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
   play at once, each with how far it got and its own **Continue** or **Start over**. A
   personal best is kept for each length, and a streak of days in a row; a calendar shows
-  each Daily you played, shaded by how many you named, with the totals and your longest
+  each Daily you played as a ring of its five - filled once finished, with a gold star
+  when you named all five, hollow while under way - with the totals and your longest
   streak. Nobody is ranked against anybody else. Play is
   local: the browser judges each guess with a port of the room's judge, and the server records what
   each drawing came to and works out the points. Once a drawing is over you can react to

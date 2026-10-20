@@ -46,6 +46,7 @@ import {
   startFreeRun,
   type SoloActiveRun,
   type SoloCalendarDay,
+  type SoloDailyMark,
   type SoloDailyResult,
   type SoloDailyStats,
   type SoloMonth,
@@ -669,9 +670,9 @@ function shiftMonth(month: string, by: number): string {
 }
 
 /**
- * The player's Dailies a month at a time, back to their first: each date
- * shaded by how many they named, a missed Daily dashed, today ringed; and
- * what all of them came to.
+ * The player's Dailies a month at a time, back to their first: each date's
+ * Daily as a ring of its five (CalendarMark), today ringed; and what all of
+ * them came to.
  */
 function SoloCalendar({
   today,
@@ -782,23 +783,13 @@ function SoloCalendar({
               aria-current={date === today ? "date" : undefined}
               aria-label={words().calendarDay({ date: dayLabel(date), status: calendarStatus(look, day) })}
             >
-              {index + 1}
+              <CalendarMark look={look} marks={day?.result?.marks ?? []} playable={date === today} />
+              <span className="solo-calendar-date">{index + 1}</span>
             </span>
           );
         })}
       </div>
       {unread && <p className="solo-note">{words().couldNotLoad}</p>}
-      <div className="solo-calendar-legend" aria-hidden="true">
-        <span>{words().legendNamed}</span>
-        <span className="solo-calendar-key is-named-1" />
-        <span className="solo-calendar-key is-named-2" />
-        <span className="solo-calendar-key is-named-3" />
-        <span>{words().legendMore}</span>
-        <span className="solo-calendar-missed-key">
-          <span className="solo-calendar-key is-missed" />
-          {words().legendMissed}
-        </span>
-      </div>
       {stats && stats.dailiesPlayed > 0 && (
         <dl className="solo-calendar-stats" data-testid="solo-stats">
           <div>
@@ -819,10 +810,11 @@ function SoloCalendar({
   );
 }
 
-type CalendarLook = "future" | "none" | "missed" | "named-0" | "named-1" | "named-2" | "named-3" | "open";
+type CalendarLook = "future" | "none" | "missed" | "open" | "perfect" | "finished" | "under-way";
 
 /** How a date reads: one to come, one with no Daily for this player, a Daily
-    they let pass, or how much of one they named. */
+    they let pass or have still to play today, or one they played - all five
+    named, finished with a miss, or under way. */
 function calendarLook(
   date: string,
   day: SoloCalendarDay | undefined,
@@ -833,8 +825,8 @@ function calendarLook(
   if (date > today) return "future";
   const result = day?.result ?? null;
   if (result) {
-    const solved = result.solved;
-    return solved === 0 ? "named-0" : solved <= 2 ? "named-1" : solved <= 4 ? "named-2" : "named-3";
+    if (!result.completed) return "under-way";
+    return result.solved === 5 ? "perfect" : "finished";
   }
   if (date === today) return (todayHasDaily ?? Boolean(day?.daily)) ? "open" : "none";
   // Only a Daily there was, after the player's first: before it, Solo was
@@ -843,10 +835,80 @@ function calendarLook(
   return "none";
 }
 
+// The calendar's ring: the five of a Daily round its date, drawn in a 40-unit
+// box. A finished ring closes, its arcs end to end; one under way keeps a gap
+// between each - 18 degrees, square-ended, about 5 units: a gap a phone still
+// shows - so what is left to play reads as the ring's grey part.
+const RING_RADIUS = 18.4;
+const RING_WIDTH = 3.2;
+// A perfect day's sticker: a fuller star than the icon set's StarIcon, so it
+// still reads as one at a calendar day's size.
+const STAR_PATH = "M12 1.8l3.1 6.4 7 .9-5.1 4.9 1.3 7L12 17.6 5.7 21l1.3-7L1.9 9.1l7-.9z";
+
+function ringArc(index: number, gap: number): string {
+  const from = ((-90 + index * 72 + gap / 2) * Math.PI) / 180;
+  const to = ((-90 + (index + 1) * 72 - gap / 2) * Math.PI) / 180;
+  const point = (angle: number) =>
+    `${(20 + RING_RADIUS * Math.cos(angle)).toFixed(2)} ${(20 + RING_RADIUS * Math.sin(angle)).toFixed(2)}`;
+  return `M${point(from)} A${RING_RADIUS} ${RING_RADIUS} 0 0 1 ${point(to)}`;
+}
+
+/** A day's Daily, behind its date: filled once it is finished - a green
+    disc with a gold star for all five named, a pale one inside its ring with
+    a miss - and hollow while under way, its drawings still to play grey. A
+    Daily not played is a dashed ring. Both are darker when the Daily can be
+    played now (`playable`), so one that can no longer be played does not
+    look like today's. */
+function CalendarMark({ look, marks, playable }: { look: CalendarLook; marks: SoloDailyMark[]; playable: boolean }) {
+  if (look === "future" || look === "none") return null;
+  if (look === "missed" || look === "open") {
+    return (
+      <svg className="solo-calendar-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle
+          className={`solo-calendar-unplayed-ring${playable ? " is-playable" : ""}`}
+          cx="20"
+          cy="20"
+          r={RING_RADIUS}
+        />
+      </svg>
+    );
+  }
+  if (look === "perfect") {
+    // The star sits on the disc's edge, top right and tilted, like a sticker:
+    // its centre on the 45 degree line, a little outside the circle.
+    return (
+      <svg className="solo-calendar-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle className="solo-calendar-disc" cx="20" cy="20" r={RING_RADIUS + RING_WIDTH / 2} />
+        <g transform="translate(35.9 4.1) rotate(12) scale(0.9) translate(-12 -12)">
+          <path className="solo-calendar-star" d={STAR_PATH} />
+        </g>
+      </svg>
+    );
+  }
+  const finished = look === "finished";
+  return (
+    <svg className="solo-calendar-mark" viewBox="0 0 40 40" aria-hidden="true">
+      {finished && <circle className="solo-calendar-fill" cx="20" cy="20" r={RING_RADIUS - RING_WIDTH / 2 + 0.6} />}
+      {Array.from({ length: 5 }, (_, index) => {
+        const outcome = marks[index]?.outcome;
+        const look = outcome === undefined ? "unplayed" : outcome === "solved" ? "solved" : "missed";
+        return (
+          <path
+            key={index}
+            className={`solo-calendar-arc is-${look}${playable ? " is-playable" : ""}`}
+            d={ringArc(index, finished ? 0 : 18)}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 function calendarStatus(look: CalendarLook, day: SoloCalendarDay | undefined): string {
+  if (day?.result && !day.result.completed) return words().underWay({ played: day.result.positionsPlayed, total: 5 });
   if (day?.result) return words().youNamed({ solved: day.result.solved, total: 5 });
   if (look === "future") return words().stillToCome;
-  if (look === "missed") return words().legendMissed;
+  if (look === "missed") return words().missedDay;
   if (look === "open") return words().toPlayToday;
   // A past day that had a Daily the player never played, before their
   // first: a Daily, not "no Daily".

@@ -210,13 +210,14 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(daily.get_by_test_id("solo-copy-result")).to_be_visible()
             await expect(daily.get_by_test_id("solo-countdown")).to_be_visible()
             await expect(daily.get_by_test_id("solo-streak")).to_have_text("1 day in a row")
-            # The calendar shades today by the one named, and counts the Daily.
+            # The calendar rings today as finished with a miss - one of five
+            # named - and counts the Daily.
             today = await page.evaluate(
                 "() => { const d = new Date(); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'),"
                 " String(d.getDate()).padStart(2, '0')].join('-') }"
             )
             cell = page.locator(f'[data-testid="solo-calendar-day"][data-date="{today}"]')
-            await expect(cell).to_have_class(re.compile(r"\bis-named-1\b"))
+            await expect(cell).to_have_class(re.compile(r"\bis-finished\b"))
             await expect(page.get_by_test_id("solo-stats")).to_contain_text("1")
 
             # A five-drawing free run: the Daily's drawings stay out of it

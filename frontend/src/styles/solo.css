@@ -288,48 +288,61 @@
   justify-content: center;
 }
 
-/* Shaded by how many of the five were named; one let pass is dashed. */
+/* Each day's Daily is a ring of its five round the date (CalendarMark):
+   filled once finished, hollow while under way, dashed when let pass or
+   still to play today. No legend: the four read apart on their own. */
+.solo-calendar-day { position: relative; }
 .solo-calendar-day.is-future { color: var(--faint); }
-.solo-calendar-day.is-missed { border: 1px dashed var(--line-strong); }
-.solo-calendar-day.is-named-0 { background: var(--track); color: var(--ink); }
-
-.solo-calendar-day.is-named-1,
-.solo-calendar-key.is-named-1 { background: color-mix(in srgb, var(--success) 30%, var(--card)); color: var(--ink); }
-
-.solo-calendar-day.is-named-2,
-.solo-calendar-key.is-named-2 { background: color-mix(in srgb, var(--success) 62%, var(--card)); color: var(--ink); }
-
-.solo-calendar-day.is-named-3,
-.solo-calendar-key.is-named-3 { background: var(--success-button); color: var(--on-success); }
-
+.solo-calendar-day.is-perfect { color: var(--on-success); }
+.solo-calendar-day.is-finished,
+.solo-calendar-day.is-under-way { color: var(--ink); }
 .solo-calendar-day.is-today { box-shadow: inset 0 0 0 3px var(--warm); }
-.solo-calendar-day.is-today.is-open { background: var(--warm-soft); color: var(--warm-ink); }
 
-.solo-calendar-legend {
-  align-items: center;
-  color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 12px;
-  font-weight: 600;
-  gap: 8px;
+.solo-calendar-date { position: relative; }
+
+.solo-calendar-mark {
+  height: calc(100% - 10px);
+  left: 5px;
+  overflow: visible;
+  position: absolute;
+  top: 5px;
+  width: calc(100% - 10px);
 }
 
-.solo-calendar-key {
-  border-radius: var(--radius-xs);
-  box-sizing: border-box;
-  display: inline-block;
-  height: 14px;
-  width: 14px;
+.solo-calendar-arc {
+  fill: none;
+  stroke-width: 3.2;
 }
 
-.solo-calendar-key.is-missed { border: 1px dashed var(--line-strong); }
+.solo-calendar-arc.is-solved { stroke: var(--success); }
+.solo-calendar-arc.is-missed { stroke: var(--danger); }
+.solo-calendar-arc.is-unplayed { stroke: var(--line-strong); }
+.solo-calendar-arc.is-unplayed.is-playable { stroke: var(--faint); }
 
-.solo-calendar-missed-key {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
+.solo-calendar-unplayed-ring {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-dasharray: 3 3;
+  stroke-width: 1.5;
+}
+
+/* A Daily that can be played now - its dashed ring, or the arcs an
+   unfinished one has left - is drawn in --faint, 3:1 and more on the card in
+   both themes; one that cannot keeps --line-strong. */
+.solo-calendar-unplayed-ring.is-playable { stroke: var(--faint); }
+
+.solo-calendar-disc { fill: var(--success-button); }
+.solo-calendar-fill { fill: color-mix(in srgb, var(--success) 30%, var(--card)); }
+
+/* A sticker's gold, the same in both themes as the avatar crown's
+   (primitives.css) - a shade deeper, to hold up on the green - edged in the
+   card's colour so it reads as stuck on. */
+.solo-calendar-star {
+  fill: #f5b82e;
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.18));
+  stroke: var(--card);
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .solo-calendar-stats {
