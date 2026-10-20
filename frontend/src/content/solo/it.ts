@@ -39,7 +39,9 @@ export const SOLO_IT: SoloCopy = {
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punto", other: "punti" })}`,
     inARow: (p: { count: number }) => `${number(p.count)} di fila`,
-    streak: (p: { days: number }) => `${counted(p.days, { one: "giorno", other: "giorni" })} di fila`,
+    streakToGoal: (p: { days: number; goal: number }) =>
+      `${counted(p.days, { one: "giorno", other: "giorni" })} di fila; il prossimo traguardo: ${counted(p.goal, { one: "giorno", other: "giorni" })}`,
+    streakReached: (p: { days: number }) => `${counted(p.days, { one: "giorno", other: "giorni" })} di fila: un nuovo traguardo`,
     previousMonth: "Mese precedente",
     nextMonth: "Mese successivo",
     missedDay: "giorno saltato",

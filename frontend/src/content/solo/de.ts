@@ -39,7 +39,9 @@ export const SOLO_DE: SoloCopy = {
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "Punkt", other: "Punkte" })}`,
     inARow: (p: { count: number }) => `${number(p.count)} in Folge`,
-    streak: (p: { days: number }) => `${counted(p.days, { one: "Tag", other: "Tage" })} in Folge`,
+    streakToGoal: (p: { days: number; goal: number }) =>
+      `${counted(p.days, { one: "Tag", other: "Tage" })} in Folge; der nächste Meilenstein: ${counted(p.goal, { one: "Tag", other: "Tage" })}`,
+    streakReached: (p: { days: number }) => `${counted(p.days, { one: "Tag", other: "Tage" })} in Folge: ein neuer Meilenstein`,
     previousMonth: "Vorheriger Monat",
     nextMonth: "Nächster Monat",
     missedDay: "verpasster Tag",

@@ -39,7 +39,10 @@ export const SOLO_PL: SoloCopy = {
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
     inARow: (p: { count: number }) => `${number(p.count)} z rzędu`,
-    streak: (p: { days: number }) => `${counted(p.days, { one: "dzień", few: "dni", many: "dni", other: "dnia" })} z rzędu`,
+    streakToGoal: (p: { days: number; goal: number }) =>
+      `${counted(p.days, { one: "dzień", few: "dni", many: "dni", other: "dnia" })} z rzędu; następny cel: ${counted(p.goal, { one: "dzień", few: "dni", many: "dni", other: "dnia" })}`,
+    streakReached: (p: { days: number }) =>
+      `${counted(p.days, { one: "dzień", few: "dni", many: "dni", other: "dnia" })} z rzędu: nowy kamień milowy`,
     previousMonth: "Poprzedni miesiąc",
     nextMonth: "Następny miesiąc",
     missedDay: "opuszczony dzień",

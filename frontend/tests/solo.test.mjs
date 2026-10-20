@@ -27,11 +27,15 @@ test("Solo's page copy is written in every interface language, none of it blank"
   const { LOCALES } = await import("../src/content/ui/index.ts");
   assert.deepEqual([...soloCopyLocales()].sort(), [...LOCALES].sort());
   const sample = { played: 2, points: 120, count: 3, days: 2, time: "01:00:00", position: 1, length: 5,
-    seconds: 9, guess: "x", solved: 1, total: 5, daily: "Daily", date: "2026-10-15", marks: "🟩" };
+    seconds: 9, guess: "x", solved: 1, total: 5, daily: "Daily", date: "2026-10-15", marks: "🟩", goal: 7,
+    left: 3, name: "Quick", status: "Done" };
   for (const locale of soloCopyLocales()) {
     for (const [key, value] of Object.entries(soloCopyFor(locale))) {
       const text = typeof value === "function" ? value(sample) : value;
       assert.ok(typeof text === "string" && text.trim(), `${locale}.${key} is blank`);
+      // A parameter the sample lacks would read as NaN or undefined, and pass
+      // as not blank.
+      assert.doesNotMatch(text, /NaN|undefined/, `${locale}.${key} reads a parameter the sample lacks`);
     }
   }
   assert.equal(soloCopyFor("pt-BR"), soloCopyFor("pt"), "a regional tag reads its base");

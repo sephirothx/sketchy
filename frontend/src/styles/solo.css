@@ -75,6 +75,98 @@
 
 .solo-daily h2 { font-size: 28px; }
 
+/* The streak (StreakIndicator): a pill with a flame that grows at each
+   milestone, and a line to the next one ending in its number. At a year the
+   pill turns gold. The golds are fixed in both themes, as the calendar's
+   sticker star's is: they are colours of the flame, not ink. */
+.solo-streak {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solo-streak-pill {
+  align-items: center;
+  background: var(--warm-soft);
+  border-radius: var(--radius-pill);
+  color: var(--warm-ink);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 800;
+  gap: 5px;
+  padding: 4px 12px 4px 7px;
+  white-space: nowrap;
+}
+
+.solo-streak.is-month .solo-streak-pill { gap: 7px; }
+.solo-streak.is-year .solo-streak-pill { background: var(--gold-soft); color: var(--gold); gap: 8px; }
+
+.solo-streak-flame {
+  flex: none;
+  height: 22px;
+  position: relative;
+  width: 22px;
+}
+
+.solo-streak-flame svg {
+  bottom: 0;
+  height: 19px;
+  left: 50%;
+  overflow: visible;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 19px;
+}
+
+.solo-streak-flame.is-week svg { height: 22px; width: 22px; }
+.solo-streak-flame.is-month svg { bottom: -1px; height: 26px; width: 26px; }
+.solo-streak-flame.is-year svg { bottom: -1px; height: 30px; width: 30px; }
+
+.solo-streak-flame .is-outer { fill: var(--warm); }
+.solo-streak-flame .is-core { fill: #f7c948; }
+.solo-streak-flame .is-gold { fill: #f5b82e; }
+.solo-streak-flame .is-deep { fill: #c8401a; }
+.solo-streak-flame .is-ember { fill: #f2a27a; }
+
+.solo-streak-next {
+  align-items: center;
+  color: var(--faint);
+  display: flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 7px;
+}
+
+.solo-streak-bar {
+  background: var(--track);
+  border-radius: var(--radius-pill);
+  height: 5px;
+  overflow: hidden;
+  width: 72px;
+}
+
+.solo-streak-bar span {
+  background: var(--warm);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+
+/* Gold only once full, on a milestone's day: a gold part-line would barely
+   stand off the track (1.5:1 in the light theme), where orange does. */
+.solo-streak.is-reached .solo-streak-bar span { background: #f5b82e; }
+
+.solo-streak-goal {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.solo-streak.is-reached .solo-streak-goal { color: var(--gold); }
+
 /* The Daily's five as rings: named, missed, the one up next, those to come. */
 .solo-rings {
   display: flex;

@@ -58,6 +58,25 @@ export function dailyMarks(result: SoloDailyResult): DailyMark[] {
   return marks.slice(0, 5);
 }
 
+export type StreakTier = "start" | "week" | "month" | "year";
+
+/** Where a streak stands between its milestones - a week, a month (30 days)
+    and a year, then every year after: the one it passed (`from`, 0 before the
+    first), the one it runs to (`goal`), and whether today is a milestone. */
+export function streakMilestone(days: number): {
+  tier: StreakTier;
+  from: number;
+  goal: number;
+  reached: boolean;
+  fraction: number;
+} {
+  const from = days >= 365 ? Math.floor(days / 365) * 365 : days >= 30 ? 30 : days >= 7 ? 7 : 0;
+  const goal = days >= 365 ? from + 365 : days >= 30 ? 365 : days >= 7 ? 30 : 7;
+  const tier: StreakTier = days >= 365 ? "year" : days >= 30 ? "month" : days >= 7 ? "week" : "start";
+  const reached = from > 0 && days === from;
+  return { tier, from, goal, reached, fraction: reached ? 1 : (days - from) / (goal - from) };
+}
+
 /** Milliseconds until the player's own midnight, when the next Daily opens. */
 export function untilLocalMidnight(now: Date = new Date()): number {
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);

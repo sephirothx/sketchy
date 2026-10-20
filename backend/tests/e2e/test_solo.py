@@ -209,7 +209,11 @@ async def test_a_daily_and_a_free_run_are_played_through():
             daily = page.get_by_test_id("solo-daily")
             await expect(daily.get_by_test_id("solo-copy-result")).to_be_visible()
             await expect(daily.get_by_test_id("solo-countdown")).to_be_visible()
-            await expect(daily.get_by_test_id("solo-streak")).to_have_text("1 day in a row")
+            # The streak: one day, with its line running to a week.
+            streak = daily.get_by_test_id("solo-streak")
+            await expect(streak).to_have_attribute("aria-label", "1 day in a row; the next milestone is 7 days")
+            await expect(streak).to_contain_text("1 day")
+            await expect(streak.get_by_test_id("solo-streak-goal")).to_have_text("7")
             # The calendar rings today as finished with a miss - one of five
             # named - and counts the Daily.
             today = await page.evaluate(

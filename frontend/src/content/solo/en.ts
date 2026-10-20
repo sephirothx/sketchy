@@ -43,7 +43,9 @@ export const SOLO_EN = {
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "point", other: "points" })}`,
     inARow: (p: { count: number }) => `${number(p.count)} in a row`,
-    streak: (p: { days: number }) => `${counted(p.days, { one: "day", other: "days" })} in a row`,
+    streakToGoal: (p: { days: number; goal: number }) =>
+      `${counted(p.days, { one: "day", other: "days" })} in a row; the next milestone is ${counted(p.goal, { one: "day", other: "days" })}`,
+    streakReached: (p: { days: number }) => `${counted(p.days, { one: "day", other: "days" })} in a row: a new milestone`,
     previousMonth: "Previous month",
     nextMonth: "Next month",
     missedDay: "missed day",

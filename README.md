@@ -110,7 +110,8 @@ keyboard that takes half the screen, and one thumb.
   played, and can be copied as a row of squares. A **Free run** is **Quick** (5 drawings),
   **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
   play at once, each with how far it got and its own **Continue** or **Start over**. A
-  personal best is kept for each length, and a streak of days in a row; a calendar shows
+  personal best is kept for each length, and a streak of days in a row, its flame
+  growing at a week, a month and a year; a calendar shows
   each Daily you played as a ring of its five - filled once finished, with a gold star
   when you named all five, hollow while under way - with the totals and your longest
   streak. Nobody is ranked against anybody else. Play is

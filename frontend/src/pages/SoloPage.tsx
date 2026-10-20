@@ -60,7 +60,9 @@ import {
   SOLO_CLOCK_SECONDS,
   SOLO_REPLAY_SECONDS,
   dailyMarks,
+  streakMilestone,
   type DailyMark,
+  type StreakTier,
   forgetServeStart,
   serveStartedAt,
   untilLocalMidnight,
@@ -442,6 +444,84 @@ function lengthName(length: SoloLength): string {
   return length === null ? words().endless : length === 5 ? words().quick : words().classic;
 }
 
+/** The streak: a pill with a flame that grows at each milestone - a week, a
+    month, a year - and the day count in the browser's own words (Intl), and
+    under it a line filling toward the next milestone with that day's number
+    at its end. Nothing in it is a sentence to translate; screen readers get
+    one (`streakToGoal`, `streakReached`). The day a milestone is reached the
+    line is full and gold, its number ticked. */
+function StreakIndicator({ days }: { days: number }) {
+  const { tier, goal, reached, fraction } = streakMilestone(days);
+  const count = new Intl.NumberFormat(intlLocale(interfaceLocale()), {
+    style: "unit",
+    unit: "day",
+    unitDisplay: "long",
+  }).format(days);
+  return (
+    <div
+      className={`solo-streak is-${tier}${reached ? " is-reached" : ""}`}
+      data-testid="solo-streak"
+      role="img"
+      aria-label={reached ? words().streakReached({ days }) : words().streakToGoal({ days, goal })}
+    >
+      <span className="solo-streak-pill">
+        <StreakFlame tier={tier} />
+        {count}
+      </span>
+      <span className="solo-streak-next">
+        <span className="solo-streak-bar">
+          <span style={{ transform: `scaleX(${fraction})` }} />
+        </span>
+        <span className="solo-streak-goal" data-testid="solo-streak-goal">
+          {reached && <CheckIcon size={12} />}
+          {formatNumber(reached ? days : goal)}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// The flame's tongues, in a 24-unit box: the outer fire, the core inside it,
+// and the year's deep-red back flame with its two embers.
+const FLAME_OUTER = "M12 22.5c-4.4 0-7.5-2.9-7.5-7 0-3.6 2.4-5.7 4-8.2.6 1.9 1.6 3 2.7 3.6.3-3.4 2-6.4 4.8-8.4-.4 3.3 1 5.6 2.3 7.6 1.1 1.7 1.7 3.2 1.7 5.1 0 4.3-3.4 7.3-8 7.3z";
+const FLAME_CORE = "M12 21c-2.6 0-4.2-1.7-4.2-4 0-2.1 1.5-3.4 2.6-5 .3 1.3 1 2 1.8 2.5.2-1.8 1-3.4 2.4-4.6-.1 2 .9 3.4 1.5 4.6.5 1 .7 1.7.7 2.5 0 2.3-2 4-4.8 4z";
+const FIRE_OUTER = "M12 23.2c-4.9 0-8.3-3.1-8.3-7.6 0-3.1 1.6-5.1 3.1-7.1.4 1.6 1.2 2.7 2.2 3.3-.1-4.1 1.9-7.9 5.4-10.6-.3 3.5 1 5.9 2.4 8 .5-1 .7-2.1.7-3.2 2.3 2.2 3.4 4.9 3.4 8.1 0 5.2-3.7 9.1-8.9 9.1z";
+const FIRE_MIDDLE = "M12 22c-3.7 0-6.2-2.4-6.2-5.7 0-2.6 1.6-4.2 2.8-6 .4 1.4 1.1 2.2 1.9 2.7.2-2.9 1.6-5.4 3.9-7.1-.2 2.6.8 4.4 1.8 6 .9 1.4 1.6 2.7 1.6 4.4 0 3.4-2.6 5.7-5.8 5.7z";
+const FIRE_CORE = "M12 21.2c-2.3 0-3.8-1.5-3.8-3.6 0-1.8 1.2-2.9 2.1-4.2.3 1 .8 1.6 1.5 2 .2-1.5.9-2.8 2.1-3.8-.1 1.6.6 2.7 1.1 3.7.4.8.7 1.5.7 2.3 0 2.1-1.6 3.6-3.7 3.6z";
+const FIRE_MONTH_CORE = "M12 21.6c-2.9 0-4.8-1.9-4.8-4.5 0-2.2 1.4-3.6 2.5-5.2.3 1.2.9 1.9 1.7 2.4.2-2 1.1-3.7 2.6-4.9-.1 2 .7 3.4 1.4 4.6.6 1 1 1.9 1 3 0 2.7-2 4.6-4.4 4.6z";
+
+/** A flame bigger at each milestone: a flame from the first day, a hot core
+    from a week, a taller fire with a gold core from a month, and from a year
+    a three-tongued fire with embers. The last two rise out of the pill
+    rather than making it taller. */
+function StreakFlame({ tier }: { tier: StreakTier }) {
+  return (
+    <span className={`solo-streak-flame is-${tier}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        {tier === "year" ? (
+          <>
+            <path className="is-deep" d={FIRE_OUTER} />
+            <path className="is-outer" d={FIRE_MIDDLE} />
+            <path className="is-gold" d={FIRE_CORE} />
+            <circle className="is-ember" cx="19.6" cy="4.2" r="1.1" />
+            <circle className="is-ember" cx="4.6" cy="6.4" r="0.8" />
+          </>
+        ) : tier === "month" ? (
+          <>
+            <path className="is-outer" d={FIRE_OUTER} />
+            <path className="is-gold" d={FIRE_MONTH_CORE} />
+          </>
+        ) : (
+          <>
+            <path className="is-outer" d={FLAME_OUTER} />
+            {tier === "week" && <path className="is-core" d={FLAME_CORE} />}
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 /** Today's Daily: its five as rings - named, missed, the one up next, the
     ones to come - and the one thing to do with it now. */
 function DailyCard({ summary, busy, onDaily }: { summary: SoloSummary | null; busy: boolean; onDaily: () => void }) {
@@ -453,11 +533,7 @@ function DailyCard({ summary, busy, onDaily }: { summary: SoloSummary | null; bu
     <section className="surface-card solo-daily" data-testid="solo-daily" aria-labelledby="solo-daily-title">
       <div className="solo-card-head">
         <h2 id="solo-daily-title">{words().daily}</h2>
-        {summary && summary.streak > 0 && (
-          <span className="chip chip-warm" data-testid="solo-streak">
-            {words().streak({ days: summary.streak })}
-          </span>
-        )}
+        {summary && summary.streak > 0 && <StreakIndicator days={summary.streak} />}
       </div>
       {state === "unavailable" ? (
         <p className="solo-note">{words().noDailyToday}</p>

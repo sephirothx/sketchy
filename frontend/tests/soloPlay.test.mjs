@@ -7,6 +7,7 @@ import {
   fingerprint,
   forgetServeStart,
   serveStartedAt,
+  streakMilestone,
   untilLocalMidnight,
   watchLocalDate,
 } from "../src/lib/soloPlay.ts";
@@ -104,4 +105,27 @@ test("a page open across midnight hears the new date, on the clock and on waking
     globalThis.document = previous.document;
     globalThis.window = previous.window;
   }
+});
+
+test("a streak runs to a week, a month and a year, then a year at a time", () => {
+  const at = (days) => {
+    const { tier, from, goal, reached } = streakMilestone(days);
+    return [tier, from, goal, reached];
+  };
+  assert.deepEqual(at(1), ["start", 0, 7, false]);
+  assert.deepEqual(at(6), ["start", 0, 7, false]);
+  assert.deepEqual(at(7), ["week", 7, 30, true]);
+  assert.deepEqual(at(29), ["week", 7, 30, false]);
+  assert.deepEqual(at(30), ["month", 30, 365, true]);
+  assert.deepEqual(at(364), ["month", 30, 365, false]);
+  assert.deepEqual(at(365), ["year", 365, 730, true]);
+  assert.deepEqual(at(500), ["year", 365, 730, false]);
+  assert.deepEqual(at(730), ["year", 730, 1095, true]);
+});
+
+test("a streak's line fills from the milestone passed, and is full on the day of one", () => {
+  assert.equal(streakMilestone(3).fraction, 3 / 7);
+  assert.equal(streakMilestone(18).fraction, 11 / 23);
+  assert.equal(streakMilestone(30).fraction, 1);
+  assert.equal(streakMilestone(31).fraction, 1 / 335);
 });
