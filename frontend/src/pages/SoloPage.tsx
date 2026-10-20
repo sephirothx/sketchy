@@ -86,7 +86,23 @@ function words() {
  * each guess is judged here by the port of the room's judge, and only what a
  * drawing came to is reported (R-SOLO-05, R-SOLO-06).
  */
+/**
+ * Solo's page, one account at a time: everything it holds - the run in play,
+ * the card after a drawing, a run's summary, the summary it opened on - is
+ * that account's, so a sign-out or a sign-in as somebody else starts it
+ * again from nothing rather than leave one player's Daily on another's
+ * screen. Keyed by the account, the whole tree is a new one, and whatever
+ * an old request brings back lands on a tree that is gone. Today a sign-out
+ * on this page or in another tab leaves it signed out, and a sign-in only
+ * happens on a page of its own; the key is what keeps that true for any way
+ * the account changes in place (#1495 review).
+ */
 export function SoloPage() {
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
+  return <SoloSession key={accountId ?? "signed-out"} />;
+}
+
+function SoloSession() {
   useDocumentTitle(ui.solo.solo);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
