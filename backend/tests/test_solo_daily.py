@@ -30,7 +30,7 @@ from app.db.models import (
     SoloServe,
     TurnDrawing,
 )
-from app.repositories.solo import SoloRepository, rebuild_bests
+from app.repositories.solo import SoloRefused, SoloRepository, rebuild_bests
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
 from app.solo_rules import DAILY_REUSE_DAYS
 from tests.dbfixtures import create_test_db
@@ -586,6 +586,29 @@ async def test_deleting_an_account_takes_its_daily_results_and_bests(env):
     await anonymize_account(factory, user_id=stranger.id)
     async with factory() as session:
         for model in (SoloRun, SoloServe, SoloDailyResult, SoloBest):
+            assert await session.scalar(select(func.count()).select_from(model)) == 0, model
+
+
+async def test_a_daily_already_past_the_door_is_refused_once_its_account_is_deleted(env):
+    # Opening or playing a Daily writes a run, its serves and a result: a
+    # deletion that commits after the route's check must not get them back.
+    from app.auth.account_data import anonymize_account
+    from app.db.models import SoloRun
+
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 6)
+    gone = await player(users, factory, "Gone")
+    run = await solo.open_daily(gone.id, DAY, now=NOON)
+    await anonymize_account(factory, user_id=gone.id)
+    for write in (
+        lambda: solo.open_daily(gone.id, DAY, now=NOON),
+        lambda: solo.settle(gone.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=NOON),
+    ):
+        with pytest.raises(SoloRefused) as refused:
+            await write()
+        assert refused.value.kind == "erased"
+    async with factory() as session:
+        for model in (SoloRun, SoloServe, SoloDailyResult):
             assert await session.scalar(select(func.count()).select_from(model)) == 0, model
 
 

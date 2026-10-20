@@ -1159,6 +1159,7 @@ class SoloRepository:
             try:
                 async with self._session_factory() as session:
                     async with session.begin():
+                        await require_live_player(session, user_id)
                         player = (await identity_ids(session, UUID(user_id)))[0]
                         rows = list(
                             (
