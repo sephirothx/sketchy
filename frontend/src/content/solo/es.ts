@@ -93,6 +93,8 @@ export const SOLO_ES: SoloCopy = {
     backToSolo: "Volver a Solo",
     couldNotLoad: "No se pudo cargar Solo.",
     couldNotLoadDrawing: "No se pudo cargar este dibujo.",
+    cannotBeNamed: "Este ya no se puede acertar: solo puedes rendirte.",
+    promptGone: "Ya no está disponible",
     couldNotSaveAnswer: "No se ha podido guardar tu respuesta.",
     tryAgain: "Reintentar",
     signInToPlay: "Inicia sesión para jugar a Solo",

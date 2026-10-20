@@ -32,7 +32,8 @@ export interface SoloForms {
 export type SoloOutcome = "solved" | "given_up" | "timed_out";
 
 /** A drawing served in a run. `forms` is null once it is settled, when
-    `prompt` says what it was. */
+    `prompt` says what it was - and on an open serve nothing can name any
+    more (R-SOLO-13), which is given up; its `prompt` stays null. */
 export interface SoloServe {
   serveId: string;
   position: number;

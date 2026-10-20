@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 
 from app.api import solo as solo_api
-from app.db.models import SoloDailyDay, SoloDailyResult, SoloDailySet, SoloRun, TurnDrawing
+from app.db.models import PromptVersion, SoloDailyDay, SoloDailyResult, SoloDailySet, SoloRun, TurnDrawing
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
 from tests import test_solo_daily
@@ -230,6 +230,41 @@ async def test_opening_a_past_daily_never_changes_its_set(env):
     assert after == before
     async with factory() as session:
         assert all(row.replaced_at is None for row in await test_solo_daily._set(factory, PAST))
+
+
+async def test_a_past_daily_opens_when_one_of_its_prompts_can_no_longer_be_named(env):
+    """A takedown can leave a past date's concept with no wording for the
+    player, and the set never changes after its date: the other four are
+    still played, and that one can only be given up (#1496 review)."""
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "Other")
+    await solo.open_daily(other.id, PAST, now=_noon(PAST))
+    unnamed = (await test_solo_daily._set(factory, PAST))[0]
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(PromptVersion)
+            .where(PromptVersion.concept_id == unnamed.concept_id)
+            .values(moderation_state="hidden")
+        )
+    stranger = await player(users, factory, "Stranger")
+    await sign_in_as(http, factory, stranger.id)
+    opened = await http.post(f"/api/solo/daily/{PAST.isoformat()}")
+    assert opened.status_code == 200, opened.text
+    serves = opened.json()["serves"]
+    assert serves[0]["forms"] is None
+    assert all(serve["forms"] for serve in serves[1:])
+
+    named = await http.post(
+        f"/api/solo/serves/{serves[0]['serveId']}/result", json={"outcome": "solved", "seconds": 5}
+    )
+    assert named.status_code == 409
+    await _settle_all(http, serves[:1], outcome="given_up")
+    await _settle_all(http, serves[1:])
+    result = await _result(factory, stranger.id, PAST)
+    assert result.completed_at is not None and result.solved == 4
+    run = (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).json()
+    assert run["serves"][0]["outcome"] == "given_up" and run["serves"][0]["prompt"] is None
 
 
 async def test_a_past_daily_sharing_today_s_concept_waits_and_a_finished_one_is_reviewed(env, monkeypatch):

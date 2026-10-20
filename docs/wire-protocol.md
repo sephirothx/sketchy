@@ -2438,7 +2438,11 @@ A **run** is `{runId, mode: free | daily, length: 5 | 10 | null, state: active |
 abandoned, endReason: completed | missed | abandoned | null, position, solved, points,
 dailyDate, serves}`. A **serve** is `{serveId, position, forms, outcome: solved | given_up |
 timed_out | null, points, prompt, promptLanguage}`: `forms` while it is open, `prompt` and
-`promptLanguage` once it is settled, never both. `forms` is the JSON
+`promptLanguage` once it is settled, never both. An open serve with `forms: null` is one
+nothing can name for the player any more - a Daily's position whose concept lost its
+wording in their languages with no replacement, or a past date's, R-SOLO-13 - and is given
+up, never named (`solved` is `409 solo_conflict`); settled, its `prompt` and
+`promptLanguage` are `null` too. `forms` is the JSON
 `{language, own: {prompt, aliases}, others: {lang: {prompt, aliases}}, taken}` — the
 player's first-ranked language that has the concept (the one `zxx` answer, folded in the
 player's first language, for an agnostic concept), their other play languages' forms,

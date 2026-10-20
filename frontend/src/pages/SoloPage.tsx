@@ -39,6 +39,7 @@ import { decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHist
 import { judge } from "../lib/guessJudge";
 import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
+import { DecodedDrawings } from "../lib/soloDrawings";
 import {
   decodeSoloForms,
   fetchSoloDrawing,
@@ -114,6 +115,8 @@ export function SoloPage() {
 
 function SoloSession() {
   useDocumentTitle(ui.solo.solo);
+  // The drawings this account's page decoded go with it.
+  useEffect(() => () => decodedDrawings.clear(), []);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -1230,6 +1233,10 @@ function SoloPlay({
 }) {
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Served with nothing to name it by: a Daily's position whose concept lost
+  // its wording in the player's languages, with no replacement, or a past
+  // date's (R-SOLO-13). Given up, never guessed.
+  const unnameable = serve.forms === null;
   const [attempt, setAttempt] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -1403,6 +1410,11 @@ function SoloPlay({
           </button>
         </div>
       )}
+      {unnameable && (
+        <p className="solo-note" data-testid="solo-unnameable">
+          {words().cannotBeNamed}
+        </p>
+      )}
       <form className="solo-guess" onSubmit={submit}>
         <input
           ref={input}
@@ -1417,12 +1429,12 @@ function SoloPlay({
           maxLength={64}
           placeholder={words().typeYourGuess}
           aria-label={words().typeYourGuess}
-          disabled={!actions || timedOut || unsaved !== null}
+          disabled={!actions || unnameable || timedOut || unsaved !== null}
           onChange={(change) => setGuess(change.target.value)}
           // A new guess is the player's attention; the last verdict goes.
           onFocus={() => setFeedback(null)}
         />
-        <button type="submit" className="btn btn-primary" disabled={!actions || !guess.trim() || timedOut || unsaved !== null}>
+        <button type="submit" className="btn btn-primary" disabled={!actions || unnameable || !guess.trim() || timedOut || unsaved !== null}>
           {words().guess}
         </button>
         <button
@@ -1431,7 +1443,7 @@ function SoloPlay({
           data-testid="solo-give-up"
           // A drawing that will not load can still be given up: it is the
           // only way past one that stopped being served (R-SOLO-13).
-          disabled={(!actions && !failed) || timedOut || unsaved !== null}
+          disabled={(!actions && !failed && !unnameable) || timedOut || unsaved !== null}
           onClick={() => void settle("given_up", elapsed)}
         >
           {words().giveUp}
@@ -1492,49 +1504,41 @@ function SoloCard({
   );
 }
 
-/** Drawings decoded this visit, by serve: the card hands its drawing on, and
-    a review's strip and its large frame read each one once. */
-const decodedDrawings = new Map<string, DecodedCanvasAction[]>();
-const DECODED_KEPT = 24;
+/** Drawings decoded this visit, by serve, spared only their decoding: each
+    is shown once the drawing door has given it again (`DecodedDrawings`). */
+const decodedDrawings = new DecodedDrawings<DecodedCanvasAction[]>();
 
-function rememberDrawing(serveId: string, actions: DecodedCanvasAction[]) {
-  decodedDrawings.delete(serveId);
-  decodedDrawings.set(serveId, actions);
-  while (decodedDrawings.size > DECODED_KEPT) {
-    const oldest = decodedDrawings.keys().next().value;
-    if (oldest === undefined) break;
-    decodedDrawings.delete(oldest);
-  }
-}
-
-/** A served drawing, decoded: the one given, one already read, or fetched. */
+/** A served drawing, decoded. `given` is the one the play view fetched
+    through the drawing door a moment ago, handed to the card after it; any
+    other is asked of the door every time it is shown - a review opened
+    again, a thumbnail picked - so a drawing withdrawn, hidden or erased since
+    stops showing (R-SOLO-04, R-SOLO-16, #1496 review). */
 function useServeDrawing(serveId: string, given: DecodedCanvasAction[] | null) {
-  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(
-    () => given ?? decodedDrawings.get(serveId) ?? null,
-  );
+  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(given);
   const [unloadable, setUnloadable] = useState(false);
   useEffect(() => {
-    if (actions) {
-      rememberDrawing(serveId, actions);
-      return;
-    }
+    if (given) return;
     let cancelled = false;
     void fetchSoloDrawing(serveId)
       .then((bytes) => {
         if (cancelled) return;
-        const decoded = decodeCanvasHistory(bytes);
+        const decoded = decodedDrawings.decode(serveId, bytes, decodeCanvasHistory);
         if (decoded) setActions(decoded);
         else setUnloadable(true);
       })
       // Gone for everybody since (R-SOLO-13), or not to be had now: said,
-      // rather than an empty frame.
+      // rather than an empty frame, and nothing of it kept.
       .catch(() => {
-        if (!cancelled) setUnloadable(true);
+        decodedDrawings.forget(serveId);
+        if (!cancelled) {
+          setActions(null);
+          setUnloadable(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [actions, serveId]);
+  }, [given, serveId]);
   return { actions, unloadable };
 }
 
@@ -1585,7 +1589,7 @@ function SettledFrame({
           <span className="visually-hidden" data-testid="solo-verdict">
             {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
           </span>
-          <Heading className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</Heading>
+          <Heading className="solo-prompt" data-testid="solo-prompt">{serve.prompt ?? words().promptGone}</Heading>
           {/* A miss's detail is its verdict again: said once. */}
           <span className="solo-verdict-detail" aria-hidden={solved ? undefined : true}>
             {solved ? (
@@ -1832,7 +1836,7 @@ function ServeThumb({ serve, picked, onPick }: { serve: SoloServe; picked: boole
       type="button"
       className={`solo-thumb ${serve.outcome === "solved" ? "is-solved" : "is-missed"}${picked ? " is-picked" : ""}`}
       aria-pressed={picked}
-      aria-label={words().reviewPick({ position: serve.position, prompt: serve.prompt ?? "" })}
+      aria-label={words().reviewPick({ position: serve.position, prompt: serve.prompt ?? words().promptGone })}
       data-testid="solo-review-thumb"
       onClick={onPick}
     >

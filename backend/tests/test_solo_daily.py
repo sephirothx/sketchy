@@ -470,6 +470,40 @@ async def test_a_language_s_wording_taken_down_replaces_the_drawing_for_everybod
     assert UUID(eight.turn_id) not in {row.turn_id for row in await _set(factory)}
 
 
+async def test_a_drawing_with_no_wording_left_and_no_replacement_is_given_up_not_refused(env):
+    """The same takedown with no candidate to replace the drawing: the Daily
+    still opens with all five for the player it leaves nothing to name by,
+    that one to be given up, the others to be played (R-SOLO-13)."""
+    http, users, history, solo, factory = env
+    every = {lang: f"n-{lang}" for lang in ("en", "de", "es", "fr", "it", "nl", "pl", "pt")}
+    await _candidates(users, history, factory, 4, tag="y")
+    _, _, [eight] = await _candidates(users, history, factory, 1, forms=every, tag="n")
+    stranger = await player(users, factory, "Stranger")
+    await solo.open_daily(stranger.id, DAY, now=NOON)
+
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PromptVersion)
+                .where(PromptVersion.language == "pl", PromptVersion.canonical_answer == "n-pl")
+                .values(moderation_state="hidden")
+            )
+    polish = await player(users, factory, "Polish", languages=("pl",))
+    run = await solo.open_daily(polish.id, DAY, now=NOON)
+    assert UUID(eight.turn_id) in {row.turn_id for row in await _set(factory)}, "nothing to replace it with"
+    turns = await _served_turns(factory, run.run_id)
+    unnamed = run.serves[turns.index(UUID(eight.turn_id))]
+    assert unnamed.forms == "" and all(serve.forms for serve in run.serves if serve is not unnamed)
+    with pytest.raises(SoloRefused):
+        await solo.settle(polish.id, unnamed.serve_id, outcome="solved", seconds=4, now=NOON)
+    for serve in run.serves:
+        outcome = "given_up" if serve is unnamed else "solved"
+        await solo.settle(polish.id, serve.serve_id, outcome=outcome, seconds=4, now=NOON)
+    async with factory() as session:
+        result = await session.get(SoloDailyResult, (UUID(polish.id), DAY))
+    assert result.completed_at is not None and result.solved == 4
+
+
 async def test_free_runs_skip_another_drawing_of_an_open_daily_s_concept(env):
     http, users, history, solo, factory = env
     drawer, seats, _ = await _candidates(users, history, factory, 5)

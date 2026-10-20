@@ -289,12 +289,14 @@ def _serve_view(serve: SoloServe) -> ServeView:
     return ServeView(
         serve_id=str(serve.id),
         position=serve.position,
-        # Only while it is open: once settled, the prompt is said plainly.
-        forms="" if settled else encode_answers(serve.id, serve.forms),
+        # Only while it is open: once settled, the prompt is said plainly. A
+        # serve with no forms is one that cannot be named any more
+        # (`_sync_daily_serves`): no forms to judge by, no prompt to say.
+        forms="" if settled or not serve.forms else encode_answers(serve.id, serve.forms),
         outcome=serve.outcome,
         points=serve.points,
-        prompt=serve.prompt if settled else None,
-        prompt_language=serve.prompt_language if settled else None,
+        prompt=(serve.prompt or None) if settled else None,
+        prompt_language=serve.prompt_language if settled and serve.prompt else None,
     )
 
 
@@ -1136,6 +1138,9 @@ class SoloRepository:
                 )
                 if serve is None or serve.outcome is not None or run.state != "active":
                     raise SoloRefused("conflict")
+                if outcome == SOLVED and not serve.forms:
+                    # Nothing to name it by: it can only be given up.
+                    raise SoloRefused("conflict")
                 earlier_open = await session.scalar(
                     select(func.count()).where(
                         SoloServe.run_id == run.id,
@@ -1288,28 +1293,37 @@ class SoloRepository:
         )
         for row in rows:
             serve = serves.get(row.position)
-            if serve is not None and (serve.outcome is not None or serve.turn_id == row.turn_id):
+            # A settled serve keeps its mark; an open one is synced to its
+            # position again only when the set moved, or when it could not be
+            # named last time and may be now.
+            if serve is not None and (
+                serve.outcome is not None or (serve.turn_id == row.turn_id and serve.forms)
+            ):
                 continue
             forms = await answer_forms(
                 session, row.concept_id, languages,
                 drawn_version_id=drawn.get(row.turn_id), meanings=self._meanings,
             )
-            if forms is None:
-                # Every set concept is nameable in every language
-                # (`_servable_set_rows`); a position left without a serve
-                # would hold the Daily open for good, so refuse instead.
-                raise SoloRefused("conflict")
+            # Every concept is nameable in every language when its set is
+            # chosen (`_servable_set_rows`), but a takedown can leave one with
+            # no wording for this player since - and a past date's set never
+            # changes (R-SOLO-18). The position is served with nothing to
+            # name it by, to be given up, rather than holding the other four
+            # of the Daily shut (#1496 review).
+            prompt, language, text = (
+                (forms.prompt, forms.language, forms.text()) if forms else ("", languages[0], "")
+            )
             if serve is None:
                 session.add(
                     SoloServe(
                         run_id=run.id, user_id=run.user_id, turn_id=row.turn_id,
-                        position=row.position, prompt=forms.prompt,
-                        prompt_language=forms.language, forms=forms.text(), served_at=now,
+                        position=row.position, prompt=prompt,
+                        prompt_language=language, forms=text, served_at=now,
                     )
                 )
             else:
                 serve.turn_id, serve.prompt, serve.prompt_language, serve.forms = (
-                    row.turn_id, forms.prompt, forms.language, forms.text()
+                    row.turn_id, prompt, language, text
                 )
         run.position = DAILY_LENGTH
         await session.flush()

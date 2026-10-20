@@ -21,7 +21,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from playwright.async_api import Page, async_playwright, expect
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
@@ -30,7 +30,9 @@ from app.db.models import (
     PromptVersion,
     SoloDailyConcept,
     SoloDailyDay,
+    SoloDailySet,
     SoloServe,
+    TurnDrawing,
     User,
 )
 from app.domain_values import PROMPT_LANGUAGES
@@ -367,6 +369,24 @@ async def open_past_daily(day: date) -> None:
         await engine.dispose()
 
 
+async def take_out_of_solo(day: date, *, position: int) -> None:
+    """Take one drawing of `day`'s Daily out of Solo, as its drawer would."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session, session.begin():
+            turns = select(SoloDailySet.turn_id).where(
+                SoloDailySet.daily_date == day, SoloDailySet.position == position
+            )
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id.in_(turns))
+                .values(solo_withdrawn_at=datetime.now(timezone.utc))
+            )
+    finally:
+        await engine.dispose()
+
+
 async def show_month(page: Page, day: date) -> None:
     """Page the calendar back to `day`'s month."""
     month = day.isoformat()[:7]
@@ -453,6 +473,17 @@ async def test_a_missed_daily_is_played_from_the_calendar_and_then_reviewed():
             assert width <= 412, width
             await review.get_by_test_id("solo-review-back").click()
             await expect(page.get_by_test_id("solo-calendar")).to_be_visible()
+
+            # Its first drawing taken out of Solo since: the review opened
+            # again asks the drawing door afresh, and shows it no more,
+            # however recently this page decoded it (#1496 review). One
+            # drawing, not five: the pool is every parallel test's.
+            await page.set_viewport_size({"width": 1280, "height": 900})
+            await take_out_of_solo(day, position=1)
+            await show_month(page, day)
+            await pick.click()
+            await expect(review.get_by_test_id("solo-card-drawing")).to_contain_text("This drawing could not be loaded.")
+            await expect(review.get_by_test_id("solo-review-thumb").locator("canvas")).to_have_count(4)
         finally:
             await context.close()
             await browser.close()

@@ -97,6 +97,8 @@ export const SOLO_EN = {
     backToSolo: "Back to Solo",
     couldNotLoad: "Solo could not be loaded.",
     couldNotLoadDrawing: "This drawing could not be loaded.",
+    cannotBeNamed: "This one can no longer be named, so it can only be given up.",
+    promptGone: "No longer available",
     couldNotSaveAnswer: "Your answer could not be saved.",
     tryAgain: "Try again",
     signInToPlay: "Sign in to play Solo",

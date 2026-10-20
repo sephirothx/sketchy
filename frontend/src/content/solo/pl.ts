@@ -94,6 +94,8 @@ export const SOLO_PL: SoloCopy = {
     backToSolo: "Wróć do Solo",
     couldNotLoad: "Nie udało się wczytać Solo.",
     couldNotLoadDrawing: "Nie udało się wczytać tego rysunku.",
+    cannotBeNamed: "Tego nie da się już odgadnąć, możesz się tylko poddać.",
+    promptGone: "Już niedostępne",
     couldNotSaveAnswer: "Nie udało się zapisać twojej odpowiedzi.",
     tryAgain: "Spróbuj ponownie",
     signInToPlay: "Zaloguj się, aby grać w Solo",

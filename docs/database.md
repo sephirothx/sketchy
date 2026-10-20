@@ -2186,7 +2186,9 @@ unique per run) · `prompt` · `prompt_language` (what the player is shown at th
 the language it was shown in — kept, so a run's history reads the same after a list
 changes) · `forms` (the `JudgeTarget` JSON the drawing is judged by, as served, so a
 resumed run hands back exactly that, whatever the player's languages have done since;
-never exported) · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
+never exported). An empty `forms` and `prompt` mark a Daily position nothing could name
+for the player when it was served (R-SOLO-13): it can only be given up, and it is the one
+open serve synced again on each opening, in case its wording came back · `served_at` · `settled_at` · `outcome` (`solved \| given_up \| timed_out`) ·
 `solve_seconds` (the client's clock, bounded to 30) · `points` (100–300, set exactly when
 solved) · `reported_at`, `report_details` (the player reported it, and what they wrote: their
 record of a Solo report, exported in place of the report row).
@@ -3193,6 +3195,7 @@ What each writer then does with an erased identity:
 | --- | --- |
 | Message retention queue (`_write`) | Drops the line; the rest of the batch is written |
 | Finished-game write (`save_game`) | Writes the game, the seats, the scores and the turns; the identity's snapshots carry the **Deleted player** tombstone, its drawings are written as `deleted` rows with no payload, reactions *on* those drawings are dropped and reactions it *gave* stay. The payload hash is taken from the input, so a retry of the same game is the same game, not a conflict |
+| Solo's writes: a free run started, a run served, a drawing settled, a Daily opened (`require_live_player`) | Refused (`SoloRefused("erased")`, 401 over HTTP) before a run, serve or result is written |
 | Avatar upload, owned-list create/update, bug, player and content reports | Refused (`AccountErasedError`, 401 over HTTP): authentication before the deletion is not authorization after it |
 | Export request | Already locks the account row `FOR UPDATE` and refuses a deleted account |
 | Reaction (`set_drawing_reaction`) | Locks the **drawer's** identity, shared, before the drawing row (for the stats rebuild, §`user_stats_daily` *Synchronization*). The turn and drawing are read before that lock, so a reaction that waited behind the drawer's deletion refuses on the erased identity the lock reports rather than on the drawing it loaded — the deletion took the drawing and its reactions (R-REACT-10) |

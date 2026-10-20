@@ -93,6 +93,8 @@ export const SOLO_NL: SoloCopy = {
     backToSolo: "Terug naar Solo",
     couldNotLoad: "Solo kon niet geladen worden.",
     couldNotLoadDrawing: "Deze tekening kon niet geladen worden.",
+    cannotBeNamed: "Deze kan niet meer geraden worden, je kunt alleen opgeven.",
+    promptGone: "Niet meer beschikbaar",
     couldNotSaveAnswer: "Je antwoord kon niet worden opgeslagen.",
     tryAgain: "Opnieuw proberen",
     signInToPlay: "Log in om Solo te spelen",
