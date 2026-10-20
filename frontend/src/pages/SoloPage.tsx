@@ -991,9 +991,6 @@ function SoloCalendar({
           </div>
         </dl>
       )}
-      {shown?.days.some((day) => day.open || day.result?.completed) && (
-        <p className="solo-note">{words().calendarHint}</p>
-      )}
     </section>
   );
 }

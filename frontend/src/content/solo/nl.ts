@@ -57,7 +57,6 @@ export const SOLO_NL: SoloCopy = {
     continuePast: "Verder",
     review: "Terugkijken",
     reviewPick: (p: { position: number; prompt: string }) => `Tekening ${number(p.position)}: ${p.prompt}`,
-    calendarHint: "Kies een eerdere dag om hem te spelen of af te maken, of een afgemaakte om hem terug te kijken. Een die je later speelt telt niet mee voor je reeks.",
     calendarDayAction: (p: { date: string; status: string; action: string }) => `${p.date}: ${p.status}. ${p.action}`,
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Tekening ${number(p.position)}` : `Tekening ${number(p.position)} van ${number(p.length)}`,
