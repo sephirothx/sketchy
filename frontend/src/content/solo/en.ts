@@ -57,6 +57,12 @@ export const SOLO_EN = {
     dailiesPlayed: "Dailies played",
     namedShare: "named",
     longestStreak: "longest streak",
+    playPast: "Play",
+    continuePast: "Continue",
+    review: "Review",
+    reviewPick: (p: { position: number; prompt: string }) => `Drawing ${number(p.position)}: ${p.prompt}`,
+    calendarHint: "Pick a past day to play it or finish it, or a day you finished to review it. One played late counts for no streak.",
+    calendarDayAction: (p: { date: string; status: string; action: string }) => `${p.date}: ${p.status}. ${p.action}`,
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Drawing ${number(p.position)}` : `Drawing ${number(p.position)} of ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

@@ -53,6 +53,12 @@ export const SOLO_DE: SoloCopy = {
     dailiesPlayed: "Tagesrätsel gespielt",
     namedShare: "erraten",
     longestStreak: "längste Serie",
+    playPast: "Spielen",
+    continuePast: "Weiterspielen",
+    review: "Ansehen",
+    reviewPick: (p: { position: number; prompt: string }) => `Zeichnung ${number(p.position)}: ${p.prompt}`,
+    calendarHint: "Wähl einen vergangenen Tag, um ihn zu spielen oder zu beenden, oder einen beendeten, um ihn anzusehen. Ein nachgeholtes zählt nicht für deine Tage in Folge.",
+    calendarDayAction: (p: { date: string; status: string; action: string }) => `${p.date}: ${p.status}. ${p.action}`,
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Zeichnung ${number(p.position)}` : `Zeichnung ${number(p.position)} von ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

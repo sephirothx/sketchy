@@ -2147,6 +2147,10 @@
    "shareWithdrawn",
    "sharedByMe"
   ],
+  "api.solo:drawing_state": [
+   "myReaction",
+   "reactionCounts"
+  ],
   "api.solo:run_payload": [
    "dailyDate",
    "endReason",
@@ -2156,15 +2160,15 @@
    "promptLanguage",
    "serveId"
   ],
-  "api.solo:write_reaction": [
-   "myReaction",
-   "reactionCounts"
-  ],
-  "api.solo:write_share": [
+  "api.solo:share_payload": [
    "heldUntil",
    "inGallery",
    "shareWithdrawn",
    "sharedByMe"
+  ],
+  "api.solo:write_reaction": [
+   "myReaction",
+   "reactionCounts"
   ],
   "api.user_blocks:_block_payload": [
    "createdAt",

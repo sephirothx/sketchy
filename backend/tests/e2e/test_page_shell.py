@@ -82,6 +82,11 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
             assert await page.evaluate("() => innerWidth === document.documentElement.clientWidth"), (
                 "Rules scrolls beside a scrollbar's lane"
             )
+            # Measured once the page's fonts are in: Rules is the first page,
+            # and before Nunito Sans arrives the chip's name is set in Linux's
+            # far wider fallback, so it stood 19 px further left than on the
+            # lobby, measured once the font was cached (#1493, #1496 CI).
+            await page.evaluate("document.fonts.ready.then(() => true)")
             rules_header = await header.bounding_box()
             rules_chip = await chip.bounding_box()
 
@@ -90,6 +95,7 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
             assert await page.evaluate(
                 "document.documentElement.scrollHeight <= document.documentElement.clientHeight"
             ), "the lobby is meant to be pinned to the window here, with nothing to scroll"
+            await page.evaluate("document.fonts.ready.then(() => true)")
             lobby_header = await header.bounding_box()
             lobby_chip = await chip.bounding_box()
 

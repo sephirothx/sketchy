@@ -53,6 +53,12 @@ export const SOLO_IT: SoloCopy = {
     dailiesPlayed: "Sfide giocate",
     namedShare: "indovinati",
     longestStreak: "serie più lunga",
+    playPast: "Gioca",
+    continuePast: "Continua",
+    review: "Rivedi",
+    reviewPick: (p: { position: number; prompt: string }) => `Disegno ${number(p.position)}: ${p.prompt}`,
+    calendarHint: "Scegli un giorno passato per giocarlo o finirlo, o uno che hai finito per rivederlo. Uno giocato in ritardo non conta per la serie.",
+    calendarDayAction: (p: { date: string; status: string; action: string }) => `${p.date}: ${p.status}. ${p.action}`,
     drawingOf: (p: { position: number; length: number | null }) =>
       p.length === null ? `Disegno ${number(p.position)}` : `Disegno ${number(p.position)} di ${number(p.length)}`,
     secondsLeft: (p: { seconds: number }) => `${number(p.seconds)} s`,

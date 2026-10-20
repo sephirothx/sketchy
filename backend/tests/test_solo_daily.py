@@ -305,7 +305,8 @@ async def test_a_date_that_is_nobody_s_today_is_refused(env):
     stranger = await player(users, factory, "Stranger")
     await sign_in_as(http, factory, stranger.id)
     real_today = datetime.now(timezone.utc).date()
-    for day in (real_today - timedelta(days=2), real_today + timedelta(days=2), "2026-13-40"):
+    # A past date is the archive's (#1470, tests/test_solo_archive.py).
+    for day in (real_today + timedelta(days=2), "2026-13-40"):
         refused = await http.post(f"/api/solo/daily/{day}")
         assert refused.status_code == 422
         assert refused.json()["errorCode"] == "solo_date_out_of_range"
@@ -732,7 +733,7 @@ async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
     await solo.settle(stranger.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=NOON)
     await solo.settle(stranger.id, run.serves[1].serve_id, outcome="timed_out", seconds=30, now=NOON)
 
-    month = await solo.month(stranger.id, date(2026, 10, 1), DAY + timedelta(days=2))
+    month = await solo.month(stranger.id, date(2026, 10, 1), DAY + timedelta(days=2), now=NOON)
     assert month["month"] == "2026-10" and month["first"] == DAY.isoformat()
     # Every date up to the player's today, and no further.
     assert [day["date"] for day in month["days"]][-1] == "2026-10-17"
@@ -741,8 +742,8 @@ async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
     assert played["2026-10-15"]["daily"] is True
     assert played["2026-10-15"]["result"]["solved"] == 1
     # Nobody asked for the 14th: it had no Daily, which is no missed day.
-    assert played["2026-10-14"] == {"date": "2026-10-14", "daily": False, "result": None}
-    september = await solo.month(stranger.id, date(2026, 9, 1), DAY)
+    assert played["2026-10-14"] == {"date": "2026-10-14", "daily": False, "open": False, "result": None}
+    september = await solo.month(stranger.id, date(2026, 9, 1), DAY, now=NOON)
     assert len(september["days"]) == 30 and not any(day["result"] for day in september["days"])
 
     summary = await solo.summary(stranger.id, DAY, now=NOON)

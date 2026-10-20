@@ -63,6 +63,7 @@ from app.prompt_content import prompt_match_variants
 from app.repositories.interfaces import TurnDrawingDetail
 from app.solo_rules import (
     DAILY_LENGTH,
+    DAY_EDGE,
     DAILY_REUSE_DAYS,
     SKIPPED_RETRY,
     MAX_OPEN_SERVES,
@@ -708,10 +709,18 @@ async def _write_set(session: AsyncSession, day: date, picked) -> None:
     await session.flush()
 
 
-async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[SoloDailySet] | None:
+async def daily_set(
+    session: AsyncSession, day: date, *, now: datetime, create: bool = True, replace: bool = True
+) -> list[SoloDailySet] | None:
     """`day`'s five, chosen by the first request for the date and the same
     for everybody after it; None for a day with too few to choose from - a
-    day looked at again, while it is open, every `SKIPPED_RETRY`.
+    day looked at again, while it is open, every `SKIPPED_RETRY` - or,
+    without `create`, for one nobody asked for while it was open: the archive
+    (#1470) plays the Dailies there were, never a past date chosen late.
+    Without `replace` the set is read as it stands: a past date is never
+    changed after the fact - a replacement walk from it would not avoid the
+    Dailies open now, and could hand a late player today's answer (#1496
+    review). A position whose drawing has gone since can only be given up.
 
     A pick takes the Daily pick lock first, so picks for different dates
     happen one at a time and each reads the concepts the others used; then
@@ -722,6 +731,8 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
     taken only then, so the opens of an untouched Daily never queue behind
     one another."""
     existing = await session.get(SoloDailyDay, day)
+    if existing is None and not create:
+        return None
     if existing is None:
         await _lock_daily_picks(session)
         existing = await session.get(SoloDailyDay, day, populate_existing=True)
@@ -761,6 +772,8 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
     if existing.state != "set":
         return None
     rows = await _set_rows(session, day)
+    if not replace:
+        return rows
     if len(set((await session.scalars(_servable_set_rows(rows))).all())) == len(rows):
         return rows
     await _lock_daily_picks(session)
@@ -788,6 +801,32 @@ async def daily_set(session: AsyncSession, day: date, *, now: datetime) -> list[
         session.add(SoloDailyConcept(daily_date=day, concept_id=concept))
     await session.flush()
     return rows
+
+
+async def _dates_sharing_open_concepts(
+    session: AsyncSession, days: Sequence[date], now: datetime
+) -> set[date]:
+    """The past dates among `days` whose Daily holds a concept a Daily open
+    somewhere now also holds: played late, they would hand over that open
+    Daily's answer, as a free run would (R-SOLO-14)."""
+    if not days:
+        return set()
+    open_concepts = select(SoloDailySet.concept_id).where(
+        SoloDailySet.daily_date.in_(open_dates(now))
+    )
+    return set(
+        (
+            await session.scalars(
+                select(SoloDailySet.daily_date)
+                .where(
+                    SoloDailySet.daily_date.in_(list(days)),
+                    SoloDailySet.daily_date.not_in(open_dates(now)),
+                    SoloDailySet.concept_id.in_(open_concepts),
+                )
+                .distinct()
+            )
+        ).all()
+    )
 
 
 async def ensure_open_dailies(
@@ -1142,19 +1181,32 @@ class SoloRepository:
 
     # --- the Daily ------------------------------------------------------------
 
-    async def open_daily(self, user_id: str, day: date, *, now: datetime) -> RunView:
+    async def open_daily(
+        self, user_id: str, day: date, *, now: datetime, archive: bool = False
+    ) -> RunView:
         """The player's Daily for `day`: created with its five serves the
         first time, resumed after - never restarted (#1434). A drawing the
         set replaced since the player was served it is swapped in their open
         serves too; what they already played keeps its mark. `missing` for a
-        day with no Daily."""
+        day with no Daily. From the `archive` (#1470), a date whose Daily was
+        never chosen has none."""
         # The set first, in a transaction of its own: a day found too thin is
         # stored as skipped even though this request is refused.
         async with self._session_factory() as session:
             async with session.begin():
-                picked = await daily_set(session, day, now=now)
+                picked = await daily_set(
+                    session, day, now=now, create=not archive, replace=not archive
+                )
         if picked is None:
             raise SoloRefused("missing")
+        if archive and not await self.daily_finished(user_id, day):
+            # A past Daily that shares a concept with one open now would hand
+            # whoever plays it late today's answer (#1496 review): held until
+            # that Daily has ended everywhere. One finished is only reviewed.
+            await ensure_open_dailies(self._session_factory, now)
+            async with self._session_factory() as session:
+                if day in await _dates_sharing_open_concepts(session, (day,), now):
+                    raise SoloRefused("conflict")
         for attempt in range(2):
             try:
                 async with self._session_factory() as session:
@@ -1197,6 +1249,18 @@ class SoloRepository:
                 if attempt:
                     raise SoloRefused("conflict") from None
         raise SoloRefused("conflict")
+
+    async def daily_finished(self, user_id: str, day: date) -> bool:
+        """Whether the player finished `day`'s Daily: a review, then, which
+        opens whatever the archive door says (#1496 review)."""
+        async with self._session_factory() as session:
+            player = (await identity_ids(session, UUID(user_id)))[0]
+            completed = await session.scalar(
+                select(SoloDailyResult.completed_at).where(
+                    SoloDailyResult.user_id == player, SoloDailyResult.daily_date == day
+                )
+            )
+        return completed is not None
 
     async def _sync_daily_serves(
         self,
@@ -1270,7 +1334,9 @@ class SoloRepository:
             result = await session.get(SoloDailyResult, (player, today))
             run = await session.scalar(
                 select(SoloRun).where(
-                    SoloRun.user_id == player, SoloRun.mode == "daily", SoloRun.daily_date == today
+                    SoloRun.user_id == player,
+                    SoloRun.mode == "daily",
+                    SoloRun.daily_date == today,
                 )
             )
             if day is not None and day.state == "skipped":
@@ -1364,12 +1430,28 @@ class SoloRepository:
             },
         }
 
-    async def month(self, user_id: str, first: date, today: date) -> dict:
+    async def month(
+        self, user_id: str, first: date, today: date, *, now: datetime, archive: bool = True
+    ) -> dict:
         """One month of the player's Dailies, for the page's calendar: each
-        date of it up to `today`, whether it had a Daily, and the player's
-        result for it if any. `first` is the player's first Daily, so the
-        calendar knows how far back there is anything to show."""
+        date of it up to `today`, whether it had a Daily, whether it can be
+        played from the calendar now (`open`, #1470), and the player's result
+        for it if any. `first` is the player's first Daily, so the calendar
+        knows how far back there is anything to show.
+
+        A date is open once it has ended everywhere: the player's yesterday
+        may still be somebody's today, and played from here it would count
+        toward a streak the archive promises it never does (#1496 review).
+        `archive` is the gate's say (R-SOLO-09): closed, nothing is. Open,
+        `earliest` is the first Daily there was, which the calendar can go
+        back to though the player never played it."""
+        # `daily_release_at(d) <= now` is `d < (now - DAY_EDGE).date()`.
+        ended_before = (now - DAY_EDGE).date()
         last = min(today, _month_end(first))
+        if archive:
+            # Which past dates are held depends on the open Dailies' concepts:
+            # picked first, as before a free run serves.
+            await ensure_open_dailies(self._session_factory, now)
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
             had = set(
@@ -1393,9 +1475,39 @@ class SoloRepository:
                     )
                 ).all()
             }
+            # The player's first Daily played on its own date: one played late
+            # from the archive must not turn the weeks before it into days
+            # they let pass (#1496 review). Any first one, if none was.
             earliest = await session.scalar(
                 select(func.min(SoloDailyResult.daily_date)).where(
+                    SoloDailyResult.user_id == player,
+                    SoloDailyResult.started_on_date.is_(True),
+                )
+            ) or await session.scalar(
+                select(func.min(SoloDailyResult.daily_date)).where(
                     SoloDailyResult.user_id == player
+                )
+            )
+            held = (
+                await _dates_sharing_open_concepts(
+                    session, [day for day in had if day < ended_before], now
+                )
+                if archive
+                else set()
+            )
+            # How far back the calendar goes: with the archive open, to the
+            # first Daily there was, every one of them playable; closed, to
+            # the player's first result however it was played, since their
+            # own finished Dailies stay reviewable (#1496 review).
+            reach = (
+                await session.scalar(
+                    select(func.min(SoloDailyDay.daily_date)).where(SoloDailyDay.state == "set")
+                )
+                if archive
+                else await session.scalar(
+                    select(func.min(SoloDailyResult.daily_date)).where(
+                        SoloDailyResult.user_id == player
+                    )
                 )
             )
         days = []
@@ -1406,6 +1518,7 @@ class SoloRepository:
                 {
                     "date": day.isoformat(),
                     "daily": day in had,
+                    "open": archive and day in had and day < ended_before and day not in held,
                     "result": daily_result_payload(result) if result is not None else None,
                 }
             )
@@ -1413,6 +1526,7 @@ class SoloRepository:
         return {
             "month": first.isoformat()[:7],
             "first": earliest.isoformat() if earliest is not None else None,
+            "earliest": reach.isoformat() if reach is not None else None,
             "days": days,
         }
 

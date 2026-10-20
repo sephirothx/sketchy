@@ -478,6 +478,103 @@
   font-weight: 700;
 }
 
+/* A past day the archive plays (#1470): the whole cell is the button. */
+.solo-calendar-pick {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  height: 100%;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 100%;
+}
+
+.solo-calendar-day.is-pickable:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+
+/* ------------------------------------------------------------------ review */
+
+/* A finished Daily (#1470): its five in a strip, the one picked large. */
+.solo-review-head {
+  align-items: flex-end;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.solo-review-title {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.solo-review-title h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-review-title h1:focus { outline: none; }
+
+.solo-review-back { margin-left: -12px; }
+
+.solo-review-total {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.solo-filmstrip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.solo-thumb {
+  aspect-ratio: 4 / 3;
+  background: var(--card);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 2px var(--success);
+  cursor: pointer;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+}
+
+.solo-thumb.is-missed { box-shadow: 0 0 0 2px var(--danger); }
+.solo-thumb.is-picked { box-shadow: 0 0 0 2px var(--success), 0 0 0 6px var(--primary-edge-soft); }
+.solo-thumb.is-missed.is-picked { box-shadow: 0 0 0 2px var(--danger), 0 0 0 6px var(--primary-edge-soft); }
+
+.solo-thumb .canvas-wrapper,
+.solo-thumb .canvas-stack { max-width: none; width: 100%; }
+.solo-thumb .canvas-stack { border: 0; border-radius: 0; }
+.solo-thumb canvas { display: block; height: auto; width: 100%; }
+.solo-thumb .solo-canvas-skeleton { border-radius: 0; display: block; height: 100%; }
+
+.solo-review-copy { margin-left: auto; }
+
+/* Seen whole, without scrolling, where the screen allows: the review is as
+   wide as a 4:3 drawing, the filmstrip above it (about 0.15 of the width)
+   and what has a fixed height - the header, the title, the verdict strip,
+   the actions - leave room for, as the Gallery's drawing page does. Never
+   narrower than a phone's, nor wider than the play column. */
+.solo-result.solo-review {
+  max-width: min(720px, calc((100dvh - var(--banner-height) - 350px) * 10 / 9));
+  min-width: min(100%, 360px);
+}
+
 /* A Daily's five, as squares: named, missed, still to play. */
 .solo-marks {
   display: inline-flex;
