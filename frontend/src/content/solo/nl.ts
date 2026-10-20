@@ -38,7 +38,6 @@ export const SOLO_NL: SoloCopy = {
     continueNamed: (p: { name: string }) => `${p.name}: verder`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punt", other: "punten" })}`,
-    supporterPreview: "Eindeloos en eerdere dagpuzzels worden straks voordelen voor supporters. Tot dan staan ze voor iedereen open.",
     inARow: (p: { count: number }) => `${number(p.count)} op rij`,
     streak: (p: { days: number }) => `${counted(p.days, { one: "dag", other: "dagen" })} op rij`,
     previousMonth: "Vorige maand",

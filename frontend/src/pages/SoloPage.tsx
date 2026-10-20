@@ -417,7 +417,6 @@ function SoloHome({
               />
             ))}
           </section>
-          <p className="solo-note solo-preview">{words().supporterPreview}</p>
         </div>
         <SoloCalendar
           today={today}

@@ -38,7 +38,6 @@ export const SOLO_IT: SoloCopy = {
     continueNamed: (p: { name: string }) => `${p.name}: continua`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punto", other: "punti" })}`,
-    supporterPreview: "Infinita e le sfide del giorno passate diventeranno vantaggi per chi sostiene Sketchy. Fino ad allora sono aperte a tutti.",
     inARow: (p: { count: number }) => `${number(p.count)} di fila`,
     streak: (p: { days: number }) => `${counted(p.days, { one: "giorno", other: "giorni" })} di fila`,
     previousMonth: "Mese precedente",

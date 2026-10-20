@@ -117,8 +117,7 @@ keyboard that takes half the screen, and one thumb.
   each drawing came to and works out the points. Once a drawing is over you can react to
   it, report it, or share it to the Gallery, where it appears under its drawer's name.
   A drawer can stop Solo showing their drawings in **Settings**, or take one out from
-  their game history. Endless and past Dailies are meant to become supporter
-  perks; for now they are open to everybody.
+  their game history.
 - Gallery — the drawings players shared, shown at `/gallery` to anyone
   signed in, guests included, whether or not they were in the game: a feed of framed
   drawings, one to a row, that loads more as you scroll, with the sort and This week in a

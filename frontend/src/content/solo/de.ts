@@ -38,7 +38,6 @@ export const SOLO_DE: SoloCopy = {
     continueNamed: (p: { name: string }) => `${p.name}: weiter`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "Punkt", other: "Punkte" })}`,
-    supporterPreview: "Endlos und frühere Tagesrätsel werden bald Vorteile für Unterstützende. Bis dahin stehen sie allen offen.",
     inARow: (p: { count: number }) => `${number(p.count)} in Folge`,
     streak: (p: { days: number }) => `${counted(p.days, { one: "Tag", other: "Tage" })} in Folge`,
     previousMonth: "Vorheriger Monat",

@@ -42,7 +42,6 @@ export const SOLO_EN = {
     continueNamed: (p: { name: string }) => `Continue ${p.name}`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "point", other: "points" })}`,
-    supporterPreview: "Endless and past Dailies are going to be supporter perks. Until then they are open to everybody.",
     inARow: (p: { count: number }) => `${number(p.count)} in a row`,
     streak: (p: { days: number }) => `${counted(p.days, { one: "day", other: "days" })} in a row`,
     previousMonth: "Previous month",

@@ -38,7 +38,6 @@ export const SOLO_PL: SoloCopy = {
     continueNamed: (p: { name: string }) => `${p.name}: kontynuuj`,
     runProgress: (p: { played: number; length: number; points: number }) =>
       `${number(p.played)}/${number(p.length)} · ${counted(p.points, { one: "punkt", few: "punkty", many: "punktów", other: "punktu" })}`,
-    supporterPreview: "Bez końca i dawne wyzwania dnia staną się dodatkami dla osób wspierających Sketchy. Do tego czasu są dostępne dla wszystkich.",
     inARow: (p: { count: number }) => `${number(p.count)} z rzędu`,
     streak: (p: { days: number }) => `${counted(p.days, { one: "dzień", few: "dni", many: "dni", other: "dnia" })} z rzędu`,
     previousMonth: "Poprzedni miesiąc",
