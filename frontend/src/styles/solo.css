@@ -368,9 +368,9 @@
 }
 
 /* Round, as the ring it holds: today's mark is drawn on this cell's edge, a
-   circle round the day's own ring. No bigger than a phone's: a wider column
-   spreads the days out rather than blowing their rings up round a small
-   date. */
+   circle round the day's own ring, and a hover and the focus ring just
+   outside it. No bigger than a phone's: a wider column spreads the days out
+   rather than blowing their rings up round a small date. */
 .solo-calendar-day {
   align-items: center;
   aspect-ratio: 1;
@@ -504,9 +504,13 @@
   position: absolute;
 }
 
-.solo-calendar-day.is-pickable:hover { box-shadow: inset 0 0 0 2px var(--primary); }
-/* Today keeps its ring under a hover: the hover's goes just inside it. */
-.solo-calendar-day.is-today.is-pickable:hover { box-shadow: inset 0 0 0 2.5px var(--warm), inset 0 0 0 4.5px var(--primary); }
+/* A hover rings the cell from outside: inside, it would reach the day's own
+   ring on a narrow phone, where 12.5% of the cell is under the 4.5px of
+   today's ring and a hover together (a cell under 36px). Today keeps
+   its ring within. The 2px sit in the grid's gap, inside the focus ring's
+   offset. */
+.solo-calendar-day.is-pickable:hover { box-shadow: 0 0 0 2px var(--primary); }
+.solo-calendar-day.is-today.is-pickable:hover { box-shadow: inset 0 0 0 2.5px var(--warm), 0 0 0 2px var(--primary); }
 
 /* ------------------------------------------------------------------ review */
 
