@@ -367,10 +367,10 @@
   text-align: center;
 }
 
-/* Round, as the ring it holds: today's mark, a hover and the focus ring are
-   drawn on this cell's edge, a circle round the day's own ring. No bigger
-   than a phone's: a wider column spreads the days out rather than blowing
-   their rings up round a small date. */
+/* Round, as the ring it holds: today's mark is drawn on this cell's edge, a
+   circle round the day's own ring. No bigger than a phone's: a wider column
+   spreads the days out rather than blowing their rings up round a small
+   date. */
 .solo-calendar-day {
   align-items: center;
   aspect-ratio: 1;
