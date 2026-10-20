@@ -495,7 +495,18 @@
   width: 100%;
 }
 
+/* The button is round, as its cell, and a round box takes no taps past its
+   curve - where a perfect day's star sits. A square layer inside it, the
+   whole cell, takes them for the day. */
+.solo-calendar-pick::before {
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
 .solo-calendar-day.is-pickable:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+/* Today keeps its ring under a hover: the hover's goes just inside it. */
+.solo-calendar-day.is-today.is-pickable:hover { box-shadow: inset 0 0 0 2.5px var(--warm), inset 0 0 0 4.5px var(--primary); }
 
 /* ------------------------------------------------------------------ review */
 
