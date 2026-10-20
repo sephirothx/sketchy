@@ -2131,7 +2131,10 @@ What the surfaces share is not restated in each either: the scales — four radi
 motion durations, one disabled opacity — are tokens in
 [`theme.css`](../frontend/src/styles/theme.css), and the two heading styles, the display
 panel title and the capitals eyebrow `.section-label`, are recipes in
-[`primitives.css`](../frontend/src/styles/primitives.css).
+[`primitives.css`](../frontend/src/styles/primitives.css), and so is `.cap-centred`,
+which centres a short label in a shape on its capitals and digits rather than on the
+face's content area, and is the only rule that trims a text box
+([`capCentred.test.mjs`](../frontend/tests/capCentred.test.mjs)).
 [`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off a
 scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
 would quietly draw the nearest one that is), and on capitals outside the recipe; its

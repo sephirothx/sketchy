@@ -390,6 +390,7 @@
 .solo-calendar-day.is-under-way { color: var(--ink); }
 .solo-calendar-day.is-today { box-shadow: inset 0 0 0 3px var(--warm); }
 
+/* Above the ring, centred on its digits (.cap-centred, primitives.css). */
 .solo-calendar-date { position: relative; }
 
 .solo-calendar-mark {

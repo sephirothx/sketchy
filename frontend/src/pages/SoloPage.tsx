@@ -555,7 +555,7 @@ function DailyCard({ summary, busy, onDaily }: { summary: SoloSummary | null; bu
               ) : mark === "missed" ? (
                 <XIcon size={24} />
               ) : (
-                <span aria-hidden="true">{index + 1}</span>
+                <span className="cap-centred" aria-hidden="true">{index + 1}</span>
               )}
             </li>
           ))}
@@ -611,7 +611,7 @@ function FreeRunRow({
   return (
     <div className={`solo-run${run ? " has-run" : ""}`} data-testid={`solo-run-${key}`}>
       <span className="solo-run-glyph" aria-hidden="true">
-        {length === null ? "∞" : length}
+        <span className="cap-centred">{length === null ? "∞" : length}</span>
       </span>
       <div className="solo-run-body">
         <div className="solo-run-title">
@@ -860,7 +860,7 @@ function SoloCalendar({
               aria-label={words().calendarDay({ date: dayLabel(date), status: calendarStatus(look, day) })}
             >
               <CalendarMark look={look} marks={day?.result?.marks ?? []} playable={date === today} />
-              <span className="solo-calendar-date">{index + 1}</span>
+              <span className="solo-calendar-date cap-centred">{index + 1}</span>
             </span>
           );
         })}

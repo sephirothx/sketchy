@@ -604,6 +604,38 @@ input:focus-visible ~ .switch-track {
   width: max-content;
 }
 
+/* ---------------------------------------------------- cap-centred labels
+
+   A short label centred in a shape - a date in its ring, a number on a disc
+   or a tile - is centred on its capitals and digits, cap height to
+   baseline, not on its content area. The content area is the face's ascent
+   plus descent, and each face spends them differently around those glyphs:
+   in the font tables Nunito Sans 700 keeps 0.047em more room below them
+   than above (ascent 1.011, descent 0.353, cap height 0.705), so they sit
+   about 0.024em high, and Fredoka 600 keeps 0.038em more above (0.974,
+   0.236, 0.700), so they sit about 0.019em low; each size then rounds to
+   whole pixels again. A content area centred in a circle is up to a pixel
+   off, in a direction that changes with face and size, so no fixed nudge
+   is right for all of them.
+   text-box trims the box to cap height above and the baseline below, and
+   the shape then centres the glyphs themselves, in any face at any size.
+   Firefox does not support it yet and keeps content-area centring: right
+   for Nunito Sans to a few hundredths of a pixel, up to about 0.9px low for
+   Fredoka at 20px.
+   Where it goes: on the label's own element, a flex or grid item the shape
+   centres - never on the shape itself, which trims its own first line
+   (in a 44px tile that puts the glyphs 7px high), and never on a box that
+   centres its text by making line-height its height (a badge or a pill),
+   whose glyphs it moves up. For one line of digits or capitals: a
+   lowercase descender or an accent falls outside the trimmed box. A symbol
+   the face lacks, such as the free runs' ∞, is drawn by the fallback face
+   and trimmed by this face's metrics: within half a pixel where measured
+   (macOS Chromium and WebKit), unmeasured where the fallback differs.
+   tests/capCentred.test.mjs keeps this the only rule that trims. */
+.cap-centred {
+  text-box: trim-both cap alphabetic;
+}
+
 /* ---------------------------------------------------------------- avatars */
 .avatar {
   display: inline-flex;
