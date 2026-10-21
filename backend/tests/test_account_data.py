@@ -35,6 +35,8 @@ from app.auth.routes import create_auth_router
 from app.canvas_history import PackedCanvasHistory
 from app.canvas_storage import stored_drawing_checksum
 from app.db.models import (
+    SoloRun,
+    SoloServe,
     AuditEvent,
     AuthSession,
     BugReport,
@@ -392,6 +394,22 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                 )
             )
             assert owner_turn is not None and owner_seat is not None
+            # A Solo run of theirs (#1434), served a drawing it stores no
+            # drawer of: what the export carries is the prompt they saw.
+            solo_run = SoloRun(
+                user_id=UUID(owner["id"]), mode="free", length=5, state="active",
+                position=1, solved=1, points=240, started_at=STARTED,
+            )
+            session.add(solo_run)
+            await session.flush()
+            session.add(
+                SoloServe(
+                    run_id=solo_run.id, user_id=UUID(owner["id"]), turn_id=owner_turn.id,
+                    position=1, prompt="lighthouse", prompt_language="en", forms="{}",
+                    served_at=STARTED, settled_at=STARTED + timedelta(seconds=9),
+                    outcome="solved", solve_seconds=9.0, points=240,
+                )
+            )
             session.add(
                 RoomMessage(
                     id=generate_uuid(),
@@ -546,8 +564,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 17
-    assert artifact["schemaVersion"] == 17
+    assert status["schemaVersion"] == 18
+    assert artifact["schemaVersion"] == 18
     # What the account was told, as kinds and values (#1436).
     [told] = artifact["inbox"]
     # A count of reviewed reports carries no dates: they would say when a
@@ -643,9 +661,17 @@ async def test_export_is_versioned_durable_and_requester_only(env):
 
     # The other play languages, in their order (#1209).
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
+    # Solo's play, and nothing that names the drawing or its drawer (#1434).
+    [solo_run] = artifact["soloRuns"]
+    assert (solo_run["mode"], solo_run["length"], solo_run["points"]) == ("free", 5, 240)
+    [solo_serve] = artifact["soloServes"]
+    assert (solo_serve["runId"], solo_serve["prompt"], solo_serve["points"]) == (
+        solo_run["id"], "lighthouse", 240,
+    )
+    assert not {"turnId", "gameId", "drawer"} & set(solo_serve)
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v17_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v18_fields.json").read_text(
             encoding="utf-8"
         )
     )

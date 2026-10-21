@@ -3526,6 +3526,144 @@ class SoloPoolEntry(Base):
     sample_key: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
 
+class SoloRun(Base):
+    """One player's run of Solo drawings (#1434): a free run, or a day's Daily.
+
+    Play is local, so a run is what the server keeps of it: which drawings it
+    served (`solo_serves`), what each came to, and whether it is still going.
+    A player has at most one active free run of each length - Quick (5),
+    Classic (10) and Endless (unlimited) - so up to three at once; starting
+    one of a length abandons the one of that length.
+    The account is the canonical one, so a merge never splits a run.
+    """
+
+    __tablename__ = "solo_runs"
+    __table_args__ = (
+        _values_check("mode", ("free", "daily"), "ck_solo_runs_mode"),
+        _values_check("state", ("active", "ended", "abandoned"), "ck_solo_runs_state"),
+        CheckConstraint(
+            "end_reason IS NULL OR end_reason IN ('completed', 'missed', 'abandoned')",
+            name="ck_solo_runs_end_reason",
+        ),
+        CheckConstraint("length IS NULL OR length IN (5, 10)", name="ck_solo_runs_length"),
+        CheckConstraint(
+            "(mode = 'daily') = (daily_date IS NOT NULL) AND (mode <> 'daily' OR length = 5)",
+            name="ck_solo_runs_daily",
+        ),
+        CheckConstraint(
+            "(state = 'active') = (ended_at IS NULL) AND (state = 'active') = (end_reason IS NULL)",
+            name="ck_solo_runs_ended",
+        ),
+        CheckConstraint(
+            "position >= 0 AND solved >= 0 AND solved <= position AND points >= 0",
+            name="ck_solo_runs_counts",
+        ),
+        # One free run in play per player and length: starting another of
+        # that length abandons it. Unlimited is NULL, and NULLs never clash in
+        # a unique index, so the length is compared as 0 for it.
+        Index(
+            "uq_solo_runs_one_active_per_length",
+            "user_id",
+            sql_text("coalesce(length, 0)"),
+            unique=True,
+            postgresql_where=sql_text("state = 'active' AND mode = 'free'"),
+            sqlite_where=sql_text("state = 'active' AND mode = 'free'"),
+        ),
+        # A player's runs by kind: the active one, and the bests' rebuild.
+        Index("ix_solo_runs_user_mode", "user_id", "mode", "length"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    # 5 or 10 drawings, or NULL: unlimited, until the first miss.
+    length: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    # The player's local date a Daily is for; NULL for a free run.
+    daily_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    state: Mapped[str] = mapped_column(String(12), nullable=False, default="active")
+    end_reason: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    # Drawings served so far, how many were named, and what they scored.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    solved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SoloServe(Base):
+    """One drawing served in a Solo run (#1434), under an id of its own.
+
+    The id is the only one the player's client ever sees: a turn id would
+    open the drawing's Gallery entry, which names its drawer, and Solo never
+    does. The row is what lets the player react, share or report a drawing
+    they were served, keeps them from being served it twice, and holds what
+    they made of it - settled once, by the first report.
+    """
+
+    __tablename__ = "solo_serves"
+    __table_args__ = (
+        UniqueConstraint("run_id", "position", name="uq_solo_serves_run_position"),
+        CheckConstraint(
+            "outcome IS NULL OR outcome IN ('solved', 'given_up', 'timed_out')",
+            name="ck_solo_serves_outcome",
+        ),
+        CheckConstraint(
+            "(outcome IS NULL) = (settled_at IS NULL)", name="ck_solo_serves_settled"
+        ),
+        CheckConstraint(
+            "(outcome = 'solved') = (points IS NOT NULL) "
+            "AND (outcome IS NULL OR solve_seconds IS NOT NULL) "
+            "AND (points IS NULL OR (points >= 100 AND points <= 300))",
+            name="ck_solo_serves_points",
+        ),
+        CheckConstraint("position >= 1", name="ck_solo_serves_position"),
+        # What a player has been served: the free runs' seen-exclusion.
+        Index("ix_solo_serves_user_turn", "user_id", "turn_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("solo_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The run's account, copied so the seen-exclusion is one index probe.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # The prompt the player is shown when it is over, in the language it was
+    # shown in: kept, so a run's history reads the same after a list changes.
+    prompt: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_language: Mapped[str] = mapped_column(String(8), nullable=False)
+    # The forms the drawing is judged by (`guess_judge.JudgeTarget` as JSON),
+    # as they were served: a resumed run hands back exactly these, whatever
+    # the player's languages or the lists have done since (#1492 review).
+    forms: Mapped[str] = mapped_column(Text, nullable=False)
+    served_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    settled_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    # The client's own clock (#1434: play is local), bounded to the 30 s.
+    solve_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
 class TurnDrawingReaction(Base):
     """One registered player's reaction to the drawing made in one turn (#520).
 

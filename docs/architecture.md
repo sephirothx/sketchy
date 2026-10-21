@@ -524,7 +524,12 @@ fetch ──▶ SessionAuthMiddleware  (app/auth/middleware.py: resolves the has
 ```
 
 REST is used for health/readiness, room discovery, and everything that is a *query or
-an account action* rather than gameplay. The session is resolved only under `/api/`:
+an account action* rather than gameplay — with one game among them: **Solo** (#1434), a
+game of one, which R-ROOM-05's two-player rule keeps out of rooms. Its state is in the
+database (`solo_runs`, `solo_serves`), its routes are `app/api/solo.py`, and play itself
+is in the browser: the server chooses and hands over each drawing behind its own door and
+records what the player reports, so nothing of Solo is process-owned and the
+single-worker rule does not reach it. The session is resolved only under `/api/`:
 the cookie is `Path=/`, so the browser sends it with the shell and every asset, and a
 cold page load used to resolve it a dozen times for files that are the same for
 everybody. Every layer in the stack is plain ASGI — `BaseHTTPMiddleware` runs the app
@@ -2005,6 +2010,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/solo_rules.py`](../backend/app/solo_rules.py) | Solo's rules (#1434): which drawings it may serve, as numbers and pure functions. |
 | [`app/repositories/solo.py`](../backend/app/repositories/solo.py) | Solo's reads and writes (#1434): what a player may be served, and their runs. |
 | [`app/services/solo_pool.py`](../backend/app/services/solo_pool.py) | Solo's pool (#1434): which recorded drawings it may serve, written and rebuilt. |
+| [`app/api/solo.py`](../backend/app/api/solo.py) | Solo's REST surface (#1434): runs, the drawings they serve, and what each came to. |
+| [`app/services/solo_access.py`](../backend/app/services/solo_access.py) | Who may open which of Solo's doors (#1434): the one gate, in one place. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |
 | [`app/handlers/connection.py`](../backend/app/handlers/connection.py) | Socket.IO handlers for the connection domain. |

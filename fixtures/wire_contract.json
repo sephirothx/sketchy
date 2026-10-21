@@ -2130,6 +2130,15 @@
    "nameColor",
    "pendingRole"
   ],
+  "api.solo:run_payload": [
+   "dailyDate",
+   "endReason",
+   "runId"
+  ],
+  "api.solo:serve_payload": [
+   "promptLanguage",
+   "serveId"
+  ],
   "api.user_blocks:_block_payload": [
    "createdAt",
    "displayName",
@@ -2314,9 +2323,12 @@
    "confettiEffects",
    "contentType",
    "createdAt",
+   "dailyDate",
    "defaultBrushSize",
    "displayName",
    "emailVerifiedAt",
+   "endReason",
+   "endedAt",
    "eventType",
    "expiresAt",
    "extraPromptLanguages",
@@ -2338,8 +2350,13 @@
    "requesterWasTarget",
    "respondedAt",
    "revokedAt",
+   "runId",
+   "servedAt",
+   "settledAt",
+   "solveSeconds",
    "soundEffects",
    "starredAt",
+   "startedAt",
    "subjectId",
    "timeFormat",
    "updatedAt",
@@ -3140,6 +3157,9 @@
    "no_such_game",
    "no_such_drawing",
    "drawing_unreadable",
+   "no_such_solo_run",
+   "solo_conflict",
+   "solo_pool_empty",
    "pinned_drawings_full",
    "prompt_list_not_found",
    "prompt_list_conflict",
