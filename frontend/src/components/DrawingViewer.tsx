@@ -594,14 +594,19 @@ export function DrawingViewer({
   // The controls belong to one drawing: keyed by it, so nothing a control
   // holds - an open picker, a take-out waiting to be confirmed - carries over
   // to the next one, and built once per drawing rather than on every move of
-  // a drag.
+  // a drag. Behind Friends or Settings they are not there at all: a take-out
+  // confirmation left open would keep its focus trap and Escape while hidden,
+  // and take them back from the viewer once the overlay closed.
   const actions = useMemo(
-    () => (entry ? <Fragment key={entryKey(entry)}>{renderActions?.(entry)}</Fragment> : null),
-    [entry, renderActions],
+    () => (entry && !behindOverlay ? <Fragment key={entryKey(entry)}>{renderActions?.(entry)}</Fragment> : null),
+    [behindOverlay, entry, renderActions],
   );
   const reactions = useMemo(
-    () => (entry && renderReactions ? <Fragment key={entryKey(entry)}>{renderReactions(entry)}</Fragment> : null),
-    [entry, renderReactions],
+    () =>
+      entry && renderReactions && !behindOverlay ? (
+        <Fragment key={entryKey(entry)}>{renderReactions(entry)}</Fragment>
+      ) : null,
+    [behindOverlay, entry, renderReactions],
   );
 
   if (!entry || !currentEntry) return null;
