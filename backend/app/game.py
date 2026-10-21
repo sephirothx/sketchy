@@ -4,13 +4,11 @@ Pure state/logic only (no socket I/O) so it can be unit tested directly.
 """
 from __future__ import annotations
 
-import difflib
 import random
 import re
 import string
 import time
 import uuid
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -33,14 +31,29 @@ from app.domain_values import (
     TurnParticipantOutcome,
 )
 from app.identifiers import generate_uuid7
-from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
+from app.prompts import PROMPTS
 from app.prompt_content import (
     letter_histogram,
     prompt_match_key,
-    prompt_match_variants,
-    prompt_match_extra_words,
-    prompt_match_words,
     wheel_letters,
+)
+# Re-exported: the guess helpers lived here before Solo needed them without a
+# game (#1434), and callers still import them by these names.
+from app.guess_judge import (  # noqa: F401
+    CLOSE_GUESS_MAX_DISTANCE,
+    CLOSE_GUESS_MIN_CORRECT_LETTERS,
+    CLOSE_GUESS_SIMILARITY_THRESHOLD,
+    HELD_VERDICT_MAX_EXTRA_WORDS,
+    AnswerForm,
+    JudgeTarget,
+    _accepted_spellings,
+    _bounded_damerau_levenshtein,
+    _is_close_pair,
+    _near_miss,
+    accepted_spellings,
+    fits_a_guess,
+    judge,
+    near_miss_keys,
 )
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
@@ -132,25 +145,6 @@ WHEEL_CONSONANT_BASE_COST = 8
 WHEEL_MIN_FREQUENCY_MULTIPLIER = 1.0
 WHEEL_MAX_FREQUENCY_MULTIPLIER = 3.0
 
-# Close guess detection (see Game.guess_hint):
-# - distance 1 (a single insertion/deletion/substitution/transposition) is
-#   always considered close.
-# - distance >1 and <= CLOSE_GUESS_MAX_DISTANCE is close if the strings are
-#   still similar enough overall (difflib ratio).
-# - for multi-word prompts, words are matched position-independently (as a
-#   bag/multiset, so reordered guesses still count) as long as the guess's
-#   word count is within 1 of the target's. One or more correct words whose
-#   combined length is at least CLOSE_GUESS_MIN_CORRECT_LETTERS letters is
-#   flagged separately as a "some words are correct" hint.
-CLOSE_GUESS_MAX_DISTANCE = 2
-CLOSE_GUESS_SIMILARITY_THRESHOLD = 0.75
-CLOSE_GUESS_MIN_CORRECT_LETTERS = 5
-# A message holding the prompt as whole words - "der Hund" - is kept from the
-# room whatever its length (#1416). Its author is told it is close only when
-# it holds at most this many other words: a verdict on a longer message would
-# answer "is it any of these eighty words?" in one go, and a guesser could
-# halve a list to the answer without looking at the drawing.
-HELD_VERDICT_MAX_EXTRA_WORDS = 1
 
 
 class Phase(str, Enum):
@@ -173,89 +167,6 @@ def _normalize(text: str, language: str = "en") -> str:
     return prompt_match_key(text, language)
 
 
-def _accepted_spellings(text: str, language: str = "en") -> frozenset[str]:
-    """Every spelling of `text` its language accepts (R-GUESS-01).
-
-    Deciding whether a guess is right asks this rather than `_normalize`: a
-    German answer is written both "maedchen" and "madchen", and no single key
-    can be both. Everything else - which prompt this was, how close a wrong
-    guess came - stays on the canonical key, so a wider accept set cannot
-    widen anything it was not meant to.
-    """
-    return prompt_match_variants(text, language)
-
-
-def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
-    """Bounded Damerau-Levenshtein distance (optimal string alignment variant).
-
-    Returns ``max_distance + 1`` when the distance exceeds the requested
-    bound. Only the diagonal band that could still produce an in-bound result
-    is evaluated, and only three sparse rows are retained for adjacent
-    transpositions.
-
-    The distance counts single-character insertions, deletions, substitutions, or
-    transpositions of two adjacent characters to turn `a` into `b`.
-
-    Counting adjacent transpositions as a single edit (rather than two
-    substitutions) matters for a guessing game, since swapped letters are one
-    of the most common typos (e.g. "hte" for "the").
-    """
-    over_limit = max_distance + 1
-    if a == b:
-        return 0
-    if abs(len(a) - len(b)) > max_distance:
-        return over_limit
-    if not a:
-        return len(b) if len(b) <= max_distance else over_limit
-    if not b:
-        return len(a) if len(a) <= max_distance else over_limit
-    len_b = len(b)
-
-    previous_previous: dict[int, int] = {}
-    previous = {j: j for j in range(min(len_b, max_distance) + 1)}
-    for i, ch_a in enumerate(a, start=1):
-        current: dict[int, int] = {}
-        first_column = max(0, i - max_distance)
-        last_column = min(len_b, i + max_distance)
-        if first_column == 0:
-            current[0] = i
-        for j in range(max(1, first_column), last_column + 1):
-            ch_b = b[j - 1]
-            insert_cost = current.get(j - 1, over_limit) + 1
-            delete_cost = previous.get(j, over_limit) + 1
-            substitute_cost = previous.get(j - 1, over_limit) + (ch_a != ch_b)
-            best = min(insert_cost, delete_cost, substitute_cost)
-            if i > 1 and j > 1 and ch_a == b[j - 2] and a[i - 2] == ch_b:
-                best = min(best, previous_previous.get(j - 2, over_limit) + 1)
-            current[j] = min(best, over_limit)
-        previous_previous, previous = previous, current
-    return previous.get(len_b, over_limit)
-
-
-def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
-    """"close" if the guess is near a whole answer, "partial" if enough of a
-    multi-word answer's words are in it, else None (see `Game.guess_hint`).
-    Both sides are `prompt_match_words` spellings, words apart."""
-    # Close is measured with the separators gone, as acceptance compares:
-    # "hang glider" and "hangglidr" are one typo apart, not two.
-    if any(_is_close_pair(guess.replace(" ", ""), answer.replace(" ", "")) for answer in answers):
-        return "close"
-    guess_tokens = guess.split(" ")
-    for answer in answers:
-        word_tokens = answer.split(" ")
-        if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
-            continue
-        # Bag-of-words intersection: matches regardless of word order,
-        # capping duplicate words at the lower count on either side.
-        overlap = Counter(guess_tokens) & Counter(word_tokens)
-        correct_letter_count = sum(
-            len(word) * count for word, count in overlap.items()
-        )
-        if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
-            return "partial"
-    return None
-
-
 def _spelling_key(text: str) -> str:
     """What makes two spellings one set of tiles: the letters, not their case -
     unless folding the case changes the length ("Straße"), where the slots
@@ -270,39 +181,6 @@ def _checkpoint_share(total_slots: int) -> int:
     if total_slots <= MIN_HIDDEN_LETTERS:
         return 0
     return min(total_slots - MIN_HIDDEN_LETTERS, max(1, round(total_slots * 0.4)))
-
-
-def fits_a_guess(text: str) -> bool:
-    """Whether a message is short enough to be judged as a guess at all.
-
-    No answer is longer than `MAX_PROMPT_LENGTH`, so anything longer is chat.
-    Measured with whitespace collapsed, as matching folds it: counting the
-    raw text sent a 32-character answer typed with one doubled space to the
-    room as chat, unjudged (#1416).
-    """
-    return len(" ".join(text.split())) <= MAX_PROMPT_LENGTH
-
-
-def _is_close_pair(guess: str, target: str) -> bool:
-    """Whether `guess` is close to `target` (already known to differ).
-
-    Very short strings are skipped to avoid trivial/noisy matches (e.g. a
-    guess of "a" being "close" to a 3-letter word just by sharing a letter).
-    """
-    if len(target) < 3 or len(guess) < 2 or guess == target:
-        return False
-    if abs(len(guess) - len(target)) > CLOSE_GUESS_MAX_DISTANCE:
-        return False
-    distance = _bounded_damerau_levenshtein(
-        guess,
-        target,
-        CLOSE_GUESS_MAX_DISTANCE,
-    )
-    if distance == 1:
-        return True
-    if distance <= CLOSE_GUESS_MAX_DISTANCE:
-        return difflib.SequenceMatcher(None, guess, target).ratio() >= CLOSE_GUESS_SIMILARITY_THRESHOLD
-    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1345,17 +1223,16 @@ class Game:
         # was typed - a doubled space, a trailing full stop, a zero-width
         # character - and turning it into chat would hand it to the room
         # (#1416).
-        guessed_spellings = _accepted_spellings(text, self.seat_language(token))
-        if guessed_spellings.isdisjoint(self._accepted_answer_spellings(token)):
-            hint = self.guess_hint(token, text)
-            if hint is None and not fits_a_guess(text):
+        verdict = judge(text, self._judge_target(token))
+        if verdict != "correct":
+            if verdict is None and not fits_a_guess(text):
                 # Too long to be the answer and holding none of it: chat.
                 return False, 0
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
             # and their messages are chat, not guesses.
             self.wrong_guesses[token] = self.wrong_guesses.get(token, 0) + 1
-            if hint is not None:
+            if verdict is not None:
                 self.near_misses[token] = self.near_misses.get(token, 0) + 1
             return False, 0
         self.guess_times[token] = self.elapsed_drawing_seconds()
@@ -1410,132 +1287,38 @@ class Game:
             return None
         if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return None
-        language = self.seat_language(token)
-        accepted = self._accepted_answer_spellings(token)
-        guessed = _accepted_spellings(text, language)
-        if not guessed.isdisjoint(accepted):
-            return None
-        if self._spells_the_prompt_elsewhere(guessed):
-            # Another language's spelling the false-friend guard refused: not
-            # this seat's answer, but broadcast it and the seats playing that
-            # language read their own answer in the chat (#1182). Kept private
-            # the way a near miss is, and the guesser is told why (#1367).
-            return "another_language"
-        held = self._held_verdict(token, text, accepted)
-        if held is not None:
-            return held
-        if not fits_a_guess(text):
-            return None
-        guess = prompt_match_words(text, language)
-        accepted_answers = self._accepted_answer_keys(token)
-        verdict = _near_miss(guess, accepted_answers)
-        if verdict is not None or not self.is_mixed_language():
-            return verdict
-        # Near another language's spelling: the room must not see it either,
-        # or the seats playing that language read their answer in a typo
-        # ("dogs" from a German seat). Measured in that language's fold.
-        key = self._current_key()
-        played = set(self.languages_in_play())
-        for other, form in self.prompt_translations.get(key, {}).items():
-            # Only a language somebody is playing: a word that is French for
-            # "cat" is ordinary chat in a room nobody plays French in.
-            if other == language or other not in played:
-                continue
-            answers = tuple(
-                dict.fromkeys(prompt_match_words(answer, other) for answer in (form.answer, *form.aliases))
-            )
-            verdict = _near_miss(prompt_match_words(text, other), answers)
-            if verdict is not None:
-                return verdict
-        return None
+        verdict = judge(text, self._judge_target(token))
+        return None if verdict == "correct" else verdict
 
-    def _accepted_answer_spellings(self, token: str | None = None) -> frozenset[str]:
-        """Every spelling that wins the turn for `token`: the answer's and its
-        aliases', folded the way that seat's language folds them.
+    def _judge_target(self, token: str | None) -> JudgeTarget:
+        """The prompt as `token` plays it, for `guess_judge.judge`.
 
         In a mixed game (#1182) the prompt in any language a player of the
         game plays wins too - a German who types "dog" beside an English seat
-        has named the drawing - each spelling folded the way its own language
-        folds it. Except where that spelling is a different
+        has named the drawing - except where that spelling is a different
         concept of the room's selection in the guesser's own language, drawn
         or not (#1367): a French seat's "papillon" means butterfly, and does
-        not win the Italian bow tie.
+        not win the Italian bow tie. Only a language somebody in the game
+        plays counts (review of #1416): French "thé" folds to "the", and won
+        the tea for an English seat in a room nobody plays French in.
         """
-        if not self.prompt:
-            return frozenset()
         key = self._current_key()
         language = self.seat_language(token)
-        own = (self.prompt_for(token) or "", *self.aliases_for(key, language))
-        spellings = frozenset().union(
-            *(_accepted_spellings(answer, language) for answer in own)
-        )
-        if not self.is_mixed_language():
-            return spellings
-        taken = self._other_prompts_keys(language)
-        played = set(self.languages_in_play())
-        for other, form in self.prompt_translations.get(key, {}).items():
-            # Only a language somebody in the game plays (review of #1416):
-            # French "thé" folds to "the", and won the tea for an English
-            # seat in a room nobody plays French in.
-            if other == language or other not in played:
-                continue
-            for answer in (form.answer, *form.aliases):
-                # Only the spellings that are not another concept's word to
-                # this seat: German "Lüge" is "luge" too, the French sled.
-                spellings = spellings | (_accepted_spellings(answer, other) - taken)
-        return spellings
-
-    def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:
-        """Whether a guess is the current prompt in the spelling of some
-        language a player of the game plays."""
-        key = self._current_key()
+        own = AnswerForm(self.prompt_for(token) or "", self.aliases_for(key or "", language))
         if not self.is_mixed_language() or key is None:
-            return False
+            return JudgeTarget(language=language, own=own)
         played = set(self.languages_in_play())
-        return any(
-            not guessed.isdisjoint(_accepted_spellings(answer, other))
+        others = {
+            other: AnswerForm(form.answer, form.aliases)
             for other, form in self.prompt_translations.get(key, {}).items()
-            if other in played
-            for answer in (form.answer, *form.aliases)
+            if other != language and other in played
+        }
+        return JudgeTarget(
+            language=language,
+            own=own,
+            others=others,
+            taken=self._other_prompts_keys(language),
         )
-
-    def _held_verdict(self, token: str, text: str, accepted: frozenset[str]) -> str | None:
-        """Whether a wrong guess holds the prompt as whole words, and what its
-        author is told (`guess_hint`).
-
-        Measured against the seat's own spellings and those of the languages
-        somebody in the game plays: the words a guesser in this room could
-        type to win. Every language's would hide ordinary chat for nothing -
-        French "thé" folds to "the" in a room nobody plays French in.
-        """
-        language = self.seat_language(token)
-        key = self._current_key()
-        own = frozenset().union(
-            *(
-                _accepted_spellings(answer, language)
-                for answer in (self.prompt_for(token) or "", *self.aliases_for(key or "", language))
-            )
-        )
-        in_play: frozenset[str] = frozenset()
-        if self.is_mixed_language() and key is not None:
-            played = set(self.languages_in_play())
-            in_play = frozenset().union(
-                *(
-                    _accepted_spellings(answer, other)
-                    for other, form in self.prompt_translations.get(key, {}).items()
-                    if other != language and other in played
-                    for answer in (form.answer, *form.aliases)
-                )
-            )
-        extra = prompt_match_extra_words(text, language, own | accepted)
-        if extra is not None:
-            return "close" if extra <= HELD_VERDICT_MAX_EXTRA_WORDS else "held"
-        # Another language's word that is a different prompt to this seat
-        # (#1367): still the drawing to the seats playing it.
-        extra = prompt_match_extra_words(text, language, in_play - accepted)
-        if extra is not None:
-            return "another_language" if extra <= HELD_VERDICT_MAX_EXTRA_WORDS else "held"
-        return None
 
     def _other_prompts_keys(self, language: str) -> frozenset[str]:
         """Every spelling, in `language`'s fold, of every other prompt
@@ -1560,19 +1343,6 @@ class Game:
         )
         self._taken_keys[(current, language)] = taken
         return taken
-
-    def _accepted_answer_keys(self, token: str | None = None) -> tuple[str, ...]:
-        """Canonical answer plus aliases for this exact selected version, as
-        `prompt_match_words` spells them for a near miss."""
-        if not self.prompt:
-            return ()
-        key = self._current_key()
-        language = self.seat_language(token)
-        # A near miss is measured against the seat's own spelling only: "very
-        # close" to another language's word would be a hint in a language the
-        # guesser is not playing (R-GUESS-01).
-        answers = (self.prompt_for(token) or "", *self.aliases_for(key, language))
-        return tuple(dict.fromkeys(prompt_match_words(answer, language) for answer in answers))
 
     def _guess_totals_by_version(self) -> tuple[tuple[str, int, int], ...]:
         """Each language's guessers against the version they played (#1182).
