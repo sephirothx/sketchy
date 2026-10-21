@@ -376,7 +376,11 @@ a simulated history; the React half is
 [`hooks/useRoomHistory.ts`](../frontend/src/hooks/useRoomHistory.ts), whose context only
 the live room provides — so `BottomSheet` and `ModalShell` register every in-room sheet
 and dialog, the room's dropdown menus register themselves, and all of them do nothing
-anywhere else. The overlays are unaffected: Settings and
+anywhere else. The one layer that answers Back outside a room is the drawing viewer
+opened from a profile (R-UX-24): its `usePageBackCloses` keeps counted entries on the
+page's own URL through the same port
+([`lib/pageHistory.ts`](../frontend/src/lib/pageHistory.ts)), and does nothing in a room,
+where the room's history answers. The overlays are unaffected: Settings and
 Friends are entries of the router's own, pushed on top, and closing one lands back on a
 room entry that asks for nothing. An overlay opened *from* a sheet or menu replaces that
 surface's entry instead of pushing over it (`isSheetEntry`, read by `useOpenOverlay`),

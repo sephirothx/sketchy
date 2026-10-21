@@ -17,8 +17,11 @@ takes its entry back, so Back never has to be pressed once per layer opened
 earlier. Entries are counted, never named, as the room's sheets are.
 
 A layer left open as the page is navigated away from leaves its entries in the
-back history. Back onto one with nothing open steps over it, so it costs the
-player nothing.
+back history. Landing on one with nothing open steps over it the way the
+player was going - Back on to the page under it, Forward on to the page after
+it - so it costs them nothing. One case is left: a reload with a layer open
+lands on its entry with nothing listening yet, and the first Back is spent
+staying on the page.
 
 The module imports only the room's history port, which keeps `history.go`
 asynchronous and counts the traversals asked for; the tests drive a simulated
@@ -87,11 +90,25 @@ export type LayerPop =
   /** Our own traversal landed: bring the history in line with what is open. */
   | { kind: "reconcile" };
 
-export function planLayerPop(depth: number, open: number, ownTraversal: boolean): LayerPop {
+export function planLayerPop(
+  depth: number,
+  open: number,
+  ownTraversal: boolean,
+  forward = false,
+): LayerPop {
   if (ownTraversal) return { kind: "reconcile" };
   if (depth < open) return { kind: "close", count: open - depth };
-  if (depth > open) return { kind: "go", delta: open - depth };
+  // A leftover entry with nothing open: on past it, whichever way the player
+  // was going, or Forward would bounce off it for good.
+  if (depth > open) return { kind: "go", delta: forward && open === 0 ? 1 : open - depth };
   return { kind: "none" };
+}
+
+/** The router's index of an entry, which says which way a traversal went. */
+function indexOf(state: unknown): number | null {
+  if (!state || typeof state !== "object") return null;
+  const idx = (state as Record<string, unknown>).idx;
+  return typeof idx === "number" ? idx : null;
 }
 
 export interface PageHistory {
@@ -104,6 +121,8 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   const layers: { dismiss: () => void }[] = [];
   // The page the open layers belong to; their entries are marked with it.
   let path = port.pathname();
+  // The entry last seen, to tell Forward from Back when one lands.
+  let lastIndex = indexOf(port.state());
   let unlisten: (() => void) | null = null;
   let scheduled = false;
 
@@ -127,6 +146,7 @@ export function createPageHistory(port: HistoryPort): PageHistory {
       state = layerState(state, path, next);
       port.pushState(state);
     }
+    lastIndex = indexOf(state);
   }
 
   function schedule() {
@@ -136,8 +156,14 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   }
 
   function onSettle(own: boolean) {
+    const index = indexOf(port.state());
+    const forward = index !== null && lastIndex !== null && index > lastIndex;
+    lastIndex = index;
+    // With nothing open the layers belong to no page: whatever page this is,
+    // a leftover entry of its own is stepped over.
+    if (layers.length === 0) path = port.pathname();
     if (port.pathname() !== path) return;
-    const plan = planLayerPop(depth(), layers.length, own);
+    const plan = planLayerPop(depth(), layers.length, own, forward);
     switch (plan.kind) {
       case "close": {
         // Out of the list before they are told, so the reconcile their closing

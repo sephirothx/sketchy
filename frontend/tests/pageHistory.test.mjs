@@ -110,6 +110,9 @@ test("the plans: push up to what is open, go down to it, close what Back passed"
   assert.deepEqual(planLayerPop(2, 0, false), { kind: "go", delta: -2 });
   assert.deepEqual(planLayerPop(1, 1, false), { kind: "none" });
   assert.deepEqual(planLayerPop(0, 1, true), { kind: "reconcile" });
+  // A leftover entry is passed the way the player was going.
+  assert.deepEqual(planLayerPop(1, 0, false, true), { kind: "go", delta: 1 });
+  assert.deepEqual(planLayerPop(1, 0, false, false), { kind: "go", delta: -1 });
 });
 
 test("Back closes a layer and leaves the page where it was", async () => {
@@ -199,4 +202,33 @@ test("a layer left open on the way to another page is stepped over by Back", asy
   await win.settle();
   assert.equal(win.location.pathname, PROFILE);
   assert.equal(win.index, 0);
+
+  // And Forward carries on past it to the page after it, rather than being
+  // turned back by it for good.
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/gallery");
+});
+
+test("a leftover entry on another page is stepped over after a layer opened elsewhere", async () => {
+  const { win, page } = setup("/profile/a");
+  const releaseFirst = page.open(() => {});
+  await win.settle();
+  // Away from /profile/a under the layer: its entry stays behind.
+  win.navigate("/profile/b");
+  releaseFirst();
+  await win.settle();
+  // A layer opens and closes on /profile/b, which moves the page it watches.
+  const release = page.open(() => {});
+  await win.settle();
+  release();
+  await win.settle();
+  assert.equal(win.location.pathname, "/profile/b");
+
+  // Back from /profile/b lands on /profile/a's leftover entry, which is
+  // stepped over to /profile/a's page in the same press.
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/profile/a");
+  assert.equal(win.depth(), 0);
 });
