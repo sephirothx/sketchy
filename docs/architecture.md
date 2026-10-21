@@ -2002,6 +2002,9 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/encode_pool.py`](../backend/app/encode_pool.py) | The threads CPU-bound drawing work runs on, so the event loop does not. |
 | [`app/game.py`](../backend/app/game.py) | Per-room game state machine: turn rotation, prompt choice, drawing timer, scoring. |
 | [`app/guess_judge.py`](../backend/app/guess_judge.py) | Whether a guess names a prompt, and how near a wrong one came. |
+| [`app/solo_rules.py`](../backend/app/solo_rules.py) | Solo's rules (#1434): which drawings it may serve, as numbers and pure functions. |
+| [`app/repositories/solo.py`](../backend/app/repositories/solo.py) | Solo's reads and writes (#1434): what a player may be served, and their runs. |
+| [`app/services/solo_pool.py`](../backend/app/services/solo_pool.py) | Solo's pool (#1434): which recorded drawings it may serve, written and rebuilt. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |
 | [`app/handlers/connection.py`](../backend/app/handlers/connection.py) | Socket.IO handlers for the connection domain. |
