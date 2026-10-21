@@ -374,9 +374,17 @@ export function ActiveGameRoom({ code }: { code: string }) {
     }
   }
 
+  // Every way into the Recap opens it on a drawing of its own choosing; only
+  // a Recap the room closed itself (its connection dropped) reopens where it
+  // was left, through `onLeave`.
+  function openRecapAt(index: number) {
+    setRecapIndex(index);
+    setRecapOpen(true);
+  }
+
   function handleViewDrawingsFromGameEnd() {
     dismissGameEnd();
-    setRecapOpen(true);
+    openRecapAt(0);
   }
 
   function handleViewHighlightsFromGameEnd() {
@@ -619,7 +627,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           entries={drawingRecap}
           initialIndex={recapIndex}
           onClose={closeRecap}
-          onIndexChange={setRecapIndex}
+          onLeave={setRecapIndex}
           loadEntry={loadRecapDrawing}
           renderReactions={(entry) => (
             <ConnectedDrawingReactionControl
@@ -678,8 +686,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 onClose={() => setHighlightsOpen(false)}
                 onOpenDrawing={(index) => {
                   setHighlightsOpen(false);
-                  setRecapIndex(index);
-                  setRecapOpen(true);
+                  openRecapAt(index);
                 }}
               />
             ) : roomView === "game-end" && finalScores ? (
@@ -700,7 +707,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 startError={startError}
                 onStart={() => void handleStartGame()}
                 drawingCount={drawingRecap.length}
-                onViewDrawings={() => setRecapOpen(true)}
+                onViewDrawings={() => openRecapAt(0)}
                 highlightCount={gameHighlights.length}
                 onViewHighlights={() => setHighlightsOpen(true)}
               />

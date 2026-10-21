@@ -89,9 +89,11 @@ interface DrawingViewerProps {
   /** The controls beside Save image - Share and Pin (#440, #1430). A prop for
       the same reason `renderReactions` is. */
   renderActions?: (entry: DrawingRecapMetadata) => ReactNode;
-  /** Told the drawing on screen as it changes, so a viewer opened again -
-      after the room's connection came back, say - opens where it was left. */
-  onIndexChange?: (index: number) => void;
+  /** Told the drawing on screen when the viewer goes, so one the room
+      closed itself - its connection dropped - reopens where it was left.
+      Once, at the end, rather than on every move: the room re-rendering under
+      each slide would cost the slide its smoothness. */
+  onLeave?: (index: number) => void;
 }
 
 interface Slide {
@@ -155,7 +157,7 @@ export function DrawingViewer({
   initialIndex = 0,
   renderReactions,
   renderActions,
-  onIndexChange,
+  onLeave,
 }: DrawingViewerProps) {
   const total = entries.length;
   const phone = useMediaQuery(PHONE_ROOM_QUERY);
@@ -170,7 +172,8 @@ export function DrawingViewer({
   const [zoom, setZoom] = useState<{ x: number; y: number } | null>(null);
   const [arrowsShown, setArrowsShown] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
-  const [stripStart, setStripStart] = useState(() => stripStartFor(initialIndex, DESKTOP_STRIP_SIZE));
+  const [stripStart, setStripStart] = useState(() =>
+    stripStartFor(Math.max(0, Math.min(total - 1, initialIndex)), DESKTOP_STRIP_SIZE));
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLElement | null>(null);
@@ -236,13 +239,16 @@ export function DrawingViewer({
     }
     let pending = drawing.current.get(key);
     if (!pending) {
-      const signal = closed.current?.signal;
+      // Made on first use rather than by the mount effect: the slides draw
+      // before that effect runs, and their draws must be stopped by a close too.
+      closed.current ??= new AbortController();
+      const signal = closed.current.signal;
       pending = loadBytes(target)
         .then((loaded) => drawThumbnail(loaded, CANVAS_WIDTH, signal))
         .then((image) => {
           if (!image) throw new Error(ui.drawingRecapGallery.thisDrawingCouldNotBeDecoded);
           const url = URL.createObjectURL(new Blob([image.png as BlobPart], { type: "image/png" }));
-          if (signal?.aborted) {
+          if (signal.aborted) {
             URL.revokeObjectURL(url);
             return url;
           }
@@ -256,23 +262,24 @@ export function DrawingViewer({
           setReady(new Map(images.current));
           return url;
         })
-        .finally(() => drawing.current.delete(key));
+        .finally(() => {
+          if (drawing.current.get(key) === pending) drawing.current.delete(key);
+        });
       drawing.current.set(key, pending);
     }
     return pending;
   }, [loadBytes]);
 
   useEffect(() => {
-    const abort = new AbortController();
-    closed.current = abort;
+    closed.current ??= new AbortController();
+    const abort = closed.current;
     const pictures = images.current;
     const pending = drawing.current;
     const timers = { slide: slideTimer, tap: tapTimer, arrows: arrowsTimer };
     const pendingFrames = frames.current;
     return () => {
       abort.abort();
-      // The slides draw before this effect runs on a remount; they must not
-      // pick up the controller just aborted.
+      // A remount makes a fresh one on its first draw.
       if (closed.current === abort) closed.current = null;
       pictures.forEach((url) => URL.revokeObjectURL(url));
       pictures.clear();
@@ -442,9 +449,11 @@ export function DrawingViewer({
     near.forEach((target) => drawImage(target).catch(() => undefined));
   }, [drawImage, near]);
 
+  const leave = useRef({ onLeave, shown });
   useEffect(() => {
-    onIndexChange?.(shown);
-  }, [onIndexChange, shown]);
+    leave.current = { onLeave, shown };
+  });
+  useEffect(() => () => leave.current.onLeave?.(leave.current.shown), []);
 
   const showArrowsForAWhile = useCallback(() => {
     if (arrowsTimer.current !== null) window.clearTimeout(arrowsTimer.current);
