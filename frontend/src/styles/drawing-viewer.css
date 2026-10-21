@@ -243,6 +243,9 @@
   visibility: hidden;
 }
 
+/* Every rule below is for the row's own buttons, its direct children: the
+   take-out confirmation renders inside the row too, and its Cancel and Take
+   out are buttons that must keep their own look. */
 .drawing-viewer-actions {
   display: flex;
   flex-wrap: wrap;
@@ -250,8 +253,8 @@
   gap: 6px;
 }
 
-.drawing-viewer-actions .btn,
-.drawing-viewer-actions .share-pill {
+.drawing-viewer-actions > .btn,
+.drawing-viewer-actions > .share-pill {
   height: 40px;
   min-width: 40px;
   padding: 0 12px;
@@ -267,36 +270,37 @@
 /* Pin, Share and Save image are their icons alone, each keeping its full
    name for a screen reader and in its tooltip: one size, one ink and nothing
    else in the button, so every icon sits at its centre (#1497). */
-.drawing-viewer-actions .pin-control,
-.drawing-viewer-actions .drawing-viewer-save,
-.drawing-viewer-actions .share-pill {
+.drawing-viewer-actions > .pin-control,
+.drawing-viewer-actions > .drawing-viewer-save,
+.drawing-viewer-actions > .share-pill {
   justify-content: center;
   width: 40px;
   padding: 0;
   gap: 0;
 }
 
-.drawing-viewer-actions svg {
+.drawing-viewer-actions > .btn svg,
+.drawing-viewer-actions > .share-pill svg {
   width: 18px;
   height: 18px;
 }
 
 /* The turn results' Share is grey until pressed; here it is in the ink of
    the buttons beside it, and takes the pressed colour from its button. */
-.drawing-viewer-actions .share-pill-icon,
-.drawing-viewer-actions .share-pill.has-mine .share-pill-icon {
+.drawing-viewer-actions > .share-pill .share-pill-icon,
+.drawing-viewer-actions > .share-pill.has-mine .share-pill-icon {
   color: inherit;
 }
 
-.drawing-viewer-actions .pin-control.is-pinned,
-.drawing-viewer-actions .share-pill.has-mine {
+.drawing-viewer-actions > .pin-control.is-pinned,
+.drawing-viewer-actions > .share-pill.has-mine {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary-ink);
 }
 
-[data-theme="dark"] .drawing-viewer-actions .pin-control.is-pinned,
-[data-theme="dark"] .drawing-viewer-actions .share-pill.has-mine {
+[data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+[data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
   /* On the white drawing the dark theme's translucent indigo wash would
      show the white through; the light theme's pair reads on it. */
   background: #eeeffb;
@@ -576,8 +580,8 @@
     gap: 8px;
   }
 
-  .drawing-viewer-actions .btn,
-  .drawing-viewer-actions .share-pill {
+  .drawing-viewer-actions > .btn,
+  .drawing-viewer-actions > .share-pill {
     width: 44px;
     height: 44px;
     min-width: 44px;
@@ -589,13 +593,14 @@
     -webkit-backdrop-filter: none;
   }
 
-  .drawing-viewer-actions svg {
+  .drawing-viewer-actions > .btn svg,
+  .drawing-viewer-actions > .share-pill svg {
     width: 20px;
     height: 20px;
   }
 
-  [data-theme="dark"] .drawing-viewer-actions .pin-control.is-pinned,
-  [data-theme="dark"] .drawing-viewer-actions .share-pill.has-mine {
+  [data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+  [data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
     background: var(--primary-soft);
     color: var(--primary-ink);
   }
