@@ -952,11 +952,15 @@ class PlayerReport(Base):
         # reports carry. Saying it again while a moderator has yet to look
         # adds no evidence and buries the queue; once the report is resolved
         # or dismissed the same reporter may raise a new one, because that is
-        # a new incident rather than the same complaint repeated.
+        # a new incident rather than the same complaint repeated. Solo's
+        # reports are counted apart (`via_solo`): one there must never change
+        # another door's answer, or a 409 there would name an anonymous
+        # drawer (#1494 review).
         Index(
             "uq_player_reports_open_target",
             "reporter_user_id",
             "reported_user_id",
+            "via_solo",
             unique=True,
             postgresql_where=text("status = 'pending'"),
             sqlite_where=text("status = 'pending'"),
@@ -1039,6 +1043,12 @@ class PlayerReport(Base):
         default=ReportStatus.PENDING.value,
         server_default=ReportStatus.PENDING.value,
         nullable=False,
+    )
+    # Filed from Solo (#1434): the reporter saw the drawing with no name, so
+    # their export reads the report off their serve, and never this row - its
+    # turn and game ids would lead to the drawer (#1494 review).
+    via_solo: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
     reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -3685,6 +3695,11 @@ class SoloServe(Base):
     # The client's own clock (#1434: play is local), bounded to the 30 s.
     solve_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # When the player reported this drawing, and what they wrote: their own
+    # record of it, kept whether or not a report row was opened - one already
+    # open about the same drawer takes the place of a second (#1494 review).
+    reported_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    report_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SoloDailyDay(Base):
@@ -4021,6 +4036,56 @@ class TurnDrawingShare(Base):
     participant: Mapped[GameParticipant] = relationship(
         primaryjoin="GameParticipant.id == foreign(TurnDrawingShare.participant_id)",
     )
+
+
+class SoloGalleryShare(Base):
+    """A Solo player putting a drawing they were served in the Gallery (#1434).
+
+    A share like any other (R-SHARE-01) - it counts toward the drawing's place
+    in the Gallery, is credited, and goes with the drawer's withdrawal or an
+    erasure - but made by somebody who sat in no seat of the game, so it hangs
+    off the account rather than a seat, and credits the account's own name.
+    Its own table rather than a seatless row in `turn_drawing_shares`, so
+    nothing that reads a share's seat - the room, the recap, history - ever
+    meets one without.
+
+    A share of a drawing in a Daily still open somewhere is **held**
+    (`release_at` set): it is not in the Gallery until that date has ended
+    everywhere, so the Daily's prompt is not on Gallery -> New while others
+    are still playing it. The retention sweep releases it.
+    """
+
+    __tablename__ = "solo_gallery_shares"
+    __table_args__ = (
+        CheckConstraint(
+            "(release_at IS NULL) = (entered_at IS NOT NULL)", name="ck_solo_gallery_shares_held"
+        ),
+        Index(
+            "ix_solo_gallery_shares_held",
+            "release_at",
+            postgresql_where=sql_text("release_at IS NOT NULL"),
+            sqlite_where=sql_text("release_at IS NOT NULL"),
+        ),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    # When the player shared it: the order shares are credited in (R-SHARE-06).
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # When a held share is to enter the Gallery; NULL once it is in.
+    release_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When it entered the Gallery - the share itself, or its release: what
+    # the Gallery's counts and New read. NULL while it is held.
+    entered_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class GalleryShelfReview(Base):

@@ -80,6 +80,7 @@ async def test_a_participant_shares_from_history_and_the_drawer_is_told(env):
         "turnId": game.turn_id,
         "shares": [game.reactor_seat],
         "shareWithdrawn": False,
+        "inGallery": True,
     }
     assert pushed == [ann.id] and changed == [True]
 

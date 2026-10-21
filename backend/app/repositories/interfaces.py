@@ -259,6 +259,9 @@ class DrawingShareResult:
     shares: tuple[str, ...]
     withdrawn: bool
     notify_user_id: str | None = None
+    # Whether anything still holds it in the Gallery: the seats above, or a
+    # Solo player's share, which no seat lists (#1434).
+    in_gallery: bool = False
 
 
 @dataclass(frozen=True)
@@ -417,6 +420,8 @@ class TurnDetail:
     # the participants list names them.
     shares: list[str] = field(default_factory=list)
     gallery_withdrawn: bool = False
+    # Whether it is in the Gallery, Solo's shares counted (#1434).
+    in_gallery: bool = False
 
 
 @dataclass(frozen=True)

@@ -14,7 +14,9 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import TurnDrawing, TurnDrawingReaction, TurnDrawingShare
+from sqlalchemy import union_all
+
+from app.db.models import SoloGalleryShare, TurnDrawing, TurnDrawingReaction, TurnDrawingShare
 
 # Reddit's constant: a decade of reactions is worth 45 000 seconds, twelve and
 # a half hours. With at most sixteen seats in a room, the room's own verdict
@@ -68,6 +70,19 @@ def drawing_hot_score(drawing: TurnDrawing) -> float:
     )
 
 
+def gallery_share_rows():
+    """Every share that holds a drawing in the Gallery, as (turn_id,
+    created_at): a seat's (`turn_drawing_shares`) and a Solo player's
+    (`solo_gallery_shares`, #1434) that is not still held for an open Daily.
+    The one definition the projections, their rebuild and the audit count."""
+    return union_all(
+        select(TurnDrawingShare.turn_id, TurnDrawingShare.created_at),
+        select(SoloGalleryShare.turn_id, SoloGalleryShare.entered_at).where(
+            SoloGalleryShare.entered_at.is_not(None)
+        ),
+    ).subquery()
+
+
 def _earlier(kept: datetime | None, found: datetime | None) -> datetime | None:
     kept, found = aware(kept), aware(found)
     if kept is None:
@@ -85,10 +100,11 @@ async def refresh_share_projection(session: AsyncSession, drawing: TurnDrawing) 
     not a new entry (R-SHARE-05) - and is moved only earlier, which is what a
     finished game's live share written after a later one does."""
     await session.flush()
+    shares = gallery_share_rows()
     count, first = (
         await session.execute(
-            select(func.count(), func.min(TurnDrawingShare.created_at)).where(
-                TurnDrawingShare.turn_id == drawing.turn_id
+            select(func.count(), func.min(shares.c.created_at)).where(
+                shares.c.turn_id == drawing.turn_id
             )
         )
     ).one()
@@ -107,18 +123,20 @@ def _count_by_turn():
 
 
 def _first_share_by_turn():
+    shares = gallery_share_rows()
     return (
-        select(func.min(TurnDrawingShare.created_at))
-        .where(TurnDrawingShare.turn_id == TurnDrawing.turn_id)
+        select(func.min(shares.c.created_at))
+        .where(shares.c.turn_id == TurnDrawing.turn_id)
         .scalar_subquery()
     )
 
 
 def _shares_by_turn():
+    shares = gallery_share_rows()
     return (
         select(func.count())
-        .select_from(TurnDrawingShare)
-        .where(TurnDrawingShare.turn_id == TurnDrawing.turn_id)
+        .select_from(shares)
+        .where(shares.c.turn_id == TurnDrawing.turn_id)
         .scalar_subquery()
     )
 

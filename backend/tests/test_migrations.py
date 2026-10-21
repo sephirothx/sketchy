@@ -286,6 +286,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "b6c7d8e9f0a3",
         "a5b6c7d8e9f2",
         "f4a5b6c7d8e1",
         "e3f4a5b6c7d0",
@@ -787,6 +788,45 @@ async def test_a_picture_report_survives_going_back(tmp_path):
                 )
             ).one()
         assert row[0] == "unscoped"
+    finally:
+        await engine.dispose()
+
+
+async def test_going_back_past_solo_reports_refuses_two_open_reports_of_one_pair(tmp_path):
+    """A Solo report and another door's about the same player may both be
+    open now, never before (#1494). Going back keeps both - closing one would
+    be a decision nobody made - by refusing until a moderator has decided."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'solo-reports.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        reporter, reported = uuid.uuid4(), uuid.uuid4()
+        async with engine.begin() as connection:
+            for account, name in ((reporter, "reporter"), (reported, "reported")):
+                await connection.execute(
+                    text(
+                        "INSERT INTO users (id, username, display_name, state, created_at,"
+                        " updated_at) VALUES (:id, :name, :name, 'anonymous', datetime('now'),"
+                        " datetime('now'))"
+                    ),
+                    {"id": account.hex, "name": name},
+                )
+            for via_solo in (1, 0):
+                await connection.execute(
+                    text(
+                        "INSERT INTO player_reports (id, reporter_user_id, reported_user_id,"
+                        " reason, details, context_snapshot, scope, status, via_solo,"
+                        " created_at, updated_at) VALUES (:id, :reporter, :reported,"
+                        " 'offensive_drawing', '', '{}', 'unscoped', 'pending', :via_solo,"
+                        " datetime('now'), datetime('now'))"
+                    ),
+                    {"id": uuid.uuid4().hex, "reporter": reporter.hex,
+                     "reported": reported.hex, "via_solo": via_solo},
+                )
+        with pytest.raises(RuntimeError, match="open Solo report and another open report"):
+            await _migrate(engine, alembic_command.downgrade, "a5b6c7d8e9f2")
+        async with engine.begin() as connection:
+            count = await connection.scalar(text("SELECT count(*) FROM player_reports"))
+        assert count == 2
     finally:
         await engine.dispose()
 
