@@ -128,6 +128,10 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   // Where our last take-back left the page: the entries above it are dead
   // ends rather than leftovers, with nothing after them to step on to.
   let takenBack: { path: string; index: number } | null = null;
+  // The top entry we pushed. An entry adopted rather than pushed - after a
+  // reload, a leftover still under an opening layer - may have a page after
+  // it, so taking it back leaves no dead end.
+  let pushedTop: number | null = null;
   let unlisten: (() => void) | null = null;
   let scheduled = false;
 
@@ -144,7 +148,10 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     if (!step) return;
     if ("go" in step) {
       const index = indexOf(port.state());
-      takenBack = index === null ? null : { path, index: index + step.go };
+      takenBack =
+        index === null || pushedTop === null || index > pushedTop
+          ? null
+          : { path, index: index + step.go };
       port.go(step.go);
       return;
     }
@@ -156,6 +163,7 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     // The push replaced whatever lay above, the dead ends included.
     takenBack = null;
     lastIndex = indexOf(state);
+    pushedTop = lastIndex;
   }
 
   function schedule() {

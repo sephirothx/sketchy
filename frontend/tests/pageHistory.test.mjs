@@ -239,6 +239,29 @@ test("Forward passes a leftover block two layers deep", async () => {
   assert.equal(win.location.pathname, "/gallery");
 });
 
+test("a leftover adopted after a reload is not a dead end once taken back", async () => {
+  // Reloaded on a leftover entry: the viewer was open on the profile when
+  // something went on to /gallery, and Back came here with nothing listening.
+  const win = new FakeWindow();
+  win.navigate(PROFILE);
+  win.entries[1].state = layerState(win.entries[0].state, PROFILE, 1);
+  win.navigate("/gallery");
+  win.index = 1;
+  const page = createPageHistory(historyPortFor(win));
+
+  // A drawing opened here adopts the entry; closed by its button, it takes it
+  // back - and Forward still reaches /gallery past it.
+  const release = page.open(() => {});
+  await win.settle();
+  assert.equal(win.entries.length, 3, "the entry is adopted, not pushed again");
+  release();
+  await win.settle();
+  assert.equal(win.index, 0);
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/gallery");
+});
+
 test("a leftover entry on another page is stepped over after a layer opened elsewhere", async () => {
   const { win, page } = setup("/profile/a");
   const releaseFirst = page.open(() => {});
