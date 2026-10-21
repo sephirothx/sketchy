@@ -982,7 +982,7 @@ export const ES: Catalogue = {
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Dibujo de ${p.prompt} por ${p.drawer}`,
-    drawnBy: "Dibujado por {drawer} · Ronda {round} · Turno {turn}",
+    drawnBy: "Dibujado por {drawer}",
     position: (p: { position: number; total: number }) => `${p.position} de ${p.total}`,
     thisDrawingCouldNotBeDecoded: "Este dibujo no se pudo descodificar.",
     drawingRecap: "Resumen de dibujos",
@@ -998,6 +998,14 @@ export const ES: Catalogue = {
     previous: "Anterior",
     next: "Siguiente",
     loadThisDrawing: "cargar este dibujo",
+    earlierDrawings: "Dibujos anteriores",
+    laterDrawings: "Dibujos siguientes",
+    allDrawings: (p: { count: number }) => `Los ${p.count} dibujos`,
+    backToDrawing: "Volver al dibujo",
+    round: (p: { round: number }) => `Ronda ${p.round}`,
+    notKept: "No guardado",
+    removed: "Retirado",
+    notAvailable: "No disponible",
   },
 
   emailRecoveryReminder: {

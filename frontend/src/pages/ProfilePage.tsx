@@ -11,7 +11,7 @@ import { formatDate } from "../lib/clock";
 import { statisticsLayout, type TurnStat } from "../lib/profileStats";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
-import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { DrawingViewer } from "../components/DrawingViewer";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
 import { PinControl } from "../components/PinControl";
 import { ShareControl } from "../components/ShareControl";
@@ -457,6 +457,7 @@ function GameRow({
                   inGallery: turn.inGallery,
                 })}
                 onShare={(shared) => shareTurn(turn.id, shared)}
+                look="viewer"
               />
             );
             // Solo serves a public game's drawings to strangers (#1434): the
@@ -523,7 +524,7 @@ function GameRow({
             return (
             <>
             {viewingIndex !== null && (
-              <DrawingRecapGallery
+              <DrawingViewer
                 entries={viewerEntries}
                 initialIndex={viewingIndex}
                 onClose={() => setViewingIndex(null)}

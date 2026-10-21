@@ -264,7 +264,7 @@
 
 /* Where the control sits in a card rather than on the canvas. */
 .turn-results-reactions,
-.drawing-recap-reactions {
+.drawing-viewer-reactions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -280,19 +280,14 @@
   display: none;
 }
 
-.turn-results-reactions .reaction-picker,
-.drawing-recap-reactions .reaction-picker {
+.turn-results-reactions .reaction-picker {
   bottom: auto;
   top: calc(var(--reaction-height) + 8px);
 }
 
 .turn-results-reactions .reaction-floaters,
-.drawing-recap-reactions .reaction-floaters {
+.drawing-viewer-reactions .reaction-floaters {
   bottom: 0;
-}
-
-.drawing-recap-reactions {
-  margin-top: 6px;
 }
 
 /* The highlight card's way into the recap. */

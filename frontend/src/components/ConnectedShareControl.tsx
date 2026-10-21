@@ -17,7 +17,7 @@ interface ConnectedShareControlProps {
   shareable: boolean;
   /** From the recap: the finished game's own visibility, not the room's. */
   recap?: boolean;
-  look?: "button" | "pill";
+  look?: "button" | "pill" | "viewer";
 }
 
 /**

@@ -1,6 +1,7 @@
 import asyncio
+import re
 
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
     open_new_room,
@@ -104,10 +105,12 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await continue_to_waiting.wait_for()
             await view_drawings.click()
 
-            assert await host.get_by_text("1 of 2", exact=True).is_visible()
+            # The strip marks the drawing on screen (#1497: no "1 of 2" counter).
+            current = host.locator('.drawing-viewer-thumb[aria-current="true"]')
+            await expect(current).to_have_attribute("aria-label", re.compile(re.escape(first_prompt)))
             assert await host.get_by_role("heading", name=first_prompt).is_visible()
             # A guest drawer, credited in the guest style (#1279).
-            assert await host.locator(".drawing-recap-meta .colored-player-name.is-guest").count() == 1
+            assert await host.locator(".drawing-viewer-byline .colored-player-name.is-guest").count() == 1
             assert not await host.get_by_text(
                 "No drawing was captured for this turn.",
                 exact=True,
@@ -117,9 +120,9 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             first_download = await first_download_info.value
             assert first_prompt in first_download.suggested_filename
 
-            await host.get_by_role("button", name="Next").click()
-            assert await host.get_by_text("2 of 2", exact=True).is_visible()
-            assert await host.get_by_role("heading", name=second_prompt).is_visible()
+            await host.get_by_role("button", name="Next", exact=True).click()
+            await expect(current).to_have_attribute("aria-label", re.compile(re.escape(second_prompt)))
+            await expect(host.get_by_role("heading", name=second_prompt)).to_be_visible()
             empty_notice = host.get_by_text(
                 "No drawing was captured for this turn.",
                 exact=True,
@@ -131,8 +134,8 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             second_download = await second_download_info.value
             assert second_prompt in second_download.suggested_filename
 
-            await host.get_by_role("button", name="Previous").click()
-            assert await host.get_by_text("1 of 2", exact=True).is_visible()
+            await host.get_by_role("button", name="Previous", exact=True).click()
+            await expect(current).to_have_attribute("aria-label", re.compile(re.escape(first_prompt)))
             # One close, the header's, named for what it closes (#1279).
             await host.get_by_role("button", name="Close drawings").click()
             await host.locator('[data-testid="waiting-room"]').wait_for()
@@ -169,10 +172,10 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
                 name="Drawings",
                 exact=True,
             ).click()
-            await guest.get_by_text("Drawing recap", exact=True).wait_for()
+            await guest.get_by_role("dialog", name="Drawing recap").wait_for()
 
             await host.get_by_role("button", name="Rematch").click()
-            await guest.get_by_text("Drawing recap", exact=True).wait_for(
+            await guest.get_by_role("dialog", name="Drawing recap").wait_for(
                 state="detached",
             )
 
@@ -184,9 +187,9 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             await guest.get_by_text("Game over", exact=True).wait_for(
                 timeout=12_000,
             )
-            assert not await guest.get_by_text(
-                "Drawing recap",
-                exact=True,
+            assert not await guest.get_by_role(
+                "dialog",
+                name="Drawing recap",
             ).is_visible()
         finally:
             await host_context.close()

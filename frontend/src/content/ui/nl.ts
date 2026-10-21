@@ -982,7 +982,7 @@ export const NL: Catalogue = {
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Tekening van ${p.prompt} door ${p.drawer}`,
-    drawnBy: "Getekend door {drawer} · Ronde {round} · Beurt {turn}",
+    drawnBy: "Getekend door {drawer}",
     position: (p: { position: number; total: number }) => `${p.position} van ${p.total}`,
     thisDrawingCouldNotBeDecoded: "Deze tekening kon niet gedecodeerd worden.",
     drawingRecap: "Tekeningenoverzicht",
@@ -998,6 +998,14 @@ export const NL: Catalogue = {
     previous: "Vorige",
     next: "Volgende",
     loadThisDrawing: "deze tekening laden",
+    earlierDrawings: "Eerdere tekeningen",
+    laterDrawings: "Latere tekeningen",
+    allDrawings: (p: { count: number }) => `Alle ${p.count} tekeningen`,
+    backToDrawing: "Terug naar de tekening",
+    round: (p: { round: number }) => `Ronde ${p.round}`,
+    notKept: "Niet bewaard",
+    removed: "Verwijderd",
+    notAvailable: "Niet beschikbaar",
   },
 
   emailRecoveryReminder: {

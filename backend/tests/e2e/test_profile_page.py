@@ -2,7 +2,7 @@
 import asyncio
 import re
 
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
     open_new_room,
@@ -128,8 +128,10 @@ async def test_finished_game_shows_up_on_the_profile_page():
             # reach the rest of the game's turns too, which is the whole point
             # of a gallery rather than a single-drawing view.
             await lobby.locator(".profile-drawing-button").first.click()
-            await lobby.locator(".drawing-recap").wait_for()
-            await lobby.get_by_text("1 of 2", exact=True).wait_for()
+            await lobby.get_by_test_id("drawing-viewer").wait_for()
+            current = lobby.locator('.drawing-viewer-thumb[aria-current="true"]')
+            await expect(current).to_have_count(1)
+            first_label = await current.get_attribute("aria-label")
 
             next_button = lobby.get_by_role("button", name="Next", exact=True)
             previous_button = lobby.get_by_role(
@@ -139,12 +141,12 @@ async def test_finished_game_shows_up_on_the_profile_page():
             assert not await previous_button.is_enabled(), "nothing precedes the first"
 
             await next_button.click()
-            await lobby.get_by_text("2 of 2", exact=True).wait_for()
+            await expect(current).not_to_have_attribute("aria-label", first_label)
             assert not await next_button.is_enabled(), "nothing follows the last"
             assert await previous_button.is_enabled()
 
             await previous_button.click()
-            await lobby.get_by_text("1 of 2", exact=True).wait_for()
+            await expect(current).to_have_attribute("aria-label", first_label)
         finally:
             await host_context.close()
             await guest_context.close()

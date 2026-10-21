@@ -990,7 +990,7 @@ export const PL: Catalogue = {
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Rysunek: ${p.prompt}. Autor: ${p.drawer}`,
-    drawnBy: "Autor: {drawer} · Runda {round} · Tura {turn}",
+    drawnBy: "Autor: {drawer}",
     position: (p: { position: number; total: number }) => `${p.position} z ${p.total}`,
     thisDrawingCouldNotBeDecoded: "Nie udało się odczytać tego rysunku.",
     drawingRecap: "Podsumowanie rysunków",
@@ -1006,6 +1006,14 @@ export const PL: Catalogue = {
     previous: "Poprzedni",
     next: "Następny",
     loadThisDrawing: "wczytanie tego rysunku",
+    earlierDrawings: "Wcześniejsze rysunki",
+    laterDrawings: "Późniejsze rysunki",
+    allDrawings: (p: { count: number }) => `Wszystkie rysunki (${p.count})`,
+    backToDrawing: "Wróć do rysunku",
+    round: (p: { round: number }) => `Runda ${p.round}`,
+    notKept: "Nie zachowano",
+    removed: "Usunięto",
+    notAvailable: "Niedostępny",
   },
 
   emailRecoveryReminder: {

@@ -17,8 +17,11 @@ interface ShareControlProps {
   /** Not yet, though offered: the state it would act on is still loading. */
   disabled?: boolean;
   /** `pill` sits beside the reaction control in the turn results, in its
-      look, with the credit in its tooltip instead of a line beside it. */
-  look?: "button" | "pill";
+      look, with the credit in its tooltip instead of a line beside it.
+      `viewer` is the same pill with its word beside the icon, for the drawing
+      viewer, whose phone row spells its buttons out and whose desktop
+      overlay shows the icon alone (#1497). */
+  look?: "button" | "pill" | "viewer";
 }
 
 /**
@@ -85,7 +88,7 @@ export function ShareControl({
     />
   );
 
-  if (look === "pill") {
+  if (look === "pill" || look === "viewer") {
     if (offer === "hidden") return null;
     return (
       <>
@@ -93,6 +96,7 @@ export function ShareControl({
           offer={offer}
           credit={credit}
           busy={busy || disabled}
+          labelled={look === "viewer"}
           onPress={(shared) => choose(shared, offer === "takeOut")}
         />
         {confirmation}
@@ -154,11 +158,14 @@ function SharePill({
   offer,
   credit,
   busy,
+  labelled = false,
   onPress,
 }: {
   offer: Exclude<ShareOffer, "hidden">;
   credit: ShareCredit;
   busy: boolean;
+  /** Shows the short word beside the icon; the full sentence stays its name. */
+  labelled?: boolean;
   onPress: (shared: boolean) => void;
 }) {
   const pressed = offer === "unshare" || offer === "takeOut";
@@ -190,6 +197,11 @@ function SharePill({
       <span className="share-pill-icon">
         <ImageIcon size={15} />
       </span>
+      {labelled && (
+        <span className="share-pill-label" aria-hidden="true">
+          {offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share}
+        </span>
+      )}
     </button>
   );
 }

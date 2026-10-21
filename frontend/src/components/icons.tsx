@@ -188,6 +188,11 @@ export function GripIcon(p: IconProps) { return <IconBase {...p}>{[6, 12, 18].ma
 export function ChevronRightIcon(p: IconProps) { return <IconBase {...p}><path d="m9 6 6 6-6 6" /></IconBase>; }
 export function PinIcon(p: IconProps) { return <IconBase {...p}><path d="M12 17v5" /><path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z" /></IconBase>; }
 export function ChevronLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m15 6-6 6 6 6" /></IconBase>; }
+/** Two chevrons: a whole set of thumbnails back or on, not one drawing. */
+export function ChevronsLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m11 17-5-5 5-5" /><path d="m18 17-5-5 5-5" /></IconBase>; }
+export function ChevronsRightIcon(p: IconProps) { return <IconBase {...p}><path d="m13 17 5-5-5-5" /><path d="m6 17 5-5-5-5" /></IconBase>; }
+/** Four tiles: every drawing at once. */
+export function GridIcon(p: IconProps) { return <IconBase {...p}><rect x="4" y="4" width="7" height="7" rx="1" /><rect x="13" y="4" width="7" height="7" rx="1" /><rect x="4" y="13" width="7" height="7" rx="1" /><rect x="13" y="13" width="7" height="7" rx="1" /></IconBase>; }
 export function BackIcon(p: IconProps) { return <IconBase {...p}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></IconBase>; }
 export function MedalIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="15" r="5" /><path d="m8.5 10.5-3-7.5" /><path d="m15.5 10.5 3-7.5" /><path d="m9 3 3 6 3-6" /></IconBase>; }
 export function GlobeIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z" /></IconBase>; }

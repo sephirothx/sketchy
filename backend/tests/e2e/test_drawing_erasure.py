@@ -67,10 +67,10 @@ async def test_an_administrator_erases_a_reported_drawing_and_an_open_recap_drop
             # it is in the Gallery to be reported from - and stays looking.
             game_end = host.locator('[data-testid="game-end-overlay"]')
             await game_end.get_by_role("button", name="Drawings", exact=True).click(timeout=12_000)
-            recap = host.locator(".drawing-recap")
+            recap = host.get_by_test_id("drawing-viewer")
             await recap.wait_for()
             await share_from_recap(host, recap)
-            await recap.locator(".drawing-recap-canvas canvas").wait_for()
+            await recap.locator(".drawing-viewer-slide.is-current img").wait_for()
 
             # Whoever did not draw it reports it from the Gallery.
             reporter = other if drawers[0] is host else host
@@ -113,6 +113,6 @@ async def test_an_administrator_erases_a_reported_drawing_and_an_open_recap_drop
 
             # The recap on the host's screen says so, without a reload.
             await expect(recap).to_contain_text("This drawing was removed by moderation.")
-            await expect(recap.locator(".drawing-recap-canvas canvas")).to_have_count(0)
+            await expect(recap.locator(".drawing-viewer-slide.is-current img")).to_have_count(0)
         finally:
             await browser.close()

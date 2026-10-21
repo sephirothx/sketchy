@@ -78,7 +78,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             # answered "still being saved"; the control stays and a second
             # press is the retry the toast asks for.
             await game_end.get_by_role("button", name="Drawings", exact=True).click()
-            await host.locator(".drawing-recap").wait_for()
+            await host.get_by_test_id("drawing-viewer").wait_for()
             toggle = host.locator('[data-testid="pin-toggle"]')
             await expect(toggle).to_have_attribute("aria-pressed", "false")
             for _ in range(20):
@@ -89,7 +89,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
                 except AssertionError:
                     continue
             await expect(toggle).to_have_attribute("aria-pressed", "true")
-            first_prompt = (await host.locator("#drawing-recap-title").inner_text()).strip()
+            first_prompt = (await host.locator("#drawing-viewer-title").inner_text()).strip()
 
             # The owner's shelf shows it, in a lobby tab of the same account.
             lobby = await host_context.new_page()
@@ -118,7 +118,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await register_account(stranger, "pinstranger")
             await stranger.goto(f"{BASE_URL}/profile/{host_id}")
             await stranger.locator('[data-testid="pinned-drawings"] .profile-shelf-open').first.click()
-            await stranger.locator(".drawing-recap").wait_for()
+            await stranger.get_by_test_id("drawing-viewer").wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
             await expect(
@@ -127,7 +127,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
                 )
             ).to_have_text("1")
             await stranger.keyboard.press("Escape")
-            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
+            await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
             await expect(
                 stranger.locator('[data-testid="pinned-drawings"] .reaction-chip .reaction-count').first
             ).to_have_text("1")

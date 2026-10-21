@@ -254,7 +254,7 @@ test("every media query width and height is one of the breakpoints", () => {
 const ROOM_LAYOUT = readFileSync(join(SRC, "lib", "roomLayout.ts"), "utf8");
 const ROOM_QUERY = /PHONE_ROOM_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
 const LANDSCAPE_QUERY = /PHONE_LANDSCAPE_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
-const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-recap.css"];
+const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-viewer.css"];
 const ROOM_COMPONENTS = [
   "ActiveGameRoom.tsx",
   "GameHeaderStatus.tsx",

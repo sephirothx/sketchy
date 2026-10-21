@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
-import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { DrawingViewer } from "../components/DrawingViewer";
 import { loadRecapDrawing } from "../lib/recapDrawings";
 import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
@@ -610,6 +610,41 @@ export function ActiveGameRoom({ code }: { code: string }) {
         <RoomMenuSheet actions={roomMenuActions} onDismiss={() => setRoomMenuOpen(false)} />
       )}
 
+      {/* The Recap is a dialog over the room; what the room shows stays under it. */}
+      {recapShown && (
+        <DrawingViewer
+          entries={drawingRecap}
+          initialIndex={recapIndex}
+          onClose={closeRecap}
+          loadEntry={loadRecapDrawing}
+          renderReactions={(entry) => (
+            <ConnectedDrawingReactionControl
+              turnId={entry.turnId}
+              drawerId={entry.drawerId}
+              placement="panel"
+              visible={entry.available !== false}
+            />
+          )}
+          renderActions={(entry) => (
+            <>
+              <ConnectedShareControl
+                turnId={entry.turnId}
+                drawerId={entry.drawerId}
+                shareable={entry.available !== false && entry.actionCount > 0}
+                recap
+                look="viewer"
+              />
+              <ConnectedPinControl
+                turnId={entry.turnId}
+                drawerId={entry.drawerId}
+                visible={entry.available !== false}
+                blank={entry.actionCount <= 0}
+              />
+            </>
+          )}
+        />
+      )}
+
       {/* Nothing in a production build; the E2E suite's way to crash the room. */}
       <CrashProbe scope="room" />
       {stage.kind === "ended" ? (
@@ -633,38 +668,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <ConnectedRoomPlayersPanel mode={roomView} />
           }
           main={
-            recapShown ? (
-              <DrawingRecapGallery
-                entries={drawingRecap}
-                initialIndex={recapIndex}
-                onClose={closeRecap}
-                loadEntry={loadRecapDrawing}
-                renderReactions={(entry) => (
-                  <ConnectedDrawingReactionControl
-                    turnId={entry.turnId}
-                    drawerId={entry.drawerId}
-                    placement="panel"
-                    visible={entry.available !== false}
-                  />
-                )}
-                renderActions={(entry) => (
-                  <>
-                    <ConnectedShareControl
-                      turnId={entry.turnId}
-                      drawerId={entry.drawerId}
-                      shareable={entry.available !== false && entry.actionCount > 0}
-                      recap
-                    />
-                    <ConnectedPinControl
-                      turnId={entry.turnId}
-                      drawerId={entry.drawerId}
-                      visible={entry.available !== false}
-                      blank={entry.actionCount <= 0}
-                    />
-                  </>
-                )}
-              />
-            ) : highlightsOpen ? (
+            highlightsOpen ? (
               <GameHighlightsPanel
                 highlights={gameHighlights}
                 onClose={() => setHighlightsOpen(false)}
