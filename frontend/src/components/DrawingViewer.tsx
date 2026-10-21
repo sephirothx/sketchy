@@ -39,7 +39,8 @@ import {
 } from "../lib/drawingViewer";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useBackCloses, usePageBackCloses } from "../hooks/useRoomHistory";
+import { usePageBackCloses } from "../hooks/usePageBackCloses";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import type { DrawingRecapMetadata } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
