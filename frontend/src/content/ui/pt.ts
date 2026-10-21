@@ -953,8 +953,6 @@ export const PT: Catalogue = {
   },
 
   pinControl: {
-    pin: "Fixar",
-    pinned: "Fixado",
     pinThisDrawing: "Fixar este desenho no teu perfil e partilhá-lo na galeria",
     unpinThisDrawing: "Remover este desenho do teu perfil",
     thatDrawingCouldNotBePinned: "Não foi possível fixar esse desenho.",

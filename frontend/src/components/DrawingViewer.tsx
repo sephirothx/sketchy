@@ -768,10 +768,7 @@ export function DrawingViewer({
                       disabled={entry.available === false || !shownPicture}
                       onClick={() => void saveImage()}
                     >
-                      <DownloadIcon size={16} />
-                      <span className="drawing-viewer-tool-label" aria-hidden="true">
-                        {ui.drawingRecapGallery.saveImage}
-                      </span>
+                      <DownloadIcon size={18} />
                     </button>
                   </div>
                   {reactions && <div className="drawing-viewer-reactions">{reactions}</div>}

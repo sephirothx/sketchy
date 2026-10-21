@@ -969,8 +969,6 @@ export const EN = {
   },
 
   pinControl: {
-    pin: "Pin",
-    pinned: "Pinned",
     pinThisDrawing: "Pin this drawing to your profile and share it to the gallery",
     unpinThisDrawing: "Unpin this drawing from your profile",
     thatDrawingCouldNotBePinned: "That drawing could not be pinned.",

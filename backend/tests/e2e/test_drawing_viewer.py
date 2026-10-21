@@ -61,9 +61,12 @@ async def test_the_viewer_moves_by_keys_on_a_desktop_and_by_swipe_and_tap_on_a_p
             await host.get_by_role("button", name="Start game").click()
 
             prompts = []
+            phone_drew = None
             for _ in range(2):
                 drawer, guesser, prompt = await choose_prompt([host, phone])
                 prompts.append(prompt)
+                if drawer is phone:
+                    phone_drew = prompt
                 box = await drawer.locator("canvas.drawing-canvas").bounding_box()
                 await drag(drawer, (box["x"] + 60, box["y"] + 60), (box["x"] + 200, box["y"] + 150))
                 await guesser.fill(".chat-input input", prompt)
@@ -112,6 +115,20 @@ async def test_the_viewer_moves_by_keys_on_a_desktop_and_by_swipe_and_tap_on_a_p
             await expect(
                 on_phone.locator('.drawing-viewer-thumb[aria-current="true"]')
             ).to_have_attribute("aria-label", re.compile(f"^Drawing of {re.escape(prompts[1])} by "))
+
+            # The phone's own drawing, shared and then taken out: the take-out
+            # asks first, in a dialog rendered inside the row of icon buttons,
+            # and its Cancel and Take it out keep their own width (#1497).
+            await on_phone.locator(f'.drawing-viewer-thumb[aria-label^="Drawing of {phone_drew} by "]').click()
+            await expect(on_phone.get_by_role("heading", name=phone_drew)).to_be_visible()
+            await on_phone.locator('[data-testid="share-toggle"]').click()
+            await on_phone.locator('[data-testid="share-take-out"]').click()
+            confirm = phone.get_by_role("alertdialog")
+            for name in ("Cancel", "Take it out"):
+                box = await confirm.get_by_role("button", name=name).bounding_box()
+                assert box["width"] > 80, (name, box)
+            await confirm.get_by_role("button", name="Cancel").click()
+            await expect(confirm).to_have_count(0)
 
             # A downward drag closes it.
             await drag(phone, middle, (middle[0], middle[1] + 260))

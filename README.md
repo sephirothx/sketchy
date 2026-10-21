@@ -58,8 +58,8 @@ keyboard that takes half the screen, and one thumb.
   timings and reactions rather than points, so the same five appear in a no-scoring game,
   and each is dropped when the game gives it nothing to say.
 - Drawing viewer — the recap, game history and the pinned shelf open a finished game's
-  drawings in one viewer over the page: the prompt above the drawing, Pin, Share, Save
-  image and the reaction on its lower corners (under it on a phone), and a strip of
+  drawings in one viewer over the page: the prompt above the drawing, Pin, Share and Save
+  image as icons and the reaction on its lower corners (under it on a phone), and a strip of
   thumbnails below - eight at a time on a desktop, a scrolling row on a phone - with an
   overview of the whole game above 24 drawings. Swipe, the arrows or the arrow keys move
   between drawings with a slide that finishes; on a phone a tap shows the arrows, a

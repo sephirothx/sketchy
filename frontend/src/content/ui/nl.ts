@@ -953,8 +953,6 @@ export const NL: Catalogue = {
   },
 
   pinControl: {
-    pin: "Vastzetten",
-    pinned: "Vastgezet",
     pinThisDrawing: "Deze tekening op je profiel vastzetten en in de galerij delen",
     unpinThisDrawing: "Deze tekening van je profiel losmaken",
     thatDrawingCouldNotBePinned: "Deze tekening kon niet worden vastgezet.",

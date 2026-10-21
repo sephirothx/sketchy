@@ -961,8 +961,6 @@ export const PL: Catalogue = {
   },
 
   pinControl: {
-    pin: "Przypnij",
-    pinned: "Przypięty",
     pinThisDrawing: "Przypnij ten rysunek do profilu i udostępnij go w galerii",
     unpinThisDrawing: "Odepnij ten rysunek od profilu",
     thatDrawingCouldNotBePinned: "Nie udało się przypiąć tego rysunku.",

@@ -18,9 +18,8 @@ interface ShareControlProps {
   disabled?: boolean;
   /** `pill` sits beside the reaction control in the turn results, in its
       look, with the credit in its tooltip instead of a line beside it.
-      `viewer` is the same pill with its word beside the icon, for the drawing
-      viewer, whose phone row spells its buttons out and whose desktop
-      overlay shows the icon alone (#1497). */
+      `viewer` is the same pill as an icon alone, at the size of the drawing
+      viewer's other buttons, named by its short word first (#1497). */
   look?: "button" | "pill" | "viewer";
 }
 
@@ -96,10 +95,7 @@ export function ShareControl({
       return (
         <span className="reaction-toggle share-pill is-inert" role="img" aria-label={said} title={said}>
           <span className="share-pill-icon">
-            <ImageIcon size={15} />
-          </span>
-          <span className="share-pill-label" aria-hidden="true">
-            {ui.shareControl.inTheGallery}
+            <ImageIcon size={18} />
           </span>
         </span>
       );
@@ -111,7 +107,7 @@ export function ShareControl({
           offer={offer}
           credit={credit}
           busy={busy || disabled}
-          labelled={look === "viewer"}
+          inViewer={look === "viewer"}
           onPress={(shared) => choose(shared, offer === "takeOut")}
         />
         {confirmation}
@@ -173,14 +169,14 @@ function SharePill({
   offer,
   credit,
   busy,
-  labelled = false,
+  inViewer = false,
   onPress,
 }: {
   offer: Exclude<ShareOffer, "hidden">;
   credit: ShareCredit;
   busy: boolean;
-  /** Shows the short word beside the icon; the full sentence stays its name. */
-  labelled?: boolean;
+  /** The viewer's button: the icon at its size, named by the short word. */
+  inViewer?: boolean;
   onPress: (shared: boolean) => void;
 }) {
   const pressed = offer === "unshare" || offer === "takeOut";
@@ -195,10 +191,10 @@ function SharePill({
           : ui.shareControl.theDrawerKeptItOut;
   const said = creditText(credit);
   const label = said && !inert ? `${said}\n${action}` : action;
-  // The word shown beside the icon starts its name, so a voice command that
-  // reads the button's word finds it (WCAG 2.5.3); the rest follows it.
+  // In the viewer its short word starts its name, so a voice command that
+  // says the button's word - "Share" - finds it; the rest follows it.
   const word = offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share;
-  const name = labelled ? (inert ? `${word}\n${action}` : said ? `${word}\n${said}` : word) : label;
+  const name = inViewer ? (inert ? `${word}\n${action}` : said ? `${word}\n${said}` : word) : label;
   return (
     <button
       type="button"
@@ -214,13 +210,8 @@ function SharePill({
       }}
     >
       <span className="share-pill-icon">
-        <ImageIcon size={15} />
+        <ImageIcon size={inViewer ? 18 : 15} />
       </span>
-      {labelled && (
-        <span className="share-pill-label" aria-hidden="true">
-          {word}
-        </span>
-      )}
     </button>
   );
 }
