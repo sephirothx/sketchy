@@ -32,7 +32,8 @@ export interface SoloForms {
 export type SoloOutcome = "solved" | "given_up" | "timed_out";
 
 /** A drawing served in a run. `forms` is null once it is settled, when
-    `prompt` says what it was. */
+    `prompt` says what it was - and on an open serve nothing can name any
+    more (R-SOLO-13), which is given up; its `prompt` stays null. */
 export interface SoloServe {
   serveId: string;
   position: number;
@@ -167,14 +168,21 @@ export interface SoloSummary {
 export interface SoloCalendarDay {
   date: string;
   daily: boolean;
+  /** Playable from the calendar now (#1470): it had a Daily and has ended
+      everywhere. Played late, finished, or - done - reviewed. */
+  open: boolean;
   result: SoloDailyResult | null;
 }
 
 /** A month of the player's Dailies, `YYYY-MM`, up to their today. `first` is
-    their first Daily, so the calendar knows how far back to go. */
+    their first Daily played on its own date, after which one let pass is
+    missed; `earliest` is how far back the calendar goes - the first Daily
+    there was while past ones can be played (#1470), else the player's first
+    however played. */
 export interface SoloMonth {
   month: string;
   first: string | null;
+  earliest: string | null;
   days: SoloCalendarDay[];
 }
 
@@ -185,7 +193,9 @@ export function localDateKey(now: Date = new Date()): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-/** Today's Daily: created with its five drawings the first time, resumed after. */
+/** A date's Daily: created with its five drawings the first time, resumed
+    after. Today's, or a past one from the archive (#1470) to play late or to
+    finish; one the player finished comes as it stands, to review. */
 export function openDaily(date: string): Promise<SoloRun> {
   return apiRequest(`/api/solo/daily/${encodeURIComponent(date)}`, { method: "POST" });
 }
@@ -203,6 +213,14 @@ export function fetchSoloMonth(today: string, month: string): Promise<SoloMonth>
 export interface SoloReaction {
   myReaction: string | null;
   reactionCounts: Record<string, number>;
+}
+
+/** A settled drawing as the player left it: their reaction and the counts,
+    and their share - what the card and the review start from. */
+export type SoloServeState = SoloReaction & SoloShare;
+
+export function fetchServeState(serveId: string): Promise<SoloServeState> {
+  return apiRequest(`/api/solo/serves/${encodeURIComponent(serveId)}/state`);
 }
 
 /** React to a drawing Solo served the player, once it is settled. */

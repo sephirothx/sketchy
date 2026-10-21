@@ -830,6 +830,18 @@ class SoloShareResult:
     notify_user_id: str | None = None
 
 
+@dataclass(frozen=True)
+class SoloDrawingState:
+    """What a Solo player sees of a drawing they settled, read before they act
+    on it again - its reaction counts and their own pick, and their share -
+    so a review shows what they did rather than a blank (#1496 review). No
+    seat, no name."""
+
+    reaction_counts: dict[str, int]
+    my_reaction: str | None
+    share: SoloShareResult
+
+
 async def release_held_solo_shares(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -4013,6 +4025,48 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     withdrawn=drawing_row.gallery_withdrawn_at is not None,
                     notify_user_id=_public_id(notify) if notify is not None else None,
                 )
+
+    async def solo_drawing_state(
+        self, turn_id: str, *, requesting_user_id: str
+    ) -> SoloDrawingState | None:
+        """A settled Solo drawing as the caller left it: the reaction counts
+        and their pick, and their share - whether it is in the Gallery, held,
+        or taken out by its drawer. The caller is the route's settled-serve
+        door; None if the drawing is gone."""
+        db_turn_id = _optional_entity_id(turn_id)
+        db_user_id = _optional_entity_id(requesting_user_id)
+        if db_turn_id is None or db_user_id is None:
+            return None
+        async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_user_id)
+            drawing_row = await session.scalar(
+                select(TurnDrawing)
+                .where(TurnDrawing.turn_id == db_turn_id)
+                .options(defer(TurnDrawing.payload))
+            )
+            if drawing_row is None:
+                return None
+            summary = (
+                await _reaction_summaries(session, (db_turn_id,), viewer_ids=identity_ids)
+            )[db_turn_id]
+            mine = (
+                await session.execute(
+                    select(SoloGalleryShare.release_at).where(
+                        SoloGalleryShare.turn_id == db_turn_id,
+                        SoloGalleryShare.user_id.in_(identity_ids),
+                    )
+                )
+            ).first()
+            return SoloDrawingState(
+                reaction_counts=dict(summary.counts),
+                my_reaction=summary.my_reaction,
+                share=SoloShareResult(
+                    in_gallery=drawing_row.gallery_share_count > 0,
+                    shared_by_me=mine is not None,
+                    held_until=mine[0] if mine is not None else None,
+                    withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                ),
+            )
 
     async def get_drawing_share_state(self, turn_id: str) -> DrawingShareResult | None:
         db_turn_id = _optional_entity_id(turn_id)

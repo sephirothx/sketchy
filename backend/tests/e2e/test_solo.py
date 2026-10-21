@@ -8,18 +8,20 @@ since play is local and the answer never shows), misses one with a wrong
 guess and gives it up, reloads mid-Daily and carries on where they were,
 finishes it, and then plays a five-drawing free run. The page also has to
 hold together at phone width, and a guest is told what an account unlocks.
+A past day picked in the calendar (#1470) is played late, and then, finished,
+opens as a review of its five.
 """
 from __future__ import annotations
 
 import base64
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from playwright.async_api import Page, async_playwright, expect
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
@@ -28,11 +30,13 @@ from app.db.models import (
     PromptVersion,
     SoloDailyConcept,
     SoloDailyDay,
+    SoloDailySet,
     SoloServe,
+    TurnDrawing,
     User,
 )
 from app.domain_values import PROMPT_LANGUAGES
-from app.repositories.solo import ensure_open_dailies
+from app.repositories.solo import daily_set, ensure_open_dailies
 from app.solo_rules import DAILY_LENGTH, open_dates
 from app.repositories.interfaces import (
     GameParticipantInput,
@@ -58,7 +62,7 @@ FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "fill_replay_100.js
 OPEN_DAILIES_DRAWINGS = 3 * DAILY_LENGTH
 
 
-async def seed_solo_drawings(count: int) -> None:
+async def seed_solo_drawings(count: int, *, finished: datetime | None = None) -> None:
     """`count` public games of one curated turn each, every language able
     to name it, two guessers and one of them right: Daily candidates, and
     free-run drawings for anybody who was not in them. Each of a concept no
@@ -105,7 +109,7 @@ async def seed_solo_drawings(count: int) -> None:
         tag = uuid4().hex[:4]
         drawer = await users.create_anonymous(f"SoloDrawer{tag}")
         guessers = [await users.create_anonymous(f"SoloSeat{tag}{i}") for i in range(2)]
-        finished = datetime.now(timezone.utc) - timedelta(hours=2)
+        finished = finished or datetime.now(timezone.utc) - timedelta(hours=2)
         for version_id in versions:
             seats = [str(uuid4()) for _ in range(3)]
             turn_id = str(uuid4())
@@ -351,3 +355,139 @@ async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
             await context.close()
             await browser.close()
 
+
+async def open_past_daily(day: date) -> None:
+    """Give `day` its Daily as somebody asking for it on the day would have:
+    the archive plays only the Dailies there were."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        noon = datetime.combine(day, time(12), tzinfo=timezone.utc)
+        async with factory() as session, session.begin():
+            assert await daily_set(session, day, now=noon), "too few drawings for a past Daily"
+    finally:
+        await engine.dispose()
+
+
+async def take_out_of_solo(day: date, *, position: int) -> None:
+    """Take one drawing of `day`'s Daily out of Solo, as its drawer would."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session, session.begin():
+            turns = select(SoloDailySet.turn_id).where(
+                SoloDailySet.daily_date == day, SoloDailySet.position == position
+            )
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id.in_(turns))
+                .values(solo_withdrawn_at=datetime.now(timezone.utc))
+            )
+    finally:
+        await engine.dispose()
+
+
+async def show_month(page: Page, day: date) -> None:
+    """Page the calendar back to `day`'s month."""
+    month = day.isoformat()[:7]
+    calendar = page.get_by_test_id("solo-calendar")
+    for _ in range(40):
+        if await calendar.get_attribute("data-month") == month:
+            break
+        await page.get_by_test_id("solo-calendar-previous").click()
+    await expect(calendar).to_have_attribute("data-month", month)
+
+
+async def test_a_missed_daily_is_played_from_the_calendar_and_then_reviewed():
+    # Within sixty days, so no Daily open now can take its concepts - one
+    # that did would hold it back, rightly, until today's had ended (R-SOLO-18)
+    # - and far enough back to have ended everywhere and to need the
+    # calendar's arrows. Its drawings were finished before it.
+    day = datetime.now(timezone.utc).date() - timedelta(days=40)
+    # The open dates' Dailies first, so no free run elsewhere picks one of
+    # them from these five before the past day has them.
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
+    await settle_open_dailies()
+    await seed_solo_drawings(DAILY_LENGTH, finished=datetime.combine(day, time(0), tzinfo=timezone.utc) - timedelta(days=1))
+    await open_past_daily(day)
+    username = f"past{uuid4().hex[:8]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        pick = page.locator(f'[data-testid="solo-calendar-day"][data-date="{day.isoformat()}"]').get_by_test_id(
+            "solo-calendar-play"
+        )
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await page.goto(f"{BASE_URL}/solo")
+            # A new player's calendar reaches back to the first Daily there was.
+            await show_month(page, day)
+            await expect(pick).to_have_attribute("aria-label", re.compile(r"\. Play$"))
+            await pick.click()
+            await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
+            await expect(page.get_by_test_id("solo-play-date")).to_be_visible()
+            for _ in range(5):
+                await give_up_and_continue(page)
+            await expect(page.get_by_test_id("solo-summary")).to_contain_text("Daily complete")
+            # A past Daily has no countdown: the next one is today's.
+            await expect(page.get_by_test_id("solo-countdown")).to_have_count(0)
+
+            # Finished, the day opens its review: the five in a strip, the
+            # one picked large, nothing played again.
+            await page.get_by_test_id("solo-back").click()
+            await show_month(page, day)
+            await expect(pick).to_have_attribute("aria-label", re.compile(r"\. Review$"))
+            await pick.click()
+            review = page.get_by_test_id("solo-review")
+            await expect(review.get_by_test_id("solo-review-thumb")).to_have_count(5)
+            first = await review.get_by_test_id("solo-prompt").inner_text()
+            await review.get_by_test_id("solo-review-thumb").nth(2).click()
+            await expect(review.get_by_test_id("solo-review-thumb").nth(2)).to_have_attribute("aria-pressed", "true")
+            await expect(review.get_by_test_id("solo-prompt")).not_to_have_text(first)
+            await review.get_by_test_id("solo-card-drawing").locator("canvas").wait_for()
+            await expect(page.get_by_test_id("solo-play")).to_have_count(0)
+            # The arrow keys step through the five, and stop at the ends.
+            thumbs = review.get_by_test_id("solo-review-thumb")
+            await page.keyboard.press("ArrowRight")
+            await expect(thumbs.nth(3)).to_have_attribute("aria-pressed", "true")
+            for _ in range(3):
+                await page.keyboard.press("ArrowRight")
+            await expect(thumbs.nth(4)).to_have_attribute("aria-pressed", "true")
+            await page.keyboard.press("ArrowLeft")
+            await expect(thumbs.nth(3)).to_have_attribute("aria-pressed", "true")
+            # Stepped from a button under the drawing, which the step replaces,
+            # the focus goes to the thumb picked, not back to the page's top.
+            await review.get_by_test_id("solo-report").focus()
+            await page.keyboard.press("ArrowLeft")
+            await expect(thumbs.nth(2)).to_be_focused()
+            # Seen whole on a 900 px screen: the actions under the drawing are
+            # in view without scrolling.
+            bottom = await review.get_by_test_id("solo-report").evaluate(
+                "(node) => node.getBoundingClientRect().bottom + window.scrollY"
+            )
+            assert bottom <= 900, bottom
+
+            # The review fits a phone too (R-SOLO-17).
+            await page.set_viewport_size({"width": 412, "height": 915})
+            await expect(review).to_be_visible()
+            width = await page.evaluate("() => document.documentElement.scrollWidth")
+            assert width <= 412, width
+            await review.get_by_test_id("solo-review-back").click()
+            await expect(page.get_by_test_id("solo-calendar")).to_be_visible()
+
+            # Its first drawing taken out of Solo since: the review opened
+            # again asks the drawing door afresh, and shows it no more,
+            # however recently this page decoded it (#1496 review). One
+            # drawing, not five: the pool is every parallel test's.
+            await page.set_viewport_size({"width": 1280, "height": 900})
+            await take_out_of_solo(day, position=1)
+            await show_month(page, day)
+            await pick.click()
+            await expect(review.get_by_test_id("solo-card-drawing")).to_contain_text("This drawing could not be loaded.")
+            await expect(review.get_by_test_id("solo-review-thumb").locator("canvas")).to_have_count(4)
+        finally:
+            await context.close()
+            await browser.close()

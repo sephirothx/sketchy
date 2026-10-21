@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthDialog } from "../components/AccountMenu";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
@@ -30,10 +39,12 @@ import { decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHist
 import { judge } from "../lib/guessJudge";
 import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
+import { DecodedDrawings } from "../lib/soloDrawings";
 import {
   decodeSoloForms,
   fetchSoloDrawing,
   fetchSoloMonth,
+  fetchServeState,
   fetchSoloRun,
   fetchSoloSummary,
   localDateKey,
@@ -104,6 +115,8 @@ export function SoloPage() {
 
 function SoloSession() {
   useDocumentTitle(ui.solo.solo);
+  // The drawings this account's page decoded go with it.
+  useEffect(() => () => decodedDrawings.clear(), []);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -132,6 +145,8 @@ function SoloSession() {
   // not fetched again.
   const shownDrawing = useRef<{ serveId: string; actions: DecodedCanvasAction[] } | null>(null);
   const [summaryOf, setSummaryOf] = useState<SoloRun | null>(null);
+  // A finished Daily picked in the calendar, to review (#1470).
+  const [review, setReview] = useState<{ run: SoloRun; result: SoloDailyResult } | null>(null);
   // The best for the run's length before it ended: a new best beats it.
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   // The player's own date, watched: the Daily rolls over at their midnight,
@@ -303,8 +318,22 @@ function SoloSession() {
 
   // Today's Daily, after a 404 on one of its drawings: the set may have
   // replaced it for everybody (R-SOLO-13), which opening it again picks up.
+  const openReview = async (date: string, result: SoloDailyResult) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // A finished Daily opens as it stands: nothing is served or recorded.
+      setReview({ run: await openDaily(date), result });
+      setError(null);
+    } catch (failure) {
+      setError(refusalText(failure, words().couldNotLoad));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reopenDaily = async () => {
-    if (!run || run.mode !== "daily" || !run.dailyDate) return;
+    if (!run || run.mode !== "daily" || !run.dailyDate || run.state !== "active") return;
     try {
       const fresh = await openDaily(run.dailyDate);
       setRun((current) => (current?.runId === fresh.runId ? fresh : current));
@@ -356,6 +385,7 @@ function SoloSession() {
         <SoloPlay
           key={playing.serveId}
           run={run}
+          today={today}
           serve={playing}
           upcoming={run.serves.find((serve) => serve.outcome === null && serve !== playing) ?? null}
           onSettle={(outcome, seconds) => settled(playing, outcome, seconds)}
@@ -363,6 +393,13 @@ function SoloSession() {
           onDrawing={(actions) => {
             shownDrawing.current = { serveId: playing.serveId, actions };
           }}
+        />
+      ) : review ? (
+        <SoloReview
+          run={review.run}
+          result={review.result}
+          registered={Boolean(user && !user.isAnonymous)}
+          onBack={() => setReview(null)}
         />
       ) : summaryOf ? (
         <SoloSummaryView
@@ -378,6 +415,8 @@ function SoloSession() {
           error={error ?? loadError}
           busy={busy}
           onDaily={() => void begin(() => openDaily(today))}
+          onPast={(date) => void begin(() => openDaily(date))}
+          onReview={(date, result) => void openReview(date, result)}
           onFree={(length) => void begin(() => startFreeRun(length))}
           onContinue={(runId) => void begin(() => fetchSoloRun(runId))}
         />
@@ -404,6 +443,8 @@ function SoloHome({
   error,
   busy,
   onDaily,
+  onPast,
+  onReview,
   onFree,
   onContinue,
 }: {
@@ -412,6 +453,10 @@ function SoloHome({
   error: string | null;
   busy: boolean;
   onDaily: () => void;
+  /** A past day picked in the calendar (#1470): played late, or finished. */
+  onPast: (date: string) => void;
+  /** A day whose Daily the player finished, picked to review. */
+  onReview: (date: string, result: SoloDailyResult) => void;
   onFree: (length: SoloLength) => void;
   onContinue: (runId: string) => void;
 }) {
@@ -441,6 +486,9 @@ function SoloHome({
           today={today}
           todayHasDaily={summary === null ? null : summary.today.state !== "unavailable"}
           stats={summary?.stats ?? null}
+          busy={busy}
+          onPast={onPast}
+          onReview={onReview}
         />
       </div>
     </div>
@@ -770,12 +818,18 @@ function SoloCalendar({
   today,
   todayHasDaily,
   stats,
+  busy,
+  onPast,
+  onReview,
 }: {
   today: string;
   /** From the summary, which picks today's Daily: the month may not know of
       it yet, before anybody has opened it. Null until the summary is here. */
   todayHasDaily: boolean | null;
   stats: SoloDailyStats | null;
+  busy: boolean;
+  onPast: (date: string) => void;
+  onReview: (date: string, result: SoloDailyResult) => void;
 }) {
   // The month looked at, for the today it was picked on: a new day can be a
   // new month, and the calendar follows the player's today back to it.
@@ -821,12 +875,20 @@ function SoloCalendar({
   const shown = loaded?.month === month ? loaded : null;
   const byDate = new Map((shown?.days ?? []).map((day) => [day.date, day]));
   const earliest = loaded?.first ?? null;
-  const canGoBack = earliest !== null && monthOf(earliest) < month;
+  // Back to the player's first Daily, or to the first there was when past
+  // ones can be played (#1470).
+  const reach = [earliest, loaded?.earliest ?? null].filter((date) => date !== null).sort()[0] ?? null;
+  const canGoBack = reach !== null && monthOf(reach) < month;
   const canGoForward = month < monthOf(today);
   const named = stats && stats.drawingsPlayed > 0 ? stats.drawingsNamed / stats.drawingsPlayed : null;
 
   return (
-    <section className="surface-card solo-calendar" data-testid="solo-calendar" aria-labelledby="solo-calendar-title">
+    <section
+      className="surface-card solo-calendar"
+      data-testid="solo-calendar"
+      data-month={month}
+      aria-labelledby="solo-calendar-title"
+    >
       <div className="solo-card-head">
         <h2 id="solo-calendar-title">{title}</h2>
         <div className="solo-calendar-nav">
@@ -865,18 +927,49 @@ function SoloCalendar({
           const date = `${month}-${String(index + 1).padStart(2, "0")}`;
           const day = byDate.get(date);
           const look = calendarLook(date, day, today, earliest, todayHasDaily);
+          // A Daily finished - today's too - is reviewed; a past one the
+          // archive door opens (#1470) is played late, or finished.
+          const finished = day?.result?.completed ? day.result : null;
+          // Still to play or to finish, it says so where every finger sees
+          // it, not on a hover a phone never has (#1496 review): its ring is
+          // dashed and dark, or hollow and part dark grey. A day it cannot
+          // open yet - yesterday, until it has ended everywhere, or one held
+          // back - keeps the paler ring of a day let pass. Today's is played
+          // from the Daily card, so it is dark without being a button.
+          const pickable = finished !== null || Boolean(day?.open);
           return (
             <span
               key={date}
               role="listitem"
-              className={`solo-calendar-day is-${look}${date === today ? " is-today" : ""}`}
+              className={`solo-calendar-day is-${look}${date === today ? " is-today" : ""}${pickable ? " is-pickable" : ""}`}
               data-testid="solo-calendar-day"
               data-date={date}
               aria-current={date === today ? "date" : undefined}
-              aria-label={words().calendarDay({ date: dayLabel(date), status: calendarStatus(look, day) })}
+              aria-label={
+                pickable
+                  ? undefined
+                  : words().calendarDay({ date: dayLabel(date), status: calendarStatus(look, day) })
+              }
             >
-              <CalendarMark look={look} marks={day?.result?.marks ?? []} playable={date === today} />
-              <span className="solo-calendar-date cap-centred">{index + 1}</span>
+              <CalendarMark look={look} marks={day?.result?.marks ?? []} playable={date === today || (finished === null && Boolean(day?.open))} />
+              {pickable ? (
+                <button
+                  type="button"
+                  className="solo-calendar-pick"
+                  data-testid="solo-calendar-play"
+                  disabled={busy}
+                  aria-label={words().calendarDayAction({
+                    date: dayLabel(date),
+                    status: calendarStatus(look, day),
+                    action: finished ? words().review : day?.result ? words().continuePast : words().playPast,
+                  })}
+                  onClick={() => (finished ? onReview(date, finished) : onPast(date))}
+                >
+                  <span className="solo-calendar-date cap-centred">{index + 1}</span>
+                </button>
+              ) : (
+                <span className="solo-calendar-date cap-centred">{index + 1}</span>
+              )}
             </span>
           );
         })}
@@ -922,8 +1015,9 @@ function calendarLook(
   }
   if (date === today) return (todayHasDaily ?? Boolean(day?.daily)) ? "open" : "none";
   // Only a Daily there was, after the player's first: before it, Solo was
-  // not theirs yet, and a missed day would be no news.
-  if (day?.daily && earliest !== null && date > earliest) return "missed";
+  // not theirs yet, and a missed day would be no news - unless it can be
+  // played now (#1470), when its dashed ring is what says so.
+  if (day?.daily && (day.open || (earliest !== null && date > earliest))) return "missed";
   return "none";
 }
 
@@ -1118,6 +1212,7 @@ function NextDailyCountdown() {
  */
 function SoloPlay({
   run,
+  today,
   serve,
   upcoming,
   onSettle,
@@ -1125,6 +1220,7 @@ function SoloPlay({
   onDrawing,
 }: {
   run: SoloRun;
+  today: string;
   serve: SoloServe;
   upcoming: SoloServe | null;
   onSettle: (outcome: SoloOutcome, seconds: number) => Promise<void>;
@@ -1134,6 +1230,10 @@ function SoloPlay({
 }) {
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Served with nothing to name it by: a Daily's position whose concept lost
+  // its wording in the player's languages, with no replacement, or a past
+  // date's (R-SOLO-13). Given up, never guessed.
+  const unnameable = serve.forms === null;
   const [attempt, setAttempt] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -1258,6 +1358,9 @@ function SoloPlay({
       <div className="solo-play-bar">
         <span className="solo-play-position">
           {runName(run)} · {words().drawingOf({ position: serve.position, length: run.length })}
+          {run.dailyDate !== null && run.dailyDate !== today && (
+            <span className="solo-play-date" data-testid="solo-play-date"> · {dayLabel(run.dailyDate)}</span>
+          )}
         </span>
         <span
           className={`solo-clock${remaining <= 10 ? " is-low" : ""}`}
@@ -1304,6 +1407,11 @@ function SoloPlay({
           </button>
         </div>
       )}
+      {unnameable && (
+        <p className="solo-note" data-testid="solo-unnameable">
+          {words().cannotBeNamed}
+        </p>
+      )}
       <form className="solo-guess" onSubmit={submit}>
         <input
           ref={input}
@@ -1318,12 +1426,12 @@ function SoloPlay({
           maxLength={64}
           placeholder={words().typeYourGuess}
           aria-label={words().typeYourGuess}
-          disabled={!actions || timedOut || unsaved !== null}
+          disabled={!actions || unnameable || timedOut || unsaved !== null}
           onChange={(change) => setGuess(change.target.value)}
           // A new guess is the player's attention; the last verdict goes.
           onFocus={() => setFeedback(null)}
         />
-        <button type="submit" className="btn btn-primary" disabled={!actions || !guess.trim() || timedOut || unsaved !== null}>
+        <button type="submit" className="btn btn-primary" disabled={!actions || unnameable || !guess.trim() || timedOut || unsaved !== null}>
           {words().guess}
         </button>
         <button
@@ -1332,7 +1440,7 @@ function SoloPlay({
           data-testid="solo-give-up"
           // A drawing that will not load can still be given up: it is the
           // only way past one that stopped being served (R-SOLO-13).
-          disabled={(!actions && !failed) || timedOut || unsaved !== null}
+          disabled={(!actions && !failed && !unnameable) || timedOut || unsaved !== null}
           onClick={() => void settle("given_up", elapsed)}
         >
           {words().giveUp}
@@ -1379,97 +1487,185 @@ function SoloCard({
   useEffect(() => {
     verdict.current?.focus();
   }, []);
-  const { notify } = useToast();
-  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(drawing);
-  const [unloadable, setUnloadable] = useState(false);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [mine, setMine] = useState<string | null>(null);
-  const [share, setShare] = useState<SoloShare | null>(null);
-  const [reporting, setReporting] = useState(false);
-  const solved = serve.outcome === "solved";
   const over = run.state !== "active";
+  return (
+    <div className="solo-result" data-testid="solo-card">
+      <RunHeader run={run} position={serve.position} />
+      <SettledFrame serve={serve} seconds={seconds} drawing={drawing} verdictRef={verdict} />
+      <DrawingActions key={serve.serveId} serve={serve} registered={registered}>
+        <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" disabled={busy} onClick={onNext}>
+          {over ? words().seeResult : words().next}
+        </button>
+      </DrawingActions>
+    </div>
+  );
+}
 
+/** Drawings decoded this visit, by serve, spared only their decoding: each
+    is shown once the drawing door has given it again (`DecodedDrawings`). */
+const decodedDrawings = new DecodedDrawings<DecodedCanvasAction[]>();
+
+/** A served drawing, decoded. `given` is the one the play view fetched
+    through the drawing door a moment ago, handed to the card after it; any
+    other is asked of the door every time it is shown - a review opened
+    again, a thumbnail picked - so a drawing withdrawn, hidden or erased since
+    stops showing (R-SOLO-04, R-SOLO-16, #1496 review). */
+function useServeDrawing(serveId: string, given: DecodedCanvasAction[] | null) {
+  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(given);
+  const [unloadable, setUnloadable] = useState(false);
   useEffect(() => {
-    if (actions) return;
+    if (given) return;
     let cancelled = false;
-    void fetchSoloDrawing(serve.serveId)
+    void fetchSoloDrawing(serveId)
       .then((bytes) => {
         if (cancelled) return;
-        const decoded = decodeCanvasHistory(bytes);
+        const decoded = decodedDrawings.decode(serveId, bytes, decodeCanvasHistory);
         if (decoded) setActions(decoded);
         else setUnloadable(true);
       })
       // Gone for everybody since (R-SOLO-13), or not to be had now: said,
-      // rather than an empty frame.
+      // rather than an empty frame, and nothing of it kept.
       .catch(() => {
-        if (!cancelled) setUnloadable(true);
+        decodedDrawings.forget(serveId);
+        if (!cancelled) {
+          setActions(null);
+          setUnloadable(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [actions, serve.serveId]);
+  }, [given, serveId]);
+  return { actions, unloadable };
+}
+
+/** A settled drawing, finished, in a frame of the verdict's colour, with a
+    strip under it: what it was, the time or why it ended, the points. */
+function SettledFrame({
+  serve,
+  seconds,
+  drawing,
+  verdictRef,
+  heading = "h1",
+}: {
+  serve: SoloServe;
+  seconds: number;
+  drawing: DecodedCanvasAction[] | null;
+  verdictRef?: RefObject<HTMLDivElement | null>;
+  /** The prompt is the card's heading; under a review's, it is the next. */
+  heading?: "h1" | "h2";
+}) {
+  const { actions, unloadable } = useServeDrawing(serve.serveId, drawing);
+  const Heading = heading;
+  const solved = serve.outcome === "solved";
+  return (
+    <div className={`solo-result-frame ${solved ? "is-solved" : "is-missed"}`}>
+      <div className="solo-canvas" data-testid="solo-card-drawing">
+        {actions ? (
+          <ReplayCanvas
+            actions={actions}
+            fraction={1}
+            playing={false}
+            onFraction={() => undefined}
+            durationSeconds={SOLO_REPLAY_SECONDS}
+            label={serve.prompt ?? ui.solo.solo}
+          />
+        ) : unloadable ? (
+          <div className="solo-canvas-failed">
+            <p className="solo-note">{words().couldNotLoadDrawing}</p>
+          </div>
+        ) : (
+          <div className="solo-canvas-skeleton" />
+        )}
+      </div>
+      <div className="solo-verdict-strip">
+        <span className="solo-verdict-mark" aria-hidden="true">
+          {solved ? <CheckIcon size={22} /> : <XIcon size={20} />}
+        </span>
+        <div ref={verdictRef} tabIndex={-1} className="solo-verdict-text">
+          <span className="visually-hidden" data-testid="solo-verdict">
+            {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
+          </span>
+          <Heading className="solo-prompt" data-testid="solo-prompt">{serve.prompt ?? words().promptGone}</Heading>
+          {/* A miss's detail is its verdict again: said once. */}
+          <span className="solo-verdict-detail" aria-hidden={solved ? undefined : true}>
+            {solved ? (
+              <>
+                <ClockIcon size={15} />
+                {words().secondsTaken({ seconds })}
+              </>
+            ) : serve.outcome === "timed_out" ? (
+              words().timeUp
+            ) : (
+              words().gaveUp
+            )}
+          </span>
+        </div>
+        {solved && serve.points !== null && (
+          <span className="solo-points" data-testid="solo-points">
+            <span aria-hidden="true">+{formatNumber(serve.points)}</span>
+            <span className="visually-hidden">{words().plusPoints({ points: serve.points })}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** React, Share and Report on a settled drawing (R-SOLO-15), each saying
+    what it does, then whatever comes next on the row; what a share did is
+    said under it. */
+function DrawingActions({
+  serve,
+  registered,
+  children,
+}: {
+  serve: SoloServe;
+  registered: boolean;
+  children?: ReactNode;
+}) {
+  const { notify } = useToast();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [mine, setMine] = useState<string | null>(null);
+  const [share, setShare] = useState<SoloShare | null>(null);
+  const [reporting, setReporting] = useState(false);
+  // Once the player has reacted, or shared, here and the server took it, that
+  // answer is the truth for its half: a state read landing after it is older
+  // and must not undo it - but still says the other half.
+  const reacted = useRef(false);
+  const shared = useRef(false);
+
+  // What the player did with it before - a reaction, a share - so the
+  // buttons say so, in a review above all (#1496 review).
+  useEffect(() => {
+    let cancelled = false;
+    void fetchServeState(serve.serveId)
+      .then((state) => {
+        if (cancelled) return;
+        if (!reacted.current) {
+          setCounts(state.reactionCounts);
+          setMine(state.myReaction);
+        }
+        if (!shared.current) setShare(state);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [serve.serveId]);
 
   const toggleShare = async () => {
     try {
-      setShare(await shareServe(serve.serveId, !(share?.sharedByMe ?? false)));
+      const answer = await shareServe(serve.serveId, !(share?.sharedByMe ?? false));
+      shared.current = true;
+      setShare(answer);
     } catch (failure) {
       notify(refusalText(failure, ui.shareControl.thatDrawingCouldNotBeShared), "error");
     }
   };
 
   return (
-    <div className="solo-result" data-testid="solo-card">
-      <RunHeader run={run} position={serve.position} />
-      <div className={`solo-result-frame ${solved ? "is-solved" : "is-missed"}`}>
-        <div className="solo-canvas" data-testid="solo-card-drawing">
-          {actions ? (
-            <ReplayCanvas
-              actions={actions}
-              fraction={1}
-              playing={false}
-              onFraction={() => undefined}
-              durationSeconds={SOLO_REPLAY_SECONDS}
-              label={serve.prompt ?? ui.solo.solo}
-            />
-          ) : unloadable ? (
-            <div className="solo-canvas-failed">
-              <p className="solo-note">{words().couldNotLoadDrawing}</p>
-            </div>
-          ) : (
-            <div className="solo-canvas-skeleton" />
-          )}
-        </div>
-        <div className="solo-verdict-strip">
-          <span className="solo-verdict-mark" aria-hidden="true">
-            {solved ? <CheckIcon size={22} /> : <XIcon size={20} />}
-          </span>
-          <div ref={verdict} tabIndex={-1} className="solo-verdict-text">
-            <span className="visually-hidden" data-testid="solo-verdict">
-              {solved ? words().gotIt : serve.outcome === "timed_out" ? words().timeUp : words().gaveUp}
-            </span>
-            <h1 className="solo-prompt" data-testid="solo-prompt">{serve.prompt}</h1>
-            {/* A miss's detail is its verdict again: said once. */}
-            <span className="solo-verdict-detail" aria-hidden={solved ? undefined : true}>
-              {solved ? (
-                <>
-                  <ClockIcon size={15} />
-                  {words().secondsTaken({ seconds })}
-                </>
-              ) : serve.outcome === "timed_out" ? (
-                words().timeUp
-              ) : (
-                words().gaveUp
-              )}
-            </span>
-          </div>
-          {solved && serve.points !== null && (
-            <span className="solo-points" data-testid="solo-points">
-              <span aria-hidden="true">+{formatNumber(serve.points)}</span>
-              <span className="visually-hidden">{words().plusPoints({ points: serve.points })}</span>
-            </span>
-          )}
-        </div>
-      </div>
+    <>
       <div className="solo-result-actions">
         <DrawingReactionControl
           reactions={[]}
@@ -1479,6 +1675,7 @@ function SoloCard({
           eligibility={reactionEligibility({ isRegistered: registered })}
           onReact={async (emoji) => {
             const answer = await reactToServe(serve.serveId, emoji);
+            reacted.current = true;
             setCounts(answer.reactionCounts);
             setMine(answer.myReaction);
           }}
@@ -1507,16 +1704,152 @@ function SoloCard({
           <FlagIcon size={16} />
           {words().reportShort}
         </button>
-        <button type="button" className="btn btn-warm btn-big solo-next" data-testid="solo-next" disabled={busy} onClick={onNext}>
-          {over ? words().seeResult : words().next}
-        </button>
+        {children}
       </div>
       {share?.sharedByMe && share.heldUntil && <p className="solo-note" data-testid="solo-share-held">{words().shareHeld}</p>}
       {share?.shareWithdrawn && <p className="solo-note">{words().shareTakenOut}</p>}
       {reporting && (
         <ReportDrawingDialog submit={(details) => reportServe(serve.serveId, details)} onClose={() => setReporting(false)} />
       )}
+    </>
+  );
+}
+
+/**
+ * A finished Daily, reviewed (#1470): its five in a strip, named or missed,
+ * and the one picked large, as it looked after the guess - what it was, the
+ * time or why it ended, the points - with React, Share and Report. Nothing
+ * is played again, and nothing is recorded.
+ */
+function SoloReview({
+  run,
+  result,
+  registered,
+  onBack,
+}: {
+  run: SoloRun;
+  result: SoloDailyResult;
+  registered: boolean;
+  onBack: () => void;
+}) {
+  const serves = [...run.serves].sort((left, right) => left.position - right.position);
+  const [picked, setPicked] = useState(1);
+  const serve = serves.find((candidate) => candidate.position === picked) ?? serves[0];
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  // The arrow keys step through the five, as the game's drawing recap does -
+  // but this is a page, not a dialog: keys that something else is using (a
+  // field, a menu, the reaction picker, the report dialog) are left to it.
+  const count = serves.length;
+  const filmstrip = useRef<HTMLDivElement>(null);
+  const refocus = useRef<Element | null>(null);
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (arrowsTakenBy(event.target) || document.querySelector('dialog[open], [aria-modal="true"]')) return;
+      event.preventDefault();
+      const next = Math.min(count, Math.max(1, picked + (event.key === "ArrowRight" ? 1 : -1)));
+      if (next === picked) return;
+      // A step replaces the drawing's frame and actions: a button focused in
+      // them is gone, and the next Tab would start from the top - the picked
+      // thumb takes the focus instead. Focus anywhere else stays where it is.
+      refocus.current = document.activeElement;
+      setPicked(next);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [count, picked]);
+  useEffect(() => {
+    const focused = refocus.current;
+    refocus.current = null;
+    if (focused && !focused.isConnected) {
+      filmstrip.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus();
+    }
+  }, [picked]);
+  if (!serve) return null;
+  const seconds = result.marks[serve.position - 1]?.seconds ?? 0;
+  return (
+    <div className="solo-result solo-review" data-testid="solo-review">
+      <div className="solo-review-head">
+        <div className="solo-review-title">
+          <button
+            type="button"
+            className="btn btn-ghost btn-compact solo-review-back"
+            data-testid="solo-review-back"
+            onClick={onBack}
+          >
+            <ChevronLeftIcon size={15} />
+            {words().backToSolo}
+          </button>
+          <h1 ref={heading} tabIndex={-1}>
+            {words().daily} · {dayLabel(result.date)}
+          </h1>
+        </div>
+        <span className="solo-review-total">
+          <span className="section-label">{words().youNamed({ solved: result.solved, total: 5 })}</span>
+          <span className="solo-run-best-value">{formatNumber(result.points)}</span>
+        </span>
+      </div>
+      <div ref={filmstrip} className="solo-filmstrip" role="group" aria-label={words().daily}>
+        {serves.map((candidate) => (
+          <ServeThumb
+            key={candidate.serveId}
+            serve={candidate}
+            picked={candidate.position === serve.position}
+            onPick={() => setPicked(candidate.position)}
+          />
+        ))}
+      </div>
+      {/* Keyed by the drawing: another one picked is a frame and actions of
+          its own - its reaction, share and report, not the last one's. */}
+      <SettledFrame key={`frame-${serve.serveId}`} serve={serve} seconds={seconds} drawing={null} heading="h2" />
+      <DrawingActions key={`actions-${serve.serveId}`} serve={serve} registered={registered}>
+        <span className="solo-review-copy">
+          <CopyResultButton result={result} />
+        </span>
+      </DrawingActions>
     </div>
+  );
+}
+
+/** Whether an arrow key pressed on `target` is already somebody else's:
+    a field's caret, a select's options, a menu's or a radio group's items,
+    or a popup's, such as the reaction picker. */
+function arrowsTakenBy(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.closest('input, textarea, select, [role="dialog"], [role="menu"], [role="listbox"], [role="radiogroup"], [role="slider"]') !== null;
+}
+
+/** One of a review's five, small, ringed by what it came to; pressed, it is
+    the one shown large. */
+function ServeThumb({ serve, picked, onPick }: { serve: SoloServe; picked: boolean; onPick: () => void }) {
+  const { actions } = useServeDrawing(serve.serveId, null);
+  return (
+    <button
+      type="button"
+      className={`solo-thumb ${serve.outcome === "solved" ? "is-solved" : "is-missed"}${picked ? " is-picked" : ""}`}
+      aria-pressed={picked}
+      aria-label={words().reviewPick({ position: serve.position, prompt: serve.prompt ?? words().promptGone })}
+      data-testid="solo-review-thumb"
+      onClick={onPick}
+    >
+      {actions ? (
+        <ReplayCanvas
+          actions={actions}
+          fraction={1}
+          playing={false}
+          onFraction={() => undefined}
+          durationSeconds={SOLO_REPLAY_SECONDS}
+          label={serve.prompt ?? ui.solo.solo}
+        />
+      ) : (
+        <span className="solo-canvas-skeleton" />
+      )}
+    </button>
   );
 }
 
@@ -1533,7 +1866,10 @@ function SoloSummaryView({
   onBack: () => void;
 }) {
   const settledCount = run.serves.filter((serve) => serve.outcome !== null).length;
-  const result = run.mode === "daily" && run.dailyDate === today ? resultOf(run) : null;
+  // Today's own Daily: its squares to copy, and the time to the next. A past
+  // one from the archive has neither.
+  const todaysDaily = run.mode === "daily" && run.dailyDate === today;
+  const result = todaysDaily ? resultOf(run) : null;
   const value = run.length === null ? run.solved : run.points;
   // Beaten, not tied: a run that only equals the best is not a new one.
   const newBest = run.mode === "free" && value > 0 && value > (previousBest ?? 0);
@@ -1555,7 +1891,7 @@ function SoloSummaryView({
         )}
         <div className="solo-result-actions">
           {result && <CopyResultButton result={result} />}
-          {run.mode === "daily" && <NextDailyCountdown />}
+          {todaysDaily && <NextDailyCountdown />}
         </div>
         <button type="button" className="btn btn-primary solo-next" data-testid="solo-back" onClick={onBack}>
           <UserIcon size={15} />

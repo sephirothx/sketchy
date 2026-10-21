@@ -107,7 +107,9 @@ keyboard that takes half the screen, and one thumb.
   The **Daily** is five drawings, the same for everybody in every language, picked from
   drawings that most of their room could name, easiest first; it rolls over at your own
   midnight, is resumed rather than restarted, keeps its progress if you leave it half
-  played, and can be copied as a row of squares. A **Free run** is **Quick** (5 drawings),
+  played, and can be copied as a row of squares; a past day in its calendar can be played
+  too - a missed one late, an unfinished one finished - and a finished one reviewed, its
+  five drawings with what each was. A **Free run** is **Quick** (5 drawings),
   **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
   play at once, each with how far it got and its own **Continue** or **Start over**. A
   personal best is kept for each length, and a streak of days in a row, its flame
@@ -2774,6 +2776,9 @@ includes the saved configuration and archive state.
 4. A run ends with its last drawing, or an Endless one with its first miss: its total,
    whether it beat your best, and for the Daily a result to copy and the time until the
    next one.
+5. Pick a day in the calendar: one you missed is played late (it counts for no streak), one
+   you left is finished, and one you finished - today's too - opens its review: the five
+   drawings in a strip, and the one you pick large, with what it was, your time and points.
 
 ### Scoring
 

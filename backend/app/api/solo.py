@@ -28,8 +28,14 @@ from app.refusals import ErrorCode
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
 from app.request_text import ControlFreeModel
-from app.services.solo_access import free_run_door, solo_door_open
-from app.solo_rules import CLOCK_SECONDS, MAX_OPEN_SERVES, OUTCOMES, date_is_open
+from app.services.solo_access import SoloDoor, free_run_door, solo_door_open
+from app.solo_rules import (
+    CLOCK_SECONDS,
+    MAX_OPEN_SERVES,
+    OUTCOMES,
+    daily_release_at,
+    date_is_open,
+)
 
 # A human's pace: a run is a handful of requests a minute. Per account, since
 # every route needs one.
@@ -204,16 +210,19 @@ def create_solo_router(
             raise refused(error, missing=ErrorCode.NO_SUCH_DRAWING) from error
         return {"serve": serve_payload(serve), "run": run_payload(run)}
 
-    def local_date(value: str) -> date:
-        """A player's local date, accepted only while it is today somewhere
-        (±14 h of UTC): the server cannot see the player's zone, and a date
-        that is nobody's today is somebody asking for another day's Daily."""
+    def parse_date(value: str) -> date:
         try:
-            day = date.fromisoformat(value)
+            return date.fromisoformat(value)
         except ValueError as error:
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a date.", field="date"
             ) from error
+
+    def local_date(value: str) -> date:
+        """A player's local date, accepted only while it is today somewhere
+        (±14 h of UTC): the server cannot see the player's zone, and a date
+        that is nobody's today is somebody asking for another day's Daily."""
+        day = parse_date(value)
         if not date_is_open(day, now()):
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That date is not today anywhere.",
@@ -221,20 +230,44 @@ def create_solo_router(
             )
         return day
 
-    @router.post("/daily/{day}")
-    async def open_daily(day: str, request: Request):
-        """Today's Daily (#1434): created with its five drawings the first
-        time, resumed after, never restarted. The same five for everybody."""
-        user = await account(request)
-        throttle(run_limiter, user)
-        local = local_date(day)
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="daily_today"):
+    def past_date(value: str) -> date:
+        """A date that has ended everywhere: the archive's (#1470). One still
+        today somewhere is today's door's, and a later one nobody's yet."""
+        day = parse_date(value)
+        if now() < daily_release_at(day):
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That date has not ended everywhere yet.",
+                field="date",
+            )
+        return day
+
+    def open_door(user: User, door: SoloDoor) -> None:
+        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
             raise Refusal(
                 403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
                 params={"action": "solo"},
             )
+
+    @router.post("/daily/{day}")
+    async def open_daily(day: str, request: Request):
+        """A date's Daily (#1434): created with its five drawings the first
+        time, resumed after, never restarted. The same five for everybody.
+        Today's through today's door; a date that has ended everywhere
+        through the archive's (#1470), where a Daily left unfinished is
+        finished, its late drawings marked so, and one finished is opened
+        as it stands, to review."""
+        user = await account(request)
+        throttle(run_limiter, user)
+        local = parse_date(day)
+        archived = not date_is_open(local, now())
+        local = past_date(day) if archived else local
+        # A Daily the player finished is only reviewed, and their own: no
+        # gate stands in front of it, as none stands before their history
+        # (#1496 review). Playing a past one late is the archive's.
+        if not (archived and await solo.daily_finished(str(user.id), local)):
+            open_door(user, "archive" if archived else "daily_today")
         try:
-            run = await solo.open_daily(str(user.id), local, now=now())
+            run = await solo.open_daily(str(user.id), local, now=now(), archive=archived)
         except SoloRefused as error:
             raise refused(error, missing=ErrorCode.NO_SUCH_DAILY) from error
         return run_payload(run)
@@ -250,7 +283,8 @@ def create_solo_router(
     @router.get("/daily/month")
     async def month(request: Request, today: str = Query(), month: str = Query()):
         """One month of the caller's Dailies for the calendar, up to their
-        `today` (validated as `/me`'s): a month after it is refused."""
+        `today` (validated as `/me`'s): a month after it is refused. Each date
+        says whether the archive door would play it now (#1470)."""
         user = await account(request)
         throttle(serve_limiter, user)
         local = local_date(today)
@@ -264,7 +298,8 @@ def create_solo_router(
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That month has not begun.", field="month"
             )
-        return await solo.month(str(user.id), first, local)
+        archive = solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="archive")
+        return await solo.month(str(user.id), first, local, now=now(), archive=archive)
 
     async def settled(serve_id: str, user: User) -> str:
         turn_id = await solo.settled_turn(str(user.id), serve_id)
@@ -288,6 +323,31 @@ def create_solo_router(
         if on_gallery_changed is not None:
             on_gallery_changed()
         return {"myReaction": result.emoji, "reactionCounts": dict(result.reaction_counts)}
+
+    def share_payload(share) -> dict:
+        return {
+            "inGallery": share.in_gallery,
+            "sharedByMe": share.shared_by_me,
+            "heldUntil": share.held_until.isoformat() if share.held_until else None,
+            "shareWithdrawn": share.withdrawn,
+        }
+
+    @router.get("/serves/{serve_id}/state")
+    async def drawing_state(serve_id: str, request: Request):
+        """A settled drawing as the caller left it (#1496 review): the
+        reaction counts and their pick, and their share, for the card and
+        the review to start from. Names nobody; the same 404 as the writes."""
+        user = await account(request)
+        throttle(serve_limiter, user)
+        turn_id = await settled(serve_id, user)
+        state = await history.solo_drawing_state(turn_id, requesting_user_id=str(user.id))
+        if state is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return {
+            "myReaction": state.my_reaction,
+            "reactionCounts": state.reaction_counts,
+            **share_payload(state.share),
+        }
 
     @router.put("/serves/{serve_id}/reaction")
     async def react(serve_id: str, body: SoloReactionBody, request: Request):
@@ -313,12 +373,7 @@ def create_solo_router(
             await on_inbox_changed(result.notify_user_id)
         if on_gallery_changed is not None:
             on_gallery_changed()
-        return {
-            "inGallery": result.in_gallery,
-            "sharedByMe": result.shared_by_me,
-            "heldUntil": result.held_until.isoformat() if result.held_until else None,
-            "shareWithdrawn": result.withdrawn,
-        }
+        return share_payload(result)
 
     @router.put("/serves/{serve_id}/share")
     async def share(serve_id: str, request: Request):

@@ -362,6 +362,28 @@ async def test_a_solo_report_never_turns_another_door_s_report_into_a_409(env):
     assert again.status_code == 409
 
 
+async def test_a_settled_drawing_s_state_is_read_back_as_the_player_left_it(env):
+    """The card and the review start from what the player did - their pick,
+    the counts, their share - not from a blank (#1496 review)."""
+    http, users, history, solo, factory = env
+    drawer, stranger, turn, serve = await _served(http, users, history, factory)
+    blank = (await http.get(f"/api/solo/serves/{serve['serveId']}/state")).json()
+    assert blank == {
+        "myReaction": None, "reactionCounts": {}, "inGallery": False, "sharedByMe": False,
+        "heldUntil": None, "shareWithdrawn": False,
+    }
+    await http.put(f"/api/solo/serves/{serve['serveId']}/reaction", json={"emoji": "wow"})
+    await http.put(f"/api/solo/serves/{serve['serveId']}/share")
+    state = (await http.get(f"/api/solo/serves/{serve['serveId']}/state")).json()
+    assert state["myReaction"] == "wow" and state["reactionCounts"] == {"wow": 1}
+    assert state["sharedByMe"] is True and state["inGallery"] is True
+    assert "drawer" not in str(state).lower() and turn.turn_id not in str(state)
+    # Somebody else's serve is the door's 404.
+    other = await player(users, factory, "Other")
+    await sign_in_as(http, factory, other.id)
+    assert (await http.get(f"/api/solo/serves/{serve['serveId']}/state")).status_code == 404
+
+
 async def test_the_reaction_write_s_solo_door_asks_for_a_settled_serve_itself(env):
     # The route resolves the serve first; the write must not trust that it did.
     http, users, history, solo, factory = env

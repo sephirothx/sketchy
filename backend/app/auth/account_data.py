@@ -1451,8 +1451,8 @@ async def _write_export_artifact(
         lambda serve: {
             "runId": str(serve.run_id),
             "position": serve.position,
-            "prompt": serve.prompt,
-            "promptLanguage": serve.prompt_language,
+            "prompt": serve.prompt or None,
+            "promptLanguage": serve.prompt_language if serve.prompt else None,
             "outcome": serve.outcome,
             "solveSeconds": serve.solve_seconds,
             "points": serve.points,

@@ -305,7 +305,8 @@ async def test_a_date_that_is_nobody_s_today_is_refused(env):
     stranger = await player(users, factory, "Stranger")
     await sign_in_as(http, factory, stranger.id)
     real_today = datetime.now(timezone.utc).date()
-    for day in (real_today - timedelta(days=2), real_today + timedelta(days=2), "2026-13-40"):
+    # A past date is the archive's (#1470, tests/test_solo_archive.py).
+    for day in (real_today + timedelta(days=2), "2026-13-40"):
         refused = await http.post(f"/api/solo/daily/{day}")
         assert refused.status_code == 422
         assert refused.json()["errorCode"] == "solo_date_out_of_range"
@@ -467,6 +468,40 @@ async def test_a_language_s_wording_taken_down_replaces_the_drawing_for_everybod
     run = await solo.open_daily(polish.id, DAY, now=NOON)
     assert len(run.serves) == 5
     assert UUID(eight.turn_id) not in {row.turn_id for row in await _set(factory)}
+
+
+async def test_a_drawing_with_no_wording_left_and_no_replacement_is_given_up_not_refused(env):
+    """The same takedown with no candidate to replace the drawing: the Daily
+    still opens with all five for the player it leaves nothing to name by,
+    that one to be given up, the others to be played (R-SOLO-13)."""
+    http, users, history, solo, factory = env
+    every = {lang: f"n-{lang}" for lang in ("en", "de", "es", "fr", "it", "nl", "pl", "pt")}
+    await _candidates(users, history, factory, 4, tag="y")
+    _, _, [eight] = await _candidates(users, history, factory, 1, forms=every, tag="n")
+    stranger = await player(users, factory, "Stranger")
+    await solo.open_daily(stranger.id, DAY, now=NOON)
+
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PromptVersion)
+                .where(PromptVersion.language == "pl", PromptVersion.canonical_answer == "n-pl")
+                .values(moderation_state="hidden")
+            )
+    polish = await player(users, factory, "Polish", languages=("pl",))
+    run = await solo.open_daily(polish.id, DAY, now=NOON)
+    assert UUID(eight.turn_id) in {row.turn_id for row in await _set(factory)}, "nothing to replace it with"
+    turns = await _served_turns(factory, run.run_id)
+    unnamed = run.serves[turns.index(UUID(eight.turn_id))]
+    assert unnamed.forms == "" and all(serve.forms for serve in run.serves if serve is not unnamed)
+    with pytest.raises(SoloRefused):
+        await solo.settle(polish.id, unnamed.serve_id, outcome="solved", seconds=4, now=NOON)
+    for serve in run.serves:
+        outcome = "given_up" if serve is unnamed else "solved"
+        await solo.settle(polish.id, serve.serve_id, outcome=outcome, seconds=4, now=NOON)
+    async with factory() as session:
+        result = await session.get(SoloDailyResult, (UUID(polish.id), DAY))
+    assert result.completed_at is not None and result.solved == 4
 
 
 async def test_free_runs_skip_another_drawing_of_an_open_daily_s_concept(env):
@@ -732,7 +767,7 @@ async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
     await solo.settle(stranger.id, run.serves[0].serve_id, outcome="solved", seconds=4, now=NOON)
     await solo.settle(stranger.id, run.serves[1].serve_id, outcome="timed_out", seconds=30, now=NOON)
 
-    month = await solo.month(stranger.id, date(2026, 10, 1), DAY + timedelta(days=2))
+    month = await solo.month(stranger.id, date(2026, 10, 1), DAY + timedelta(days=2), now=NOON)
     assert month["month"] == "2026-10" and month["first"] == DAY.isoformat()
     # Every date up to the player's today, and no further.
     assert [day["date"] for day in month["days"]][-1] == "2026-10-17"
@@ -741,8 +776,8 @@ async def test_the_calendar_reads_a_month_and_the_totals_come_with_me(env):
     assert played["2026-10-15"]["daily"] is True
     assert played["2026-10-15"]["result"]["solved"] == 1
     # Nobody asked for the 14th: it had no Daily, which is no missed day.
-    assert played["2026-10-14"] == {"date": "2026-10-14", "daily": False, "result": None}
-    september = await solo.month(stranger.id, date(2026, 9, 1), DAY)
+    assert played["2026-10-14"] == {"date": "2026-10-14", "daily": False, "open": False, "result": None}
+    september = await solo.month(stranger.id, date(2026, 9, 1), DAY, now=NOON)
     assert len(september["days"]) == 30 and not any(day["result"] for day in september["days"])
 
     summary = await solo.summary(stranger.id, DAY, now=NOON)
