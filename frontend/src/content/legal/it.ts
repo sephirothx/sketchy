@@ -42,6 +42,9 @@ export const LEGAL_IT: LegalDocuments = {
           "Le tue partite: le stanze in cui hai giocato, le tue risposte, punti " +
             "e risultati, le tue reazioni, i disegni che hai fatto e i disegni " +
             "che hai condiviso nella Galleria.",
+          "Solo: le partite che giochi, quali disegni ti sono stati mostrati e " +
+            "che cosa hai fatto con ciascuno, i tuoi risultati della Sfida del " +
+            "giorno e i tuoi record personali.",
           "La chat, nelle stanze e nella lobby.",
           "I messaggi della tua posta in arrivo, sul tuo account, sui tuoi " +
             "disegni e sulle tue amicizie.",
@@ -105,6 +108,17 @@ export const LEGAL_IT: LegalDocuments = {
             "Galleria qualsiasi tuo disegno, e nessuno potrà più condividerlo, a " +
             "meno che non lo faccia tu. I disegni di una stanza privata li vede " +
             "solo chi c'era, a meno che tu non condivida i tuoi.",
+          "In Solo, a un giocatore che non era in una partita pubblica può " +
+            "essere mostrato uno dei disegni di quella partita da indovinare, " +
+            "senza il nome, l'immagine o alcun collegamento a chi l'ha " +
+            "disegnato. Solo non gli dice mai di chi è; ma un disegno che si " +
+            "trova nella Galleria, compreso uno che quel giocatore vi " +
+            "condivide, compare con il nome con cui è stato disegnato. Nelle " +
+            "Impostazioni puoi fare in modo che Solo non mostri nessuno dei " +
+            "tuoi disegni pubblici, oppure, dalla tua cronologia delle partite, " +
+            "togliere da Solo un singolo disegno; un disegno fatto come ospite " +
+            "viene mostrato allo stesso modo, e può essere tolto una volta che " +
+            "hai un account.",
           "Eliminare il tuo account cancella tutti i tuoi disegni, tranne una " +
             "copia allegata a una segnalazione, che resta con essa; per farne " +
             "cancellare uno solo, scrivi a {contact}.",
@@ -163,6 +177,8 @@ export const LEGAL_IT: LegalDocuments = {
           "Entrate e uscite dalle stanze: 30 giorni.",
           "Email inviate a te: 30 giorni.",
           "Esportazioni di dati che richiedi: 7 giorni.",
+          "Partite di Solo, risultati e record personali: finché non elimini " +
+            "il tuo account.",
           "Le partite concluse – punti, disegni, reazioni – fanno parte della " +
             "cronologia di tutti quelli che hanno giocato, quindi vengono " +
             "conservate. Se elimini il tuo account, i tuoi disegni vengono " +
@@ -272,7 +288,8 @@ export const LEGAL_IT: LegalDocuments = {
         body: [
           "Ciò che disegni, scrivi e pubblichi resta tuo. Perché il gioco " +
             "funzioni, consenti al gestore di conservarlo, mostrarlo e copiarlo " +
-            "all'interno di Sketchy – nella tua stanza, nella Galleria una volta " +
+            "all'interno di Sketchy – nella tua stanza, in Solo senza il tuo nome " +
+            "se la stanza era pubblica, nella Galleria una volta " +
             "che un disegno è condiviso, " +
             "nelle liste di parole che pubblichi e nelle copie " +
             "che altri ne fanno – gratuitamente, in tutto il mondo e finché " +

@@ -1,0 +1,805 @@
+/* Solo (#1434): one page, four views - what it opens on, a drawing in play,
+   what a drawing came to, and a run that is over. The page and its heading
+   block follow the Gallery's recipe; the cards are `.surface-card`s. */
+
+.solo-page {
+  --page-width: 1040px;
+  margin: 0 auto;
+  max-width: calc(var(--page-width) + 32px);
+  padding: 24px 16px 64px;
+}
+
+.solo-head { margin-bottom: 18px; }
+
+.solo-head h1 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  margin: 0 0 3px;
+}
+
+.solo-head p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 58ch;
+}
+
+/* ------------------------------------------------------------------- home */
+
+/* The Daily and the free runs on the left, the calendar on the right; one
+   column on a narrow screen, the calendar last. */
+.solo-columns {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+@media (max-width: 900px) {
+  .solo-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+.solo-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.solo-home h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-card-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.solo-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.solo-daily {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+}
+
+.solo-daily h2 { font-size: 28px; }
+
+/* The streak (StreakIndicator): a pill with a flame that grows at each
+   milestone, and a line to the next one ending in its number. At a year the
+   pill turns gold. The golds are fixed in both themes, as the calendar's
+   sticker star's is: they are colours of the flame, not ink. */
+.solo-streak {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solo-streak-pill {
+  align-items: center;
+  background: var(--warm-soft);
+  border-radius: var(--radius-pill);
+  color: var(--warm-ink);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 800;
+  gap: 5px;
+  padding: 4px 12px 4px 7px;
+  white-space: nowrap;
+}
+
+.solo-streak.is-month .solo-streak-pill { gap: 7px; }
+.solo-streak.is-year .solo-streak-pill { background: var(--gold-soft); color: var(--gold); gap: 8px; }
+
+.solo-streak-flame {
+  flex: none;
+  height: 22px;
+  position: relative;
+  width: 22px;
+}
+
+.solo-streak-flame svg {
+  bottom: 0;
+  height: 19px;
+  left: 50%;
+  overflow: visible;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 19px;
+}
+
+.solo-streak-flame.is-week svg { height: 22px; width: 22px; }
+.solo-streak-flame.is-month svg { bottom: -1px; height: 26px; width: 26px; }
+.solo-streak-flame.is-year svg { bottom: -1px; height: 30px; width: 30px; }
+
+.solo-streak-flame .is-outer { fill: var(--warm); }
+.solo-streak-flame .is-core { fill: #f7c948; }
+.solo-streak-flame .is-gold { fill: #f5b82e; }
+.solo-streak-flame .is-deep { fill: #c8401a; }
+.solo-streak-flame .is-ember { fill: #f2a27a; }
+
+.solo-streak-next {
+  align-items: center;
+  color: var(--faint);
+  display: flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 7px;
+}
+
+.solo-streak-bar {
+  background: var(--track);
+  border-radius: var(--radius-pill);
+  height: 5px;
+  overflow: hidden;
+  width: 72px;
+}
+
+.solo-streak-bar span {
+  background: var(--warm);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+
+/* Gold only once full, on a milestone's day: a gold part-line would barely
+   stand off the track (1.5:1 in the light theme), where orange does. */
+.solo-streak.is-reached .solo-streak-bar span { background: #f5b82e; }
+
+.solo-streak-goal {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.solo-streak.is-reached .solo-streak-goal { color: var(--gold); }
+
+/* The Daily's five as rings: named, missed, the one up next, those to come. */
+.solo-rings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.solo-ring {
+  align-items: center;
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.solo-ring.is-solved { background: var(--success-button); color: var(--on-success); }
+.solo-ring.is-missed { background: var(--danger-button); color: var(--on-danger); }
+
+.solo-ring.is-unplayed {
+  border: 3px dashed var(--line-strong);
+  color: var(--faint);
+}
+
+.solo-ring.is-next {
+  border: 4px solid var(--warm);
+  color: var(--warm-ink);
+}
+
+.solo-daily-foot {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.solo-daily-play { flex: 1 1 220px; }
+
+.solo-daily-points { font-weight: 800; }
+
+.solo-countdown {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* One row a free-run length: what it is, how far the run in play got, the
+   best, and what to do. */
+.solo-free {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 8px;
+}
+
+.solo-free h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.solo-run {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 44px minmax(0, 1fr) 84px auto;
+  padding: 12px 0;
+}
+
+.solo-run:last-child { border-bottom: 0; }
+
+.solo-run-glyph {
+  align-items: center;
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+  color: var(--primary-ink);
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  height: 44px;
+  justify-content: center;
+}
+
+.solo-run-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.solo-run-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.solo-run-title h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-run-progress {
+  color: var(--primary-ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+/* A run's drawings as segments; an Endless run's latest, 24 px each where
+   there is room and narrower where there is not, so ten never run under the
+   best beside them (#1495 review). */
+.solo-strip {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+}
+
+.solo-strip-segment {
+  border-radius: 3px;
+  flex: 1 1 0;
+}
+
+.solo-strip.is-endless .solo-strip-segment { flex: 0 1 24px; min-width: 4px; }
+
+.solo-strip-segment.is-solved { background: var(--success); }
+.solo-strip-segment.is-missed { background: var(--danger); }
+.solo-strip-segment.is-unplayed { box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+.solo-run-best {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+}
+
+.solo-run-best-value {
+  color: var(--warm-ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.solo-run-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.solo-run-main { min-width: 104px; }
+
+/* A phone: the rings shrink to stay on one line, and a run in play puts
+   Start over and Continue on a line under the rest. */
+@media (max-width: 480px) {
+  .solo-rings { gap: 8px; }
+  .solo-ring { font-size: 19px; height: 50px; width: 50px; }
+  .solo-run { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
+  .solo-run-main { min-width: 0; }
+  .solo-run.has-run { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .solo-run.has-run .solo-run-actions { grid-column: 1 / -1; }
+  .solo-run.has-run .solo-run-main { flex: 1 1 auto; }
+}
+
+/* The calendar of the player's Dailies, and what they came to. */
+.solo-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.solo-calendar h2 { font-size: 22px; }
+
+.solo-calendar-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.solo-calendar-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.solo-calendar-weekday {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Round, as the ring it holds: today's mark is drawn on this cell's edge, a
+   circle round the day's own ring. No bigger than a phone's: a wider column
+   spreads the days out rather than blowing their rings up round a small
+   date. */
+.solo-calendar-day {
+  align-items: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  justify-self: center;
+  max-width: 48px;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--muted);
+  display: flex;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  justify-content: center;
+}
+
+/* Each day's Daily is a ring of its five round the date (CalendarMark):
+   filled once finished, hollow while under way, dashed when let pass or
+   still to play today. No legend: the four read apart on their own. */
+.solo-calendar-day { position: relative; }
+.solo-calendar-day.is-future { color: var(--faint); }
+.solo-calendar-day.is-perfect { color: var(--on-success); }
+.solo-calendar-day.is-finished,
+.solo-calendar-day.is-under-way { color: var(--ink); }
+.solo-calendar-day.is-today { box-shadow: inset 0 0 0 2.5px var(--warm); }
+
+/* Above the ring, centred on its digits (.cap-centred, primitives.css). */
+.solo-calendar-date { position: relative; }
+
+/* The ring, inset by a share of the cell rather than a fixed margin, so it
+   scales with it: a perfect day's star reaches 6.2 of the mark's 40 units
+   past its top right (11.6% of the cell), inside the 12.5% left round it,
+   so it stays in its own day's square at any size. */
+.solo-calendar-mark {
+  height: 75%;
+  left: 12.5%;
+  overflow: visible;
+  position: absolute;
+  top: 12.5%;
+  width: 75%;
+}
+
+.solo-calendar-arc {
+  fill: none;
+  stroke-width: 3.2;
+}
+
+.solo-calendar-arc.is-solved { stroke: var(--success); }
+.solo-calendar-arc.is-missed { stroke: var(--danger); }
+.solo-calendar-arc.is-unplayed { stroke: var(--line-strong); }
+.solo-calendar-arc.is-unplayed.is-playable { stroke: var(--faint); }
+
+.solo-calendar-unplayed-ring {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-dasharray: 3 3;
+  stroke-width: 1.5;
+}
+
+/* A Daily that can be played now - its dashed ring, or the arcs an
+   unfinished one has left - is drawn in --faint, 3:1 and more on the card in
+   both themes; one that cannot keeps --line-strong. */
+.solo-calendar-unplayed-ring.is-playable { stroke: var(--faint); }
+
+.solo-calendar-disc { fill: var(--success-button); }
+.solo-calendar-fill { fill: color-mix(in srgb, var(--success) 30%, var(--card)); }
+
+/* A sticker's gold, the same in both themes as the avatar crown's
+   (primitives.css) - a shade deeper, to hold up on the green - edged in the
+   card's colour so it reads as stuck on. */
+.solo-calendar-star {
+  fill: #f5b82e;
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.18));
+  stroke: var(--card);
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.solo-calendar-stats {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding-top: 14px;
+  text-align: center;
+}
+
+/* The number above its label, read label first. */
+.solo-calendar-stats div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.solo-calendar-stats dd {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.solo-calendar-stats dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* A Daily's five, as squares: named, missed, still to play. */
+.solo-marks {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.solo-mark {
+  border-radius: var(--radius-xs);
+  display: inline-block;
+  height: 16px;
+  width: 16px;
+}
+
+.solo-mark.is-solved { background: var(--success); }
+.solo-mark.is-missed { background: var(--danger); }
+.solo-mark.is-unplayed { background: var(--track); }
+
+/* ------------------------------------------------------------------- play */
+
+.solo-play,
+.solo-result,
+.solo-summary {
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+.solo-play-bar {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.solo-play-position {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.solo-clock {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.solo-clock.is-low { color: var(--danger); }
+
+.solo-clock-track {
+  background: var(--track);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.solo-clock-track span {
+  background: var(--warm);
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform var(--dur-fast) linear;
+}
+
+.solo-canvas {
+  overflow: hidden;
+  padding: 0;
+}
+
+.solo-canvas canvas {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.solo-guess {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.solo-guess-input {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  flex: 1 1 auto;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.solo-feedback {
+  font-weight: 700;
+  margin: 8px 0 0;
+  min-height: 1.4em;
+}
+
+.solo-feedback.is-close { color: var(--warm-ink); }
+.solo-feedback.is-miss { color: var(--muted); }
+
+@media (max-width: 480px) {
+  .solo-guess { flex-wrap: wrap; }
+  .solo-guess-input { flex-basis: 100%; }
+  .solo-guess .btn { flex: 1 1 0; justify-content: center; }
+}
+
+/* ----------------------------------------------------- result and summary */
+
+/* Above a drawing, in play or settled: which run and drawing, and its dots. */
+.solo-run-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.solo-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.solo-dot {
+  border-radius: 50%;
+  height: 14px;
+  width: 14px;
+}
+
+.solo-dot.is-solved { background: var(--success); }
+.solo-dot.is-missed { background: var(--danger); }
+.solo-dot.is-unplayed { box-shadow: inset 0 0 0 2px var(--line-strong); }
+.solo-dot.is-current.is-solved { box-shadow: 0 0 0 3px var(--success-soft); }
+.solo-dot.is-current.is-missed { box-shadow: 0 0 0 3px var(--danger-soft); }
+
+/* What a drawing came to: the drawing, finished, in a frame of the verdict's
+   colour, and a strip under it saying what it was. */
+.solo-result-frame {
+  background: var(--card);
+  border: 2px solid var(--success);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.solo-result-frame.is-missed { border-color: var(--danger); }
+
+.solo-result-frame .solo-canvas { border-radius: 0; }
+
+/* The frame is the drawing's edge: the canvas's own border and corners go,
+   as the drawing recap's do. */
+.solo-result-frame .canvas-wrapper,
+.solo-result-frame .canvas-stack { max-width: none; width: 100%; }
+.solo-result-frame .canvas-stack { border: 0; border-radius: 0; }
+
+.solo-verdict-strip {
+  align-items: center;
+  background: var(--success-soft);
+  border-top: 1px solid color-mix(in srgb, var(--success) 25%, var(--success-soft));
+  display: flex;
+  gap: 16px;
+  padding: 14px 20px;
+}
+
+.is-missed .solo-verdict-strip {
+  background: var(--danger-soft);
+  border-top-color: color-mix(in srgb, var(--danger) 25%, var(--danger-soft));
+}
+
+.solo-verdict-mark {
+  align-items: center;
+  background: var(--success-button);
+  border-radius: 50%;
+  color: var(--on-success);
+  display: flex;
+  flex-shrink: 0;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.is-missed .solo-verdict-mark { background: var(--danger-button); color: var(--on-danger); }
+
+.solo-verdict-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.solo-prompt {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.05;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.solo-verdict-detail {
+  align-items: center;
+  color: var(--success-ink);
+  display: flex;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.is-missed .solo-verdict-detail { color: var(--danger); }
+
+.solo-points {
+  color: var(--success-ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* React, Share and Report as a row of the same buttons, each saying what it
+   does; Next at the far end. */
+.solo-result-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.solo-result-actions .is-pressed {
+  background: var(--primary-soft);
+  border-color: var(--primary-edge);
+  color: var(--primary-ink);
+}
+
+.solo-result-actions .reaction-toggle.has-label {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 800;
+  height: 44px;
+  padding: 0 16px;
+}
+
+.solo-result-actions .reaction-toggle.has-label .reaction-toggle-empty {
+  align-items: center;
+  color: inherit;
+  gap: 8px;
+}
+
+.solo-result-actions .solo-next { margin-left: auto; margin-top: 0; }
+
+@media (max-width: 480px) {
+  .solo-result-actions .solo-next { flex-basis: 100%; margin-left: 0; }
+  .solo-verdict-strip { padding: 12px 14px; gap: 12px; }
+  .solo-prompt { font-size: 26px; }
+  .solo-points { font-size: 24px; }
+}
+
+/* A run that is over. */
+.solo-result-card {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.solo-result-card .solo-result-actions { justify-content: center; margin-top: 0; }
+
+.solo-verdict {
+  font-weight: 800;
+  margin: 0;
+}
+
+.solo-verdict.is-solved { color: var(--success-ink); }
+.solo-verdict.is-missed { color: var(--danger); }
+
+.solo-it-was {
+  color: var(--muted);
+  margin: 0;
+}
+
+.solo-result-card .solo-prompt { font-size: 32px; }
+
+.solo-next { margin-top: 8px; }
+
+.solo-new-best { margin: 0; }
+
+/* A drawing on its way, and one that would not come. */
+.solo-canvas-skeleton {
+  aspect-ratio: 4 / 3;
+  background: var(--track);
+  border-radius: var(--radius);
+  width: 100%;
+}
+
+.solo-canvas-failed {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 32px 16px;
+}
+
+.solo-unsaved {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* The verdict and the summary's heading take focus from the page so a screen
+   reader says them (tabindex -1, as `.ops-tabpanel`): read, never a control,
+   so no ring. */
+.solo-verdict:focus,
+.solo-verdict-text:focus { outline: none; }

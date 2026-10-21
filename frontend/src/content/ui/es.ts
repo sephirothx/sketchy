@@ -2729,6 +2729,9 @@ export const ES: Catalogue = {
   clock: {
     unknown: "Desconocido",
   },
+  solo: {
+    solo: "Solo",
+  },
   protocol: {
     theServerWasUpdated: "El servidor se ha actualizado.",
   },

@@ -2732,6 +2732,9 @@ export const FR: Catalogue = {
   clock: {
     unknown: "Inconnu",
   },
+  solo: {
+    solo: "Solo",
+  },
   protocol: {
     theServerWasUpdated: "Le serveur a été mis à jour.",
   },

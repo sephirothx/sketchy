@@ -91,7 +91,11 @@ import {
   XIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
-import { ui } from "../content/ui/index.ts";
+import { apiRequest } from "../lib/api.ts";
+import { setSoloOptOut } from "../lib/solo";
+import { useToast } from "../lib/toast";
+import { soloCopyFor } from "../content/solo/index.ts";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 import { ModalHeader } from "./ui/ModalShell";
@@ -504,6 +508,48 @@ function NamelessCard({ onAuth }: { onAuth: (mode: AuthMode) => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The drawer's no to Solo (#1434, R-SOLO-16): whether strangers may be served
+ * this account's public drawings to guess, anonymously. An account's choice,
+ * read and written on its own rather than through the device settings sync,
+ * since it is not a preference about this browser.
+ */
+function SoloOptOutGroup() {
+  const { notify } = useToast();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<{ soloOptOut?: boolean }>("/api/users/me/settings")
+      .then((settings) => {
+        if (!cancelled) setAllowed(!(settings.soloOptOut ?? false));
+      })
+      .catch(() => {
+        // Unknown is not "allowed": a switch showing the wrong answer to an
+        // account that said no is worse than no switch until the next open.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (allowed === null) return null;
+  return (
+    <Group title={ui.solo.solo}>
+      <ToggleRow
+        label={soloCopyFor(interfaceLocale()).optOut}
+        hint={soloCopyFor(interfaceLocale()).optOutHint}
+        checked={allowed}
+        onChange={(next) => {
+          setAllowed(next);
+          void setSoloOptOut(!next).catch((failure) => {
+            setAllowed(!next);
+            notify(refusalText(failure, ui.dialog.couldNotSave), "error");
+          });
+        }}
+      />
+    </Group>
   );
 }
 
@@ -952,6 +998,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           </Row>
         </Group>
       )}
+
+      {!isGuest && <SoloOptOutGroup />}
 
       <Group title={ui.settingsOverlay.yourData}>
         <Row

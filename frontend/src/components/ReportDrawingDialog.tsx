@@ -13,9 +13,13 @@ stored drawing as the evidence. All that is asked here is whether the
 reporter has anything to add. */
 export function ReportDrawingDialog({
   turnId,
+  submit,
   onClose,
 }: {
-  turnId: string;
+  /** The Gallery's drawing, by turn. */
+  turnId?: string;
+  /** Another door's report instead - a Solo serve (#1434), which names no turn. */
+  submit?: (details: string | null) => Promise<unknown>;
   onClose: () => void;
 }) {
   return (
@@ -25,7 +29,8 @@ export function ReportDrawingDialog({
       testId="report-drawing-dialog"
       sendTestId="report-drawing-send"
       onSend={async (details) => {
-        await reportGalleryDrawing(turnId, details);
+        if (submit) await submit(details);
+        else if (turnId) await reportGalleryDrawing(turnId, details);
         return ui.reportDrawingDialog.sentWithTheDrawingAttached;
       }}
       onClose={onClose}

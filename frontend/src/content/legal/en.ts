@@ -52,6 +52,8 @@ export const LEGAL_EN: LegalDocuments = {
           "Your games: the rooms you played in, your guesses, points and " +
             "scores, your reactions, the drawings you made, and the drawings " +
             "you shared to the Gallery.",
+          "Solo: the runs you play, which drawings you were shown and what " +
+            "you made of each, your Daily results and your personal bests.",
           "Chat, in rooms and in the lobby.",
           "The messages in your inbox, about your account, your drawings " +
             "and your friends.",
@@ -110,6 +112,14 @@ export const LEGAL_EN: LegalDocuments = {
             "any drawing of yours out of the Gallery, and nobody can share it " +
             "again unless you do. Drawings from a private room are seen only " +
             "by the people who were in it, unless you share your own.",
+          "In Solo, a player who was not in a public game may be shown one of " +
+            "its drawings to guess, with no name, picture or link to who drew " +
+            "it. Solo never tells them whose it is; but a drawing that is in " +
+            "the Gallery, including one they share there, appears under the " +
+            "name it was drawn under. You can stop Solo showing any of your " +
+            "public drawings in Settings, or take a single drawing out of Solo " +
+            "from your game history; a drawing made as a guest is shown the " +
+            "same way, and can be taken out once you have an account.",
           "Deleting your account erases every drawing you made, except a " +
             "copy attached to a report, which stays with the report; to have " +
             "a single drawing erased, write to {contact}.",
@@ -163,6 +173,8 @@ export const LEGAL_EN: LegalDocuments = {
           "Room joins and leaves: 30 days.",
           "Emails sent to you: 30 days.",
           "Data exports you ask for: 7 days.",
+          "Solo runs, results and personal bests: until you delete your " +
+            "account.",
           "Finished games — scores, drawings, reactions — are part of every " +
             "player's history, so they are kept. When you delete your account " +
             "your drawings are erased and your place in those games is " +
@@ -271,8 +283,8 @@ export const LEGAL_EN: LegalDocuments = {
         body: [
           "What you draw, write and publish stays yours. So that the game " +
             "can work, you allow the operator to store, show and copy it " +
-            "within Sketchy — in your room, in the Gallery once a drawing is " +
-            "shared, " +
+            "within Sketchy — in your room, in Solo without your name if the " +
+            "room was public, in the Gallery once a drawing is shared, " +
             "in prompt lists you publish and in copies other players make of " +
             "them — free of charge, worldwide, for as long as Sketchy keeps " +
             "it.",

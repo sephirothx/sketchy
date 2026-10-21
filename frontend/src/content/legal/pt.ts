@@ -42,6 +42,9 @@ export const LEGAL_PT: LegalDocuments = {
           "Os teus jogos: as salas em que jogaste, os teus palpites, pontos e " +
             "resultados, as tuas reações, os desenhos que fizeste e os desenhos " +
             "que partilhaste na Galeria.",
+          "Solo: as partidas que jogas, que desenhos te foram mostrados e o " +
+            "que fizeste com cada um, os teus resultados no Desafio do dia e os " +
+            "teus recordes pessoais.",
           "O chat, nas salas e no átrio.",
           "As mensagens da tua caixa de entrada, sobre a tua conta, os teus " +
             "desenhos e as tuas amizades.",
@@ -103,6 +106,16 @@ export const LEGAL_PT: LegalDocuments = {
             "e ninguém o pode voltar a partilhar a não ser que tu o faças. Os " +
             "desenhos de uma sala privada só são vistos por quem lá estava, a " +
             "não ser que partilhes os teus.",
+          "No Solo, a um jogador que não esteve num jogo público pode ser " +
+            "mostrado um dos desenhos desse jogo para adivinhar, sem o nome, a " +
+            "imagem ou qualquer ligação a quem o desenhou. O Solo nunca lhe diz " +
+            "de quem é; mas um desenho que esteja na Galeria, incluindo um que " +
+            "esse jogador lá partilhe, aparece com o nome com que foi " +
+            "desenhado. Nas Definições podes impedir que o Solo mostre qualquer " +
+            "um dos teus desenhos públicos, ou tirar do Solo um único desenho a " +
+            "partir do teu histórico de partidas; um desenho feito como " +
+            "convidado é mostrado da mesma forma, e pode ser tirado do Solo " +
+            "assim que tiveres uma conta.",
           "Eliminar a tua conta apaga todos os teus desenhos, exceto uma cópia " +
             "anexada a uma denúncia, que fica com ela; para apagar apenas um, " +
             "escreve para {contact}.",
@@ -158,6 +171,8 @@ export const LEGAL_PT: LegalDocuments = {
           "Entradas e saídas das salas: 30 dias.",
           "Emails enviados para ti: 30 dias.",
           "Exportações de dados que pedires: 7 dias.",
+          "Partidas de Solo, resultados e recordes pessoais: até eliminares a " +
+            "tua conta.",
           "Os jogos terminados – pontos, desenhos, reações – fazem parte do " +
             "histórico de todos os que jogaram, por isso são guardados. Se " +
             "eliminares a tua conta, os teus desenhos são apagados e o teu lugar " +
@@ -266,7 +281,8 @@ export const LEGAL_PT: LegalDocuments = {
         body: [
           "O que desenhas, escreves e publicas continua a ser teu. Para que o " +
             "jogo funcione, autorizas o operador a guardá-lo, mostrá-lo e " +
-            "copiá-lo dentro do Sketchy – na tua sala, na Galeria depois de um " +
+            "copiá-lo dentro do Sketchy – na tua sala, no Solo sem o teu nome se " +
+            "a sala era pública, na Galeria depois de um " +
             "desenho ser partilhado, " +
             "nas listas de palavras que publicas e nas cópias que " +
             "outros fazem delas –, gratuitamente, em todo o mundo e enquanto o " +

@@ -76,7 +76,7 @@ function uuidBytes(id: string): Uint8Array {
   return bytes;
 }
 
-/** Start a free run, abandoning the one in play. */
+/** Start a free run, abandoning the one of its length in play. */
 export function startFreeRun(length: 5 | 10 | null): Promise<SoloRun> {
   return apiRequest("/api/solo/runs", { method: "POST", body: { length } });
 }
@@ -88,6 +88,12 @@ export async function serveNext(runId: string, count: 1 | 2 = 1): Promise<SoloSe
     { method: "POST" },
   );
   return answer.serves;
+}
+
+/** A run as the server holds it: what a page reconciles with after a lost
+    answer. */
+export function fetchSoloRun(runId: string): Promise<SoloRun> {
+  return apiRequest(`/api/solo/runs/${encodeURIComponent(runId)}`);
 }
 
 /** Report what a drawing came to, by the client's own clock. */

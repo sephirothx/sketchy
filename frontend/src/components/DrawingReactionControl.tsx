@@ -44,6 +44,11 @@ interface DrawingReactionControlProps {
    */
   placement: "canvas" | "panel";
   /**
+   * Words beside the heart while nobody has reacted, for a row of buttons
+   * that each say what they do (Solo's card). Without it, the heart alone.
+   */
+  label?: string;
+  /**
    * A reaction somebody else just left on this drawing: the control floats its
    * glyph. Sequence-numbered so the same glyph twice still floats twice.
    */
@@ -94,6 +99,7 @@ export function DrawingReactionControl({
   onRequestAccount,
   placement,
   incoming,
+  label,
 }: DrawingReactionControlProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -221,7 +227,7 @@ export function DrawingReactionControl({
       {canOpen ? (
         <button
           type="button"
-          className={`reaction-toggle${mine ? " has-mine" : ""}`}
+          className={`reaction-toggle${mine ? " has-mine" : ""}${label ? " has-label" : ""}`}
           aria-label={canPick ? ui.drawingReactionControl.reactToThisDrawingSummary({ summary }) : summary}
           aria-haspopup="dialog"
           aria-expanded={open}
@@ -231,6 +237,7 @@ export function DrawingReactionControl({
           {chips.length === 0 ? (
             <span className="reaction-toggle-empty">
               <HeartIcon size={15} />
+              {label && <span className="reaction-toggle-label">{label}</span>}
             </span>
           ) : (
             chips.map((chip) => <TallyChip key={chip.code} code={chip.code} count={chip.count} />)

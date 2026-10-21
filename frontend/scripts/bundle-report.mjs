@@ -18,7 +18,10 @@ real first loads were about 240 KB against a 215 KB budget.
 `--budget` fails the run when the first-load set's gzip size, in KB, is over
 either figure: `npm run bundle:check` is what CI runs after the build, so a
 page that slips back into the entry chunk is caught by the change that did it
-rather than noticed at launch (#475).
+rather than noticed at launch (#475). The JS figure moved 216 -> 217 KB with
+Solo (#1434), whose page copy loads with its page (`content/solo/`): what is
+left in the first load is its five refusal messages, the header link and the
+lobby button, about 0.5 KB, against 0.3 KB of headroom.
 
 Written for the frontend performance epic (#981), so each change in it is
 measured the same way before and after. */
