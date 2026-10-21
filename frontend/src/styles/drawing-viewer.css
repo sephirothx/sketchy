@@ -44,6 +44,11 @@
   overscroll-behavior: contain;
 }
 
+/* Out of the way of Friends or Settings opened over the page. */
+.drawing-viewer[hidden] {
+  display: none;
+}
+
 [data-theme="dark"] .drawing-viewer {
   --viewer-scrim: rgba(2, 6, 23, 0.88);
   --viewer-scrim-solid: #020617;

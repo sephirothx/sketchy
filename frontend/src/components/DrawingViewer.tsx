@@ -39,6 +39,7 @@ import {
 } from "../lib/drawingViewer";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useOverlayOpen } from "../hooks/useOverlayRoute";
 import { useBackCloses } from "../hooks/useRoomHistory";
 import type { DrawingRecapMetadata } from "../types";
 import { ui } from "../content/ui/index.ts";
@@ -369,10 +370,17 @@ export function DrawingViewer({
 
   const closeOverview = useCallback(() => setOverviewOpen(false), []);
   useBackCloses(overviewOpen, closeOverview);
+  // Friends or Settings opened over the page - from a toast, say - is a
+  // screen of its own: the viewer steps out of its way, hidden and with its
+  // trap, Escape and keys stood down, and is back on the same drawing when it
+  // closes. On top, it hid the overlay and took its clicks while focus went
+  // into it.
+  const behindOverlay = useOverlayOpen();
   useLayoutEffect(() => {
     initialFocusRef.current = stripRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
   });
   useFocusTrap(dialogRef, {
+    active: !behindOverlay,
     onEscape: () => (overviewOpen ? closeOverview() : onClose()),
     initialFocusRef,
   });
@@ -381,6 +389,7 @@ export function DrawingViewer({
   // the phone's arrows hidden again, the overview opening or closing over the
   // control that had it - comes back to the drawing's thumbnail instead.
   useEffect(() => {
+    if (behindOverlay) return;
     const active = document.activeElement;
     if (active && active !== document.body) return;
     const dialog = dialogRef.current;
@@ -397,7 +406,7 @@ export function DrawingViewer({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (overviewOpen) return;
+      if (overviewOpen || behindOverlay) return;
       // Not from inside something laid over the viewer: the take-out
       // confirmation, the reaction picker.
       const target = event.target instanceof Element ? event.target : null;
@@ -416,7 +425,7 @@ export function DrawingViewer({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [goTo, overviewOpen, shown, total]);
+  }, [behindOverlay, goTo, overviewOpen, shown, total]);
 
   // On a phone the strip scrolls; keep the drawing on screen in view, and
   // scroll nothing but the strip to do it.
@@ -623,6 +632,7 @@ export function DrawingViewer({
       aria-modal="true"
       aria-label={ui.drawingRecapGallery.drawingRecap}
       data-testid="drawing-viewer"
+      hidden={behindOverlay}
     >
       {/* Fades as a downward drag pulls the card away, so letting go closes
           what is visibly already leaving. */}
