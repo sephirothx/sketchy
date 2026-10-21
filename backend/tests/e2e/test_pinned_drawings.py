@@ -173,6 +173,26 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await viewer.wait_for()
             await expect(viewer.locator('[data-testid="pin-toggle"]')).to_have_count(1)
             await expect(viewer.locator('[data-testid="solo-take-out"]')).to_have_count(0)
+
+            # Friends opened over the open viewer - as a friend-request toast's
+            # Open does - is a screen of its own: the viewer steps aside rather
+            # than covering it and taking its clicks, and is back on the same
+            # drawing when Friends closes (#1497). The header is under the
+            # viewer, so its menu is driven the way the toast drives the route.
+            shown = await viewer.locator('.drawing-viewer-thumb[aria-current="true"]').get_attribute("aria-label")
+            await lobby.evaluate("() => document.querySelector('.identity-chip').click()")
+            await lobby.evaluate(
+                "() => [...document.querySelectorAll('[role=menuitem]')]"
+                ".find((item) => item.textContent.trim().startsWith('Friends')).click()"
+            )
+            await lobby.wait_for_url("**/friends")
+            friends = lobby.get_by_test_id("friends")
+            await friends.wait_for()
+            await expect(viewer).to_be_hidden()
+            await friends.locator(".modal-close").click(timeout=5_000)
+            await lobby.wait_for_url("**/profile")
+            await expect(viewer).to_be_visible()
+            await expect(viewer.locator('.drawing-viewer-thumb[aria-current="true"]')).to_have_attribute("aria-label", shown)
         finally:
             await host_context.close()
             await other_context.close()
