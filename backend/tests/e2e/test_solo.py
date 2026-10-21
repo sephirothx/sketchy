@@ -19,11 +19,21 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from playwright.async_api import Page, async_playwright, expect
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Prompt, PromptList, PromptVersion, SoloServe, User
+from app.db.models import (
+    Prompt,
+    PromptList,
+    PromptVersion,
+    SoloDailyConcept,
+    SoloDailyDay,
+    SoloServe,
+    User,
+)
 from app.domain_values import PROMPT_LANGUAGES
+from app.repositories.solo import ensure_open_dailies
+from app.solo_rules import DAILY_LENGTH, open_dates
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -42,11 +52,17 @@ from tests.e2e.staff_helpers import database_url
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "fill_replay_100.json"
 
+# Every date open somewhere takes its own five the first time anything asks
+# for one - a free run asks for them all - and two or three are open at any
+# moment. Enough for all of them, wherever the pool stood.
+OPEN_DAILIES_DRAWINGS = 3 * DAILY_LENGTH
+
 
 async def seed_solo_drawings(count: int) -> None:
     """`count` public games of one curated turn each, every language able
     to name it, two guessers and one of them right: Daily candidates, and
-    free-run drawings for anybody who was not in them."""
+    free-run drawings for anybody who was not in them. Each of a concept no
+    Daily has held, so the sixty-day rule cannot leave one of them out."""
     engine = create_async_engine(database_url())
     try:
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -68,11 +84,20 @@ async def seed_solo_drawings(count: int) -> None:
                         PromptVersion.content_rating == "everyone",
                         PromptVersion.moderation_state == "active",
                         PromptVersion.concept_id.in_(every_language),
+                        PromptVersion.concept_id.not_in(select(SoloDailyConcept.concept_id)),
                     )
                     .order_by(func.random())
-                    .limit(count)
+                    .limit(count * 3)
                 )
             ).all()
+            # One a concept: two lists can carry the same one.
+            concepts = {
+                version.id: version.concept_id
+                for version in (
+                    await session.scalars(select(PromptVersion).where(PromptVersion.id.in_(versions)))
+                ).all()
+            }
+        versions = list({concepts[version]: version for version in versions}.values())[:count]
         assert len(versions) == count, "the official lists have too few eight-language prompts"
         users = SqlAlchemyUserRepository(factory)
         history = SqlAlchemyGameHistoryRepository(factory)
@@ -124,6 +149,35 @@ async def seed_solo_drawings(count: int) -> None:
         await engine.dispose()
 
 
+async def settle_open_dailies() -> None:
+    """Give every date open somewhere its Daily now, as the server would,
+    before a test asks for one: left to whichever test asks first, one date
+    could take the drawings another test seeded for today, leaving today
+    with too few - stored as skipped for minutes - or take a past Daily's
+    before it is opened. A date stored with no Daily is looked at again
+    first: nobody can have played it."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        now = datetime.now(timezone.utc)
+        async with factory() as session, session.begin():
+            await session.execute(
+                delete(SoloDailyDay).where(
+                    SoloDailyDay.daily_date.in_(open_dates(now)), SoloDailyDay.state == "skipped"
+                )
+            )
+        await ensure_open_dailies(factory, now)
+        async with factory() as session:
+            states = (
+                await session.scalars(
+                    select(SoloDailyDay.state).where(SoloDailyDay.daily_date.in_(open_dates(now)))
+                )
+            ).all()
+        assert states == ["set"] * len(open_dates(now)), "too few drawings for the open Dailies"
+    finally:
+        await engine.dispose()
+
+
 async def open_prompt(username: str) -> str:
     """The prompt of the player's drawing in play: the server keeps it on the
     serve, the page never shows it until the drawing is over."""
@@ -150,7 +204,10 @@ async def give_up_and_continue(page: Page) -> None:
 
 
 async def test_a_daily_and_a_free_run_are_played_through():
-    await seed_solo_drawings(6)
+    # One more than the open Dailies can hold, for the free run - which
+    # never serves an open Daily's concept.
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS + 1)
+    await settle_open_dailies()
     username = f"solo{uuid4().hex[:8]}"
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -225,8 +282,8 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(page.get_by_test_id("solo-stats")).to_contain_text("1")
 
             # A five-drawing free run: the Daily's drawings stay out of it
-            # while the Daily is open, so the sixth seeded one is played, and
-            # repeats fill the rest.
+            # while the Daily is open, so the one seeded past every open
+            # Daily is played, and repeats fill the rest.
             await page.get_by_test_id("solo-free-5").click()
             await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
             await give_up_and_continue(page)
@@ -250,10 +307,8 @@ async def test_a_daily_and_a_free_run_are_played_through():
 
 
 async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
-    # Six: a free run picks today's Daily if nobody has, so whichever test
-    # runs first the Daily has five drawings, and a free run - which never
-    # serves an open Daily's concept - still has a sixth to play.
-    await seed_solo_drawings(6)
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS + 1)
+    await settle_open_dailies()
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context(viewport={"width": 412, "height": 915}, is_mobile=True, has_touch=True)
