@@ -113,6 +113,7 @@ test("the plans: push up to what is open, go down to it, close what Back passed"
   // A leftover entry is passed the way the player was going.
   assert.deepEqual(planLayerPop(1, 0, false, true), { kind: "go", delta: 1 });
   assert.deepEqual(planLayerPop(1, 0, false, false), { kind: "go", delta: -1 });
+  assert.deepEqual(planLayerPop(1, 0, true, true), { kind: "go", delta: 1 });
 });
 
 test("Back closes a layer and leaves the page where it was", async () => {
@@ -205,6 +206,27 @@ test("a layer left open on the way to another page is stepped over by Back", asy
 
   // And Forward carries on past it to the page after it, rather than being
   // turned back by it for good.
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/gallery");
+});
+
+test("Forward passes a leftover block two layers deep", async () => {
+  const { win, page } = setup();
+  const releaseViewer = page.open(() => {});
+  const releaseOverview = page.open(() => {});
+  await win.settle();
+  win.navigate("/gallery");
+  releaseOverview();
+  releaseViewer();
+  await win.settle();
+  assert.equal(win.entries.length, 4);
+
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.location.pathname, PROFILE);
+  assert.equal(win.index, 0);
+
   win.press(1);
   await win.settle();
   assert.equal(win.location.pathname, "/gallery");

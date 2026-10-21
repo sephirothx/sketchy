@@ -96,11 +96,13 @@ export function planLayerPop(
   ownTraversal: boolean,
   forward = false,
 ): LayerPop {
+  // A leftover entry with nothing open, landed on going Forward: on past it,
+  // one entry at a time - a step of our own included, since the block can be
+  // more than one deep - or Forward would bounce off it for good.
+  if (forward && open === 0 && depth > 0) return { kind: "go", delta: 1 };
   if (ownTraversal) return { kind: "reconcile" };
   if (depth < open) return { kind: "close", count: open - depth };
-  // A leftover entry with nothing open: on past it, whichever way the player
-  // was going, or Forward would bounce off it for good.
-  if (depth > open) return { kind: "go", delta: forward && open === 0 ? 1 : open - depth };
+  if (depth > open) return { kind: "go", delta: open - depth };
   return { kind: "none" };
 }
 
