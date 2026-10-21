@@ -148,9 +148,26 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await previous_button.click()
             await expect(current).to_have_attribute("aria-label", first_label)
 
+            # A guest's reaction asks for an account, and the form opens over
+            # the viewer: it is the page's dialog, and the viewer painted over
+            # it, taking every click while focus went into the hidden form.
+            viewer = lobby.get_by_test_id("drawing-viewer")
+            toggle = viewer.locator('[data-testid="reaction-toggle"]:visible')
+            if not await toggle.count():
+                await next_button.click()
+            await toggle.first.click()
+            await viewer.locator(".reaction-claim").click()
+            account_form = lobby.locator(".modal-overlay")
+            field = account_form.locator("input").first
+            await field.click(timeout=5_000)
+            await field.fill("Viewerclaim")
+            # Escape closes the form alone, and the viewer is still there.
+            await lobby.keyboard.press("Escape")
+            await expect(account_form).to_have_count(0)
+            await expect(viewer).to_be_visible()
+
             # Back closes the viewer and leaves the player on the profile
             # (R-UX-15): it used to take them off the page with it still open.
-            viewer = lobby.get_by_test_id("drawing-viewer")
             await lobby.go_back()
             await expect(viewer).to_have_count(0)
             assert lobby.url.endswith("/profile")

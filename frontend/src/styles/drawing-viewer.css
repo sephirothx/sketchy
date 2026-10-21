@@ -23,7 +23,11 @@
 
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal);
+  /* A layer under the dialogs, not one of them: a dialog the page opens over
+     the viewer - the account form a guest's reaction asks for on a profile -
+     lives in the app root, which the viewer, portaled after it, would paint
+     over on a tie. Last in <body>, it still covers the room's sheets. */
+  z-index: var(--z-sheet);
   display: flex;
   flex-direction: column;
   align-items: center;

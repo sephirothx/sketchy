@@ -93,6 +93,9 @@ test("the stacking bugs stay fixed", () => {
     ["dialogs.css", ".modal-overlay.suspension-overlay", "blocking"],
     ["dialogs.css", ".modal-overlay.afk-check-overlay", "blocking"],
     ["overlays.css", ".bottom-sheet-scrim", "sheet"],
+    // Under the dialogs, so the account form a reaction opens on a profile is
+    // not painted over (#1502 review).
+    ["drawing-viewer.css", ".drawing-viewer", "sheet"],
     ["settings.css", ".settings-overlay", "overlay"],
     ["friends.css", ".friends-overlay", "overlay"],
     ["lobby-page.css", ".friend-invite-notice", "notice"],
