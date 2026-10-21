@@ -508,6 +508,7 @@ from the facts on demand, a batch of games per transaction.
 ```bash
 cd backend
 .venv/bin/python -m app.services.solo_pool
+.venv/bin/python -m app.services.solo_pool --bests   # the players' personal bests, from their runs
 ```
 
 ### Recalculable competitive foundation

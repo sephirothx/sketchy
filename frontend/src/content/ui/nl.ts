@@ -313,6 +313,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_solo_run: "Die Solo-ronde bestaat niet meer.",
   solo_conflict: "Dat is intussen veranderd. Laad Solo opnieuw en ga verder.",
   solo_pool_empty: "Er is nu geen tekening meer om te spelen. Probeer het later opnieuw.",
+  solo_date_out_of_range: "De dagpuzzel van die dag is niet open.",
+  no_such_daily: "Vandaag is er geen dagpuzzel. Probeer een vrije ronde.",
   pinned_drawings_full: "Je vastgezette tekeningen zijn vol. Maak er eerst een los in je profiel.",
 
   // Prompt lists

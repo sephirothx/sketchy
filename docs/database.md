@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`f4a5b6c7d8e1_solo_runs.py` (#1434). Both this line and the table
+`a5b6c7d8e9f2_solo_daily.py` (#1434). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-67 tables in nine domains.
+72 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -127,6 +127,10 @@ erDiagram
     users ||--o{ solo_runs : "plays Solo"
     solo_runs ||--o{ solo_serves : "served"
     turn_records ||--o{ solo_serves : "served as"
+    solo_daily_days ||--o{ solo_daily_sets : "five"
+    solo_daily_days ||--o{ solo_daily_concepts : "every concept held"
+    users ||--o{ solo_daily_results : "plays the Daily"
+    users ||--o{ solo_bests : "best runs"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -157,7 +161,7 @@ erDiagram
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
-| **Solo** | `solo_pool`, `solo_runs`, `solo_serves` |
+| **Solo** | `solo_pool`, `solo_runs`, `solo_serves`, `solo_daily_days`, `solo_daily_sets`, `solo_daily_concepts`, `solo_daily_results`, `solo_bests` |
 
 ---
 
@@ -2132,6 +2136,11 @@ deadlocks with the erasure (the erasure holds the drawer's `users` row; the batc
 insert needs it through `drawer_user_id`) is retried whole. `guesser_count` and `correct_count` are the
 original game's, the solve rate the Daily is picked by.
 
+`ix_solo_pool_daily` is partial — `guesser_count >= 2 AND correct_count * 5 >= guesser_count`,
+the Daily's candidates (R-SOLO-11) — so the Daily's walk never reads a row it could not pick;
+the pick renders the same literal predicate (`SOLO_DAILY_CANDIDATE`), which is what lets the
+planner use it.
+
 `sample_key` is the row's place in the pool's random order: 31 bits of SHA-256 of the
 turn id (`solo_rules.sample_key`), so a rebuild puts every row back where it was. A
 random draw is a range probe on its index, never a sort of the table. Clients never see
@@ -2177,6 +2186,56 @@ pool) aggregates the player's serves — measured at 15–22 ms over a 4,000-dra
 held ready and never settled is deleted when its run ends, and the run's `position`
 goes back by it: a player who never saw it was not served it. Kept for as long as the account (owner's decision): it is what keeps a player
 from being served the same drawing twice.
+
+### `solo_daily_days`, `solo_daily_sets` and `solo_daily_concepts`
+`solo_daily_days`: `daily_date` **PK** · `state` (`set \| skipped`) · `picked_at`.
+`solo_daily_sets`: `daily_date` (CASCADE) + `position` (1–5) composite **PK** · `turn_id`
+(CASCADE, indexed) · `concept_id` (CASCADE) · `solve_rate` · `replaced_turn_id`,
+`replaced_concept_id` (no foreign keys; the latest replaced) · `replaced_at`; unique (`daily_date`, `concept_id`); `ix_solo_daily_sets_concept_date`.
+`solo_daily_concepts`: `daily_date` (CASCADE) + `concept_id` (CASCADE) composite **PK**; `ix_solo_daily_concepts_concept_date`.
+
+The Daily (#1434, R-SOLO-11): the same five drawings for everybody, kept **forever** for the
+archive (#1470). Every pick and replacement first takes one transaction-scoped advisory lock
+(`DAILY_PICK_LOCK_ID`, PostgreSQL), so two dates open at once — today and tomorrow both are at
+noon UTC — never read the same unused concepts before either commits (#1493 review). SQLite
+has no such lock, deliberately: it is the development and test database, it runs in WAL mode
+where taking its write lock after a transaction has read fails rather than waits, and the
+60-day rule is a guarantee of the deployment, which is PostgreSQL. Then the
+day row is what two first requests for one date race for: the one that inserts it
+(`ON CONFLICT DO NOTHING`) picks, in the same transaction; the other reads. A day too thin is stored as `skipped`; while it is still open somewhere it is looked at again, under the same locks, once `SKIPPED_RETRY` (5 min) has passed since `picked_at` — nobody can have played it, and a date first asked for before its games finished would otherwise have no Daily for good. Once it has ended everywhere it stays skipped. A drawing that stops being
+playable for everybody is replaced for everybody (R-SOLO-13) under the day row's lock —
+taken only when something needs replacing, so the opens of an untouched Daily never queue
+— and the row keeps the drawing and the concept it replaced. `solo_daily_concepts` holds
+every concept a date's Daily ever held, the five picked and each replacement, because a
+position replaced twice keeps only its latest predecessor on the set row; it is what the
+60-day reuse rule reads, by concept and date (#1493 review).
+`ix_solo_daily_sets_concept_date` serves the free runs' exclusion of every concept in a
+Daily still open somewhere.
+
+### `solo_daily_results`
+`user_id` (CASCADE) + `daily_date` composite **PK** · `run_id` (SET NULL, indexed) ·
+`positions_played` (0–5) · `solved` · `points` · `marks` (JSON: one `{position, outcome,
+seconds, late}` per drawing played) · `started_on_date` · `started_at` · `completed_at`
+(set exactly when all five are played).
+
+A player's Daily for a date (R-SOLO-12): a **fact that grows** — written when its first
+drawing settles and added to as each other does, never rewritten, so a Daily left half
+played keeps its progress. `late` marks a drawing settled after the date had ended
+everywhere; `started_on_date` is what the streak counts (R-SOLO-14), computed from these
+rows on every read. Deleted with the account.
+
+### `solo_bests`
+`user_id` (CASCADE) + `length_key` (`5 \| 10 \| unlimited`) composite **PK** · `best` ·
+`run_id` (SET NULL, indexed) · `achieved_at`.
+
+A **projection**: raised in the transaction that ends a free run — the
+points of a finished 5 or 10 run, the drawings named in an unlimited one however it
+ended — and never lowered (R-SOLO-14). A run that scored nothing, or named nothing, is
+no best: a best of 0 only says a run went nowhere. Rebuilt from `solo_runs` by:
+
+```bash
+cd backend && .venv/bin/python -m app.services.solo_pool --bests
+```
 
 ---
 
@@ -2904,7 +2963,8 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
-| Solo runs and the drawings they served | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
+| Solo runs, the drawings they served, Daily results and bests | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
+| The Daily's sets and the concepts each held | Permanent: the archive plays past days (#1470), and the 60-day rule reads the concepts | — | Permanently kept | — | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -3023,7 +3083,8 @@ Deletion:
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;
 - deletes the Solo pool rows of those erased drawings, and the account's own Solo runs
-  with the drawings they served (`solo_pool`, `solo_runs`, `solo_serves` in §6);
+  with the drawings they served, its Daily results and its bests (`solo_pool`,
+  `solo_runs`, `solo_serves`, `solo_daily_results`, `solo_bests` in §6);
 - deletes the pins on those erased drawings, and every pin the account itself made — a
   tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting

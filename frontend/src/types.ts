@@ -784,6 +784,8 @@ export type ErrorCode =
   | "no_such_solo_run"
   | "solo_conflict"
   | "solo_pool_empty"
+  | "solo_date_out_of_range"
+  | "no_such_daily"
   | "pinned_drawings_full"
   | "prompt_list_not_found"
   | "prompt_list_conflict"

@@ -2315,11 +2315,13 @@
    "publishedAt"
   ],
   "auth.account_data:_write_export_artifact": [
+   "achievedAt",
    "avatarKey",
    "blockedUserId",
    "brushCursor",
    "byteSize",
    "colorblindSafeColors",
+   "completedAt",
    "confettiEffects",
    "contentType",
    "createdAt",
@@ -2341,6 +2343,7 @@
    "mergedAt",
    "nameColor",
    "penPressure",
+   "positionsPlayed",
    "promptLanguage",
    "promptListId",
    "promptListName",
@@ -2357,6 +2360,7 @@
    "soundEffects",
    "starredAt",
    "startedAt",
+   "startedOnDate",
    "subjectId",
    "timeFormat",
    "updatedAt",
@@ -2731,6 +2735,17 @@
    "sitsOutTurn",
    "totalRounds",
    "turnId"
+  ],
+  "repositories.solo:daily_result_payload": [
+   "positionsPlayed"
+  ],
+  "repositories.solo:summary": [
+   "activeRuns",
+   "dailiesPlayed",
+   "drawingsNamed",
+   "drawingsPlayed",
+   "longestStreak",
+   "runId"
   ],
   "rooms:_player_entry": [
    "avatarUrl",
@@ -3160,6 +3175,8 @@
    "no_such_solo_run",
    "solo_conflict",
    "solo_pool_empty",
+   "solo_date_out_of_range",
+   "no_such_daily",
    "pinned_drawings_full",
    "prompt_list_not_found",
    "prompt_list_conflict",

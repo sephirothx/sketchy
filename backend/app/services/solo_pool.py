@@ -206,12 +206,19 @@ async def rebuild_solo_pool(session_factory: async_sessionmaker[AsyncSession]) -
         last = after
 
 
-async def _run_cli() -> None:
+async def _run_cli(bests: bool) -> None:
     from app.db import init_db, maintenance_engine
+    from app.repositories.solo import rebuild_bests
 
     engine, factory = maintenance_engine()
     try:
         await init_db(engine)
+        if bests:
+            async with factory() as session:
+                async with session.begin():
+                    rows = await rebuild_bests(session)
+            print(f"Rebuilt Solo's personal bests: {rows} rows.")
+            return
         rows = await rebuild_solo_pool(factory)
         print(f"Rebuilt the Solo pool: {rows} drawings.")
     finally:
@@ -222,8 +229,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Rebuild the drawings Solo may serve from the recorded games."
     )
-    parser.parse_args()
-    asyncio.run(_run_cli())
+    parser.add_argument(
+        "--bests",
+        action="store_true",
+        help="rebuild the players' personal bests from their ended free runs instead",
+    )
+    args = parser.parse_args()
+    asyncio.run(_run_cli(args.bests))
 
 
 if __name__ == "__main__":

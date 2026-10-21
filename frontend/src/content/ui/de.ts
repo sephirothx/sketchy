@@ -313,6 +313,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_solo_run: "Diese Solo-Runde gibt es nicht mehr.",
   solo_conflict: "Das hat sich inzwischen geändert. Lade Solo neu und spiel weiter.",
   solo_pool_empty: "Gerade ist keine Zeichnung zum Spielen übrig. Versuch es später noch einmal.",
+  solo_date_out_of_range: "Das Tagesrätsel für diesen Tag ist nicht offen.",
+  no_such_daily: "Heute gibt es kein Tagesrätsel. Probier eine freie Runde.",
   pinned_drawings_full: "Deine angehefteten Zeichnungen sind voll. Löse zuerst eine in deinem Profil.",
 
   // Prompt lists
