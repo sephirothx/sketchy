@@ -165,6 +165,27 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await lobby.keyboard.press("Escape")
             await expect(account_form).to_have_count(0)
             await expect(viewer).to_be_visible()
+
+            # Back closes the viewer and leaves the player on the profile
+            # (R-UX-15): it used to take them off the page with it still open.
+            await lobby.go_back()
+            await expect(viewer).to_have_count(0)
+            assert lobby.url.endswith("/profile")
+            await expect(lobby.locator(".profile-stat").first).to_be_visible()
+
+            # Closed by its own button, it takes its entry back: the next Back
+            # leaves the profile at once rather than being spent on nothing.
+            await lobby.locator(".profile-drawing-button").first.click()
+            await viewer.wait_for()
+            await lobby.get_by_role("button", name="Close drawings").click()
+            await expect(viewer).to_have_count(0)
+            # Its entry is gone before Back is pressed: the take-back is a
+            # traversal of its own, and Back racing it would count from it.
+            await lobby.wait_for_function(
+                "() => !(history.state && history.state.sketchyPageLayer)"
+            )
+            await lobby.go_back()
+            await lobby.wait_for_url(lambda url: not url.endswith("/profile"))
         finally:
             await host_context.close()
             await guest_context.close()

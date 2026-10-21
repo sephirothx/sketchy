@@ -39,6 +39,7 @@ import {
 } from "../lib/drawingViewer";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { usePageBackCloses } from "../hooks/usePageBackCloses";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
 import { useBackCloses } from "../hooks/useRoomHistory";
 import type { DrawingRecapMetadata } from "../types";
@@ -369,7 +370,12 @@ export function DrawingViewer({
   }, []);
 
   const closeOverview = useCallback(() => setOverviewOpen(false), []);
+  // Back closes the overview, then the viewer, as Escape does (R-UX-15). In a
+  // room the room's history answers it and opens the viewer's own entry
+  // (ActiveGameRoom); on a page, the page's.
   useBackCloses(overviewOpen, closeOverview);
+  usePageBackCloses(true, onClose);
+  usePageBackCloses(overviewOpen, closeOverview);
   // Friends or Settings opened over the page - from a toast, say - is a
   // screen of its own: the viewer steps out of its way, hidden and with its
   // trap, Escape and keys stood down, and is back on the same drawing when it

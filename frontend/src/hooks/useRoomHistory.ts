@@ -62,6 +62,11 @@ export function useBackCloses(active: boolean, onClose: () => void): void {
   }, [active, history]);
 }
 
+/** Whether a live room's history answers Back here. */
+export function useInRoomHistory(): boolean {
+  return useContext(RoomHistoryContext) !== null;
+}
+
 /** Leave the room's history the way the room is left: its entries rewound off
 the stack, then `finish` navigates - replacing the entry the room was entered
 on when `replace` is true, so Back from the lobby does not come back here. */
