@@ -146,6 +146,13 @@ test("a layer closed by its own control takes its entry back", async () => {
   release();
   await win.settle();
   assert.equal(win.index, 0);
+
+  // Forward on to the entry it left has nowhere to go on to: it turns back
+  // to the page, and no step off the end is left counted as our own.
+  win.press(1);
+  await win.settle();
+  assert.equal(win.index, 0);
+  assert.equal(win.depth(), 0);
 });
 
 test("two layers: Back closes the top one, and again the one under it", async () => {

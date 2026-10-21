@@ -125,6 +125,9 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   let path = port.pathname();
   // The entry last seen, to tell Forward from Back when one lands.
   let lastIndex = indexOf(port.state());
+  // Where our last take-back left the page: the entries above it are dead
+  // ends rather than leftovers, with nothing after them to step on to.
+  let takenBack: { path: string; index: number } | null = null;
   let unlisten: (() => void) | null = null;
   let scheduled = false;
 
@@ -140,6 +143,8 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     const step = planLayers(depth(), layers.length);
     if (!step) return;
     if ("go" in step) {
+      const index = indexOf(port.state());
+      takenBack = index === null ? null : { path, index: index + step.go };
       port.go(step.go);
       return;
     }
@@ -148,6 +153,8 @@ export function createPageHistory(port: HistoryPort): PageHistory {
       state = layerState(state, path, next);
       port.pushState(state);
     }
+    // The push replaced whatever lay above, the dead ends included.
+    takenBack = null;
     lastIndex = indexOf(state);
   }
 
@@ -165,7 +172,11 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     // a leftover entry of its own is stepped over.
     if (layers.length === 0) path = port.pathname();
     if (port.pathname() !== path) return;
-    const plan = planLayerPop(depth(), layers.length, own, forward);
+    // Forward on to an entry a take-back left: nothing follows it, so back
+    // to the page rather than a step off the end of the history.
+    const deadEnd =
+      takenBack !== null && takenBack.path === path && index !== null && index > takenBack.index;
+    const plan = planLayerPop(depth(), layers.length, own, forward && !deadEnd);
     switch (plan.kind) {
       case "close": {
         // Out of the list before they are told, so the reconcile their closing
