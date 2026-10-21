@@ -180,6 +180,7 @@ simulated history in the tests. */
 export interface HistoryWindow {
   readonly history: {
     readonly state: unknown;
+    readonly length: number;
     pushState(data: unknown, unused: string): void;
     go(delta: number): void;
   };
@@ -202,6 +203,8 @@ nothing waits on it for good. */
 export interface HistoryPort {
   state(): unknown;
   pathname(): string;
+  /** `history.length`: how many entries the tab's history holds. */
+  length(): number;
   /** `history.pushState` on the current URL. Synchronous, and fires nothing. */
   pushState(state: unknown): void;
   go(delta: number): void;
@@ -245,6 +248,7 @@ export function historyPortFor(win: HistoryWindow): HistoryPort {
   const port: HistoryPort = {
     state: () => win.history.state,
     pathname: () => win.location.pathname,
+    length: () => win.history.length,
     pushState: (state) => win.history.pushState(state, ""),
     go(delta) {
       inFlight += 1;

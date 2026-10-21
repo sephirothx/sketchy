@@ -128,16 +128,24 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   // Where our last take-back left the page: the entries above it are dead
   // ends rather than leftovers, with nothing after them to step on to.
   let takenBack: { path: string; index: number } | null = null;
-  // The top entry we pushed, while nothing is known to follow it. An entry
-  // adopted rather than pushed - after a reload, a leftover still under an
-  // opening layer - may have a page after it, and so may one the player came
-  // Back to from an overlay route pushed over the open viewer: taking either
-  // back leaves no dead end.
-  let pushedTop: number | null = null;
+  // What our last push left: its top entry, and the history's length after
+  // it. Anything pushed since - an overlay route, Friends or Settings, over the
+  // open viewer, which stays mounted under it - makes the history longer. An
+  // entry adopted rather than pushed (after a reload, a leftover under an
+  // opening layer) has no record: it may have a page after it.
+  let pushed: { index: number; length: number } | null = null;
   let unlisten: (() => void) | null = null;
   let scheduled = false;
 
   const depth = () => layerDepth(port.state(), path);
+
+  /** Whether the entries above `index` are ours with nothing after them, so
+  that once closed they are dead ends rather than a way on. */
+  function nothingFollows(index: number | null): index is number {
+    return (
+      index !== null && pushed !== null && index <= pushed.index && port.length() === pushed.length
+    );
+  }
 
   function reconcile() {
     scheduled = false;
@@ -150,10 +158,7 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     if (!step) return;
     if ("go" in step) {
       const index = indexOf(port.state());
-      takenBack =
-        index === null || pushedTop === null || index > pushedTop
-          ? null
-          : { path, index: index + step.go };
+      takenBack = nothingFollows(index) ? { path, index: index + step.go } : null;
       port.go(step.go);
       return;
     }
@@ -165,7 +170,7 @@ export function createPageHistory(port: HistoryPort): PageHistory {
     // The push replaced whatever lay above, the dead ends included.
     takenBack = null;
     lastIndex = indexOf(state);
-    pushedTop = lastIndex;
+    pushed = lastIndex === null ? null : { index: lastIndex, length: port.length() };
   }
 
   function schedule() {
@@ -192,6 +197,9 @@ export function createPageHistory(port: HistoryPort): PageHistory {
         // Out of the list before they are told, so the reconcile their closing
         // schedules finds the history already where it should be.
         const closing = layers.splice(layers.length - plan.count, plan.count).reverse();
+        // Back passed their entries, which stay ahead: dead ends, as a
+        // take-back's are, unless something was pushed after them.
+        takenBack = nothingFollows(index) ? { path, index } : null;
         for (const layer of closing) layer.dismiss();
         break;
       }
@@ -202,10 +210,10 @@ export function createPageHistory(port: HistoryPort): PageHistory {
         schedule();
         break;
       case "none":
-        // Back on to the open layers from something that is not ours - an
-        // overlay route, Friends or Settings, pushed over the viewer, which
-        // stays mounted under it. That entry is still there to go Forward to.
-        pushedTop = null;
+        // Back on to the open layers from something that is not ours: an
+        // overlay route pushed over the viewer. Said already by the length,
+        // except at a browser's cap on entries, where a push drops the oldest.
+        pushed = null;
         break;
     }
   }

@@ -27,6 +27,9 @@ class FakeWindow {
       get state() {
         return self.entries[self.index].state;
       },
+      get length() {
+        return self.entries.length;
+      },
       pushState(state) {
         self.entries.splice(self.index + 1);
         self.entries.push({ path: self.entries[self.index].path, state });
@@ -258,6 +261,37 @@ test("an overlay pushed over an open layer is still reached by Forward after it 
   win.press(1);
   await win.settle();
   assert.equal(win.location.pathname, "/friends");
+});
+
+test("Back two at once from an overlay over viewer and overview still leaves Forward to it", async () => {
+  const { win, page } = setup();
+  const releaseViewer = page.open(() => {});
+  page.open(() => {});
+  await win.settle();
+  win.navigate("/friends");
+  // Two steps in one press: past the overview's entry, which closes it.
+  win.press(-2);
+  await win.settle();
+  assert.equal(win.depth(), 1);
+  releaseViewer();
+  await win.settle();
+  assert.equal(win.index, 0);
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/friends");
+});
+
+test("a layer closed by Back is a dead end for Forward, not a step off the end", async () => {
+  const { win, page } = setup();
+  page.open(() => {});
+  await win.settle();
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.index, 0);
+  win.press(1);
+  await win.settle();
+  assert.equal(win.index, 0, "turned back to the page");
+  assert.equal(win.depth(), 0);
 });
 
 test("a leftover adopted after a reload is not a dead end once taken back", async () => {
