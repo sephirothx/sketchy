@@ -89,6 +89,21 @@ export function ShareControl({
   );
 
   if (look === "pill" || look === "viewer") {
+    // Nothing to press, but the drawing is in the gallery: the viewer still
+    // says so, as the button look's credit line did (R-SHARE-07).
+    if (offer === "hidden" && look === "viewer" && credit.kind !== "none") {
+      const said = creditText(credit) ?? ui.shareControl.inTheGallery;
+      return (
+        <span className="reaction-toggle share-pill is-inert" role="img" aria-label={said} title={said}>
+          <span className="share-pill-icon">
+            <ImageIcon size={15} />
+          </span>
+          <span className="share-pill-label" aria-hidden="true">
+            {ui.shareControl.inTheGallery}
+          </span>
+        </span>
+      );
+    }
     if (offer === "hidden") return null;
     return (
       <>
@@ -180,13 +195,17 @@ function SharePill({
           : ui.shareControl.theDrawerKeptItOut;
   const said = creditText(credit);
   const label = said && !inert ? `${said}\n${action}` : action;
+  // The word shown beside the icon starts its name, so a voice command that
+  // reads the button's word finds it (WCAG 2.5.3); the rest follows it.
+  const word = offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share;
+  const name = labelled ? `${word}\n${inert ? action : said ?? action}` : label;
   return (
     <button
       type="button"
       className={`reaction-toggle share-pill${pressed ? " has-mine" : ""}${inert ? " is-inert" : ""}`}
       aria-pressed={inert ? undefined : pressed}
       aria-disabled={inert || busy || undefined}
-      aria-label={label}
+      aria-label={name}
       title={label}
       data-testid={offer === "takeOut" ? "share-take-out" : inert ? "share-withdrawn" : "share-toggle"}
       onClick={() => {
@@ -199,7 +218,7 @@ function SharePill({
       </span>
       {labelled && (
         <span className="share-pill-label" aria-hidden="true">
-          {offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share}
+          {word}
         </span>
       )}
     </button>

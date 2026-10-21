@@ -28,9 +28,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* Centred while it fits; from the top, scrolling, when it does not - a
+     short phone with a two-line prompt - so the close is never pushed off
+     above the screen. */
+  justify-content: safe center;
   gap: 16px;
   padding: 16px;
   box-sizing: border-box;
+  overflow-y: auto;
   color: var(--ink);
   overscroll-behavior: contain;
 }
@@ -47,7 +52,7 @@
   transition: opacity var(--dur) ease;
 }
 
-.drawing-viewer > :not(.drawing-viewer-backdrop) {
+.drawing-viewer > :not(.drawing-viewer-backdrop):not(.visually-hidden) {
   position: relative;
 }
 
@@ -383,7 +388,9 @@
   box-sizing: border-box;
   height: 100%;
   padding: 4px;
-  background: var(--track);
+  /* Opaque: the thumbnail under it is white, and the dark theme's
+     translucent track over white would leave the note unreadable. */
+  background: var(--card);
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
@@ -542,6 +549,14 @@
     background: var(--card);
     color: var(--ink);
     box-shadow: none;
+  }
+
+  .drawing-viewer-reactions .reaction-toggle:not(.has-mine) .reaction-toggle-empty {
+    color: var(--muted);
+  }
+
+  .drawing-viewer-all {
+    height: 44px;
   }
 
   .drawing-viewer-actions .btn,

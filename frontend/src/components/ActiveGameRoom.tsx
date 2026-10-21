@@ -438,8 +438,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setHighlightsOpen(false);
   }
 
-  // The two post-game panels take the stage rather than sitting over it, but
-  // they are opened and closed like sheets, so Back closes them like sheets.
+  // The highlights take the stage and the Recap opens over it, but both are
+  // opened and closed like sheets, so Back closes them like sheets.
   const recapShown = recapOpen && drawingRecap.length > 0;
   function closeRecap() {
     setRecapOpen(false);
@@ -610,8 +610,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
         <RoomMenuSheet actions={roomMenuActions} onDismiss={() => setRoomMenuOpen(false)} />
       )}
 
-      {/* The Recap is a dialog over the room; what the room shows stays under it. */}
-      {recapShown && (
+      {/* The Recap is a dialog over the room; what the room shows stays under
+          it. Not over a paused or ended room: the card that says so, with its
+          Reload and Leave, is what the player needs then, and nothing the
+          Recap does can reach the room while it shows. */}
+      {recapShown && stage.kind === "live" && (
         <DrawingViewer
           entries={drawingRecap}
           initialIndex={recapIndex}

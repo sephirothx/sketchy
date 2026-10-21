@@ -2297,7 +2297,8 @@ grid; it is client-only and not done.
 A room above the breakpoint and at least 640px tall is pinned to the viewport,
 like the desktop lobby: `.game-room` is `100dvh` less `--banner-height`, the
 players and chat panels run the full height and scroll inside themselves, and
-the waiting room, game-over panel and recap scroll inside the middle column.
+the waiting room and game-over panel scroll inside the middle column, and the
+Recap opens over the room as a dialog (`DrawingViewer.tsx`, R-UX-24).
 In play the canvas is sized from whichever cap binds first — the column's
 width, `--canvas-cap`, or the height the prompt and the toolbar leave. The
 wrapper is 4:3 from its width and is the one flex item allowed to shrink; the

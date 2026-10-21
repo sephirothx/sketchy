@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import {
   ChevronLeftIcon,
@@ -39,6 +39,7 @@ import {
 } from "../lib/drawingViewer";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import type { DrawingRecapMetadata } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -60,7 +61,9 @@ Moving between drawings slides: a swipe carries on from where the finger let
 go, and the arrows, a thumbnail or the overview slide the drawing in from the
 side it lies on. The track holds three slots - previous, current, next - and a
 slide ends by swapping the middle one with transitions off, so the jump back
-to the centre is never seen. Under reduced motion the drawing simply changes.
+to the centre is never seen. A move asked for while a slide runs finishes that
+one at once and slides again from there, so held keys and quick taps never
+play a slide backwards. Under reduced motion the drawing simply changes.
 
 Drawings are drawn on the thumbnail worker at their full 800 px, never on the
 page's thread (#1282), so a fill-heavy neighbour being prepared cannot stall a
@@ -95,6 +98,7 @@ interface Slide {
 }
 
 interface PointerTrack {
+  id: number;
   x: number;
   y: number;
   at: number;
@@ -108,7 +112,8 @@ interface PointerTrack {
 }
 
 /** Drawn pictures kept for a quick way back; each is a PNG of a few dozen
-    kilobytes until the browser decodes it. */
+    kilobytes until the browser decodes it. The ones about to be shown are
+    never the ones let go. */
 const KEPT_IMAGES = 12;
 
 /** How many drawings either side are drawn before they are reached. */
@@ -125,6 +130,19 @@ function asArrayBuffer(payload: unknown): ArrayBuffer {
     return payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) as ArrayBuffer;
   }
   throw new Error(ui.drawingRecapGallery.thisDrawingCouldNotBeDecoded);
+}
+
+function entryLabel(target: DrawingRecapMetadata): string {
+  return ui.drawingRecapGallery.drawingLabel({ prompt: target.prompt, drawer: target.drawerNickname });
+}
+
+/** Two frames: one to paint what changed with transitions off, one more
+    before they may run again. */
+function afterTwoFrames(frames: number[], then: () => void) {
+  const first = requestAnimationFrame(() => {
+    frames.push(requestAnimationFrame(then));
+  });
+  frames.push(first);
 }
 
 export function DrawingViewer({
@@ -152,17 +170,22 @@ export function DrawingViewer({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const initialFocusRef = useRef<HTMLElement | null>(null);
   const pointerRef = useRef<PointerTrack | null>(null);
   const slideTimer = useRef<number | null>(null);
   const tapTimer = useRef<number | null>(null);
   const arrowsTimer = useRef<number | null>(null);
   const frames = useRef<number[]>([]);
+  // A move asked for while a slide runs: made once that slide has settled.
+  const queued = useRef<number | null>(null);
 
   // Settled drawing and the one a slide is heading for: the header, the
   // controls and the strip already show where it is going.
   const current = Math.min(index, Math.max(0, total - 1));
   const shown = slide ? Math.min(slide.to, total - 1) : current;
-  const entry = entries[shown];
+  const entry = entries[shown] as DrawingRecapMetadata | undefined;
 
   // A loader is often an inline arrow, a new function every render; the
   // cache must not be thrown away with it.
@@ -189,28 +212,38 @@ export function DrawingViewer({
   // Drawn pictures, by drawing. A slot that becomes the middle one at the end
   // of a slide must show its picture in the same frame, not after another
   // trip to the worker, or the swap would flash; so the pictures outlive the
-  // slots, a few at a time.
+  // slots, a few at a time, in the order they were last asked for.
   const images = useRef(new Map<string, string>());
   // What render reads: the same pictures, as state.
   const [ready, setReady] = useState<ReadonlyMap<string, string>>(() => new Map());
   const drawing = useRef(new Map<string, Promise<string>>());
+  const keep = useRef(new Set<string>());
+  const closed = useRef(new AbortController());
   const drawImage = useCallback((target: DrawingRecapMetadata): Promise<string> => {
     const key = entryKey(target);
-    const ready = images.current.get(key);
-    if (ready) return Promise.resolve(ready);
+    const hit = images.current.get(key);
+    if (hit) {
+      images.current.delete(key);
+      images.current.set(key, hit);
+      return Promise.resolve(hit);
+    }
     let pending = drawing.current.get(key);
     if (!pending) {
+      const signal = closed.current.signal;
       pending = loadBytes(target)
-        .then((loaded) => drawThumbnail(loaded, CANVAS_WIDTH))
+        .then((loaded) => drawThumbnail(loaded, CANVAS_WIDTH, signal))
         .then((image) => {
           if (!image) throw new Error(ui.drawingRecapGallery.thisDrawingCouldNotBeDecoded);
           const url = URL.createObjectURL(new Blob([image.png as BlobPart], { type: "image/png" }));
+          if (signal.aborted) {
+            URL.revokeObjectURL(url);
+            return url;
+          }
           images.current.set(key, url);
-          // The oldest go first, a dozen kept: enough for the neighbours both
-          // ways and a few steps back.
-          while (images.current.size > KEPT_IMAGES) {
-            const [oldest, oldUrl] = images.current.entries().next().value as [string, string];
-            images.current.delete(oldest);
+          for (const [oldKey, oldUrl] of [...images.current]) {
+            if (images.current.size <= KEPT_IMAGES) break;
+            if (keep.current.has(oldKey)) continue;
+            images.current.delete(oldKey);
             URL.revokeObjectURL(oldUrl);
           }
           setReady(new Map(images.current));
@@ -222,16 +255,20 @@ export function DrawingViewer({
     return pending;
   }, [loadBytes]);
 
-  useEffect(() => () => {
-    images.current.forEach((url) => URL.revokeObjectURL(url));
-    images.current.clear();
-  }, []);
-
-  useEffect(() => () => {
-    if (slideTimer.current !== null) window.clearTimeout(slideTimer.current);
-    if (tapTimer.current !== null) window.clearTimeout(tapTimer.current);
-    if (arrowsTimer.current !== null) window.clearTimeout(arrowsTimer.current);
-    frames.current.forEach((frame) => cancelAnimationFrame(frame));
+  useEffect(() => {
+    const abort = closed.current;
+    const pictures = images.current;
+    const timers = { slide: slideTimer, tap: tapTimer, arrows: arrowsTimer };
+    const pendingFrames = frames.current;
+    return () => {
+      abort.abort();
+      pictures.forEach((url) => URL.revokeObjectURL(url));
+      pictures.clear();
+      Object.values(timers).forEach((timer) => {
+        if (timer.current !== null) window.clearTimeout(timer.current);
+      });
+      pendingFrames.forEach((frame) => cancelAnimationFrame(frame));
+    };
   }, []);
 
   // The page under the viewer does not scroll while it is open.
@@ -244,6 +281,9 @@ export function DrawingViewer({
     };
   }, []);
 
+  // The move after the current one, read when a settled slide asks for it.
+  const goToRef = useRef<(target: number, dragged?: number) => void>(() => undefined);
+
   const finishSlide = useCallback((to: number) => {
     if (slideTimer.current !== null) window.clearTimeout(slideTimer.current);
     slideTimer.current = null;
@@ -251,32 +291,34 @@ export function DrawingViewer({
     setIndex(to);
     setSlide(null);
     setOffset({ x: 0, y: 0 });
-    // Two frames: one to paint the swapped track without a transition, one
-    // more before transitions may run again.
-    const first = requestAnimationFrame(() => {
-      const second = requestAnimationFrame(() => setInstant(false));
-      frames.current.push(second);
+    afterTwoFrames(frames.current, () => {
+      setInstant(false);
+      const next = queued.current;
+      queued.current = null;
+      if (next !== null) goToRef.current(next);
     });
-    frames.current.push(first);
   }, []);
 
   const goTo = useCallback((target: number, dragged = 0) => {
     const to = Math.max(0, Math.min(total - 1, target));
-    setOverviewOpen(false);
     setZoom(null);
     setDragging(false);
     setStripStart((start) => stripStartAfterMove(start, to, DESKTOP_STRIP_SIZE));
-    if (to === shown) {
+    if (slide) {
+      // Settle the running slide where it was going, then move on from there.
+      queued.current = to;
+      finishSlide(slide.to);
+      return;
+    }
+    if (to === current) {
       setOffset({ x: 0, y: 0 });
       return;
     }
-    // Under reduced motion, or while a slide is already running, change at once.
-    if (reducedMotion || slide) {
-      if (slideTimer.current !== null) window.clearTimeout(slideTimer.current);
-      slideTimer.current = null;
-      setSlide(null);
+    if (reducedMotion) {
+      setInstant(true);
       setIndex(to);
       setOffset({ x: 0, y: 0 });
+      afterTwoFrames(frames.current, () => setInstant(false));
       return;
     }
     const width = frameRef.current?.clientWidth ?? 0;
@@ -284,23 +326,63 @@ export function DrawingViewer({
     setSlide({ to, direction: to > current ? 1 : -1, ms });
     setOffset({ x: 0, y: 0 });
     slideTimer.current = window.setTimeout(() => finishSlide(to), ms);
-  }, [current, finishSlide, reducedMotion, shown, slide, total]);
+  }, [current, finishSlide, reducedMotion, slide, total]);
+
+  useEffect(() => {
+    goToRef.current = goTo;
+  });
+
+  const pick = useCallback((target: number) => goToRef.current(target), []);
+  // From the overview the stage has to be back on screen before a slide can
+  // start, or there would be nothing to slide from.
+  const pickFromOverview = useCallback((target: number) => {
+    setOverviewOpen(false);
+    afterTwoFrames(frames.current, () => goToRef.current(target));
+  }, []);
 
   const closeOverview = useCallback(() => setOverviewOpen(false), []);
+  useBackCloses(overviewOpen, closeOverview);
+  useLayoutEffect(() => {
+    initialFocusRef.current = stripRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
+  });
   useFocusTrap(dialogRef, {
     onEscape: () => (overviewOpen ? closeOverview() : onClose()),
+    initialFocusRef,
   });
+
+  // Focus that would fall to the page - a focused arrow disabled at the end,
+  // the phone's arrows hidden again, the overview opening or closing over the
+  // control that had it - comes back to the drawing's thumbnail instead.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const target = overviewOpen
+      ? backRef.current
+      : stripRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? closeRef.current;
+    target?.focus({ preventScroll: true });
+  });
+
+  useEffect(() => {
+    if (overviewOpen) backRef.current?.focus({ preventScroll: true });
+  }, [overviewOpen]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (overviewOpen) return;
+      // Not from inside something laid over the viewer: the take-out
+      // confirmation, the reaction picker.
+      const target = event.target instanceof Element ? event.target : null;
+      const layer = target?.closest('[role="dialog"], [role="alertdialog"]');
+      if (layer && layer !== dialogRef.current) return;
       const move = arrowKeyMoves({
         key: event.key,
         defaultPrevented: event.defaultPrevented,
         altKey: event.altKey,
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
-        target: event.target as HTMLElement | null,
+        target: target as HTMLElement | null,
       });
       if (move === "previous" && shown > 0) goTo(shown - 1);
       if (move === "next" && shown < total - 1) goTo(shown + 1);
@@ -320,14 +402,19 @@ export function DrawingViewer({
     strip.scrollTo({ left: Math.max(0, left), behavior: reducedMotion ? "auto" : "smooth" });
   }, [phone, shown, overviewOpen, reducedMotion]);
 
-  // The drawings a swipe is about to reach are drawn before it gets there.
+  // The drawings a swipe is about to reach are drawn before it gets there,
+  // and kept while they are this close.
   useEffect(() => {
-    for (let step = 1; step <= PREPARED_EITHER_SIDE; step += 1) {
-      for (const near of [entries[shown - step], entries[shown + step]]) {
-        if (near && near.available !== false) drawImage(near).catch(() => undefined);
+    const near: DrawingRecapMetadata[] = [];
+    for (let step = -PREPARED_EITHER_SIDE; step <= PREPARED_EITHER_SIDE; step += 1) {
+      for (const at of [current + step, shown + step]) {
+        const target = entries[at];
+        if (target && target.available !== false) near.push(target);
       }
     }
-  }, [drawImage, entries, shown]);
+    keep.current = new Set(near.map(entryKey));
+    near.forEach((target) => drawImage(target).catch(() => undefined));
+  }, [current, drawImage, entries, shown]);
 
   const showArrowsForAWhile = useCallback(() => {
     if (arrowsTimer.current !== null) window.clearTimeout(arrowsTimer.current);
@@ -335,16 +422,31 @@ export function DrawingViewer({
     arrowsTimer.current = window.setTimeout(() => setArrowsShown(false), ARROWS_SHOWN_MS);
   }, []);
 
+  const currentEntry = entries[current] as DrawingRecapMetadata | undefined;
+  const currentPicture = currentEntry ? ready.get(entryKey(currentEntry)) : undefined;
+
   // One pointer, four gestures on the drawing: a sideways drag changes it, a
   // downward drag closes the viewer, a double tap zooms, and on a phone a
-  // single tap shows the arrows for a few seconds.
+  // single tap shows the arrows for a few seconds. A second pointer - a
+  // pinch - calls the whole gesture off rather than being read as the first.
+  const cancelGesture = () => {
+    pointerRef.current = null;
+    setDragging(false);
+    setOffset({ x: 0, y: 0 });
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (pointerRef.current) {
+      cancelGesture();
+      return;
+    }
     const target = event.target as HTMLElement;
     if (target.closest("button, a, input, .drawing-viewer-tools, .reaction-picker")) return;
     if (slide) finishSlide(slide.to);
     const rect = event.currentTarget.getBoundingClientRect();
     pointerRef.current = {
+      id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       at: performance.now(),
@@ -361,7 +463,7 @@ export function DrawingViewer({
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const track = pointerRef.current;
-    if (!track) return;
+    if (!track || event.pointerId !== track.id) return;
     const dx = event.clientX - track.x;
     const dy = event.clientY - track.y;
     if (zoom) {
@@ -384,8 +486,8 @@ export function DrawingViewer({
 
   const endPointer = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
     const track = pointerRef.current;
+    if (!track || event.pointerId !== track.id) return;
     pointerRef.current = null;
-    if (!track) return;
     const dx = event.clientX - track.x;
     const dy = event.clientY - track.y;
     const ms = performance.now() - track.at;
@@ -407,10 +509,12 @@ export function DrawingViewer({
       if (closesOnRelease(dy, ms)) onClose();
       return;
     }
-    // A tap: a second one soon after makes it a double tap, which zooms.
+    // A tap: a second one soon after makes it a double tap, which zooms - a
+    // drawing that is there to zoom.
     if (tapTimer.current !== null) {
       window.clearTimeout(tapTimer.current);
       tapTimer.current = null;
+      if (!currentPicture && !zoom) return;
       const fx = (event.clientX - track.left) / track.width;
       const fy = (event.clientY - track.top) / track.height;
       setArrowsShown(false);
@@ -439,7 +543,20 @@ export function DrawingViewer({
     }
   }
 
-  if (!entry) return null;
+  // The controls belong to one drawing: keyed by it, so nothing a control
+  // holds - an open picker, a take-out waiting to be confirmed - carries over
+  // to the next one, and built once per drawing rather than on every move of
+  // a drag.
+  const actions = useMemo(
+    () => (entry ? <Fragment key={entryKey(entry)}>{renderActions?.(entry)}</Fragment> : null),
+    [entry, renderActions],
+  );
+  const reactions = useMemo(
+    () => (entry && renderReactions ? <Fragment key={entryKey(entry)}>{renderReactions(entry)}</Fragment> : null),
+    [entry, renderReactions],
+  );
+
+  if (!entry || !currentEntry) return null;
 
   const previousEntry = slide
     ? (slide.direction < 0 ? entries[slide.to] : entries[current - 1])
@@ -447,52 +564,17 @@ export function DrawingViewer({
   const nextEntry = slide
     ? (slide.direction > 0 ? entries[slide.to] : entries[current + 1])
     : entries[current + 1];
-  const easing = dragging || instant ? "none" : undefined;
+  const still = dragging || instant;
   const trackTransform = slide
     ? `translate3d(${slide.direction > 0 ? "-66.6667%" : "0%"}, 0, 0)`
     : `translate3d(calc(-33.3333% + ${offset.x}px), 0, 0)`;
-  const trackTransition = slide ? `transform ${slide.ms}ms cubic-bezier(0.2, 0.8, 0.2, 1)` : easing;
+  const trackTransition = slide
+    ? `transform ${slide.ms}ms cubic-bezier(0.2, 0.8, 0.2, 1)`
+    : (still ? "none" : undefined);
   const dismissing = offset.y > 0 ? Math.min(offset.y, 300) : 0;
   const zoomTransform = zoom ? `translate(${zoom.x}px, ${zoom.y}px) scale(${ZOOM_SCALE})` : undefined;
   const paged = !phone && total > DESKTOP_STRIP_SIZE;
-  const stripEntries = phone ? entries : entries.slice(stripStart, stripStart + DESKTOP_STRIP_SIZE);
-  const label = (target: DrawingRecapMetadata) =>
-    ui.drawingRecapGallery.drawingLabel({ prompt: target.prompt, drawer: target.drawerNickname });
-
-  const thumb = (target: DrawingRecapMetadata) => (
-    <button
-      key={entryKey(target)}
-      type="button"
-      className="drawing-viewer-thumb"
-      aria-current={target.index === entry.index ? "true" : undefined}
-      aria-label={label(target)}
-      onClick={() => goTo(entries.indexOf(target))}
-    >
-      {target.available === false ? (
-        <span className="drawing-viewer-thumb-note">
-          {target.removed ? ui.drawingRecapGallery.removed : ui.drawingRecapGallery.notKept}
-        </span>
-      ) : (
-        <DrawingThumbnail
-          drawingKey={entryKey(target)}
-          load={() => loadBytes(target)}
-          label=""
-          className="drawing-viewer-thumb-image"
-          noteClassName="drawing-viewer-thumb-note"
-          failedText={ui.drawingRecapGallery.notAvailable}
-        />
-      )}
-    </button>
-  );
-
-  const rounds: { round: number; entries: DrawingRecapMetadata[] }[] = [];
-  if (overviewOpen) {
-    for (const target of entries) {
-      const last = rounds[rounds.length - 1];
-      if (last && last.round === target.roundNumber) last.entries.push(target);
-      else rounds.push({ round: target.roundNumber, entries: [target] });
-    }
-  }
+  const shownPicture = ready.get(entryKey(entry));
 
   return createPortal(
     <div
@@ -513,20 +595,13 @@ export function DrawingViewer({
       {overviewOpen ? (
         <section className="drawing-viewer-overview" aria-labelledby="drawing-viewer-overview-title">
           <header className="drawing-viewer-overview-header">
-            <button type="button" className="btn btn-ghost drawing-viewer-back" onClick={closeOverview}>
+            <button ref={backRef} type="button" className="btn btn-ghost drawing-viewer-back" onClick={closeOverview}>
               <ChevronLeftIcon size={18} />
               {ui.drawingRecapGallery.backToDrawing}
             </button>
             <h2 id="drawing-viewer-overview-title">{ui.drawingRecapGallery.allDrawings({ count: total })}</h2>
           </header>
-          <div className="drawing-viewer-overview-body">
-            {rounds.map((group) => (
-              <section key={group.round} className="drawing-viewer-overview-round">
-                <h3 className="section-label">{ui.drawingRecapGallery.round({ round: group.round })}</h3>
-                <div className="drawing-viewer-overview-grid">{group.entries.map(thumb)}</div>
-              </section>
-            ))}
-          </div>
+          <ViewerOverview entries={entries} shown={shown} onPick={pickFromOverview} load={loadBytes} />
         </section>
       ) : (
         <>
@@ -568,10 +643,12 @@ export function DrawingViewer({
                   </p>
                 </div>
                 <button
+                  ref={closeRef}
                   type="button"
                   className="btn btn-icon drawing-viewer-close"
                   onClick={onClose}
                   aria-label={ui.drawingRecapGallery.closeDrawings}
+                  data-skip-initial-focus
                 >
                   <XIcon size={18} />
                 </button>
@@ -597,13 +674,13 @@ export function DrawingViewer({
                       ready={previousEntry ? ready.get(entryKey(previousEntry)) : undefined}
                     />
                     <ViewerSlide
-                      key={`current:${entryKey(entries[current])}`}
-                      target={entries[current]}
+                      key={`current:${entryKey(currentEntry)}`}
+                      target={currentEntry}
                       draw={drawImage}
-                      ready={ready.get(entryKey(entries[current]))}
+                      ready={currentPicture}
                       current
                       zoomTransform={zoomTransform}
-                      animated={!dragging && !instant}
+                      animated={!still}
                     />
                     <ViewerSlide
                       key={nextEntry ? `next:${entryKey(nextEntry)}` : "next"}
@@ -637,13 +714,13 @@ export function DrawingViewer({
                 </div>
                 <div className={`drawing-viewer-tools${zoom || dragging ? " is-hidden" : ""}`}>
                   <div className="drawing-viewer-actions">
-                    {renderActions?.(entry)}
+                    {actions}
                     <button
                       type="button"
                       className="btn btn-secondary btn-compact drawing-viewer-save"
                       aria-label={ui.drawingRecapGallery.saveImage}
                       title={ui.drawingRecapGallery.saveImage}
-                      disabled={entry.available === false}
+                      disabled={entry.available === false || !shownPicture}
                       onClick={() => void saveImage()}
                     >
                       <DownloadIcon size={16} />
@@ -652,9 +729,7 @@ export function DrawingViewer({
                       </span>
                     </button>
                   </div>
-                  {renderReactions && (
-                    <div className="drawing-viewer-reactions">{renderReactions(entry)}</div>
-                  )}
+                  {reactions && <div className="drawing-viewer-reactions">{reactions}</div>}
                 </div>
               </div>
               {entry.actionCount === 0 && entry.available !== false && (
@@ -686,13 +761,15 @@ export function DrawingViewer({
                 <ChevronsLeftIcon size={20} strokeWidth={2.4} />
               </button>
             )}
-            <nav
-              ref={stripRef}
-              className="drawing-viewer-thumbs"
-              aria-label={ui.drawingRecapGallery.drawingRecapNavigation}
-            >
-              {stripEntries.map(thumb)}
-            </nav>
+            <ViewerStrip
+              entries={entries}
+              start={phone ? 0 : stripStart}
+              size={phone ? total : DESKTOP_STRIP_SIZE}
+              shown={shown}
+              onPick={pick}
+              load={loadBytes}
+              navRef={stripRef}
+            />
             {paged && (
               <button
                 type="button"
@@ -713,7 +790,7 @@ export function DrawingViewer({
             </button>
           )}
           <p className="visually-hidden" aria-live="polite">
-            {`${label(entry)}. ${ui.drawingRecapGallery.position({ position: shown + 1, total })}`}
+            {`${entryLabel(entry)}. ${ui.drawingRecapGallery.position({ position: shown + 1, total })}`}
           </p>
         </>
       )}
@@ -722,10 +799,128 @@ export function DrawingViewer({
   );
 }
 
+/** One thumbnail: a button that brings its drawing up. */
+function ViewerThumb({
+  target,
+  position,
+  current,
+  onPick,
+  load,
+}: {
+  target: DrawingRecapMetadata;
+  position: number;
+  current: boolean;
+  onPick: (position: number) => void;
+  load: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer>;
+}) {
+  return (
+    <button
+      type="button"
+      className="drawing-viewer-thumb"
+      aria-current={current ? "true" : undefined}
+      aria-label={entryLabel(target)}
+      onClick={() => onPick(position)}
+    >
+      {target.available === false ? (
+        <span className="drawing-viewer-thumb-note">
+          {target.removed ? ui.drawingRecapGallery.removed : ui.drawingRecapGallery.notKept}
+        </span>
+      ) : (
+        <DrawingThumbnail
+          drawingKey={entryKey(target)}
+          load={() => load(target)}
+          label=""
+          className="drawing-viewer-thumb-image"
+          noteClassName="drawing-viewer-thumb-note"
+          failedText={ui.drawingRecapGallery.notAvailable}
+        />
+      )}
+    </button>
+  );
+}
+
+/** The strip: a page of thumbnails on a desktop, all of them on a phone. Its
+    own component, held still while a drag re-renders the viewer: up to 160
+    thumbnails need not follow every pointer move. */
+const ViewerStrip = memo(function ViewerStrip({
+  entries,
+  start,
+  size,
+  shown,
+  onPick,
+  load,
+  navRef,
+}: {
+  entries: DrawingRecapMetadata[];
+  start: number;
+  size: number;
+  shown: number;
+  onPick: (position: number) => void;
+  load: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer>;
+  navRef: RefObject<HTMLElement | null>;
+}) {
+  return (
+    <nav ref={navRef} className="drawing-viewer-thumbs" aria-label={ui.drawingRecapGallery.drawingRecapNavigation}>
+      {entries.slice(start, start + size).map((target, offset) => (
+        <ViewerThumb
+          key={entryKey(target)}
+          target={target}
+          position={start + offset}
+          current={start + offset === shown}
+          onPick={onPick}
+          load={load}
+        />
+      ))}
+    </nav>
+  );
+});
+
+/** Every drawing of the game, by round. */
+function ViewerOverview({
+  entries,
+  shown,
+  onPick,
+  load,
+}: {
+  entries: DrawingRecapMetadata[];
+  shown: number;
+  onPick: (position: number) => void;
+  load: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer>;
+}) {
+  const rounds: { round: number; items: { target: DrawingRecapMetadata; position: number }[] }[] = [];
+  entries.forEach((target, position) => {
+    const last = rounds[rounds.length - 1];
+    if (last && last.round === target.roundNumber) last.items.push({ target, position });
+    else rounds.push({ round: target.roundNumber, items: [{ target, position }] });
+  });
+  return (
+    <div className="drawing-viewer-overview-body">
+      {rounds.map((group) => (
+        <section key={group.round} className="drawing-viewer-overview-round">
+          <h3 className="section-label">{ui.drawingRecapGallery.round({ round: group.round })}</h3>
+          <div className="drawing-viewer-overview-grid">
+            {group.items.map(({ target, position }) => (
+              <ViewerThumb
+                key={entryKey(target)}
+                target={target}
+                position={position}
+                current={position === shown}
+                onPick={onPick}
+                load={load}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /** One slot of the track: the drawing at its full size from the viewer's
     picture cache, or why there is none to show. Keyed by its drawing, so a
-    slot that already has its picture shows it on the first frame. */
-function ViewerSlide({
+    slot that already has its picture shows it on the first frame. Only the
+    middle slot is read out; the two beside it are off screen. */
+const ViewerSlide = memo(function ViewerSlide({
   target,
   draw,
   ready,
@@ -740,17 +935,18 @@ function ViewerSlide({
   zoomTransform?: string;
   animated?: boolean;
 }) {
-  const [src, setSrc] = useState<string | null>(ready ?? null);
+  const [drawn, setDrawn] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const unavailable = target?.available === false;
+  const src = ready ?? drawn;
 
   useEffect(() => {
     if (!target || unavailable || src) return;
     let live = true;
     draw(target).then(
       (url) => {
-        if (live) setSrc(url);
+        if (live) setDrawn(url);
       },
       (failure) => {
         if (live) setError(socketRequestErrorMessage(failure, ui.drawingRecapGallery.loadThisDrawing));
@@ -764,10 +960,11 @@ function ViewerSlide({
   }, [attempt, unavailable]);
 
   const className = `drawing-viewer-slide${current ? " is-current" : ""}`;
+  const hidden = current ? undefined : true;
   if (!target) return <div className={className} aria-hidden="true" />;
   if (unavailable) {
     return (
-      <div className={className}>
+      <div className={className} aria-hidden={hidden}>
         <div className="drawing-viewer-status">
           {target.removed ? (
             <p>{ui.drawingRecapGallery.removedByModeration}</p>
@@ -781,9 +978,9 @@ function ViewerSlide({
       </div>
     );
   }
-  if (error) {
+  if (error && !src) {
     return (
-      <div className={className}>
+      <div className={className} aria-hidden={hidden}>
         <div className="drawing-viewer-status" role={current ? "alert" : undefined}>
           <p>{error}</p>
           {current && (
@@ -803,13 +1000,11 @@ function ViewerSlide({
     );
   }
   return (
-    <div className={className} aria-busy={src === null}>
-      {src === null ? (
-        <span className="visually-hidden">{ui.drawingRecapGallery.loadingDrawing}</span>
-      ) : (
+    <div className={className} aria-hidden={hidden} aria-busy={src ? undefined : true}>
+      {src ? (
         <img
           src={src}
-          alt={current ? ui.drawingRecapGallery.drawingLabel({ prompt: target.prompt, drawer: target.drawerNickname }) : ""}
+          alt={current ? entryLabel(target) : ""}
           draggable={false}
           decoding="async"
           style={{
@@ -817,7 +1012,9 @@ function ViewerSlide({
             transition: current && !animated ? "none" : undefined,
           }}
         />
+      ) : (
+        <span className="visually-hidden">{ui.drawingRecapGallery.loadingDrawing}</span>
       )}
     </div>
   );
-}
+});
