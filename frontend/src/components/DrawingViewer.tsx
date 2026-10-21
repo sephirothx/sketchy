@@ -39,7 +39,7 @@ import {
 } from "../lib/drawingViewer";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useBackCloses } from "../hooks/useRoomHistory";
+import { useBackCloses, usePageBackCloses } from "../hooks/useRoomHistory";
 import type { DrawingRecapMetadata } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -368,7 +368,12 @@ export function DrawingViewer({
   }, []);
 
   const closeOverview = useCallback(() => setOverviewOpen(false), []);
+  // Back closes the overview, then the viewer, as Escape does (R-UX-15). In a
+  // room the room's history answers it and opens the viewer's own entry
+  // (ActiveGameRoom); on a page, the page's.
   useBackCloses(overviewOpen, closeOverview);
+  usePageBackCloses(true, onClose);
+  usePageBackCloses(overviewOpen, closeOverview);
   useLayoutEffect(() => {
     initialFocusRef.current = stripRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
   });

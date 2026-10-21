@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 
+import { createPageHistory, type PageHistory } from "../lib/pageHistory";
 import {
   createRoomHistory,
   historyPortFor,
@@ -60,6 +61,30 @@ export function useBackCloses(active: boolean, onClose: () => void): void {
     if (!active || !history) return;
     return history.open(() => onCloseRef.current());
   }, [active, history]);
+}
+
+/** The page's layers on the history stack (`lib/pageHistory.ts`), made on
+first use: one per window, like the port under it. */
+let pageHistory: PageHistory | null = null;
+
+/** Let Back close this layer over a page that is not a room, as Escape does
+(R-UX-15): the drawing viewer opened from a profile.
+
+Inside a room it does nothing - the room's own history answers Back there,
+through `useBackCloses` - so a surface that can be opened in both calls both.
+Layers opened in one render take entries in the order their hooks run, so
+the outer one is called first. */
+export function usePageBackCloses(active: boolean, onClose: () => void): void {
+  const inRoom = useContext(RoomHistoryContext) !== null;
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!active || inRoom) return;
+    pageHistory ??= createPageHistory(browserPort());
+    return pageHistory.open(() => onCloseRef.current());
+  }, [active, inRoom]);
 }
 
 /** Leave the room's history the way the room is left: its entries rewound off
