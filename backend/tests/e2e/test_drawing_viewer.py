@@ -69,6 +69,13 @@ async def test_the_viewer_moves_by_keys_on_a_desktop_and_by_swipe_and_tap_on_a_p
                 await guesser.fill(".chat-input input", prompt)
                 await guesser.keyboard.press("Enter")
 
+            # Both open the drawings straight away: the game-over card moves
+            # on by itself after a few seconds, and its Drawings button with it.
+            phone_end = phone.locator('[data-testid="game-end-overlay"]')
+            await phone_end.get_by_role("button", name="Drawings", exact=True).click(timeout=12_000)
+            on_phone = phone.get_by_test_id("drawing-viewer")
+            await on_phone.locator(".drawing-viewer-slide.is-current img").wait_for()
+
             # A desktop: the arrow keys move between drawings, Escape closes.
             game_end = host.locator('[data-testid="game-end-overlay"]')
             await game_end.get_by_role("button", name="Drawings", exact=True).click(timeout=12_000)
@@ -82,20 +89,17 @@ async def test_the_viewer_moves_by_keys_on_a_desktop_and_by_swipe_and_tap_on_a_p
             await expect(viewer).to_have_count(0)
 
             # A phone: no arrows over the drawing until it is tapped.
-            phone_end = phone.locator('[data-testid="game-end-overlay"]')
-            await phone_end.get_by_role("button", name="Drawings", exact=True).click(timeout=12_000)
-            on_phone = phone.get_by_test_id("drawing-viewer")
-            await on_phone.locator(".drawing-viewer-slide.is-current img").wait_for()
             arrows = on_phone.locator(".drawing-viewer-arrow")
             await expect(arrows).to_have_count(0)
             frame = await on_phone.locator(".drawing-viewer-frame").bounding_box()
             middle = (frame["x"] + frame["width"] / 2, frame["y"] + frame["height"] / 2)
             await phone.mouse.click(*middle)
             await expect(arrows).to_have_count(2)
-            # A second tap, well after the first, hides them again.
+            # A second tap, well after the first, hides them again - and well
+            # before they would hide by themselves three seconds on.
             await phone.wait_for_timeout(400)
             await phone.mouse.click(*middle)
-            await expect(arrows).to_have_count(0)
+            await expect(arrows).to_have_count(0, timeout=1_500)
 
             # A swipe to the left brings up the next drawing.
             await expect(on_phone.get_by_role("heading", name=prompts[0])).to_be_visible()

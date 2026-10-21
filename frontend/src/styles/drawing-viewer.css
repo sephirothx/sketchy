@@ -45,8 +45,10 @@
   --viewer-scrim-solid: #020617;
 }
 
+/* Fixed rather than absolute: the viewer scrolls on a screen too short for
+   it, and the scrim has to stay over the whole page while it does. */
 .drawing-viewer-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: var(--viewer-scrim);
   transition: opacity var(--dur) ease;
@@ -635,6 +637,7 @@
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto;
     align-content: center;
+    align-content: safe center;
     column-gap: 16px;
   }
 

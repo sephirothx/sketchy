@@ -619,6 +619,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           entries={drawingRecap}
           initialIndex={recapIndex}
           onClose={closeRecap}
+          onIndexChange={setRecapIndex}
           loadEntry={loadRecapDrawing}
           renderReactions={(entry) => (
             <ConnectedDrawingReactionControl

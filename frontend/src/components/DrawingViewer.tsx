@@ -89,6 +89,9 @@ interface DrawingViewerProps {
   /** The controls beside Save image - Share and Pin (#440, #1430). A prop for
       the same reason `renderReactions` is. */
   renderActions?: (entry: DrawingRecapMetadata) => ReactNode;
+  /** Told the drawing on screen as it changes, so a viewer opened again -
+      after the room's connection came back, say - opens where it was left. */
+  onIndexChange?: (index: number) => void;
 }
 
 interface Slide {
@@ -152,6 +155,7 @@ export function DrawingViewer({
   initialIndex = 0,
   renderReactions,
   renderActions,
+  onIndexChange,
 }: DrawingViewerProps) {
   const total = entries.length;
   const phone = useMediaQuery(PHONE_ROOM_QUERY);
@@ -218,7 +222,10 @@ export function DrawingViewer({
   const [ready, setReady] = useState<ReadonlyMap<string, string>>(() => new Map());
   const drawing = useRef(new Map<string, Promise<string>>());
   const keep = useRef(new Set<string>());
-  const closed = useRef(new AbortController());
+  // Aborted when the viewer closes. Made by the mount rather than once per
+  // instance: StrictMode mounts, unmounts and mounts again, and a controller
+  // the first unmount aborted would refuse every drawing after it.
+  const closed = useRef<AbortController | null>(null);
   const drawImage = useCallback((target: DrawingRecapMetadata): Promise<string> => {
     const key = entryKey(target);
     const hit = images.current.get(key);
@@ -229,13 +236,13 @@ export function DrawingViewer({
     }
     let pending = drawing.current.get(key);
     if (!pending) {
-      const signal = closed.current.signal;
+      const signal = closed.current?.signal;
       pending = loadBytes(target)
         .then((loaded) => drawThumbnail(loaded, CANVAS_WIDTH, signal))
         .then((image) => {
           if (!image) throw new Error(ui.drawingRecapGallery.thisDrawingCouldNotBeDecoded);
           const url = URL.createObjectURL(new Blob([image.png as BlobPart], { type: "image/png" }));
-          if (signal.aborted) {
+          if (signal?.aborted) {
             URL.revokeObjectURL(url);
             return url;
           }
@@ -256,14 +263,22 @@ export function DrawingViewer({
   }, [loadBytes]);
 
   useEffect(() => {
-    const abort = closed.current;
+    const abort = new AbortController();
+    closed.current = abort;
     const pictures = images.current;
+    const pending = drawing.current;
     const timers = { slide: slideTimer, tap: tapTimer, arrows: arrowsTimer };
     const pendingFrames = frames.current;
     return () => {
       abort.abort();
+      // The slides draw before this effect runs on a remount; they must not
+      // pick up the controller just aborted.
+      if (closed.current === abort) closed.current = null;
       pictures.forEach((url) => URL.revokeObjectURL(url));
       pictures.clear();
+      // A draw started under this mount is not one a later mount may reuse.
+      pending.clear();
+      setReady(new Map());
       Object.values(timers).forEach((timer) => {
         if (timer.current !== null) window.clearTimeout(timer.current);
       });
@@ -304,6 +319,11 @@ export function DrawingViewer({
     setZoom(null);
     setDragging(false);
     setStripStart((start) => stripStartAfterMove(start, to, DESKTOP_STRIP_SIZE));
+    // A move is already waiting for a slide to settle: this one replaces it.
+    if (queued.current !== null) {
+      queued.current = to;
+      return;
+    }
     if (slide) {
       // Settle the running slide where it was going, then move on from there.
       queued.current = to;
@@ -403,18 +423,28 @@ export function DrawingViewer({
   }, [phone, shown, overviewOpen, reducedMotion]);
 
   // The drawings a swipe is about to reach are drawn before it gets there,
-  // and kept while they are this close.
-  useEffect(() => {
-    const near: DrawingRecapMetadata[] = [];
+  // and kept while they are this close - marked as kept in the commit that
+  // mounts their slots, before a draw finishing could evict them.
+  const near = useMemo(() => {
+    const found: DrawingRecapMetadata[] = [];
     for (let step = -PREPARED_EITHER_SIDE; step <= PREPARED_EITHER_SIDE; step += 1) {
       for (const at of [current + step, shown + step]) {
         const target = entries[at];
-        if (target && target.available !== false) near.push(target);
+        if (target && target.available !== false) found.push(target);
       }
     }
+    return found;
+  }, [current, entries, shown]);
+  useLayoutEffect(() => {
     keep.current = new Set(near.map(entryKey));
+  }, [near]);
+  useEffect(() => {
     near.forEach((target) => drawImage(target).catch(() => undefined));
-  }, [current, drawImage, entries, shown]);
+  }, [drawImage, near]);
+
+  useEffect(() => {
+    onIndexChange?.(shown);
+  }, [onIndexChange, shown]);
 
   const showArrowsForAWhile = useCallback(() => {
     if (arrowsTimer.current !== null) window.clearTimeout(arrowsTimer.current);
@@ -955,9 +985,10 @@ const ViewerSlide = memo(function ViewerSlide({
     return () => {
       live = false;
     };
-    // Keyed by its drawing, so `target` only changes with `attempt`.
+    // Keyed by its drawing, so `target` only changes with `attempt`; a
+    // picture let go while the slot shows it is drawn again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt, unavailable]);
+  }, [attempt, unavailable, src]);
 
   const className = `drawing-viewer-slide${current ? " is-current" : ""}`;
   const hidden = current ? undefined : true;

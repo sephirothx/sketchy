@@ -198,7 +198,7 @@ function SharePill({
   // The word shown beside the icon starts its name, so a voice command that
   // reads the button's word finds it (WCAG 2.5.3); the rest follows it.
   const word = offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share;
-  const name = labelled ? `${word}\n${inert ? action : said ?? action}` : label;
+  const name = labelled ? (inert ? `${word}\n${action}` : said ? `${word}\n${said}` : word) : label;
   return (
     <button
       type="button"
