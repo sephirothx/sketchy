@@ -20,7 +20,9 @@ interface PinControlProps {
 }
 
 /**
- * The Pin / Pinned toggle beside a drawing (#440), offered only where
+ * The pin toggle beside a drawing (#440), in the viewer and in the game
+ * history's rows: its icon alone, its name in the label and the tooltip.
+ * Offered only where
  * pressing it can work (R-PIN-09): a registered player, in a public game,
  * looking at a drawing that was kept. Everyone else sees nothing - the
  * reaction control beside it already tells a guest about accounts, and a
@@ -54,8 +56,7 @@ export function PinControl({ pinned, eligibility, disabled = false, onToggle }: 
       data-testid="pin-toggle"
       onClick={() => void toggle()}
     >
-      <PinIcon size={14} />
-      {pinned ? ui.pinControl.pinned : ui.pinControl.pin}
+      <PinIcon size={18} />
     </button>
   );
 }

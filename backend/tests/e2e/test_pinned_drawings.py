@@ -159,6 +159,20 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(1)
             await table_toggles.nth(1).click()
             await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(2)
+
+            # Take out of Solo is on the drawer's own row, one of the two
+            # (R-SOLO-17), and works from there; the viewer, whose buttons are
+            # icons alone, does not offer it (#1497).
+            solo = lobby.locator('.profile-turns [data-testid="solo-take-out"]')
+            await expect(solo).to_have_count(1)
+            before = await solo.inner_text()
+            await solo.click()
+            await expect(solo).not_to_have_text(before)
+            await lobby.locator(".profile-drawing-button").first.click()
+            viewer = lobby.get_by_test_id("drawing-viewer")
+            await viewer.wait_for()
+            await expect(viewer.locator('[data-testid="pin-toggle"]')).to_have_count(1)
+            await expect(viewer.locator('[data-testid="solo-take-out"]')).to_have_count(0)
         finally:
             await host_context.close()
             await other_context.close()

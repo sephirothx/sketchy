@@ -953,8 +953,6 @@ export const DE: Catalogue = {
   },
 
   pinControl: {
-    pin: "Anheften",
-    pinned: "Angeheftet",
     pinThisDrawing: "Diese Zeichnung an dein Profil heften und in der Galerie zeigen",
     unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
     thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",

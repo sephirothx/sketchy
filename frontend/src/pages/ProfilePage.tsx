@@ -461,7 +461,8 @@ function GameRow({
               />
             );
             // Solo serves a public game's drawings to strangers (#1434): the
-            // drawer may take one out, or put it back.
+            // drawer may take one out, or put it back, from its row here
+            // (R-SOLO-17) - not the viewer, whose buttons are icons alone.
             const soloControlFor = (turn: GameTurn) =>
               isMine(turn) && game.visibility === "public" && turn.drawingStatus === "ready" ? (
                 <button
@@ -553,7 +554,6 @@ function GameRow({
                   <>
                     {shareControlFor(detail.turns[entry.index])}
                     {pinControlFor(detail.turns[entry.index])}
-                    {soloControlFor(detail.turns[entry.index])}
                   </>
                 )}
               />
@@ -593,6 +593,7 @@ function GameRow({
                             {ui.profilePage.view}
                           </button>
                           {pinControlFor(turn)}
+                          {soloControlFor(turn)}
                         </span>
                       ) : (
                         <span className="profile-note">{drawingNote(turn)}</span>
