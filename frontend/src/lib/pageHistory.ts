@@ -128,9 +128,11 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   // Where our last take-back left the page: the entries above it are dead
   // ends rather than leftovers, with nothing after them to step on to.
   let takenBack: { path: string; index: number } | null = null;
-  // The top entry we pushed. An entry adopted rather than pushed - after a
-  // reload, a leftover still under an opening layer - may have a page after
-  // it, so taking it back leaves no dead end.
+  // The top entry we pushed, while nothing is known to follow it. An entry
+  // adopted rather than pushed - after a reload, a leftover still under an
+  // opening layer - may have a page after it, and so may one the player came
+  // Back to from an overlay route pushed over the open viewer: taking either
+  // back leaves no dead end.
   let pushedTop: number | null = null;
   let unlisten: (() => void) | null = null;
   let scheduled = false;
@@ -200,6 +202,10 @@ export function createPageHistory(port: HistoryPort): PageHistory {
         schedule();
         break;
       case "none":
+        // Back on to the open layers from something that is not ours - an
+        // overlay route, Friends or Settings, pushed over the viewer, which
+        // stays mounted under it. That entry is still there to go Forward to.
+        pushedTop = null;
         break;
     }
   }

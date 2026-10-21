@@ -239,6 +239,27 @@ test("Forward passes a leftover block two layers deep", async () => {
   assert.equal(win.location.pathname, "/gallery");
 });
 
+test("an overlay pushed over an open layer is still reached by Forward after it closes", async () => {
+  const { win, page } = setup();
+  const release = page.open(() => {});
+  await win.settle();
+  // Friends opened over the viewer: the router pushes, the viewer stays.
+  win.navigate("/friends");
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.location.pathname, PROFILE);
+  assert.equal(win.depth(), 1, "Back from the overlay lands on the open viewer");
+
+  // Closed by its button, the viewer's entry is taken back - and Forward
+  // passes it to Friends instead of bouncing off it as a dead end.
+  release();
+  await win.settle();
+  assert.equal(win.index, 0);
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/friends");
+});
+
 test("a leftover adopted after a reload is not a dead end once taken back", async () => {
   // Reloaded on a leftover entry: the viewer was open on the profile when
   // something went on to /gallery, and Back came here with nothing listening.
