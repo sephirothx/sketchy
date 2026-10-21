@@ -281,6 +281,29 @@ test("Back two at once from an overlay over viewer and overview still leaves For
   assert.equal(win.location.pathname, "/friends");
 });
 
+test("an overlay pushed from below the top layer still leaves Forward to it", async () => {
+  const { win, page } = setup();
+  const releaseViewer = page.open(() => {});
+  page.open(() => {});
+  await win.settle();
+  // Back closes the overview; Friends then replaces its entry, length unchanged.
+  win.press(-1);
+  await win.settle();
+  win.navigate("/friends");
+  page.followed();
+  // Two back at once, past the viewer's entry to the page: it closes.
+  win.press(-2);
+  await win.settle();
+  releaseViewer();
+  await win.settle();
+  assert.equal(win.index, 0);
+  win.press(1);
+  await win.settle();
+  win.press(1);
+  await win.settle();
+  assert.equal(win.location.pathname, "/friends");
+});
+
 test("a layer closed by Back is a dead end for Forward, not a step off the end", async () => {
   const { win, page } = setup();
   page.open(() => {});

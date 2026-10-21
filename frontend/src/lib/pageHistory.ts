@@ -117,6 +117,10 @@ export interface PageHistory {
   /** A layer opened. Back closes it through `dismiss`. The returned release is
   for when it closes any other way, and does nothing once Back has closed it. */
   open(dismiss: () => void): () => void;
+  /** The router pushed over the open layers - an overlay route, Friends or
+  Settings - so their entries have a way on after them, whatever the history's
+  length says: a push from below the top replaces as many entries as it adds. */
+  followed(): void;
 }
 
 export function createPageHistory(port: HistoryPort): PageHistory {
@@ -219,6 +223,9 @@ export function createPageHistory(port: HistoryPort): PageHistory {
   }
 
   return {
+    followed() {
+      pushed = null;
+    },
     open(dismiss) {
       if (layers.length === 0) path = port.pathname();
       unlisten ??= port.listen(onSettle);

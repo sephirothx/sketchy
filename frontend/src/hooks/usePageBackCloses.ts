@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { createPageHistory, type PageHistory } from "../lib/pageHistory";
 import { historyPortFor } from "../lib/roomHistory";
+import { useOverlayOpen } from "./useOverlayRoute";
 import { useInRoomHistory } from "./useRoomHistory";
 
 /* Apart from `useRoomHistory.ts`, which every page loads: this half rides
@@ -20,6 +21,7 @@ Layers opened in one render take entries in the order their hooks run, so
 the outer one is called first. */
 export function usePageBackCloses(active: boolean, onClose: () => void): void {
   const inRoom = useInRoomHistory();
+  const overlayOpen = useOverlayOpen();
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -29,4 +31,9 @@ export function usePageBackCloses(active: boolean, onClose: () => void): void {
     pageHistory ??= createPageHistory(historyPortFor(window));
     return pageHistory.open(() => onCloseRef.current());
   }, [active, inRoom]);
+  // An overlay route opened over the layer: an entry of the router's after
+  // theirs, which Forward has to reach once they close.
+  useEffect(() => {
+    if (active && overlayOpen && !inRoom) pageHistory?.followed();
+  }, [active, overlayOpen, inRoom]);
 }
