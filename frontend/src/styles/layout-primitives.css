@@ -37,7 +37,11 @@
    overlay   Screens laid over a page: Settings, Friends, and a phone room's
              game over and turn recap. A route overlay comes later in the DOM,
              so the one the player opened lands over the one the game did.
-   sheet     Bottom sheets: the room's drawers (a centred dialog on a desktop).
+   sheet     Bottom sheets: the room's drawers (a centred dialog on a desktop),
+             and the drawing viewer. Portaled last into <body>, the viewer
+             covers a drawer on a tie; under the dialogs, a page's own dialog
+             opened over it - the account form a guest's reaction asks for -
+             is not painted behind it.
    modal     Dialogs. Over sheets because they are opened from them - report a
              player from the players drawer. A dialog opened from a dialog is
              nested in it or portaled after it, so the DOM puts it on top.

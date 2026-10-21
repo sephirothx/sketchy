@@ -78,7 +78,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             # answered "still being saved"; the control stays and a second
             # press is the retry the toast asks for.
             await game_end.get_by_role("button", name="Drawings", exact=True).click()
-            await host.locator(".drawing-recap").wait_for()
+            await host.get_by_test_id("drawing-viewer").wait_for()
             toggle = host.locator('[data-testid="pin-toggle"]')
             await expect(toggle).to_have_attribute("aria-pressed", "false")
             for _ in range(20):
@@ -89,7 +89,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
                 except AssertionError:
                     continue
             await expect(toggle).to_have_attribute("aria-pressed", "true")
-            first_prompt = (await host.locator("#drawing-recap-title").inner_text()).strip()
+            first_prompt = (await host.locator("#drawing-viewer-title").inner_text()).strip()
 
             # The owner's shelf shows it, in a lobby tab of the same account.
             lobby = await host_context.new_page()
@@ -118,7 +118,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await register_account(stranger, "pinstranger")
             await stranger.goto(f"{BASE_URL}/profile/{host_id}")
             await stranger.locator('[data-testid="pinned-drawings"] .profile-shelf-open').first.click()
-            await stranger.locator(".drawing-recap").wait_for()
+            await stranger.get_by_test_id("drawing-viewer").wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
             await expect(
@@ -127,7 +127,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
                 )
             ).to_have_text("1")
             await stranger.keyboard.press("Escape")
-            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
+            await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
             await expect(
                 stranger.locator('[data-testid="pinned-drawings"] .reaction-chip .reaction-count').first
             ).to_have_text("1")
@@ -159,6 +159,40 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(1)
             await table_toggles.nth(1).click()
             await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(2)
+
+            # Take out of Solo is on the drawer's own row, one of the two
+            # (R-SOLO-17), and works from there; the viewer, whose buttons are
+            # icons alone, does not offer it (#1497).
+            solo = lobby.locator('.profile-turns [data-testid="solo-take-out"]')
+            await expect(solo).to_have_count(1)
+            before = await solo.inner_text()
+            await solo.click()
+            await expect(solo).not_to_have_text(before)
+            await lobby.locator(".profile-drawing-button").first.click()
+            viewer = lobby.get_by_test_id("drawing-viewer")
+            await viewer.wait_for()
+            await expect(viewer.locator('[data-testid="pin-toggle"]')).to_have_count(1)
+            await expect(viewer.locator('[data-testid="solo-take-out"]')).to_have_count(0)
+
+            # Friends opened over the open viewer - as a friend-request toast's
+            # Open does - is a screen of its own: the viewer steps aside rather
+            # than covering it and taking its clicks, and is back on the same
+            # drawing when Friends closes (#1497). The header is under the
+            # viewer, so its menu is driven the way the toast drives the route.
+            shown = await viewer.locator('.drawing-viewer-thumb[aria-current="true"]').get_attribute("aria-label")
+            await lobby.evaluate("() => document.querySelector('.identity-chip').click()")
+            await lobby.evaluate(
+                "() => [...document.querySelectorAll('[role=menuitem]')]"
+                ".find((item) => item.textContent.trim().startsWith('Friends')).click()"
+            )
+            await lobby.wait_for_url("**/friends")
+            friends = lobby.get_by_test_id("friends")
+            await friends.wait_for()
+            await expect(viewer).to_be_hidden()
+            await friends.locator(".modal-close").click(timeout=5_000)
+            await lobby.wait_for_url("**/profile")
+            await expect(viewer).to_be_visible()
+            await expect(viewer.locator('.drawing-viewer-thumb[aria-current="true"]')).to_have_attribute("aria-label", shown)
         finally:
             await host_context.close()
             await other_context.close()

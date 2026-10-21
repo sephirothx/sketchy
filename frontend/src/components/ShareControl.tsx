@@ -17,8 +17,10 @@ interface ShareControlProps {
   /** Not yet, though offered: the state it would act on is still loading. */
   disabled?: boolean;
   /** `pill` sits beside the reaction control in the turn results, in its
-      look, with the credit in its tooltip instead of a line beside it. */
-  look?: "button" | "pill";
+      look, with the credit in its tooltip instead of a line beside it.
+      `viewer` is the same pill as an icon alone, at the size of the drawing
+      viewer's other buttons, named by its short word first (#1497). */
+  look?: "button" | "pill" | "viewer";
 }
 
 /**
@@ -85,7 +87,19 @@ export function ShareControl({
     />
   );
 
-  if (look === "pill") {
+  if (look === "pill" || look === "viewer") {
+    // Nothing to press, but the drawing is in the gallery: the viewer still
+    // says so, as the button look's credit line did (R-SHARE-07).
+    if (offer === "hidden" && look === "viewer" && credit.kind !== "none") {
+      const said = creditText(credit) ?? ui.shareControl.inTheGallery;
+      return (
+        <span className="reaction-toggle share-pill is-inert" role="img" aria-label={said} title={said}>
+          <span className="share-pill-icon">
+            <ImageIcon size={18} />
+          </span>
+        </span>
+      );
+    }
     if (offer === "hidden") return null;
     return (
       <>
@@ -93,6 +107,7 @@ export function ShareControl({
           offer={offer}
           credit={credit}
           busy={busy || disabled}
+          inViewer={look === "viewer"}
           onPress={(shared) => choose(shared, offer === "takeOut")}
         />
         {confirmation}
@@ -154,11 +169,14 @@ function SharePill({
   offer,
   credit,
   busy,
+  inViewer = false,
   onPress,
 }: {
   offer: Exclude<ShareOffer, "hidden">;
   credit: ShareCredit;
   busy: boolean;
+  /** The viewer's button: the icon at its size, named by the short word. */
+  inViewer?: boolean;
   onPress: (shared: boolean) => void;
 }) {
   const pressed = offer === "unshare" || offer === "takeOut";
@@ -173,13 +191,17 @@ function SharePill({
           : ui.shareControl.theDrawerKeptItOut;
   const said = creditText(credit);
   const label = said && !inert ? `${said}\n${action}` : action;
+  // In the viewer its short word starts its name, so a voice command that
+  // says the button's word - "Share" - finds it; the rest follows it.
+  const word = offer === "unshare" ? ui.shareControl.shared : offer === "takeOut" ? ui.shareControl.takeOut : ui.shareControl.share;
+  const name = inViewer ? (inert ? `${word}\n${action}` : said ? `${word}\n${said}` : word) : label;
   return (
     <button
       type="button"
       className={`reaction-toggle share-pill${pressed ? " has-mine" : ""}${inert ? " is-inert" : ""}`}
       aria-pressed={inert ? undefined : pressed}
       aria-disabled={inert || busy || undefined}
-      aria-label={label}
+      aria-label={name}
       title={label}
       data-testid={offer === "takeOut" ? "share-take-out" : inert ? "share-withdrawn" : "share-toggle"}
       onClick={() => {
@@ -188,7 +210,7 @@ function SharePill({
       }}
     >
       <span className="share-pill-icon">
-        <ImageIcon size={15} />
+        <ImageIcon size={inViewer ? 18 : 15} />
       </span>
     </button>
   );

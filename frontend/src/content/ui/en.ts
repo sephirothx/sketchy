@@ -969,8 +969,6 @@ export const EN = {
   },
 
   pinControl: {
-    pin: "Pin",
-    pinned: "Pinned",
     pinThisDrawing: "Pin this drawing to your profile and share it to the gallery",
     unpinThisDrawing: "Unpin this drawing from your profile",
     thatDrawingCouldNotBePinned: "That drawing could not be pinned.",
@@ -998,7 +996,7 @@ export const EN = {
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Drawing of ${p.prompt} by ${p.drawer}`,
-    drawnBy: "Drawn by {drawer} · Round {round} · Turn {turn}",
+    drawnBy: "Drawn by {drawer}",
     position: (p: { position: number; total: number }) => `${p.position} of ${p.total}`,
     thisDrawingCouldNotBeDecoded: "This drawing could not be decoded.",
     drawingRecap: "Drawing recap",
@@ -1014,6 +1012,14 @@ export const EN = {
     previous: "Previous",
     next: "Next",
     loadThisDrawing: "load this drawing",
+    earlierDrawings: "Earlier drawings",
+    laterDrawings: "Later drawings",
+    allDrawings: (p: { count: number }) => `All ${p.count} drawings`,
+    backToDrawing: "Back to the drawing",
+    round: (p: { round: number }) => `Round ${p.round}`,
+    notKept: "Not kept",
+    removed: "Removed",
+    notAvailable: "Not available",
   },
 
   emailRecoveryReminder: {

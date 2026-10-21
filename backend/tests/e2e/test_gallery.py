@@ -66,16 +66,19 @@ async def share_from_recap(page: Page, recap: Locator) -> None:
     """Share the recap's current drawing. The history write lands just before
     the recap is offered, so the first press may be answered "still being
     saved"; the control stays, and another press is the retry it asks for.
-    Read before every press: a share that landed turns the button into the
-    one that takes it back."""
-    credit = recap.locator('[data-testid="share-credit"]')
+    Read before every press: a share that landed presses the pill, and turns
+    the drawer's own into the one that takes it out (#1497)."""
     toggle = recap.locator('[data-testid="share-toggle"]')
+    shared = recap.locator(
+        '[data-testid="share-take-out"], [data-testid="share-toggle"][aria-pressed="true"]'
+    )
     for _ in range(20):
-        if await credit.count() and (await credit.inner_text()).strip() == SHARED_BY_YOU:
+        if await shared.count():
+            await expect(shared).to_have_attribute("aria-label", re.compile(SHARED_BY_YOU))
             return
         await toggle.click()
         await page.wait_for_timeout(1_000)
-    await expect(credit).to_have_text(SHARED_BY_YOU)
+    await expect(shared).to_have_count(1)
 
 
 SHARED_BY_YOU = "In the gallery · shared by you"
@@ -260,7 +263,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             # other player's, without asking (R-SHARE-02). The other player is
             # in the room watching, so nothing lands in their inbox (R-SHARE-09).
             await game_end.get_by_role("button", name="Drawings", exact=True).click()
-            recap = host.locator(".drawing-recap")
+            recap = host.get_by_test_id("drawing-viewer")
             await recap.wait_for()
             for index in range(2):
                 await share_from_recap(host, recap)

@@ -953,8 +953,6 @@ export const DE: Catalogue = {
   },
 
   pinControl: {
-    pin: "Anheften",
-    pinned: "Angeheftet",
     pinThisDrawing: "Diese Zeichnung an dein Profil heften und in der Galerie zeigen",
     unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
     thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",
@@ -982,7 +980,7 @@ export const DE: Catalogue = {
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Zeichnung von ${p.prompt} von ${p.drawer}`,
-    drawnBy: "Gezeichnet von {drawer} · Runde {round} · Zug {turn}",
+    drawnBy: "Gezeichnet von {drawer}",
     position: (p: { position: number; total: number }) => `${p.position} von ${p.total}`,
     thisDrawingCouldNotBeDecoded: "Diese Zeichnung konnte nicht dekodiert werden.",
     drawingRecap: "Zeichnungsrückblick",
@@ -998,6 +996,14 @@ export const DE: Catalogue = {
     previous: "Zurück",
     next: "Weiter",
     loadThisDrawing: "diese Zeichnung laden",
+    earlierDrawings: "Frühere Zeichnungen",
+    laterDrawings: "Spätere Zeichnungen",
+    allDrawings: (p: { count: number }) => `Alle ${p.count} Zeichnungen`,
+    backToDrawing: "Zurück zur Zeichnung",
+    round: (p: { round: number }) => `Runde ${p.round}`,
+    notKept: "Nicht aufbewahrt",
+    removed: "Entfernt",
+    notAvailable: "Nicht verfügbar",
   },
 
   emailRecoveryReminder: {

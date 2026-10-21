@@ -57,6 +57,13 @@ keyboard that takes half the screen, and one thumb.
   the game over screen or from the waiting room afterwards. Derived from guess counts,
   timings and reactions rather than points, so the same five appear in a no-scoring game,
   and each is dropped when the game gives it nothing to say.
+- Drawing viewer — the recap, game history and the pinned shelf open a finished game's
+  drawings in one viewer over the page: the prompt above the drawing, Pin, Share and Save
+  image as icons and the reaction on its lower corners (under it on a phone), and a strip of
+  thumbnails below - eight at a time on a desktop, a scrolling row on a phone - with an
+  overview of the whole game above 24 drawings. Swipe, the arrows or the arrow keys move
+  between drawings with a slide that finishes; on a phone a tap shows the arrows, a
+  downward drag closes, and a double tap zooms.
 - Reactions to drawings — a registered player leaves one emoji from a fixed positive set
   (❤️ 😂 😮 🔥) on a drawing, from a small button in the corner of the canvas while it is
   being drawn, at turn results, in the recap, or later from game history. Changeable and
@@ -75,7 +82,7 @@ keyboard that takes half the screen, and one thumb.
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
   owner moves a drawing left or right and unpins it there, and anyone opens one in
-  the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
+  the drawing viewer. **Pin** sits beside a kept drawing on the game-over recap and in the
   profile's game history, for a registered player who may share it.
 - **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, in all eight interface
   languages: what is kept, why and for how long, who

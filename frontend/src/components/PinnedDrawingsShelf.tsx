@@ -2,7 +2,7 @@ import { useState } from "react";
 import { EmptyState } from "./ui/EmptyState";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
-import { DrawingRecapGallery } from "./DrawingRecapGallery";
+import { DrawingViewer } from "./DrawingViewer";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
@@ -158,7 +158,7 @@ export function PinnedDrawingsShelf({
         ))}
       </ul>
       {openIndex !== null && (
-        <DrawingRecapGallery
+        <DrawingViewer
           entries={pinsAsRecapEntries(pins)}
           initialIndex={openIndex}
           onClose={() => setOpenIndex(null)}

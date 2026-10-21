@@ -93,6 +93,9 @@ test("the stacking bugs stay fixed", () => {
     ["dialogs.css", ".modal-overlay.suspension-overlay", "blocking"],
     ["dialogs.css", ".modal-overlay.afk-check-overlay", "blocking"],
     ["overlays.css", ".bottom-sheet-scrim", "sheet"],
+    // Under the dialogs, so the account form a reaction opens on a profile is
+    // not painted over (#1502 review).
+    ["drawing-viewer.css", ".drawing-viewer", "sheet"],
     ["settings.css", ".settings-overlay", "overlay"],
     ["friends.css", ".friends-overlay", "overlay"],
     ["lobby-page.css", ".friend-invite-notice", "notice"],
@@ -254,7 +257,7 @@ test("every media query width and height is one of the breakpoints", () => {
 const ROOM_LAYOUT = readFileSync(join(SRC, "lib", "roomLayout.ts"), "utf8");
 const ROOM_QUERY = /PHONE_ROOM_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
 const LANDSCAPE_QUERY = /PHONE_LANDSCAPE_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
-const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-recap.css"];
+const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-viewer.css"];
 const ROOM_COMPONENTS = [
   "ActiveGameRoom.tsx",
   "GameHeaderStatus.tsx",

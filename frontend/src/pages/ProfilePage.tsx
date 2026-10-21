@@ -11,7 +11,7 @@ import { formatDate } from "../lib/clock";
 import { statisticsLayout, type TurnStat } from "../lib/profileStats";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
-import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
+import { DrawingViewer } from "../components/DrawingViewer";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
 import { PinControl } from "../components/PinControl";
 import { ShareControl } from "../components/ShareControl";
@@ -457,10 +457,12 @@ function GameRow({
                   inGallery: turn.inGallery,
                 })}
                 onShare={(shared) => shareTurn(turn.id, shared)}
+                look="viewer"
               />
             );
             // Solo serves a public game's drawings to strangers (#1434): the
-            // drawer may take one out, or put it back.
+            // drawer may take one out, or put it back, from its row here
+            // (R-SOLO-17) - not the viewer, whose buttons are icons alone.
             const soloControlFor = (turn: GameTurn) =>
               isMine(turn) && game.visibility === "public" && turn.drawingStatus === "ready" ? (
                 <button
@@ -523,7 +525,7 @@ function GameRow({
             return (
             <>
             {viewingIndex !== null && (
-              <DrawingRecapGallery
+              <DrawingViewer
                 entries={viewerEntries}
                 initialIndex={viewingIndex}
                 onClose={() => setViewingIndex(null)}
@@ -552,7 +554,6 @@ function GameRow({
                   <>
                     {shareControlFor(detail.turns[entry.index])}
                     {pinControlFor(detail.turns[entry.index])}
-                    {soloControlFor(detail.turns[entry.index])}
                   </>
                 )}
               />
@@ -592,6 +593,7 @@ function GameRow({
                             {ui.profilePage.view}
                           </button>
                           {pinControlFor(turn)}
+                          {soloControlFor(turn)}
                         </span>
                       ) : (
                         <span className="profile-note">{drawingNote(turn)}</span>

@@ -1,0 +1,679 @@
+/* The drawing viewer (#1497, components/DrawingViewer.tsx): one dialog for the
+   Recap, game history and the pinned shelf.
+
+   It is laid over the page on a dark scrim in both themes, so the arrows, the
+   thumbnail strip and the overview button - which sit on the scrim - take light
+   colours of their own rather than the theme's ink. The card holds the prompt
+   and the drawing. The drawing's sheet is white in both themes, as the canvas
+   is, so what sits on it is light in both too: the reaction pill's own look,
+   rgba(255, 255, 255, 0.9) with #3a3a40, which is already what sits on a
+   canvas everywhere else. Those colours are the same in both themes and are
+   written as they are rather than as theme tokens. */
+
+.drawing-viewer {
+  --viewer-scrim: rgba(23, 20, 15, 0.86);
+  /* The scrim as a solid colour: the gap in the ring round the current
+     thumbnail, which has to read as the scrim showing through. */
+  --viewer-scrim-solid: #17140f;
+  /* How wide the card may be: no wider than the design's 760px, narrow enough
+     to leave the arrows their place beside it, and short enough that the card,
+     the strip and the overview button fit the height without a scroll. */
+  --viewer-card-width: min(760px, calc(100vw - 232px), calc((100vh - 300px) * 4 / 3 + 42px));
+  --viewer-card-width: min(760px, calc(100vw - 232px), calc((100dvh - 300px) * 4 / 3 + 42px));
+
+  position: fixed;
+  inset: 0;
+  /* A layer under the dialogs, not one of them: a dialog the page opens over
+     the viewer - the account form a guest's reaction asks for on a profile -
+     lives in the app root, which the viewer, portaled after it, would paint
+     over on a tie. Last in <body>, it still covers the room's sheets. */
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Centred while it fits; from the top, scrolling, when it does not - a
+     short phone with a two-line prompt - so the close is never pushed off
+     above the screen. */
+  justify-content: safe center;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  color: var(--ink);
+  overscroll-behavior: contain;
+}
+
+/* Out of the way of Friends or Settings opened over the page. */
+.drawing-viewer[hidden] {
+  display: none;
+}
+
+[data-theme="dark"] .drawing-viewer {
+  --viewer-scrim: rgba(2, 6, 23, 0.88);
+  --viewer-scrim-solid: #020617;
+}
+
+/* Fixed rather than absolute: the viewer scrolls on a screen too short for
+   it, and the scrim has to stay over the whole page while it does. */
+.drawing-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--viewer-scrim);
+  transition: opacity var(--dur) ease;
+}
+
+.drawing-viewer > :not(.drawing-viewer-backdrop):not(.visually-hidden) {
+  position: relative;
+}
+
+.drawing-viewer-stage {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.drawing-viewer-card {
+  width: var(--viewer-card-width);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  transition: transform var(--dur) ease;
+}
+
+/* The prompt in the middle, the close on the right, and an empty column of
+   the close's width on the left, so the prompt is centred on the drawing. */
+.drawing-viewer-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawing-viewer-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+}
+
+/* A long prompt (32 characters at most) wraps to two balanced lines. */
+.drawing-viewer-title h2 {
+  display: -webkit-box;
+  max-width: 100%;
+  margin: 0;
+  margin-inline: calc(-1 * var(--ink-overhang));
+  padding-inline: var(--ink-overhang);
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.drawing-viewer-byline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.drawing-viewer-close {
+  width: 44px;
+  height: 44px;
+}
+
+.drawing-viewer-figure {
+  position: relative;
+}
+
+.drawing-viewer-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--well);
+  /* The drawing takes every gesture: the page under it does not scroll or
+     zoom, and the strip and the buttons keep their own. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drawing-viewer-track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  transform: translate3d(-33.3333%, 0, 0);
+  transition: transform var(--dur) ease;
+  will-change: transform;
+}
+
+.drawing-viewer-slide {
+  flex: 0 0 33.3333%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.drawing-viewer-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: transform var(--dur) ease;
+}
+
+.drawing-viewer-status {
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.drawing-viewer-status p {
+  margin: 0 0 10px;
+}
+
+.drawing-viewer-status-detail {
+  font-size: 0.9em;
+}
+
+.drawing-viewer-note {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-xs);
+  background: var(--well);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Previous and next: on the scrim either side of the card on a desktop. */
+.drawing-viewer-arrow {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(250, 246, 239, 0.12);
+  color: #faf6ef;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.drawing-viewer-arrow:hover:not(:disabled) {
+  background: rgba(250, 246, 239, 0.2);
+}
+
+.drawing-viewer-arrow:disabled,
+.drawing-viewer-page:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+/* Pin, Share, Save image and the reaction, on the drawing's lower corners.
+   They step aside while a drag or a zoom has the drawing. */
+.drawing-viewer-tools {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.drawing-viewer-tools > * {
+  pointer-events: auto;
+}
+
+.drawing-viewer-tools.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Every rule below is for the row's own buttons, its direct children: the
+   take-out confirmation renders inside the row too, and its Cancel and Take
+   out are buttons that must keep their own look. */
+.drawing-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawing-viewer-actions > .btn,
+.drawing-viewer-actions > .share-pill {
+  height: 40px;
+  min-width: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.9);
+  color: #3a3a40;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Pin, Share and Save image are their icons alone, each keeping its full
+   name for a screen reader and in its tooltip: one size, one ink and nothing
+   else in the button, so every icon sits at its centre (#1497). */
+.drawing-viewer-actions > .pin-control,
+.drawing-viewer-actions > .drawing-viewer-save,
+.drawing-viewer-actions > .share-pill {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+.drawing-viewer-actions > .btn svg,
+.drawing-viewer-actions > .share-pill svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The turn results' Share is grey until pressed; here it is in the ink of
+   the buttons beside it, and takes the pressed colour from its button. */
+.drawing-viewer-actions > .share-pill .share-pill-icon,
+.drawing-viewer-actions > .share-pill.has-mine .share-pill-icon {
+  color: inherit;
+}
+
+.drawing-viewer-actions > .pin-control.is-pinned,
+.drawing-viewer-actions > .share-pill.has-mine {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+[data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+[data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
+  /* On the white drawing the dark theme's translucent indigo wash would
+     show the white through; the light theme's pair reads on it. */
+  background: #eeeffb;
+  color: #3b41b5;
+}
+
+/* The reaction pill at the height of the buttons beside it. */
+.drawing-viewer-reactions {
+  --reaction-height: 40px;
+}
+
+/* The reaction control sits in the right-hand corner, so its picker opens
+   leftwards and upwards, over the drawing rather than off the card. */
+.drawing-viewer-reactions .reaction-picker {
+  top: auto;
+  right: 0;
+  bottom: calc(var(--reaction-height) + 8px);
+  left: auto;
+}
+
+/* The phone's arrows: on the drawing, and only after a tap, so they cover
+   nothing while it is being looked at. */
+.drawing-viewer-arrow.is-on-drawing {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  color: #3a3a40;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+}
+
+.drawing-viewer-arrow.is-previous {
+  left: 8px;
+}
+
+.drawing-viewer-arrow.is-next {
+  right: 8px;
+}
+
+/* The strip: every drawing in one tap. */
+.drawing-viewer-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+}
+
+.drawing-viewer-thumbs {
+  display: flex;
+  gap: 10px;
+  padding: 6px;
+}
+
+.drawing-viewer-thumb {
+  flex: 0 0 auto;
+  width: 80px;
+  height: 60px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: #ffffff;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.drawing-viewer-thumb:hover,
+.drawing-viewer-thumb:focus-visible {
+  opacity: 0.85;
+}
+
+.drawing-viewer-thumb[aria-current="true"] {
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--viewer-scrim-solid), 0 0 0 6px #faf6ef;
+}
+
+.drawing-viewer-thumb-image,
+.drawing-viewer-thumb .canvas-wrapper,
+.drawing-viewer-thumb .canvas-stack {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.drawing-viewer-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.drawing-viewer-thumb-note {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 4px;
+  /* Opaque: the thumbnail under it is white, and the dark theme's
+     translucent track over white would leave the note unreadable. */
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.drawing-viewer-page {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(250, 246, 239, 0.12);
+  color: #faf6ef;
+  cursor: pointer;
+}
+
+.drawing-viewer-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(250, 246, 239, 0.22);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #cfc6b6;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.drawing-viewer-all:hover {
+  color: #faf6ef;
+}
+
+/* Every drawing of the game, by round, in the card's place. */
+.drawing-viewer-overview {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.drawing-viewer-overview-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drawing-viewer-overview-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.drawing-viewer-back {
+  justify-self: start;
+}
+
+.drawing-viewer-overview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.drawing-viewer-overview-round {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawing-viewer-overview-round h3 {
+  margin: 0;
+}
+
+.drawing-viewer-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.drawing-viewer-overview-grid .drawing-viewer-thumb {
+  width: auto;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  opacity: 1;
+}
+
+.drawing-viewer-overview-grid .drawing-viewer-thumb[aria-current="true"] {
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 6px var(--primary);
+}
+
+/* A phone, or a window too short for the desktop's card: the room's own rule
+   (lib/roomLayout.ts). The drawing takes the width, the controls move under
+   it, the arrows wait for a tap, and the strip scrolls. */
+@media (max-width: 900px), (max-height: 520px) {
+  .drawing-viewer {
+    --viewer-card-width: min(100%, calc((100vh - 290px) * 4 / 3 + 18px));
+    --viewer-card-width: min(100%, calc((100dvh - 290px) * 4 / 3 + 18px));
+    gap: 12px;
+    padding: 12px 8px;
+  }
+
+  .drawing-viewer-stage {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .drawing-viewer-card {
+    gap: 8px;
+    padding: 10px 8px 8px;
+  }
+
+  .drawing-viewer-title h2 {
+    font-size: 22px;
+    line-height: 1.15;
+  }
+
+  .drawing-viewer-byline {
+    font-size: 13px;
+  }
+
+  .drawing-viewer-tools {
+    position: static;
+    align-items: center;
+    margin-top: 8px;
+    pointer-events: auto;
+  }
+
+  /* Under the drawing the reaction is one of the row's buttons, on the card
+     like them rather than in the pill's on-the-drawing look. */
+  .drawing-viewer-reactions {
+    --reaction-height: 44px;
+  }
+
+  .drawing-viewer-reactions .reaction-toggle:not(.has-mine) {
+    border-color: var(--line);
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: none;
+  }
+
+  .drawing-viewer-reactions .reaction-toggle:not(.has-mine) .reaction-toggle-empty {
+    color: var(--muted);
+  }
+
+  .drawing-viewer-all {
+    height: 44px;
+  }
+
+  /* Under the drawing, on the card: round 44px buttons, icons alone - with
+     their words they wrapped to a second line beside the reaction. */
+  .drawing-viewer-actions {
+    gap: 8px;
+  }
+
+  .drawing-viewer-actions > .btn,
+  .drawing-viewer-actions > .share-pill {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-color: var(--line);
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .drawing-viewer-actions > .btn svg,
+  .drawing-viewer-actions > .share-pill svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  [data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+  [data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  .drawing-viewer-strip {
+    width: 100%;
+  }
+
+  .drawing-viewer-thumbs {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    gap: 6px;
+  }
+
+  .drawing-viewer-thumb {
+    width: 60px;
+    height: 45px;
+    scroll-snap-align: center;
+  }
+
+  .drawing-viewer-overview {
+    width: 100%;
+    height: 100%;
+  }
+
+  .drawing-viewer-overview-body {
+    padding: 10px 12px 16px;
+  }
+
+  .drawing-viewer-overview-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+/* A phone held sideways: the card on the left, sized by the height, and the
+   strip and the overview button beside it, where the width is. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 481px) {
+  .drawing-viewer {
+    --viewer-card-width: min(60vw, calc((100vh - 150px) * 4 / 3 + 18px));
+    --viewer-card-width: min(60vw, calc((100dvh - 150px) * 4 / 3 + 18px));
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    align-content: safe center;
+    column-gap: 16px;
+  }
+
+  .drawing-viewer-stage {
+    grid-row: 1 / span 2;
+    width: auto;
+  }
+
+  .drawing-viewer-strip {
+    align-self: end;
+  }
+
+  .drawing-viewer-all {
+    align-self: start;
+    justify-self: start;
+  }
+
+  .drawing-viewer-overview {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+  }
+}

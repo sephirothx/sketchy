@@ -167,7 +167,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await other.get_by_text("Most reacted drawing", exact=True).wait_for()
             await expect(other.locator(".game-highlights-value").filter(has_text="1 reaction")).to_be_visible()
             await other.get_by_role("button", name="See it").click()
-            await other.locator(".drawing-recap").wait_for()
+            await other.get_by_test_id("drawing-viewer").wait_for()
             await expect(other.get_by_role("heading", name=first_prompt)).to_be_visible()
             await expect(chip(other, "heart")).to_have_text("1")
 
@@ -179,7 +179,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await expect(chip(other, "wow")).to_have_text("1")
 
             await host.get_by_role("button", name="Drawings", exact=True).click()
-            await host.locator(".drawing-recap").wait_for()
+            await host.get_by_test_id("drawing-viewer").wait_for()
             await expect(chip(host, "wow")).to_have_text("1")
             await expect(host.locator('[data-testid="reaction-toggle"]')).to_have_count(0)
 
