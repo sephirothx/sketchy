@@ -404,7 +404,11 @@ async def test_a_missed_daily_is_played_from_the_calendar_and_then_reviewed():
     # - and far enough back to have ended everywhere and to need the
     # calendar's arrows. Its drawings were finished before it.
     day = datetime.now(timezone.utc).date() - timedelta(days=40)
-    await seed_solo_drawings(5, finished=datetime.combine(day, time(0), tzinfo=timezone.utc) - timedelta(days=1))
+    # The open dates' Dailies first, so no free run elsewhere picks one of
+    # them from these five before the past day has them.
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
+    await settle_open_dailies()
+    await seed_solo_drawings(DAILY_LENGTH, finished=datetime.combine(day, time(0), tzinfo=timezone.utc) - timedelta(days=1))
     await open_past_daily(day)
     username = f"past{uuid4().hex[:8]}"
     async with async_playwright() as playwright:
