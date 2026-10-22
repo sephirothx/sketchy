@@ -442,7 +442,7 @@ export const IT: Catalogue = {
       Rendered into `index.html` for a crawler, which arrives before any
       script, and rewritten here for the reader once their locale is known. */
   document: {
-    description: "Disegna, indovina e ridi con gli amici!",
+    tagline: "Gioco multigiocatore gratuito per disegnare e indovinare",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1688,6 +1688,7 @@ export const IT: Catalogue = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name}: ${counted(p.count, { one: "parola", other: "parole" })} da disegnare`,
     noSuchList: "Non c’è nessuna lista di parole con questo nome.",
     couldNotLoadStats: "Non è stato possibile caricare queste statistiche. Riprova.",
     showMore: (p: { count: number }) => `Mostra altri ${p.count}`,

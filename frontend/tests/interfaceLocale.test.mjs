@@ -58,7 +58,7 @@ test("setting a locale this build cannot read leaves the words in place", () => 
   assert.equal(ui.lastSeen.online, before);
 });
 
-test("the document description comes from the catalogue, like every other word", () => {
-  assert.equal(typeof catalogueFor(FALLBACK_LOCALE).document.description, "string");
-  assert.notEqual(catalogueFor(FALLBACK_LOCALE).document.description.trim(), "");
+test("the tagline comes from the catalogue, like every other word", () => {
+  assert.equal(typeof catalogueFor(FALLBACK_LOCALE).document.tagline, "string");
+  assert.notEqual(catalogueFor(FALLBACK_LOCALE).document.tagline.trim(), "");
 });

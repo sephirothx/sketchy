@@ -442,7 +442,7 @@ export const DE: Catalogue = {
       Rendered into `index.html` for a crawler, which arrives before any
       script, and rewritten here for the reader once their locale is known. */
   document: {
-    description: "Zeichnen, raten und mit Freunden lachen!",
+    tagline: "Kostenloses Online-Zeichen- und Ratespiel",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1689,6 +1689,7 @@ export const DE: Catalogue = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name}: ${counted(p.count, { one: "Begriff", other: "Begriffe" })} zum Zeichnen`,
     noSuchList: "Es gibt keine Begriffsliste mit diesem Namen.",
     couldNotLoadStats: "Diese Begriffsstatistik konnte nicht geladen werden. Bitte versuch es noch einmal.",
     showMore: (p: { count: number }) => `${p.count} weitere zeigen`,

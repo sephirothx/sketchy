@@ -449,12 +449,13 @@ export const EN = {
   refusals: REFUSALS,
   announcements: ANNOUNCEMENTS,
 
-  /** What the document itself says: the tab, and what a link preview shows.
-
-      Rendered into `index.html` for a crawler, which arrives before any
-      script, and rewritten here for the reader once their locale is known. */
+  /** What the document itself says. The tagline names the game in the words
+      people search for (#1461): the lobby's tab title and its heading say it,
+      and the build writes it into the served home page for a crawler (#1459).
+      The pages' descriptions are in `content/seo/`, which only the build
+      reads. */
   document: {
-    description: "Draw, guess and laugh with friends!",
+    tagline: "Free multiplayer drawing & guessing game",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1710,6 +1711,7 @@ export const EN = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name}: ${counted(p.count, { one: "word", other: "words" })} to draw`,
     noSuchList: "There is no prompt list with that name.",
     couldNotLoadStats: "Could not load these prompt stats. Please try again.",
     showMore: (p: { count: number }) => `Show ${p.count} more`,

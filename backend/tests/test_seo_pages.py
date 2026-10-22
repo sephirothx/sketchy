@@ -1,0 +1,233 @@
+"""Each public page's own head in the served HTML (#1459, R-SEO-04, R-SEO-05)."""
+from __future__ import annotations
+
+import gzip
+import json
+import re
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+
+from app.main import configure_frontend
+from app.security_headers import _InlineScripts
+from app.seo_pages import PageHead, SeoPages, page_heads, render_page
+from tests.test_static_delivery import request
+
+SHELL = (Path(__file__).resolve().parents[2] / "frontend" / "index.html").read_text(
+    encoding="utf-8"
+)
+BASE = "https://sketchy.example.org"
+
+
+def pages_file(**lists) -> dict:
+    head = lambda title: {"title": f"{title} · Sketchy", "description": f"About {title}."}  # noqa: E731
+    return {
+        "version": 1,
+        "locales": {
+            "en": {
+                "tagline": "Free multiplayer drawing & guessing game",
+                "pages": {
+                    "/": {
+                        "title": "Sketchy – Free multiplayer drawing & guessing game",
+                        "description": "A free online drawing and guessing game.",
+                    },
+                    "/rules": head("Rules"),
+                    "/solo": head("Solo"),
+                    "/terms": head("Terms"),
+                    "/privacy": head("Privacy notice"),
+                },
+                "promptLists": {
+                    slug: head(name)
+                    for slug, name in (lists or {"english_standard": "English — Standard"}).items()
+                },
+                "standardList": "english_standard",
+            }
+        },
+    }
+
+
+def scripts(text: str) -> list[str]:
+    parser = _InlineScripts()
+    parser.feed(text)
+    return parser.bodies
+
+
+def test_a_page_says_what_it_is_before_any_script_runs():
+    page = render_page(
+        SHELL,
+        PageHead(title="Rules · Sketchy", description="How it stays fun.", canonical_path="/rules", lang="en"),
+        base_url=BASE,
+    )
+    assert "<title>Rules · Sketchy</title>" in page
+    assert '<meta name="description" content="How it stays fun." />' in page
+    assert '<meta property="og:title" content="Rules · Sketchy" />' in page
+    assert '<meta property="og:description" content="How it stays fun." />' in page
+    assert f'<link rel="canonical" href="{BASE}/rules" />' in page
+    assert f'<meta property="og:url" content="{BASE}/rules" />' in page
+    assert f'<meta property="og:image" content="{BASE}/og-image.png" />' in page
+    assert "application/ld+json" not in page
+    # One of each: a second description would be a page saying two things.
+    assert page.count('name="description"') == 1
+    assert page.count("<title>") == 1
+
+
+def test_the_scripts_the_policy_admits_are_untouched_and_the_prefetch_stays_first():
+    page = render_page(
+        SHELL,
+        PageHead(title="T", description="D", canonical_path="/", lang="en", home=True),
+        base_url=BASE,
+    )
+    executable = [body for body in scripts(page) if '"@context"' not in body]
+    assert executable == scripts(SHELL)
+    assert executable[0].lstrip().startswith("try {\n        var sketchyAbort")
+
+
+def test_the_home_page_names_the_site_in_structured_data():
+    page = render_page(
+        SHELL,
+        PageHead(
+            title="Sketchy – Free multiplayer drawing & guessing game",
+            description="</script><script>alert(1)</script>",
+            canonical_path="/",
+            lang="en",
+            home=True,
+        ),
+        base_url=BASE,
+    )
+    block = re.search(r'<script type="application/ld\+json">(.*?)</script>', page, re.S)
+    assert block is not None
+    # Nothing in a value can close the element early.
+    assert "</script" not in block.group(1).lower()
+    data = json.loads(block.group(1))
+    kinds = {node["@type"]: node for node in data["@graph"]}
+    assert kinds["WebSite"]["name"] == "Sketchy"
+    assert kinds["WebSite"]["url"] == f"{BASE}/"
+    assert kinds["WebApplication"]["applicationCategory"] == "GameApplication"
+    assert kinds["WebApplication"]["offers"]["price"] == "0"
+    assert "<title>Sketchy – Free multiplayer drawing &amp; guessing game</title>" in page
+
+
+def test_text_is_escaped_where_it_lands():
+    page = render_page(
+        SHELL,
+        PageHead(title='A "quoted" <list>', description="Tom & Jerry", canonical_path="/x", lang="en"),
+        base_url=BASE,
+    )
+    assert "<title>A \"quoted\" &lt;list&gt;</title>" in page
+    assert 'content="A &quot;quoted&quot; &lt;list&gt;"' in page
+    assert 'content="Tom &amp; Jerry"' in page
+
+
+def test_a_shell_missing_a_tag_is_refused_rather_than_half_written():
+    with pytest.raises(ValueError):
+        render_page(
+            SHELL.replace('<meta name="description"', '<meta name="summary"'),
+            PageHead(title="T", description="D", canonical_path="/", lang="en"),
+            base_url=BASE,
+        )
+
+
+def test_only_the_lists_the_catalogue_serves_get_a_page():
+    heads = page_heads(
+        pages_file(english_standard="English — Standard", retired="Retired"),
+        {"english_standard"},
+    )
+    assert "/prompt-lists/english_standard" in heads
+    assert "/prompt-lists/retired" not in heads
+    # The bare catalogue is the reader's Standard list, under that list's URL.
+    assert heads["/prompt-lists"].canonical_path == "/prompt-lists/english_standard"
+    assert heads["/"].home and not heads["/rules"].home
+
+
+@pytest.fixture
+def served(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages_file()), encoding="utf-8")
+    pages = SeoPages()
+    pages.load(tmp_path, list_slugs={"english_standard"}, base_url=BASE)
+    assert pages.loaded
+    app = FastAPI()
+    configure_frontend(app, tmp_path, pages)
+    return app
+
+
+@pytest.mark.parametrize(
+    "path,title",
+    [
+        ("/", "Sketchy – Free multiplayer drawing &amp; guessing game"),
+        ("/rules", "Rules · Sketchy"),
+        ("/Rules/", "Rules · Sketchy"),
+        ("/prompt-lists/english_standard", "English — Standard · Sketchy"),
+        ("/prompt-lists", "English — Standard · Sketchy"),
+    ],
+)
+async def test_each_public_page_is_served_its_own_head(served, path, title):
+    status, headers, body = await request(served, path)
+    assert status == 200
+    assert headers["content-type"].startswith("text/html")
+    assert headers["cache-control"] == "no-cache"
+    assert f"<title>{title}</title>" in body.decode()
+
+
+async def test_a_page_is_served_gzipped_and_revalidates(served):
+    status, headers, body = await request(served, "/rules", headers={"Accept-Encoding": "gzip, br"})
+    assert status == 200
+    assert headers["content-encoding"] == "gzip"
+    assert headers["vary"] == "Accept-Encoding"
+    assert "<title>Rules · Sketchy</title>" in gzip.decompress(body).decode()
+    again, revalidated, empty = await request(
+        served,
+        "/rules",
+        headers={"Accept-Encoding": "gzip", "If-None-Match": headers["etag"]},
+    )
+    assert again == 304 and empty == b""
+    assert revalidated["etag"] == headers["etag"]
+    # The identity copy has a validator of its own: two bodies, two names.
+    _, identity, _ = await request(served, "/rules")
+    assert identity["etag"] != headers["etag"]
+    assert "content-encoding" not in identity
+
+
+async def test_head_answers_without_a_body(served):
+    status, headers, body = await request(served, "/rules", method="HEAD")
+    assert status == 200 and body == b""
+    assert int(headers["content-length"]) > 0
+
+
+async def test_an_unknown_list_keeps_the_shell_and_is_told_noindex(served):
+    status, headers, body = await request(served, "/prompt-lists/no_such_list")
+    assert status == 200
+    assert headers["x-robots-tag"] == "noindex"
+    assert "<title>Sketchy</title>" in body.decode()
+
+
+async def test_a_room_keeps_the_generic_card(served):
+    status, _, body = await request(served, "/room/ABC123")
+    assert status == 200
+    assert "<title>Sketchy</title>" in body.decode()
+    assert 'rel="canonical"' not in body.decode()
+
+
+async def test_the_build_s_pages_file_is_not_served_and_the_shell_file_is_noindex(served):
+    status, _, _ = await request(served, "/seo/pages.json")
+    assert status == 404
+    _, headers, _ = await request(served, "/index.html")
+    assert headers["x-robots-tag"] == "noindex"
+
+
+def test_a_build_without_the_pages_file_serves_the_plain_shell(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    pages = SeoPages()
+    pages.load(tmp_path, list_slugs=set(), base_url=BASE)
+    assert not pages.loaded and pages.get("/") is None
+
+
+def test_a_pages_file_it_cannot_read_serves_the_plain_shell(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text('{"version": 99}', encoding="utf-8")
+    pages = SeoPages()
+    pages.load(tmp_path, list_slugs=set(), base_url=BASE)
+    assert not pages.loaded

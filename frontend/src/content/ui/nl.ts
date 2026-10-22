@@ -442,7 +442,7 @@ export const NL: Catalogue = {
       Rendered into `index.html` for a crawler, which arrives before any
       script, and rewritten here for the reader once their locale is known. */
   document: {
-    description: "Teken, raad en lach met vrienden!",
+    tagline: "Gratis multiplayer teken- en raadspel",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1689,6 +1689,7 @@ export const NL: Catalogue = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name}: ${counted(p.count, { one: "woord", other: "woorden" })} om te tekenen`,
     noSuchList: "Er is geen woordenlijst met die naam.",
     couldNotLoadStats: "Deze woordstatistieken konden niet geladen worden. Probeer het nog eens.",
     showMore: (p: { count: number }) => `Nog ${p.count} tonen`,

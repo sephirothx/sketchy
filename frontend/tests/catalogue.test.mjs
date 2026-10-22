@@ -577,7 +577,6 @@ test("the style check would notice a slip", () => {
 const READ_BY_CODE = {
   refusals: "ui.refusals[errorCode]",
   announcements: "ui.announcements[code]",
-  document: "catalogueFor(locale).document, before any component renders",
   moderationCategories: "humanizeCategory(), by the category a moderator recorded",
   promptTags: "tagName() in MyPromptListsPage, by the slug the server sent",
   avatarDoodles: "doodleLabel() in lib/avatarDoodles, by the doodle's name",

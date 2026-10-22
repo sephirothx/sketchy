@@ -442,7 +442,7 @@ export const FR: Catalogue = {
       Rendered into `index.html` for a crawler, which arrives before any
       script, and rewritten here for the reader once their locale is known. */
   document: {
-    description: "Dessine, devine et ris avec tes amis !",
+    tagline: "Jeu multijoueur gratuit de dessin et de devinettes",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1689,6 +1689,7 @@ export const FR: Catalogue = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name} : ${counted(p.count, { one: "mot", other: "mots" })} à dessiner`,
     noSuchList: "Il n’y a aucune liste de mots portant ce nom.",
     couldNotLoadStats: "Ces statistiques n’ont pas pu être chargées. Réessaie.",
     showMore: (p: { count: number }) => `Voir ${p.count} de plus`,

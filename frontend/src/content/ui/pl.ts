@@ -442,7 +442,7 @@ export const PL: Catalogue = {
       Rendered into `index.html` for a crawler, which arrives before any
       script, and rewritten here for the reader once their locale is known. */
   document: {
-    description: "Rysuj, zgaduj i śmiej się ze znajomymi!",
+    tagline: "Darmowa gra wieloosobowa w rysowanie i zgadywanie",
   },
 
   /** Shapes that belong to the language rather than to any one screen. */
@@ -1701,6 +1701,7 @@ export const PL: Catalogue = {
   },
 
   promptStatsPage: {
+    listTitle: (p: { name: string; count: number }) => `${p.name}: ${counted(p.count, { one: "hasło", few: "hasła", many: "haseł", other: "hasła" })} do rysowania`,
     noSuchList: "Nie ma listy haseł o tej nazwie.",
     couldNotLoadStats: "Nie udało się wczytać statystyk haseł. Spróbuj ponownie.",
     showMore: (p: { count: number }) => `Pokaż jeszcze ${p.count}`,
