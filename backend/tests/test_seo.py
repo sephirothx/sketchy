@@ -188,6 +188,8 @@ async def test_the_sitemap_lists_the_public_pages_and_every_official_list(
     answered = await http.get("/sitemap.xml")
     assert answered.status_code == 200
     assert answered.headers["content-type"].startswith("application/xml")
+    # No cache may keep a hidden list listed longer than this process does.
+    assert answered.headers["cache-control"] == "public, max-age=60"
     locations = [
         element.text
         for element in ElementTree.fromstring(answered.content).iter(f"{SITEMAP}loc")
@@ -211,8 +213,9 @@ async def test_head_is_answered_like_get(crawler_files):
 
 
 async def test_the_real_application_is_wired_for_crawlers():
-    # The routes must sit before the static mount at "/", and the middleware
-    # around everything: neither shows in an app a test assembles itself.
+    # The middleware must be around everything, which an app a test assembles
+    # itself does not show. (The routes' place before the static mount at "/"
+    # shows only with a build present; the end-to-end suite has one.)
     from app.main import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
