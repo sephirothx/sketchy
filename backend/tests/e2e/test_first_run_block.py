@@ -45,6 +45,15 @@ async def test_the_first_landing_names_you_and_says_what_the_game_is():
                 await page.goto(BASE_URL)
                 await page.wait_for_selector(".first-run")
 
+                # The page's one heading says what the game is while the tag
+                # shows (#1461), in the words its title uses.
+                heading = page.locator("h1")
+                assert await heading.count() == 1
+                assert (await heading.inner_text()).strip() == (
+                    "Sketchy – Free multiplayer drawing & guessing game"
+                )
+                assert await page.title() == "Sketchy – Free multiplayer drawing & guessing game"
+
                 # One line of the pool, and the subtitle that never changes.
                 line = (await page.locator(".first-run-heading").inner_text()).strip()
                 assert line in LINES, line
@@ -60,6 +69,8 @@ async def test_the_first_landing_names_you_and_says_what_the_game_is():
                 await page.click(".first-run-guest-submit")
                 await page.wait_for_selector(".identity-chip")
                 assert await page.locator(".first-run").count() == 0
+                # With a name, the heading is the lobby's again.
+                assert (await page.locator("h1").inner_text()).strip() == "Lobby"
                 assert await page.locator('[data-testid="waiting-room"]').count() == 0
                 assert await page.locator(".lobby-page").count() == 1
                 await context.close()

@@ -36,6 +36,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { showsRoomCount, showsRoomFilters } from "../lib/lobbyControls.ts";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { documentTitle } from "../lib/documentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
 import { whenStyleRule } from "../lib/styleRuleReady";
@@ -517,8 +518,13 @@ export function LobbyBrowserPage() {
       <AppHeader />
       {/* The page's one heading. The wordmark above is a link, not a heading,
           and the lobby shows its name nowhere else: every panel below has its
-          own. Out of the layout, so the grid and flex rows are untouched. */}
-      <h1 className="visually-hidden">{ui.lobbyBrowserPage.lobby}</h1>
+          own. Out of the layout, so the grid and flex rows are untouched.
+          While the name tag shows - for a first visit, and for a crawler,
+          which never has a name - it says what the game is, in the words
+          people search for, as the page's title does (#1461). */}
+      <h1 className="visually-hidden">
+        {aboutToBeAsked ? documentTitle(null, ui.document.tagline) : ui.lobbyBrowserPage.lobby}
+      </h1>
 
       {criticalError && (
         <RemovedFromRoomDialog
