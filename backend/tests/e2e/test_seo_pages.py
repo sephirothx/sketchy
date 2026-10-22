@@ -83,3 +83,43 @@ async def test_the_app_keeps_the_title_the_server_wrote():
                 ).group(1).replace("&amp;", "&"), path
         finally:
             await browser.close()
+
+
+async def test_the_readable_text_is_there_without_script_and_gone_with_it():
+    # #1460: the words a crawler that runs no script reads, and which a
+    # player never sees - hidden before the first paint, replaced on mount.
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        try:
+            plain = await browser.new_context(java_script_enabled=False)
+            page = await plain.new_page()
+            await page.goto(BASE_URL + "/rules")
+            await page.get_by_role("heading", name="Harassment").wait_for()
+            assert await page.locator(".prerender").is_visible()
+            await page.goto(BASE_URL + "/")
+            assert await page.get_by_role("link", name="Prompt stats").count() == 1
+            assert await page.locator("h1").inner_text() == (
+                "Sketchy – Free multiplayer drawing & guessing game"
+            )
+            await plain.close()
+
+            context = await browser.new_context()
+            page = await context.new_page()
+            # In a <noscript>, which a browser that runs script never parses:
+            # no element to lay out, no font fetched for it. Read before
+            # React has drawn anything (it waits on the account read first).
+            await page.add_init_script(
+                """
+                document.addEventListener('DOMContentLoaded', () => {
+                  const copy = document.querySelector('.prerender');
+                  window.__copy = copy ? getComputedStyle(copy).display : 'gone';
+                });
+                """
+            )
+            await page.goto(BASE_URL + "/rules")
+            await page.locator(".rules-page").wait_for()
+            assert await page.evaluate("window.__copy") == "gone"
+            assert await page.locator(".prerender").count() == 0
+            await context.close()
+        finally:
+            await browser.close()

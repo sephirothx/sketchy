@@ -29,15 +29,19 @@ def pages_file(**lists) -> dict:
         "locales": {
             "en": {
                 "tagline": "Free multiplayer drawing & guessing game",
+                "contactPending": "[no address yet]",
                 "pages": {
                     "/": {
                         "title": "Sketchy – Free multiplayer drawing & guessing game",
                         "description": "A free online drawing and guessing game.",
                     },
-                    "/rules": head("Rules"),
+                    "/rules": {**head("Rules"), "body": '<div class="prerender"><h1>Rules</h1></div>'},
+                    "/privacy": {
+                        **head("Privacy notice"),
+                        "body": '<div class="prerender"><p>Write to {contact}.</p></div>',
+                    },
                     "/solo": head("Solo"),
                     "/terms": head("Terms"),
-                    "/privacy": head("Privacy notice"),
                 },
                 "promptLists": {
                     slug: head(name)
@@ -408,3 +412,22 @@ async def test_a_read_that_hangs_is_given_up(tmp_path: Path):
     # Given up, the last answer kept, and free to start the next read.
     assert pages.reading is None
     assert pages.list_slugs == {"english_standard"}
+
+
+async def test_a_page_with_readable_text_carries_it_inside_root(served):
+    _, _, body = await request(served, "/rules")
+    assert '<div id="root"><div class="prerender"><h1>Rules</h1></div></div>' in body.decode()
+    # A page without any keeps the empty root React mounts into.
+    _, _, body = await request(served, "/prompt-lists/english_standard")
+    assert '<div id="root"></div>' in body.decode()
+
+
+def test_the_contact_address_is_filled_in_and_escaped():
+    heads = page_heads(pages_file(), contact='op"<x>@example.org')
+    assert heads["/privacy"].body == (
+        '<div class="prerender"><p>Write to '
+        '<a href="mailto:op&quot;&lt;x&gt;@example.org">op&quot;&lt;x&gt;@example.org</a>.</p></div>'
+    )
+    # Without one, the words the page shows then.
+    heads = page_heads(pages_file(), contact=None)
+    assert heads["/privacy"].body == '<div class="prerender"><p>Write to [no address yet].</p></div>'

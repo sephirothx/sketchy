@@ -8,7 +8,11 @@ interface language, from the catalogues the app reads
 puts them into a copy of the shell per page, beside what only the deployment
 knows: the canonical URL and `og:url` on `PUBLIC_BASE_URL`, an absolute
 `og:image`, and for the home page the structured data a search engine reads
-to name the site.
+to name the site. The home, the rules, the legal pages and Solo also get their
+readable text inside `#root` (#1460): the words the page draws, written by the
+build as plain HTML, which React replaces when it mounts and the stylesheet
+hides until then. The legal texts' contact address is filled in here, the one
+place that knows it.
 
 **Once, at startup, then from memory.** The pages change only with a deploy,
 and a deploy restarts the process. Each is gzipped once here and served with
@@ -64,6 +68,8 @@ class PageHead:
     # The official list the page is about, which the catalogue must still
     # serve for the page to be served (#1459 review), or None.
     list_slug: str | None = None
+    # The page's readable copy (#1460), or None for a page that has none.
+    body: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +162,8 @@ def render_page(shell: str, head: PageHead, *, base_url: str) -> str:
     ]
     if head.home:
         added.append(_structured_data(head, base_url))
+    if head.body is not None:
+        page = _replace_once(r'<div id="root"></div>', f'<div id="root">{head.body}</div>', page)
     page = _replace_once(
         r"<title>[^<]*</title>",
         f"<title>{html.escape(head.title, quote=False)}</title>\n    " + "\n    ".join(added),
@@ -171,7 +179,21 @@ def assemble(text: str) -> AssembledPage:
     return AssembledPage(identity, gzip.compress(identity, compresslevel=9, mtime=0), f'"{digest}"')
 
 
-def page_heads(pages: dict, *, locale: str = DEFAULT_LOCALE) -> dict[str, PageHead]:
+def contact_text(address: str | None, pending: str) -> str:
+    """What the legal texts' `{contact}` reads (#1460): the deployment's
+    address as a mail link, or the words the page shows without one."""
+    if not address:
+        return html.escape(pending, quote=False)
+    escaped = html.escape(address, quote=True)
+    return f'<a href="mailto:{escaped}">{escaped}</a>'
+
+
+def page_heads(
+    pages: dict,
+    *,
+    locale: str = DEFAULT_LOCALE,
+    contact: str | None = None,
+) -> dict[str, PageHead]:
     """Every public page's head for *locale*, keyed by its path.
 
     Every list the build wrote a head for is included, whether or not the
@@ -181,14 +203,17 @@ def page_heads(pages: dict, *, locale: str = DEFAULT_LOCALE) -> dict[str, PageHe
     list (R-STAT-01) under that list's canonical URL.
     """
     entry = pages["locales"][locale]
+    contact_html = contact_text(contact, entry["contactPending"])
     heads: dict[str, PageHead] = {}
     for path, head in entry["pages"].items():
+        body = head.get("body")
         heads[path] = PageHead(
             title=head["title"],
             description=head["description"],
             canonical_path=path,
             lang=locale,
             home=path == "/",
+            body=body.replace("{contact}", contact_html) if body is not None else None,
         )
     for slug, head in entry["promptLists"].items():
         heads[f"/prompt-lists/{slug}"] = PageHead(
@@ -291,6 +316,7 @@ class SeoPages:
         list_slugs: set[str],
         base_url: str,
         reread: Callable[[], Awaitable[set[str]]] | None = None,
+        contact: str | None = None,
     ) -> None:
         """Assemble every page from the build in *dist*.
 
@@ -307,7 +333,7 @@ class SeoPages:
         try:
             if pages.get("version") != PAGES_FILE_VERSION:
                 raise ValueError(f"pages file version {pages.get('version')!r}")
-            heads = page_heads(pages)
+            heads = page_heads(pages, contact=contact)
             assembled = {
                 page_key(path): assemble(render_page(shell, head, base_url=base_url))
                 for path, head in heads.items()

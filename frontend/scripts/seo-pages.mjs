@@ -18,6 +18,18 @@ that language's own plural. Name lists are expanded here as the server
 expands them. The server uses an entry only for a list it
 actually serves.
 
+The home, the rules, the legal pages and Solo also get **readable text**
+(#1460): the same words the page draws, as plain semantic HTML that the
+server puts inside `#root`, in a `<noscript>`. A reader that runs no script -
+a crawler, a link checker - parses it as the page, with the site's links; a
+browser that runs script never parses it at all, so it costs a player nothing
+but its bytes. Hidden markup was tried first and cost the first paint 200 ms
+on a slow phone: the browser fetched the body font for the hidden text, and
+the download competed with the reader's language. React replaces it either
+way when it mounts. The legal
+texts' `{contact}` is left for the server, which is the one that knows the
+address; `{age}` is filled here.
+
     node --experimental-strip-types scripts/seo-pages.mjs dist
 */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,8 +37,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { catalogueFor, loadCatalogue, LOCALES } from "../src/content/ui/index.ts";
-import { legalFor } from "../src/content/legal/index.ts";
+import { legalFor, MINIMUM_AGE } from "../src/content/legal/index.ts";
 import { rulesFor } from "../src/content/rules/index.ts";
+import { soloCopyFor } from "../src/content/solo/index.ts";
 import { SEO_COPY } from "../src/content/seo/index.ts";
 import { documentTitle } from "../src/lib/documentTitle.ts";
 
@@ -72,6 +85,82 @@ export function bundledLists(directory = LIST_DIRECTORY) {
     .flatMap((name) => expandedLists(JSON.parse(readFileSync(join(directory, name), "utf-8"))));
 }
 
+/** Text made safe to put between tags or in an attribute. */
+export function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+const paragraphs = (texts) => texts.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+const items = (texts) =>
+  texts.length ? `<ul>${texts.map((text) => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : "";
+const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+
+/** The header's site links and the footer's legal ones, around a page's own
+    words: the way a crawler that runs no script finds the rest of the site. */
+function framed(ui, legal, main) {
+  const nav = [
+    ["/", ui.lobbyBrowserPage.lobby],
+    ["/solo", ui.solo.solo],
+    ["/community-lists", ui.appHeader.communityLink],
+    ["/prompt-lists", ui.appHeader.promptStatsLink],
+    ["/rules", ui.accountMenu.rules],
+  ];
+  return (
+    '<noscript><div class="prerender">' +
+    `<header>${link("/", "Sketchy")}<nav aria-label="${escapeHtml(ui.appHeader.siteNav)}"><ul>` +
+    nav.map(([href, text]) => `<li>${link(href, text)}</li>`).join("") +
+    `</ul></nav></header><main>${main}</main>` +
+    `<footer>${link("/terms", legal.terms.title)} · ${link("/privacy", legal.privacy.title)}</footer>` +
+    "</div></noscript>"
+  );
+}
+
+function rulesBody(rules) {
+  return (
+    `<h1>${escapeHtml(rules.title)}</h1>` +
+    `<section><h2>${escapeHtml(rules.introHeading)}</h2>${paragraphs(rules.intro)}</section>` +
+    rules.sections
+      .map(
+        (section) =>
+          `<section id="${escapeHtml(section.id)}"><h2>${escapeHtml(section.heading)}</h2>` +
+          `<p>${escapeHtml(section.blurb)}</p>` +
+          section.rules
+            .map(
+              (rule) =>
+                `<h3 id="${escapeHtml(rule.id)}">${escapeHtml(rule.heading)}</h3>` +
+                paragraphs(rule.body) +
+                items(rule.examples),
+            )
+            .join("") +
+          "</section>",
+      )
+      .join("") +
+    `<section><h2>${escapeHtml(rules.enforcement.heading)}</h2>${paragraphs(rules.enforcement.body)}</section>`
+  );
+}
+
+/** A legal document, `{age}` filled and `{contact}` left for the server. */
+function legalBody(document) {
+  const fill = (text) => text.replaceAll("{age}", String(MINIMUM_AGE));
+  return (
+    `<h1>${escapeHtml(document.title)}</h1>` +
+    paragraphs(document.intro.map(fill)) +
+    document.sections
+      .map(
+        (section) =>
+          `<section id="${escapeHtml(section.id)}"><h2>${escapeHtml(section.heading)}</h2>` +
+          paragraphs(section.body.map(fill)) +
+          items((section.items ?? []).map(fill)) +
+          "</section>",
+      )
+      .join("")
+  );
+}
+
 /** The heads of every public page in every interface language. */
 export async function seoPages(lists) {
   const locales = {};
@@ -80,12 +169,27 @@ export async function seoPages(lists) {
     const ui = catalogueFor(locale);
     const seo = SEO_COPY[locale];
     const legal = legalFor(locale);
+    const rules = rulesFor(locale);
+    const home = documentTitle(null, ui.document.tagline);
+    const body = (main) => framed(ui, legal, main);
     const pages = {
-      "/": { title: documentTitle(null, ui.document.tagline), description: seo.home },
-      "/rules": { title: documentTitle(rulesFor(locale).title), description: seo.rules },
-      "/solo": { title: documentTitle(ui.solo.solo), description: seo.solo },
-      "/terms": { title: documentTitle(legal.terms.title), description: seo.terms },
-      "/privacy": { title: documentTitle(legal.privacy.title), description: seo.privacy },
+      "/": {
+        title: home,
+        description: seo.home,
+        body: body(`<h1>${escapeHtml(home)}</h1><p>${escapeHtml(ui.firstRunIdentity.oneLineExplainer)}</p>`),
+      },
+      "/rules": { title: documentTitle(rules.title), description: seo.rules, body: body(rulesBody(rules)) },
+      "/solo": {
+        title: documentTitle(ui.solo.solo),
+        description: seo.solo,
+        body: body(`<h1>${escapeHtml(ui.solo.solo)}</h1><p>${escapeHtml(soloCopyFor(locale).intro)}</p>`),
+      },
+      "/terms": { title: documentTitle(legal.terms.title), description: seo.terms, body: body(legalBody(legal.terms)) },
+      "/privacy": {
+        title: documentTitle(legal.privacy.title),
+        description: seo.privacy,
+        body: body(legalBody(legal.privacy)),
+      },
     };
     const promptLists = {};
     for (const list of lists) {
@@ -104,6 +208,9 @@ export async function seoPages(lists) {
       lists.find((list) => list.language === "en" && list.slug.endsWith("_standard"));
     locales[locale] = {
       tagline: ui.document.tagline,
+      // What `{contact}` reads where the deployment names no address: the
+      // words the page itself shows then.
+      contactPending: ui.legalPage.contactPending,
       pages,
       promptLists,
       standardList: standard?.slug ?? null,
