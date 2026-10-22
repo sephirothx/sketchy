@@ -63,7 +63,8 @@ test("the home page's title is the brand and the tagline", () => {
 
 test("the readable text is the words each page draws, in every language", async () => {
   const { rulesFor } = await import("../src/content/rules/index.ts");
-  const { legalFor } = await import("../src/content/legal/index.ts");
+  const { legalFor, MINIMUM_AGE } = await import("../src/content/legal/index.ts");
+  const { soloCopyFor } = await import("../src/content/solo/index.ts");
   const { escapeHtml } = await import("../scripts/seo-pages.mjs");
   for (const [locale, entry] of Object.entries(pages.locales)) {
     const rules = rulesFor(locale);
@@ -74,12 +75,22 @@ test("the readable text is the words each page draws, in every language", async 
         for (const paragraph of rule.body) assert.ok(body.includes(escapeHtml(paragraph)), `${locale} ${rule.id}`);
       }
     }
+    assert.ok(body.includes(`<section id="enforcement">`), locale);
     for (const which of ["terms", "privacy"]) {
       const text = entry.pages[`/${which}`].body;
-      assert.ok(text.includes(`<h1>${escapeHtml(legalFor(locale)[which].title)}</h1>`), `${locale} ${which}`);
-      // The age is the build's to fill; the address is the server's.
+      const document = legalFor(locale)[which];
+      assert.ok(text.includes(`<h1>${escapeHtml(document.title)}</h1>`), `${locale} ${which}`);
+      for (const section of document.sections) {
+        assert.ok(text.includes(`<section id="${section.id}"><h2>${escapeHtml(section.heading)}</h2>`), `${locale} ${which} ${section.id}`);
+        for (const line of [...section.body, ...(section.items ?? [])]) {
+          // The age is the build's to fill; the address is the server's.
+          const filled = escapeHtml(line.replaceAll("{age}", String(MINIMUM_AGE)));
+          assert.ok(text.includes(filled), `${locale} ${which} ${section.id}`);
+        }
+      }
       assert.ok(!text.includes("{age}"), `${locale} ${which}`);
     }
+    assert.ok(entry.pages["/solo"].body.includes(escapeHtml(soloCopyFor(locale).intro)), locale);
     assert.ok(entry.pages["/privacy"].body.includes("{contact}"), locale);
     // The site's links, for a crawler that follows no script.
     const home = entry.pages["/"].body;

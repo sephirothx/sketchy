@@ -87,7 +87,7 @@ async def test_the_app_keeps_the_title_the_server_wrote():
 
 async def test_the_readable_text_is_there_without_script_and_gone_with_it():
     # #1460: the words a crawler that runs no script reads, and which a
-    # player never sees - hidden before the first paint, replaced on mount.
+    # player's browser never parses - a <noscript>, replaced on mount.
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         try:
@@ -101,6 +101,11 @@ async def test_the_readable_text_is_there_without_script_and_gone_with_it():
             assert await page.locator("h1").inner_text() == (
                 "Sketchy – Free multiplayer drawing & guessing game"
             )
+            # The contact address is the server's to fill in: an address, or
+            # the words the page shows without one - never the placeholder.
+            await page.goto(BASE_URL + "/privacy")
+            text = await page.locator(".prerender").inner_text()
+            assert "{contact}" not in text and "Who is responsible" in text
             await plain.close()
 
             context = await browser.new_context()

@@ -37,7 +37,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { catalogueFor, loadCatalogue, LOCALES } from "../src/content/ui/index.ts";
-import { legalFor, MINIMUM_AGE } from "../src/content/legal/index.ts";
+import { LEGAL_REVISION, legalFor, legalHistoryUrl, MINIMUM_AGE } from "../src/content/legal/index.ts";
 import { rulesFor } from "../src/content/rules/index.ts";
 import { soloCopyFor } from "../src/content/solo/index.ts";
 import { SEO_COPY } from "../src/content/seo/index.ts";
@@ -119,7 +119,7 @@ function framed(ui, legal, main) {
   );
 }
 
-function rulesBody(rules) {
+function rulesBody(rules, ui) {
   return (
     `<h1>${escapeHtml(rules.title)}</h1>` +
     `<section><h2>${escapeHtml(rules.introHeading)}</h2>${paragraphs(rules.intro)}</section>` +
@@ -133,21 +133,28 @@ function rulesBody(rules) {
               (rule) =>
                 `<h3 id="${escapeHtml(rule.id)}">${escapeHtml(rule.heading)}</h3>` +
                 paragraphs(rule.body) +
-                items(rule.examples),
+                (rule.examples.length ? `<p>${escapeHtml(ui.rulesPage.forExample)}</p>${items(rule.examples)}` : ""),
             )
             .join("") +
           "</section>",
       )
       .join("") +
-    `<section><h2>${escapeHtml(rules.enforcement.heading)}</h2>${paragraphs(rules.enforcement.body)}</section>`
+    `<section id="enforcement"><h2>${escapeHtml(rules.enforcement.heading)}</h2>` +
+    `${paragraphs(rules.enforcement.body)}</section>`
   );
 }
 
-/** A legal document, `{age}` filled and `{contact}` left for the server. */
-function legalBody(document) {
+/** A legal document, `{age}` filled and `{contact}` left for the server,
+    under the date it last changed, as `LegalPage` shows it. */
+function legalBody(document, ui, locale) {
   const fill = (text) => text.replaceAll("{age}", String(MINIMUM_AGE));
+  const date = new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone: "UTC" }).format(
+    new Date(`${LEGAL_REVISION.date}T00:00:00Z`),
+  );
   return (
     `<h1>${escapeHtml(document.title)}</h1>` +
+    `<p>${escapeHtml(ui.legalPage.lastUpdated({ date }))} · ` +
+    `${link(legalHistoryUrl(locale), ui.legalPage.history)}</p>` +
     paragraphs(document.intro.map(fill)) +
     document.sections
       .map(
@@ -178,17 +185,17 @@ export async function seoPages(lists) {
         description: seo.home,
         body: body(`<h1>${escapeHtml(home)}</h1><p>${escapeHtml(ui.firstRunIdentity.oneLineExplainer)}</p>`),
       },
-      "/rules": { title: documentTitle(rules.title), description: seo.rules, body: body(rulesBody(rules)) },
+      "/rules": { title: documentTitle(rules.title), description: seo.rules, body: body(rulesBody(rules, ui)) },
       "/solo": {
         title: documentTitle(ui.solo.solo),
         description: seo.solo,
         body: body(`<h1>${escapeHtml(ui.solo.solo)}</h1><p>${escapeHtml(soloCopyFor(locale).intro)}</p>`),
       },
-      "/terms": { title: documentTitle(legal.terms.title), description: seo.terms, body: body(legalBody(legal.terms)) },
+      "/terms": { title: documentTitle(legal.terms.title), description: seo.terms, body: body(legalBody(legal.terms, ui, locale)) },
       "/privacy": {
         title: documentTitle(legal.privacy.title),
         description: seo.privacy,
-        body: body(legalBody(legal.privacy)),
+        body: body(legalBody(legal.privacy, ui, locale)),
       },
     };
     const promptLists = {};

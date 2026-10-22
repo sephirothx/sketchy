@@ -10,9 +10,9 @@ knows: the canonical URL and `og:url` on `PUBLIC_BASE_URL`, an absolute
 `og:image`, and for the home page the structured data a search engine reads
 to name the site. The home, the rules, the legal pages and Solo also get their
 readable text inside `#root` (#1460): the words the page draws, written by the
-build as plain HTML, which React replaces when it mounts and the stylesheet
-hides until then. The legal texts' contact address is filled in here, the one
-place that knows it.
+build as plain HTML in a `<noscript>`, which a browser running the app never
+parses and React replaces when it mounts. The legal texts' contact address is
+filled in here, the one place that knows it.
 
 **Once, at startup, then from memory.** The pages change only with a deploy,
 and a deploy restarts the process. Each is gzipped once here and served with
