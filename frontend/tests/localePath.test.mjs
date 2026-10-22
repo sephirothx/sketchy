@@ -9,6 +9,9 @@ test("a public page's address names its language; English has none", () => {
   assert.deepEqual(splitLocalePath("/fr/"), { locale: "fr", path: "/" });
   assert.deepEqual(splitLocalePath("/PT/prompt-lists/x"), { locale: "pt", path: "/prompt-lists/x" });
   assert.deepEqual(splitLocalePath("/rules"), { locale: null, path: "/rules" });
+  // An overlay's background carries the page's query (review of #1462).
+  assert.deepEqual(splitLocalePath("/de/prompt-lists?sort=easiest"), { locale: "de", path: "/prompt-lists?sort=easiest" });
+  assert.deepEqual(splitLocalePath("/de?x=1#top"), { locale: "de", path: "/?x=1#top" });
   // English is the unprefixed address, not a second one.
   assert.deepEqual(splitLocalePath("/en/rules"), { locale: null, path: "/en/rules" });
 });

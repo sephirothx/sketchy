@@ -160,3 +160,24 @@ async def test_settings_over_a_language_address_move_the_page_behind_them():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_settings_over_a_filtered_language_address_keep_the_page_and_its_language():
+    # Review of #1462: the overlay's background carries the page's query, and
+    # it used to stop the prefix being read - the not-found page behind
+    # Settings, in the reader's own language.
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(locale="en-US", viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL + "/de/prompt-lists?window=30d")
+            await page.locator(".prompt-stats-page").wait_for()
+            await page.locator(".header-settings-button").click()
+            await page.wait_for_url(re.compile(r"/settings"))
+            await page.locator(".settings-modal-card").wait_for()
+            assert await page.locator(".prompt-stats-page").count() == 1
+            assert await page.evaluate("document.documentElement.lang") == "de"
+        finally:
+            await context.close()
+            await browser.close()

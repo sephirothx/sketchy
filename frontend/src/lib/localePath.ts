@@ -20,14 +20,15 @@ export function isPublicPath(path: string): boolean {
   return PUBLIC_PATH.test(path);
 }
 
-/** The URL's language, if it has one, and the page's path without it. */
+/** The URL's language, if it has one, and the page's path without it. A
+    query or a fragment - an overlay's background carries one - stays on it. */
 export function splitLocalePath(pathname: string): { locale: Locale | null; path: string } {
   // Without case, as the router matches the rest.
-  const match = /^\/([a-z]{2})(\/.*)?$/i.exec(pathname);
+  const match = /^\/([a-z]{2})(\/[^?#]*)?([?#].*)?$/i.exec(pathname);
   const locale = match?.[1].toLowerCase() as Locale | undefined;
   const path = match?.[2] ?? "/";
   if (locale && locale !== "en" && LOCALES.includes(locale) && isPublicPath(path)) {
-    return { locale, path };
+    return { locale, path: path + (match?.[3] ?? "") };
   }
   return { locale: null, path: pathname };
 }
