@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { bundledLists, seoPages } from "../scripts/seo-pages.mjs";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { bundledLists, expandedLists, LIST_DIRECTORY, seoPages } from "../scripts/seo-pages.mjs";
 import { LOCALES } from "../src/content/ui/index.ts";
 
 const lists = bundledLists();
@@ -30,15 +33,28 @@ test("every official list has its own head in every language", () => {
 
 test("a list's head names it and counts its words in the reader's language", () => {
   const standard = lists.find((list) => list.slug === "english_standard");
-  const count = standard.prompts.length;
   assert.equal(
     pages.locales.en.promptLists.english_standard.title,
-    `English — Standard: ${count.toLocaleString("en")} words to draw · Sketchy`,
+    `English — Standard: ${standard.count.toLocaleString("en")} words to draw · Sketchy`,
   );
-  // A translated name where the list has one, the list's own otherwise.
-  const pokemon = lists.find((list) => list.slug === "pokemon_gen1");
-  assert.match(pages.locales.fr.promptLists.pokemon_gen1.title, new RegExp(`^${pokemon.names.fr}`));
   assert.equal(pages.locales.de.standardList, "german_standard");
+});
+
+test("a name list stands for one list per language, as the server seeds it", () => {
+  const file = JSON.parse(readFileSync(join(LIST_DIRECTORY, "pokemon_gen1.json"), "utf-8"));
+  const expanded = expandedLists(file);
+  assert.deepEqual(
+    expanded.map((list) => list.slug).sort(),
+    ["dutch", "english", "french", "german", "italian", "polish", "portuguese", "spanish"]
+      .map((language) => `${language}_pokemon_gen1`),
+  );
+  const french = expanded.find((list) => list.language === "fr");
+  assert.equal(french.name, file.names.fr);
+  assert.equal(french.count, file.prompts.length);
+  // The list's own name whatever language the page is read in: official lists
+  // have no other.
+  assert.match(pages.locales.de.promptLists.french_pokemon_gen1.title, new RegExp(`^${file.names.fr}`));
+  assert.ok(!("pokemon_gen1" in pages.locales.en.promptLists));
 });
 
 test("the home page's title is the brand and the tagline", () => {

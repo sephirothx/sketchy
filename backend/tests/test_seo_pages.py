@@ -146,7 +146,8 @@ def served(tmp_path: Path):
     (tmp_path / "seo").mkdir()
     (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages_file()), encoding="utf-8")
     pages = SeoPages()
-    pages.load(tmp_path, list_slugs={"english_standard"}, base_url=BASE)
+    # `added_since` is served but the build wrote no head for it.
+    pages.load(tmp_path, list_slugs={"english_standard", "added_since"}, base_url=BASE)
     assert pages.loaded
     app = FastAPI()
     configure_frontend(app, tmp_path, pages)
@@ -231,3 +232,38 @@ def test_a_pages_file_it_cannot_read_serves_the_plain_shell(tmp_path: Path):
     pages = SeoPages()
     pages.load(tmp_path, list_slugs=set(), base_url=BASE)
     assert not pages.loaded
+
+
+async def test_a_proxy_s_weakened_validator_still_revalidates(served):
+    _, headers, _ = await request(served, "/rules", headers={"Accept-Encoding": "gzip"})
+    answered, _, _ = await request(
+        served,
+        "/rules",
+        headers={"Accept-Encoding": "gzip", "If-None-Match": f"W/{headers['etag']}"},
+    )
+    assert answered == 304
+
+
+async def test_a_public_page_answers_only_get_and_head(served):
+    status, _, _ = await request(served, "/rules", method="POST")
+    assert status == 405
+
+
+async def test_a_list_slug_is_matched_as_written(served):
+    # The page asks the server for the slug exactly as typed, and there is
+    # no `English_Standard`: it must not be served the real list's head.
+    status, headers, body = await request(served, "/prompt-lists/English_Standard")
+    assert status == 200
+    assert headers["x-robots-tag"] == "noindex"
+    assert "<title>Sketchy</title>" in body.decode()
+    # The rest of the path is matched without case, as the router does.
+    _, _, body = await request(served, "/Prompt-Lists/english_standard")
+    assert "<title>English — Standard · Sketchy</title>" in body.decode()
+
+
+async def test_a_served_list_without_a_head_stays_findable(served):
+    # It is in the sitemap: noindex would contradict it.
+    status, headers, body = await request(served, "/prompt-lists/added_since")
+    assert status == 200
+    assert "x-robots-tag" not in headers
+    assert "<title>Sketchy</title>" in body.decode()

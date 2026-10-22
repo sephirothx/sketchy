@@ -14,7 +14,8 @@ which the app never loads.
 The official lists are read from `backend/data/prompt_lists/`, the files the
 server seeds them from: a list's name in each language and its word count are
 facts the build needs to write "English — Standard: 1,038 words to draw" in
-that language's own plural. The server uses an entry only for a list it
+that language's own plural. Name lists are expanded here as the server
+expands them. The server uses an entry only for a list it
 actually serves.
 
     node --experimental-strip-types scripts/seo-pages.mjs dist
@@ -32,18 +33,43 @@ import { documentTitle } from "../src/lib/documentTitle.ts";
 const here = dirname(fileURLToPath(import.meta.url));
 export const LIST_DIRECTORY = join(here, "..", "..", "backend", "data", "prompt_lists");
 
-/** Every bundled list definition, as the server seeds it. */
+/** The prompt languages, by the names a name list's slugs are built from
+    (`PromptLanguage` in `backend/app/domain_values.py`). */
+const PROMPT_LANGUAGE_NAMES = {
+  en: "english",
+  de: "german",
+  es: "spanish",
+  fr: "french",
+  it: "italian",
+  nl: "dutch",
+  pt: "portuguese",
+  pl: "polish",
+};
+
+/** One file's lists, as `expand_name_list` (`backend/app/db/name_lists.py`)
+    makes them: a **name list** - a file with `languages` and no `language` -
+    stands for one list per prompt language, `<language>_<slug>`, named in that
+    language where the file has the name and holding every one of its
+    prompts. Only the facts a head needs; `tests/e2e/test_seo_pages.py` holds
+    every list the server serves to having one. */
+export function expandedLists(data) {
+  if (!("languages" in data) || "language" in data) {
+    return [{ slug: data.slug, name: data.name, language: data.language, count: data.prompts.length }];
+  }
+  return Object.entries(PROMPT_LANGUAGE_NAMES).map(([language, name]) => ({
+    slug: `${name}_${data.slug}`,
+    name: data.names?.[language] ?? data.name,
+    language,
+    count: data.prompts.length,
+  }));
+}
+
+/** Every official list, as the server seeds it. */
 export function bundledLists(directory = LIST_DIRECTORY) {
   return readdirSync(directory)
     .filter((name) => name.endsWith(".json"))
     .sort()
-    .map((name) => JSON.parse(readFileSync(join(directory, name), "utf-8")));
-}
-
-/** A list's name in *locale*, the way the catalogue serves it: its own
-    translation when it has one, its name otherwise. */
-function listName(list, locale) {
-  return list.names?.[locale] ?? list.name;
+    .flatMap((name) => expandedLists(JSON.parse(readFileSync(join(directory, name), "utf-8"))));
 }
 
 /** The heads of every public page in every interface language. */
@@ -63,7 +89,9 @@ export async function seoPages(lists) {
     };
     const promptLists = {};
     for (const list of lists) {
-      const facts = { name: listName(list, locale), count: list.prompts.length };
+      // The list's own name in every interface language: the catalogue has
+      // no translations for official lists, so that is what the page shows.
+      const facts = { name: list.name, count: list.count };
       promptLists[list.slug] = {
         title: documentTitle(ui.promptStatsPage.listTitle(facts)),
         description: seo.promptList(facts),

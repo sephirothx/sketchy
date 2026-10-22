@@ -194,10 +194,18 @@ def page_heads(pages: dict, list_slugs: set[str], *, locale: str = DEFAULT_LOCAL
     return heads
 
 
+LIST_PREFIX = "/prompt-lists/"
+
+
 def page_key(path: str) -> str:
     """How a request path finds its page: as react-router matches it, with
-    case and a trailing slash ignored."""
-    return (path.rstrip("/") or "/").lower()
+    case and a trailing slash ignored - except in a list's slug, which the
+    page asks the server for exactly as written, so `English_Standard` is a
+    list that does not exist rather than a second copy of one that does."""
+    trimmed = path.rstrip("/") or "/"
+    if trimmed.lower().startswith(LIST_PREFIX) and trimmed.count("/") == 2:
+        return LIST_PREFIX + trimmed[len(LIST_PREFIX):]
+    return trimmed.lower()
 
 
 @dataclass
@@ -206,9 +214,19 @@ class SeoPages:
 
     pages: dict[str, AssembledPage] = field(default_factory=dict)
     loaded: bool = False
+    list_slugs: frozenset[str] = frozenset()
 
     def get(self, path: str) -> AssembledPage | None:
         return self.pages.get(page_key(path))
+
+    def is_unknown_list(self, path: str) -> bool:
+        """Whether *path* names an official list the catalogue does not serve.
+
+        Asked of the catalogue, not of the pages: a list the build wrote no
+        head for is still a real page, served the plain shell, and must stay
+        indexable - it is in the sitemap."""
+        key = page_key(path)
+        return key.startswith(LIST_PREFIX) and key[len(LIST_PREFIX):] not in self.list_slugs
 
     def load(self, dist: Path, *, list_slugs: set[str], base_url: str) -> None:
         """Assemble every page from the build in *dist*.
@@ -234,5 +252,11 @@ class SeoPages:
         except (KeyError, TypeError, ValueError):
             logger.exception("Public pages keep the plain shell: %s could not be used", PAGES_FILE)
             return
+        headless = sorted(slug for slug in list_slugs if f"{LIST_PREFIX}{slug}" not in heads)
+        if headless:
+            # A list added without a build that knows it: served, findable,
+            # with the generic head until the next build.
+            logger.warning("Official lists served without a head of their own: %s", ", ".join(headless))
         self.pages = assembled
+        self.list_slugs = frozenset(list_slugs)
         self.loaded = True

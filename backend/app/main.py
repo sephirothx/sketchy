@@ -137,7 +137,6 @@ from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.seo import RobotsTagMiddleware
 from app.seo_pages import SeoPages
-from app.client_routes import is_indexable_route
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.room_presets import RoomPresetService
@@ -189,7 +188,9 @@ class SPAStaticFiles(StaticFiles):
         }
         if use_gzip:
             response_headers["content-encoding"] = "gzip"
-        if etag in (tag.strip() for tag in headers.get("if-none-match", "").split(",")):
+        # Weak or strong alike, as Starlette reads it for the shell:
+        # a proxy that re-encodes a response weakens its tag (#978).
+        if self.is_not_modified(Headers(response_headers), headers):
             return NotModifiedResponse(response_headers)
         return Response(
             body if scope.get("method") != "HEAD" else b"",
@@ -237,7 +238,12 @@ class SPAStaticFiles(StaticFiles):
         # (#1459) are served inside the pages, never as a file.
         if path.lower().startswith("seo/"):
             raise HTTPException(status_code=404)
-        page = self.seo_pages.get(scope["path"]) if self.seo_pages else None
+        # GET and HEAD only: anything else is StaticFiles' 405, below.
+        page = (
+            self.seo_pages.get(scope["path"])
+            if self.seo_pages and scope.get("method") in ("GET", "HEAD")
+            else None
+        )
         if page is not None:
             response = self.seo_page_response(page, scope)
             response.headers["Cache-Control"] = "no-cache"
@@ -266,13 +272,12 @@ class SPAStaticFiles(StaticFiles):
             # normalizes that one, and the root arrives as "." rather than "/".
             if not is_client_route(scope["path"]):
                 response.status_code = 404
-            # A public route with no page assembled for it - a list the
-            # catalogue does not serve - is a page nobody should find
-            # (#1459). Without a build's pages nothing is known either way.
+            # A list the catalogue does not serve is a page nobody should
+            # find (#1459). Without a build's pages nothing is known.
             elif (
                 self.seo_pages is not None
                 and self.seo_pages.loaded
-                and is_indexable_route(scope["path"])
+                and self.seo_pages.is_unknown_list(scope["path"])
             ):
                 response.headers["X-Robots-Tag"] = "noindex"
 

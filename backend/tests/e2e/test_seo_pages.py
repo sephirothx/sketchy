@@ -33,12 +33,39 @@ def test_the_crawler_files_are_served_in_front_of_the_static_mount():
     assert status == 200 and "/prompt-lists/english_standard</loc>" in body
 
 
+def test_every_page_in_the_sitemap_is_served_its_own_head():
+    # The build writes the lists' heads from the seed files and the server
+    # serves the lists it seeded from them: a list the two disagree about -
+    # a name list expanded one way here and another there - would be listed
+    # in the sitemap with the generic head.
+    _, _, sitemap = fetch("/sitemap.xml")
+    paths = [
+        re.sub(r"^https?://[^/]+", "", location)
+        for location in re.findall(r"<loc>([^<]+)</loc>", sitemap)
+    ]
+    assert len(paths) > 100, paths
+    for path in paths:
+        status, headers, body = fetch(path)
+        assert status == 200, path
+        assert "x-robots-tag" not in headers, path
+        assert served_title(body) != "Sketchy", f"{path} was served the generic head"
+
+
 async def test_the_app_keeps_the_title_the_server_wrote():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
         try:
-            for path in ("/", "/rules", "/terms", "/privacy", "/solo", "/prompt-lists/english_standard"):
+            for path in (
+                "/",
+                "/rules",
+                "/terms",
+                "/privacy",
+                "/solo",
+                "/prompt-lists/english_standard",
+                # A name list, expanded per language by the seed (#1399).
+                "/prompt-lists/french_pokemon_gen1",
+            ):
                 _, headers, body = fetch(path)
                 assert "x-robots-tag" not in headers, path
                 expected = served_title(body)
