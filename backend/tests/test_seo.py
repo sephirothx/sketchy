@@ -89,6 +89,8 @@ def test_anything_but_production_is_closed_to_crawlers():
         ("/reset-password", 200, True),
         ("/no-such-page", 404, True),
         ("/rules", 500, True),
+        ("/rules", 308, False),
+        ("/room/ABC123", 302, False),
         ("/api/rooms", 200, True),
         ("/api", 404, True),
         ("/socket.io/", 200, True),
@@ -199,3 +201,26 @@ async def test_the_sitemap_lists_the_public_pages_and_every_official_list(
         "https://sketchy.example.org/prompt-lists/english_standard",
         "https://sketchy.example.org/prompt-lists/german_standard",
     ]
+
+
+async def test_head_is_answered_like_get(crawler_files):
+    http, _ = crawler_files
+    for path in ("/robots.txt", "/sitemap.xml"):
+        answered = await http.head(path)
+        assert answered.status_code == 200, path
+
+
+async def test_the_real_application_is_wired_for_crawlers():
+    # The routes must sit before the static mount at "/", and the middleware
+    # around everything: neither shows in an app a test assembles itself.
+    from app.main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        robots = await http.get("/robots.txt")
+        assert robots.status_code == 200
+        assert robots.text.startswith("User-agent: *")
+        assert "x-robots-tag" not in robots.headers
+        health = await http.get("/api/health")
+        assert health.headers["x-robots-tag"] == "noindex"
+        handshake = await http.get("/socket.io/?EIO=4&transport=polling")
+        assert handshake.headers["x-robots-tag"] == "noindex"

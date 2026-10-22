@@ -13,25 +13,29 @@ from app.seo import ROBOTS_PATH, SITEMAP_PATH, public_paths, robots_txt, sitemap
 # The official lists change only with a deploy, which restarts the process;
 # a minute bounds what a moderator hiding a bundled list leaves behind.
 SITEMAP_TTL_SECONDS = 60.0
-# An hour: neither file changes between deploys, and a crawler that holds an
-# old copy a little longer loses nothing.
-CRAWLER_FILE_CACHE = {"Cache-Control": "public, max-age=3600"}
+# robots.txt changes only with a deploy, and a crawler that holds an old copy
+# for an hour loses nothing. The sitemap is held no longer than this process
+# holds it, or a shared cache would keep a hidden list listed for an hour.
+ROBOTS_CACHE = {"Cache-Control": "public, max-age=3600"}
+SITEMAP_CACHE = {"Cache-Control": f"public, max-age={int(SITEMAP_TTL_SECONDS)}"}
 
 
 def create_seo_router(prompt_lists: PromptListRepository) -> APIRouter:
     router = APIRouter()
     cached: dict[str, tuple[float, str]] = {}
 
-    @router.get(ROBOTS_PATH, include_in_schema=False)
+    # HEAD too: FastAPI routes GET alone, and a HEAD would fall through to the
+    # static mount's 404 - which is what some validators probe with.
+    @router.api_route(ROBOTS_PATH, methods=["GET", "HEAD"], include_in_schema=False)
     async def robots():
         """What crawlers may fetch: `app/seo.py` says why it is so little."""
         return Response(
             robots_txt(production=is_production(), base_url=public_base_url()),
             media_type="text/plain",
-            headers=CRAWLER_FILE_CACHE,
+            headers=ROBOTS_CACHE,
         )
 
-    @router.get(SITEMAP_PATH, include_in_schema=False)
+    @router.api_route(SITEMAP_PATH, methods=["GET", "HEAD"], include_in_schema=False)
     async def sitemap():
         """The public pages, as absolute URLs on `PUBLIC_BASE_URL`."""
         base_url = public_base_url()
@@ -40,6 +44,6 @@ def create_seo_router(prompt_lists: PromptListRepository) -> APIRouter:
             slugs = [entry.slug for entry in await prompt_lists.list_all()]
             hit = (time.monotonic(), sitemap_xml(base_url=base_url, paths=public_paths(slugs)))
             cached[base_url] = hit
-        return Response(hit[1], media_type="application/xml", headers=CRAWLER_FILE_CACHE)
+        return Response(hit[1], media_type="application/xml", headers=SITEMAP_CACHE)
 
     return router

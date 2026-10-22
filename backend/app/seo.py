@@ -91,8 +91,12 @@ def wants_noindex(path: str, status: int) -> bool:
     if "." in path.rsplit("/", 1)[-1]:
         return False
     # A 304 updates the headers of the response it revalidates, so it must
-    # say what its 200 said.
-    return status not in (200, 304) or not is_indexable_route(path)
+    # say what its 200 said. A redirect is left alone too: some crawlers
+    # carry its tags over to where it points, and production's redirect to
+    # HTTPS points at the public pages themselves.
+    if 300 <= status < 400:
+        return False
+    return status != 200 or not is_indexable_route(path)
 
 
 class RobotsTagMiddleware:

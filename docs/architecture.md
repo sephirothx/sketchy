@@ -409,7 +409,7 @@ refusing it (§7, *Authorization*), and keep their 200: the URL exists, the acco
 The same table says which routes a search engine may index (#1458): the lobby, the
 rules, the legal pages, Solo and the official word lists. Everything else is answered
 with `X-Robots-Tag: noindex` by [`app/seo.py`](../backend/app/seo.py), the outermost
-middleware, which also covers `/api/` and every 404. `/robots.txt` and `/sitemap.xml`
+middleware, which also covers `/api/` and every URL with no page. `/robots.txt` and `/sitemap.xml`
 are routes of their own ([`app/api/seo.py`](../backend/app/api/seo.py)), built from
 `PUBLIC_BASE_URL` and the official catalogue; production's `robots.txt` keeps crawlers
 out of `/room/` only, because Google renders a public page by running it and needs
