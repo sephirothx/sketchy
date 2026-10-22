@@ -29,6 +29,7 @@ import {
   setCatalogue,
   ui,
 } from "../content/ui/index.ts";
+import { splitLocalePath } from "../lib/localePath.ts";
 import {
   applyDocumentLocale,
   rememberLocale,
@@ -383,10 +384,25 @@ function switchLocale(locale: string, remember = true): Promise<boolean> {
 // slowest (R-I18N-06). The words are fetched from here; `main.tsx` holds the
 // paint for them. An account's own choice arrives later, with the rest of its
 // settings, and moves the app again if it differs.
-const requestedLocale = resolveLocale({
-  stored: storedLocale(),
-  browser: typeof navigator === "undefined" ? [] : navigator.languages,
-});
+const ownLocale = () =>
+  resolveLocale({
+    stored: storedLocale(),
+    browser: typeof navigator === "undefined" ? [] : navigator.languages,
+  });
+/** The language a public page's URL names (#1462), while one is on screen:
+    it goes first for that page view and is never stored. */
+let pageLocale =
+  typeof location === "undefined" ? null : splitLocalePath(location.pathname).locale;
+const requestedLocale = pageLocale ?? ownLocale();
+
+/** Follow the URL from page to page: into a public page's language, and back
+    to the reader's own order (R-I18N-06) when a page names none. */
+export function followPageLocale(pathname: string): void {
+  const next = splitLocalePath(pathname).locale;
+  if (next === pageLocale) return;
+  pageLocale = next;
+  void switchLocale(next ?? ownLocale(), false);
+}
 applyDocumentLocale(interfaceLocale());
 setClockLocale(interfaceLocale());
 
@@ -456,8 +472,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     });
     // The account's choice wins over this browser's, and is remembered here
     // too so the next visit does not flash the other language before the
-    // settings arrive.
-    void switchLocale(locale);
+    // settings arrive - but not over a language the page's URL names, which
+    // stands until the reader leaves it.
+    if (pageLocale) rememberLocale(locale);
+    else void switchLocale(locale);
   },
   setKeyBinding: (action, keys) =>
     set((state) => {

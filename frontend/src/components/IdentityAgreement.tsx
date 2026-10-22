@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { usePublicPath } from "../hooks/usePublicPath";
 
 import { InfoIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -24,11 +25,13 @@ export function IdentityAgreement({
   className?: string;
   withRules?: boolean;
 }) {
+  // In the language of the page it is on (#1462).
+  const publicPath = usePublicPath();
   const links: ReactNode[] = [
-    <a key="terms" href="/terms" target="_blank" rel="noreferrer">
+    <a key="terms" href={publicPath("/terms")} target="_blank" rel="noreferrer">
       {ui.firstRunIdentity.terms}
     </a>,
-    <a key="privacy" href="/privacy" target="_blank" rel="noreferrer">
+    <a key="privacy" href={publicPath("/privacy")} target="_blank" rel="noreferrer">
       {ui.firstRunIdentity.privacy}
     </a>,
     <span key="age" title={ui.firstRunIdentity.ageTitle({ age: MINIMUM_AGE })}>
@@ -38,7 +41,7 @@ export function IdentityAgreement({
   ];
   if (withRules) {
     links.unshift(
-      <Link key="rules" to="/rules" className="identity-rules">
+      <Link key="rules" to={publicPath("/rules")} className="identity-rules">
         <InfoIcon size={13} />
         {ui.accountMenu.rules}
       </Link>,

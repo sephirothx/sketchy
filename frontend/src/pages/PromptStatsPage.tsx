@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { usePublicPath } from "../hooks/usePublicPath";
 import "../styles/lazy/profile.css";
 import "../styles/lazy/prompt-lists.css";
 import "../styles/lazy/prompt-stats.css";
@@ -63,6 +64,7 @@ const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
 export function PromptStatsPage() {
   const params = useParams<{ slug?: string }>();
   const navigate = useNavigate();
+  const publicPath = usePublicPath();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [lists, setLists] = useState<PromptListSummary[] | null>(null);
@@ -198,7 +200,7 @@ export function PromptStatsPage() {
   function chooseList(nextSlug: string) {
     setQuery("");
     const queryString = searchParams.toString();
-    navigate(`/prompt-lists/${nextSlug}${queryString ? `?${queryString}` : ""}`);
+    navigate(publicPath(`/prompt-lists/${nextSlug}`) + (queryString ? `?${queryString}` : ""));
   }
 
   function setFilter(name: string, value: string, defaultValue: string) {

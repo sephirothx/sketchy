@@ -87,8 +87,8 @@ the entry and its static imports to download and run, then for French. And an
 invite link (`/room/CODE`) asked for the room's page from inside the entry
 too, while the lobby's play routes competed with it. This writes the chunk
 lists into `index.html` and an inline script that chooses the language the
-way the app does (`resolveLocale`: the stored choice, then the browser's
-languages by base tag, then English) and appends `modulepreload` links for it
+way the app does (`resolveLocale`: a public page's URL language (#1462), the
+stored choice, then the browser's languages by base tag, then English) and appends `modulepreload` links for it
 - and for the room's page and its imports on `/room/`.
 
 Appended after Vite's own tags, so the entry and vendor are asked for first:
@@ -146,7 +146,12 @@ function preloadReaderChunks(): Plugin {
           `try{s=localStorage.getItem("sketchy_locale")}catch(e){}` +
           // Own keys only: a stored "constructor" is not a language.
           `var h=function(k){return Object.prototype.hasOwnProperty.call(p.locales,k)};` +
-          `var l=h(s)?s:null;` +
+          // A public page's address names its language first (#1462):
+          // `/de/rules` is read in German whatever this browser stored. The
+          // app checks the rest of the path; a prefix on any other page is a
+          // 404 that fetched German for nothing.
+          `var u=location.pathname.split("/")[1];` +
+          `var l=u!=="en"&&h(u)?u:h(s)?s:null;` +
           `if(!l){var b=navigator.languages||[navigator.language||""];` +
           `for(var i=0;i<b.length&&!l;i++){var t=String(b[i]).toLowerCase();` +
           `if(h(t))l=t;else if(h(t.split("-")[0]))l=t.split("-")[0];}}` +

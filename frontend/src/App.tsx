@@ -1,5 +1,7 @@
 import { Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { splitLocalePath } from "./lib/localePath";
+import { PageLocaleContext } from "./hooks/usePublicPath";
 import {
   isFriendsPath,
   isOverlayPath,
@@ -47,7 +49,7 @@ import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
 import { friendListOwner } from "./lib/friends";
-import { useSettingsStore } from "./store/settingsStore";
+import { followPageLocale, useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
 
 /* The router keeps the window scroll across navigations, so submitting a form
@@ -80,9 +82,17 @@ function AppRoutes() {
   // location context *only* when it is handed one, so letting this flip
   // between a value and nothing would change the element tree and remount
   // every page behind the overlay - the live room included.
-  const behind = onOverlay
+  const shown = onOverlay
     ? (overlayBackgroundOf(location.state) ?? "/")
     : location;
+  // A public page's language prefix (#1462) is not part of its route: the
+  // table matches `/rules` for `/de/rules`, and the language is followed
+  // from the URL here.
+  const shownPath = typeof shown === "string" ? shown : shown.pathname;
+  const { locale: pageLocale, path: pagePath } = splitLocalePath(shownPath);
+  const behind =
+    pageLocale === null ? shown : typeof shown === "string" ? pagePath : { ...shown, pathname: pagePath };
+  useEffect(() => followPageLocale(location.pathname), [location.pathname]);
 
   // The pages draw nothing while their chunk arrives: navigations are
   // transitions, so a page already on screen stays there until the next one
@@ -91,6 +101,7 @@ function AppRoutes() {
   // live room is a retry notice, not the crash page.
   return (
     <>
+      <PageLocaleContext.Provider value={pageLocale}>
       <OverlayOpenContext.Provider value={onOverlay}>
       <Suspense fallback={null}>
       <Routes location={behind}>
@@ -131,6 +142,7 @@ function AppRoutes() {
       </Routes>
       </Suspense>
       </OverlayOpenContext.Provider>
+      </PageLocaleContext.Provider>
       {isSettingsPath(location.pathname) && <SettingsOverlay />}
       {isFriendsPath(location.pathname) && <FriendsOverlay />}
     </>

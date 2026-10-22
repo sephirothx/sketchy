@@ -431,3 +431,83 @@ def test_the_contact_address_is_filled_in_and_escaped():
     # Without one, the words the page shows then.
     heads = page_heads(pages_file(), contact=None)
     assert heads["/privacy"].body == '<div class="prerender"><p>Write to [no address yet].</p></div>'
+
+
+@pytest.fixture
+def two_languages(tmp_path: Path):
+    pages = pages_file(english_standard="English — Standard", german_standard="Deutsch — Standard")
+    german = json.loads(json.dumps(pages["locales"]["en"]))
+    for head in [*german["pages"].values(), *german["promptLists"].values()]:
+        head["title"] = "DE " + head["title"]
+    german["standardList"] = "german_standard"
+    pages["locales"]["de"] = german
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages), encoding="utf-8")
+    store = SeoPages()
+    store.load(tmp_path, list_slugs={"english_standard", "german_standard"}, base_url=BASE)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, store)
+    return app
+
+
+async def test_each_language_has_its_own_address_and_names_the_others(two_languages):
+    _, _, body = await request(two_languages, "/de/rules")
+    page = body.decode()
+    assert "<title>DE Rules · Sketchy</title>" in page
+    assert '<html lang="de">' in page
+    assert f'<link rel="canonical" href="{BASE}/de/rules" />' in page
+    assert f'<link rel="alternate" hreflang="de" href="{BASE}/de/rules" />' in page
+    assert f'<link rel="alternate" hreflang="en" href="{BASE}/rules" />' in page
+    assert f'<link rel="alternate" hreflang="x-default" href="{BASE}/rules" />' in page
+    _, _, body = await request(two_languages, "/de")
+    assert f'<link rel="canonical" href="{BASE}/de" />' in body.decode()
+    # The prefix is matched without case, as the client matches it.
+    _, _, body = await request(two_languages, "/DE/Rules/")
+    assert "<title>DE Rules · Sketchy</title>" in body.decode()
+
+
+async def test_the_bare_catalogue_points_at_the_language_s_own_standard_list(two_languages):
+    _, _, body = await request(two_languages, "/de/prompt-lists")
+    page = body.decode()
+    assert f'<link rel="canonical" href="{BASE}/de/prompt-lists/german_standard" />' in page
+    assert 'hreflang=' not in page
+
+
+async def test_english_has_one_address(two_languages):
+    status, headers, _ = await request(two_languages, "/en/rules")
+    assert status == 301 and headers["location"] == "/rules"
+    status, headers, _ = await request(two_languages, "/en")
+    assert status == 301 and headers["location"] == "/"
+
+
+async def test_only_a_public_page_has_an_address_per_language(two_languages):
+    status, _, _ = await request(two_languages, "/de/room/ABC123")
+    assert status == 404
+    status, headers, _ = await request(two_languages, "/de/prompt-lists/no_such_list")
+    assert status == 200 and headers["x-robots-tag"] == "noindex"
+
+
+async def test_a_hidden_list_leaves_every_language_s_address(tmp_path: Path):
+    pages = pages_file(english_standard="English — Standard", german_standard="Deutsch — Standard")
+    pages["locales"]["de"] = {**json.loads(json.dumps(pages["locales"]["en"])), "standardList": "german_standard"}
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages), encoding="utf-8")
+    catalogue = {"english_standard", "german_standard"}
+
+    async def reread() -> set[str]:
+        return set(catalogue)
+
+    store = SeoPages(ttl_seconds=0)
+    store.load(tmp_path, list_slugs=set(catalogue), base_url=BASE, reread=reread)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, store)
+    catalogue.discard("german_standard")
+    for path in ("/de/prompt-lists/german_standard", "/prompt-lists/german_standard"):
+        _, headers, body = await request(app, path)
+        assert headers["x-robots-tag"] == "noindex", path
+        assert "<title>Sketchy</title>" in body.decode(), path
+    # The German bare catalogue shows German's Standard list, so it goes too.
+    _, _, body = await request(app, "/de/prompt-lists")
+    assert "<title>Sketchy</title>" in body.decode()
