@@ -479,6 +479,8 @@ async def test_english_has_one_address(two_languages):
     assert status == 301 and headers["location"] == "/rules"
     status, headers, _ = await request(two_languages, "/en")
     assert status == 301 and headers["location"] == "/"
+    status, headers, _ = await request(two_languages, "/en//")
+    assert status == 301 and headers["location"] == "/"
 
 
 async def test_only_a_public_page_has_an_address_per_language(two_languages):

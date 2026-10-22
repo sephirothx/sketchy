@@ -58,7 +58,8 @@ import { socket } from "./lib/socket";
    was - scrolling it to the top would move something the reader is not even
    looking at, and leave it there once the overlay closes. */
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  // The same page in another language is not a new page (#1462).
+  const pathname = splitLocalePath(useLocation().pathname).path;
   useEffect(() => {
     if (isOverlayPath(pathname)) return;
     window.scrollTo(0, 0);
@@ -92,7 +93,8 @@ function AppRoutes() {
   const { locale: pageLocale, path: pagePath } = splitLocalePath(shownPath);
   const behind =
     pageLocale === null ? shown : typeof shown === "string" ? pagePath : { ...shown, pathname: pagePath };
-  useEffect(() => followPageLocale(location.pathname), [location.pathname]);
+  // The page's address, not an overlay's drawn over it.
+  useEffect(() => followPageLocale(shownPath), [shownPath]);
 
   // The pages draw nothing while their chunk arrives: navigations are
   // transitions, so a page already on screen stays there until the next one

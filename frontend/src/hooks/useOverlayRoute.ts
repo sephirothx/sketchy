@@ -32,7 +32,9 @@ export function useOpenOverlay(): (
 ) => void {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = `${location.pathname}${location.search}`;
+  // The address as the browser has it: inside the page table the router's
+  // has no language prefix (#1462), and closing must come back to it.
+  const from = `${window.location.pathname}${location.search}`;
   const onOverlay = isOverlayPath(location.pathname);
   return useCallback(
     (path: string, options?: { replace?: boolean }) => {
@@ -59,10 +61,12 @@ export function useCloseOverlay(): () => void {
   const navigate = useNavigate();
   const location = useLocation();
   const background = overlayBackgroundOf(location.state);
+  const moved = (location.state as OverlayLocationState | null)?.overlayMoved === true;
   return useCallback(() => {
-    if (background) navigate(-1);
+    if (background && moved) navigate(background, { replace: true });
+    else if (background) navigate(-1);
     else navigate("/", { replace: true });
-  }, [navigate, background]);
+  }, [navigate, background, moved]);
 }
 
 /** Whether an overlay route - Settings, Friends - is open over the page.

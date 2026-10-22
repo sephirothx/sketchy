@@ -78,7 +78,8 @@ export function AppHeader({
   languageSwitch?: boolean;
 } = {}) {
   const navigate = useNavigate();
-  const home = usePublicPath()("/");
+  const publicPath = usePublicPath();
+  const home = publicPath("/");
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const showBack = Boolean(backLabel) && isNarrow;
   const openSettings = useOpenSettings();
@@ -95,7 +96,7 @@ export function AppHeader({
           <button
             type="button"
             className="btn btn-ghost header-back-button"
-            onClick={() => navigate(backTo)}
+            onClick={() => navigate(publicPath(backTo))}
             aria-label={backLabel}
             title={backLabel}
           >
@@ -123,11 +124,11 @@ export function AppHeader({
           <p className="header-crumb">
             <ChevronRightIcon size={14} />
             <a
-              href={parent.to}
+              href={publicPath(parent.to)}
               onClick={(event) => {
                 if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
                 event.preventDefault();
-                navigate(parent.to);
+                navigate(publicPath(parent.to));
               }}
             >
               {parent.label}

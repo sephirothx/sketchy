@@ -179,7 +179,8 @@ class SPAStaticFiles(StaticFiles):
         if first.lower() != DEFAULT_PATH_LOCALE or not is_indexable_route("/" + rest):
             return None
         query = scope.get("query_string", b"").decode("latin-1")
-        target = "/" + rest
+        # One leading slash: `//x` would be a host, not a path.
+        target = "/" + rest.lstrip("/")
         return RedirectResponse(target + (f"?{query}" if query else ""), status_code=301)
 
     def seo_page_response(self, page, scope) -> Response:

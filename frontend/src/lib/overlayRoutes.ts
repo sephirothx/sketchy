@@ -56,6 +56,10 @@ export function isOverlayPath(pathname: string): boolean {
 export interface OverlayLocationState {
   /** The path the overlay was opened from, drawn underneath it until it closes. */
   overlayBackground?: string;
+  /** Set when the page underneath moved while the overlay was open - a
+      language chosen in Settings over a public page moves it to its address
+      in that language (#1462) - so closing goes there rather than back. */
+  overlayMoved?: boolean;
 }
 
 /** The page an overlay was opened over, or nothing if it was reached directly.

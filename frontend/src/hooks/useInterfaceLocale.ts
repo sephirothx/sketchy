@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { queueSettingsSync } from "../lib/accountSettingsSync";
 import { rememberLocale, type Locale } from "../lib/interfaceLocale.ts";
 import { isPublicPath, localePath, splitLocalePath } from "../lib/localePath";
+import { overlayBackgroundOf } from "../lib/overlayRoutes";
 import { useSettingsStore } from "../store/settingsStore";
 
 /** The language the interface is read in, and the one way to change it.
@@ -16,17 +17,26 @@ that makes it follow the player to another device (R-I18N-06). */
 export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
-  const { pathname, search, hash } = useLocation();
+  const { pathname, search, hash, state } = useLocation();
   const navigate = useNavigate();
   const choose = useCallback(
     (next: Locale) => {
       // On a public page the choice is also a page: the same one at its
       // address in that language (#1462). Remembered first, so leaving a
       // prefixed page for English finds English as the reader's own.
-      const { path } = splitLocalePath(pathname);
+      // Over Settings, the page is the one the overlay was opened from.
+      const background = overlayBackgroundOf(state);
+      const [page, query = ""] = (background ?? pathname).split("?");
+      const { path } = splitLocalePath(page);
       if (isPublicPath(path)) {
         rememberLocale(next);
-        navigate(localePath(path, next) + search + hash, { replace: true });
+        const there = localePath(path, next) + (query && `?${query}`);
+        navigate(
+          background ? pathname + search : there + search + hash,
+          background
+            ? { replace: true, state: { overlayBackground: there, overlayMoved: true } }
+            : { replace: true },
+        );
       }
       // Saved to the account only once the words are here and showing: a
       // language whose chunk could not be fetched would otherwise follow the
@@ -35,7 +45,7 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
         if (applied) queueSettingsSync({ locale: next });
       });
     },
-    [setLocale, pathname, search, hash, navigate],
+    [setLocale, pathname, search, hash, state, navigate],
   );
   return [locale, choose];
 }

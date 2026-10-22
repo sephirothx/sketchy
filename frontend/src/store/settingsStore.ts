@@ -384,7 +384,9 @@ function switchLocale(locale: string, remember = true): Promise<boolean> {
 // slowest (R-I18N-06). The words are fetched from here; `main.tsx` holds the
 // paint for them. An account's own choice arrives later, with the rest of its
 // settings, and moves the app again if it differs.
-const ownLocale = () =>
+/** The reader's own language, R-I18N-06's order without a page's address -
+    what an account is created with, and what a page without one is read in. */
+export const ownLocale = () =>
   resolveLocale({
     stored: storedLocale(),
     browser: typeof navigator === "undefined" ? [] : navigator.languages,
@@ -394,6 +396,8 @@ const ownLocale = () =>
 let pageLocale =
   typeof location === "undefined" ? null : splitLocalePath(location.pathname).locale;
 const requestedLocale = pageLocale ?? ownLocale();
+
+export const pageLocaleInForce = (): boolean => pageLocale !== null;
 
 /** Follow the URL from page to page: into a public page's language, and back
     to the reader's own order (R-I18N-06) when a page names none. */
