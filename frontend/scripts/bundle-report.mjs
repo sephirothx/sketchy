@@ -21,7 +21,10 @@ page that slips back into the entry chunk is caught by the change that did it
 rather than noticed at launch (#475). The JS figure moved 216 -> 217 KB with
 Solo (#1434), whose page copy loads with its page (`content/solo/`): what is
 left in the first load is its five refusal messages, the header link and the
-lobby button, about 0.5 KB, against 0.3 KB of headroom.
+lobby button, about 0.5 KB, against 0.3 KB of headroom. It moved 217 -> 218
+KB with the public pages' addresses per language (#1462), decided by the
+owner: the header's links, the picker and the overlays keeping a page's
+language are about 0.6 KB that every first load runs.
 
 Written for the frontend performance epic (#981), so each change in it is
 measured the same way before and after. */

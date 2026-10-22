@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build && node --experimental-strip-types scripts/seo-pages.mjs dist",
     "lint": "eslint .",
     "preview": "vite preview",
-    "bundle:check": "node scripts/bundle-report.mjs dist --budget js=217,css=41"
+    "bundle:check": "node scripts/bundle-report.mjs dist --budget js=218,css=41"
   },
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",
