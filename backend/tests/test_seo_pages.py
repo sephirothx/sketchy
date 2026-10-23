@@ -506,6 +506,7 @@ async def test_a_hidden_list_leaves_every_language_s_address(tmp_path: Path):
     app = FastAPI()
     configure_frontend(app, tmp_path, store)
     catalogue.discard("german_standard")
+    await read_again(app, store)
     for path in ("/de/prompt-lists/german_standard", "/prompt-lists/german_standard"):
         _, headers, body = await request(app, path)
         assert headers["x-robots-tag"] == "noindex", path
