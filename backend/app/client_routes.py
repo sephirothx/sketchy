@@ -13,39 +13,63 @@ add a route there and forget it here, and the page renders perfectly in a
 browser while answering 404 to everything that is not one. So the ``:param``
 syntax is react-router's, kept verbatim, and `tests/test_client_routes.py`
 reads `App.tsx` and refuses any difference between the two lists.
+
+Each route also says whether a search engine may index it (#1458), in the
+same table, so adding a page means deciding that too.
 """
 from __future__ import annotations
 
 
-# Mirrors the <Route path=...> list in frontend/src/App.tsx, in its order.
+# Mirrors the <Route path=...> list in frontend/src/App.tsx, in its order,
+# each with whether a search engine may index it (#1458). One table, so a new
+# route cannot be added without that being decided: the indexable ones are the
+# public pages somebody could search for, and everything else answers with
+# `X-Robots-Tag: noindex` (`app/seo.py`).
+#
+# - The lobby, the rules, the legal pages, Solo and the official word lists
+#   are public, need no session and say the same thing to everybody.
+# - The community catalogue is public too (R-LIST-19), but user-authored: a
+#   takedown (R-LIST-13) cannot recall a search engine's cached snippet, so
+#   it waits for a trust threshold (#1463).
+# - The Gallery refuses a visitor without a session (R-GAL-02), so all a
+#   crawler could index is the refusal.
+# - Rooms are ephemeral and their names are not ours to publish (N-06's
+#   spirit); profiles, settings, friends, account recovery and the staff
+#   pages are personal or private.
+#
 # The catch-all (path="*") is deliberately absent: it is what *renders* the
 # not-found page, so treating it as a known route would defeat the whole list.
-CLIENT_ROUTES: tuple[str, ...] = (
-    "/",
-    "/create",
-    "/room/:code",
-    "/rules",
-    "/privacy",
-    "/terms",
-    "/prompt-lists",
-    "/prompt-lists/:slug",
-    "/community-lists",
-    "/community-lists/:listId",
-    "/gallery",
-    "/gallery/:turnId",
-    "/solo",
-    "/my-prompt-lists",
-    "/profile",
-    "/profile/:userId",
-    "/settings",
-    "/settings/:section",
-    "/friends",
-    "/forgot-password",
-    "/reset-password",
-    "/verify-email",
-    "/admin/operations",
-    "/moderation",
-    "/admin/bug-reports",
+CLIENT_ROUTE_TABLE: tuple[tuple[str, bool], ...] = (
+    ("/", True),
+    ("/create", False),
+    ("/room/:code", False),
+    ("/rules", True),
+    ("/privacy", True),
+    ("/terms", True),
+    ("/prompt-lists", True),
+    ("/prompt-lists/:slug", True),
+    ("/community-lists", False),
+    ("/community-lists/:listId", False),
+    ("/gallery", False),
+    ("/gallery/:turnId", False),
+    ("/solo", True),
+    ("/my-prompt-lists", False),
+    ("/profile", False),
+    ("/profile/:userId", False),
+    ("/settings", False),
+    ("/settings/:section", False),
+    ("/friends", False),
+    ("/forgot-password", False),
+    ("/reset-password", False),
+    ("/verify-email", False),
+    ("/admin/operations", False),
+    ("/moderation", False),
+    ("/admin/bug-reports", False),
+)
+
+CLIENT_ROUTES: tuple[str, ...] = tuple(route for route, _ in CLIENT_ROUTE_TABLE)
+INDEXABLE_ROUTES: tuple[str, ...] = tuple(
+    route for route, indexable in CLIENT_ROUTE_TABLE if indexable
 )
 
 
@@ -71,6 +95,10 @@ def _matches(route: str, segments: list[str]) -> bool:
     )
 
 
+def _segments(path: str) -> list[str]:
+    return (path.rstrip("/") or "/").split("/")
+
+
 def is_client_route(path: str) -> bool:
     """Whether the SPA has a page for *path*.
 
@@ -82,6 +110,15 @@ def is_client_route(path: str) -> bool:
     and "/create" are one page, and answering 404 for one of them would be a
     difference nobody typed.
     """
-    trimmed = path.rstrip("/") or "/"
-    segments = trimmed.split("/")
+    segments = _segments(path)
     return any(_matches(route, segments) for route in CLIENT_ROUTES)
+
+
+def is_indexable_route(path: str) -> bool:
+    """Whether *path* is a client page a search engine may index (#1458).
+
+    Matched the way `is_client_route` matches, so a trailing slash or a
+    capital letter does not turn a public page private or the reverse.
+    """
+    segments = _segments(path)
+    return any(_matches(route, segments) for route in INDEXABLE_ROUTES)
