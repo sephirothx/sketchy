@@ -415,6 +415,21 @@ are routes of their own ([`app/api/seo.py`](../backend/app/api/seo.py)), built f
 out of `/room/` only, because Google renders a public page by running it and needs
 `/api/` to do so (R-SEO-02).
 
+Each indexable page is also served **its own head** (#1459, R-SEO-04): title,
+description, canonical URL, `og:url`, an absolute `og:image`, and structured data on the
+home page. The words are the build's: `npm run build` ends with
+[`scripts/seo-pages.mjs`](../frontend/scripts/seo-pages.mjs), which reads the same
+catalogues the app does (titles from `content/ui/`, descriptions from `content/seo/`,
+which the app never loads) and the bundled list files, and writes `dist/seo/pages.json`
+for every interface language. At startup, once the catalogue is seeded,
+[`app/seo_pages.py`](../backend/app/seo_pages.py) writes each page's head into a copy of
+the built shell, gzips it once and keeps it in memory with an `ETag`; `SPAStaticFiles`
+serves that copy ahead of the file, and the plain shell to every other URL. Only the head
+changes: every inline script stays as built, so the policy's hashes still admit them. The
+app sets the same title when it runs (`useDocumentTitle`, the lobby's with the tagline,
+a list's with its name and count) and no longer rewrites the description, because a
+crawler that renders the page indexes what the app leaves behind.
+
 Four frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
@@ -2054,6 +2069,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/prompt_content.py`](../backend/app/prompt_content.py) | Language-aware normalization and bounded metadata for prompt content. |
 | [`app/refusals.py`](../backend/app/refusals.py) | Every reason the server refuses something, named once for both surfaces. |
 | [`app/seo.py`](../backend/app/seo.py) | What search engines are told: robots.txt, the sitemap, and noindex (#1458). |
+| [`app/seo_pages.py`](../backend/app/seo_pages.py) | Each public page's own head in the HTML the server sends (#1459). |
 | [`app/prompts.py`](../backend/app/prompts.py) | Static prompt list used for turn prompt selection. |
 | [`app/repositories/__init__.py`](../backend/app/repositories/__init__.py) | Repository layer for Sketchy data persistence. |
 | [`app/repositories/interfaces.py`](../backend/app/repositories/interfaces.py) | Abstract repository interfaces and domain transfer objects. |

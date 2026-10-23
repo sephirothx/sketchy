@@ -61,7 +61,6 @@ const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
 ];
 
 export function PromptStatsPage() {
-  useDocumentTitle(ui.promptStatsPage.promptStats);
   const params = useParams<{ slug?: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -167,6 +166,13 @@ export function PromptStatsPage() {
     [stats, sort],
   );
   const list = lists?.find((entry) => entry.slug === slug) ?? null;
+  // The list's own title once it is known, as the server wrote it into the
+  // page (#1459): a crawler that runs this script indexes what it ends with.
+  useDocumentTitle(
+    list
+      ? ui.promptStatsPage.listTitle({ name: list.name, count: list.promptCount })
+      : ui.promptStatsPage.promptStats,
+  );
   const listLanguage = list?.language ?? playLanguage;
   const matches = sorted ? matchingPrompts(sorted.prompts, query) : [];
   const plain = stats !== null && nothingRanked(stats);

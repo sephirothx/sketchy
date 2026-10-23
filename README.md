@@ -1867,6 +1867,7 @@ backend/
     api/          REST routers: player profiles, prompt lists, prompt stats, and Solo (#1434)
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
     seo.py        What search engines are told: robots.txt, the sitemap, and noindex
+    seo_pages.py  Each public page's own head, written into the served HTML at startup
     compression.py Serving the build's precompressed copies; cheap gzip for what stays dynamic
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
@@ -1917,6 +1918,8 @@ backend/
 frontend/
   scripts/bundle-report.mjs What a first visit downloads from a build: raw, gzip and brotli per chunk,
                   and the first-load budget CI holds it to (`npm run bundle:check`)
+  scripts/seo-pages.mjs Each public page's title and description in every language, written by
+                  `npm run build` into dist/seo/pages.json for the server to serve (#1459)
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
@@ -1927,6 +1930,8 @@ frontend/
                   anchors.ts is the link notices use, kept apart from the documents
     content/legal/ The privacy notice and the terms of use, one typed module per language
                   (en.ts is the reference); lib/minimumAge.ts holds the age they state
+    content/seo/  What a search result says under each public page's title, one typed
+                  module per language; read by the build alone, never by the app
     content/solo/ Solo's page copy (#1434), one typed module per language, loaded with
                   the pages that use it rather than in the first-load catalogue
     content/ui/   Every word the interface says, one typed module per language
@@ -2668,6 +2673,18 @@ terms, the privacy notice, Solo and the official word lists (#1458). Every other
 `X-Robots-Tag: noindex`. `/robots.txt` keeps crawlers out of rooms in production and
 out of everything elsewhere, so a staging host or a tunnel is never indexed;
 `/sitemap.xml` lists the public pages and every official list on `PUBLIC_BASE_URL`.
+
+Each of those public pages is served **its own head** (#1459): its title, its
+description, a canonical URL and `og:url` on `PUBLIC_BASE_URL`, an absolute preview
+image, and on the home page the structured data that names the site. A crawler that runs
+no script and every link preview read only the served HTML, so with one shell for every
+URL they used to see one page. `npm run build` writes the words, in every language, from
+the same catalogues the app reads (`dist/seo/pages.json`), and the server puts them into a
+copy of the shell per page once at startup, gzips it once and serves it from memory with
+an `ETag` of its own. Everything else — rooms and their invite links included — keeps the
+plain shell and its generic card. The app sets the same title once it runs (the home's is
+"Sketchy – Free multiplayer drawing & guessing game"), since a crawler that runs the page
+indexes what it ends with.
 
 A screen whose own code throws shows the **crash page** instead of going blank: a render error
 is caught at the application root and again around the live room. The page offers a reload, a

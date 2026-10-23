@@ -155,8 +155,9 @@ BUILTIN_EVENTS = frozenset({"connect", "disconnect", "connect_error"})
 #: Modules whose dict keys and emits are not the server's: `probe` speaks *to* a
 #: server, and this module describes one.
 # `db.name_lists` reads and writes the seed files' own format (#1399): its
-# keys are a file's, never a payload's.
-EXCLUDED_MODULES = frozenset({"probe", "wire_contract", "db.name_lists"})
+# keys are a file's, never a payload's. `seo_pages` writes schema.org's
+# vocabulary into a page for search engines (#1459), which no client reads.
+EXCLUDED_MODULES = frozenset({"probe", "wire_contract", "db.name_lists", "seo_pages"})
 
 # --- extraction --------------------------------------------------------------
 

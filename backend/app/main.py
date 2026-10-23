@@ -27,6 +27,7 @@ from app.api.errors import install_refusal_handler, install_validation_handler
 from app.auth.password import password_hash_workers
 from app.compression import (
     NO_DYNAMIC_COMPRESSION,
+    accepted_encodings,
     PRECOMPRESSED_SIBLINGS,
     SelectiveGZipMiddleware,
     precompressed_variant,
@@ -135,6 +136,7 @@ from app.services.idle_rooms import start_idle_room_loop, stop_idle_room_loop
 from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.seo import RobotsTagMiddleware
+from app.seo_pages import SeoPages
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.room_presets import RoomPresetService
@@ -165,6 +167,36 @@ class SPAStaticFiles(StaticFiles):
     so the status tells the truth to everything that is not a browser. A
     missing file, and anything under /api/, stays a plain 404 with no body.
     """
+
+    def __init__(self, *args, seo_pages: SeoPages | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.seo_pages = seo_pages
+
+    def seo_page_response(self, page, scope) -> Response:
+        """A public page's assembled copy (#1459), gzipped when the client
+        takes it, revalidated against the bytes it would actually send."""
+        headers = Headers(scope=scope)
+        use_gzip = "gzip" in accepted_encodings(headers.get("accept-encoding"))
+        body = page.gzipped if use_gzip else page.identity
+        etag = page.gzip_etag if use_gzip else page.etag
+        # Lower case: a 304 keeps only the names it knows, as they are spelled
+        # in `NotModifiedResponse`.
+        response_headers = {
+            "etag": etag,
+            "content-length": str(len(body)),
+            "vary": "Accept-Encoding",
+        }
+        if use_gzip:
+            response_headers["content-encoding"] = "gzip"
+        # Weak or strong alike, as Starlette reads it for the shell:
+        # a proxy that re-encodes a response weakens its tag (#978).
+        if self.is_not_modified(Headers(response_headers), headers):
+            return NotModifiedResponse(response_headers)
+        return Response(
+            body if scope.get("method") != "HEAD" else b"",
+            media_type="text/html",
+            headers=response_headers,
+        )
 
     def file_response(self, full_path, stat_result, scope, status_code: int = 200):
         """Answer with the build's compressed copy when the client takes one,
@@ -202,6 +234,22 @@ class SPAStaticFiles(StaticFiles):
         # case-insensitive filesystem answers `app.js.BR` with the copy.
         if path.lower().endswith(PRECOMPRESSED_SUFFIXES):
             raise HTTPException(status_code=404)
+        # What the build wrote for the server's own use: the pages' heads
+        # (#1459) are served inside the pages, never as a file.
+        if path.lower().startswith("seo/"):
+            raise HTTPException(status_code=404)
+        # GET and HEAD only: anything else is StaticFiles' 405, below.
+        if self.seo_pages is not None and not Path(path).suffix:
+            self.seo_pages.follow_catalogue()
+        page = (
+            self.seo_pages.get(scope["path"])
+            if self.seo_pages and scope.get("method") in ("GET", "HEAD")
+            else None
+        )
+        if page is not None:
+            response = self.seo_page_response(page, scope)
+            response.headers["Cache-Control"] = "no-cache"
+            return response
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
@@ -226,7 +274,18 @@ class SPAStaticFiles(StaticFiles):
             # normalizes that one, and the root arrives as "." rather than "/".
             if not is_client_route(scope["path"]):
                 response.status_code = 404
+            # A list the catalogue does not serve is a page nobody should
+            # find (#1459). Without a build's pages nothing is known.
+            elif (
+                self.seo_pages is not None
+                and self.seo_pages.loaded
+                and self.seo_pages.is_unknown_list(scope["path"])
+            ):
+                response.headers["X-Robots-Tag"] = "noindex"
 
+        if path == "index.html":
+            # The shell under its file name is the home page's duplicate.
+            response.headers["X-Robots-Tag"] = "noindex"
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (
                 "public, max-age=31536000, immutable"
@@ -238,7 +297,7 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
-def configure_frontend(app: FastAPI, directory: Path) -> None:
+def configure_frontend(app: FastAPI, directory: Path, seo_pages: SeoPages | None = None) -> None:
     """Compress what is dynamic, and mount the production frontend when present.
 
     Static files are served from the build's precompressed copies
@@ -249,7 +308,7 @@ def configure_frontend(app: FastAPI, directory: Path) -> None:
     if directory.is_dir():
         app.mount(
             "/",
-            SPAStaticFiles(directory=str(directory), html=True),
+            SPAStaticFiles(directory=str(directory), html=True, seo_pages=seo_pages),
             name="frontend",
         )
 
@@ -859,6 +918,25 @@ async def flush_runtime_events(session_factory) -> None:
         )
 
 
+# Each public page's own head (#1459), assembled once the catalogue is seeded.
+seo_pages = SeoPages()
+
+
+async def official_list_slugs() -> set[str]:
+    return {entry.slug for entry in await prompt_list_repo.list_all()}
+
+
+async def load_seo_pages() -> None:
+    await asyncio.to_thread(
+        seo_pages.load,
+        _frontend_dist,
+        list_slugs=await official_list_slugs(),
+        base_url=public_base_url(),
+        # A list a moderator hides or restores while this process runs.
+        reread=official_list_slugs,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Refused at startup rather than at the first finished game.
@@ -926,6 +1004,8 @@ async def lifespan(_app: FastAPI):
         # bounded - so a backlog left by a long outage cannot delay startup.
         await restore_lobby_backlog(handler_context.lobby_chat, async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
+        # After the seed, so the pages name the lists the catalogue serves.
+        await load_seo_pages()
         await adopt_stored_settings()
         # One worker owns everything (#382), so the outbox needs no scheduler
         # and no second process that somebody has to remember to start.
@@ -1303,7 +1383,7 @@ async def list_public_rooms(request: Request):
 # In production, serve the built frontend as static files from the same origin
 # (single-port self-hosting). No-op during development when the folder is absent.
 _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-configure_frontend(api, _frontend_dist)
+configure_frontend(api, _frontend_dist, seo_pages)
 # Added after everything else, so it is outermost and the time it records is
 # the whole of what a client waited for: the size guard, the session lookup,
 # routing, the handler, and compression. Socket.IO traffic never reaches it -
