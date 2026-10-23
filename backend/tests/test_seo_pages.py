@@ -1,6 +1,8 @@
 """Each public page's own head in the served HTML (#1459, R-SEO-04, R-SEO-05)."""
 from __future__ import annotations
 
+import asyncio
+
 import gzip
 import json
 import re
@@ -207,7 +209,8 @@ async def test_the_catalogue_is_read_at_most_once_a_minute(tmp_path: Path):
     pages.read_at -= pages.ttl_seconds + 1
     for _ in range(5):
         await request(app, "/rules")
-    await pages.reading
+    if pages.reading is not None:
+        await pages.reading
     # One read for the burst, and it ran beside the requests.
     assert reads == 1
     # Assets never ask.
@@ -386,3 +389,22 @@ async def test_a_failed_read_keeps_the_last_answer(tmp_path: Path):
     _, headers, body = await request(app, "/prompt-lists/english_standard")
     assert "x-robots-tag" not in headers
     assert "<title>English — Standard · Sketchy</title>" in body.decode()
+
+
+async def test_a_read_that_hangs_is_given_up(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages_file()), encoding="utf-8")
+
+    async def reread() -> set[str]:
+        await asyncio.Event().wait()  # a dead connection, never answering
+        return set()
+
+    pages = SeoPages(ttl_seconds=0.01)
+    pages.load(tmp_path, list_slugs={"english_standard"}, base_url=BASE, reread=reread)
+    pages.read_at -= 1
+    pages.follow_catalogue()
+    await pages.reading
+    # Given up, the last answer kept, and free to start the next read.
+    assert pages.reading is None
+    assert pages.list_slugs == {"english_standard"}

@@ -258,7 +258,9 @@ class SeoPages:
 
     async def _read(self, reread: Callable[[], Awaitable[set[str]]]) -> None:
         try:
-            self.list_slugs = frozenset(await reread())
+            # Bounded, so a read stuck on a dead connection cannot stop the
+            # following for good: the next request after it starts another.
+            self.list_slugs = frozenset(await asyncio.wait_for(reread(), self.ttl_seconds or None))
         except Exception:
             logger.warning("Public pages keep the last list of official lists", exc_info=True)
         finally:
