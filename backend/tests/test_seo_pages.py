@@ -141,6 +141,14 @@ def test_every_list_the_build_knows_gets_a_head():
     assert heads["/rules"].list_slug is None
 
 
+async def read_again(app, pages: SeoPages) -> None:
+    """Have a request start the catalogue's read, and let it land: it runs in
+    the background, so no page waits for the database."""
+    await request(app, "/rules")
+    if pages.reading is not None:
+        await pages.reading
+
+
 async def test_a_list_follows_the_catalogue_while_the_process_runs(tmp_path: Path):
     (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
     (tmp_path / "seo").mkdir()
@@ -160,16 +168,19 @@ async def test_a_list_follows_the_catalogue_while_the_process_runs(tmp_path: Pat
 
     # A moderator hides German: no page of its own, and noindex.
     catalogue.discard("german_standard")
+    await read_again(app, pages)
     status, headers, body = await request(app, "/prompt-lists/german_standard")
     assert status == 200 and headers["x-robots-tag"] == "noindex"
     assert "<title>Sketchy</title>" in body.decode()
     # And restores it: the page it had, findable again.
     catalogue.add("german_standard")
+    await read_again(app, pages)
     status, headers, body = await request(app, "/prompt-lists/german_standard")
     assert "x-robots-tag" not in headers
     assert "<title>Deutsch · Sketchy</title>" in body.decode()
     # The bare catalogue goes with the Standard list it shows.
     catalogue.discard("english_standard")
+    await read_again(app, pages)
     _, headers, body = await request(app, "/prompt-lists")
     assert "<title>Sketchy</title>" in body.decode()
 
@@ -196,6 +207,8 @@ async def test_the_catalogue_is_read_at_most_once_a_minute(tmp_path: Path):
     pages.read_at -= pages.ttl_seconds + 1
     for _ in range(5):
         await request(app, "/rules")
+    await pages.reading
+    # One read for the burst, and it ran beside the requests.
     assert reads == 1
     # Assets never ask.
     pages.read_at -= pages.ttl_seconds + 1
@@ -330,3 +343,46 @@ async def test_a_served_list_without_a_head_stays_findable(served):
     assert status == 200
     assert "x-robots-tag" not in headers
     assert "<title>Sketchy</title>" in body.decode()
+
+
+async def test_a_list_hidden_at_startup_gets_its_page_back_when_restored(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(
+        json.dumps(pages_file(english_standard="English — Standard", german_standard="Deutsch")),
+        encoding="utf-8",
+    )
+    catalogue = {"english_standard"}
+
+    async def reread() -> set[str]:
+        return set(catalogue)
+
+    pages = SeoPages(ttl_seconds=0)
+    pages.load(tmp_path, list_slugs=set(catalogue), base_url=BASE, reread=reread)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, pages)
+    _, headers, _ = await request(app, "/prompt-lists/german_standard")
+    assert headers["x-robots-tag"] == "noindex"
+    catalogue.add("german_standard")
+    await read_again(app, pages)
+    _, headers, body = await request(app, "/prompt-lists/german_standard")
+    assert "x-robots-tag" not in headers
+    assert "<title>Deutsch · Sketchy</title>" in body.decode()
+
+
+async def test_a_failed_read_keeps_the_last_answer(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages_file()), encoding="utf-8")
+
+    async def reread() -> set[str]:
+        raise ConnectionError("the database is down")
+
+    pages = SeoPages(ttl_seconds=0)
+    pages.load(tmp_path, list_slugs={"english_standard"}, base_url=BASE, reread=reread)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, pages)
+    await read_again(app, pages)
+    _, headers, body = await request(app, "/prompt-lists/english_standard")
+    assert "x-robots-tag" not in headers
+    assert "<title>English — Standard · Sketchy</title>" in body.decode()

@@ -23,14 +23,15 @@ the `/api/auth/me` prefetch keeps its place (#983); the structured data is a
 **A page that is not known is not invented.** An official list the build did
 not write a head for, or one the catalogue no longer serves, keeps the plain
 shell, and `/prompt-lists/<anything else>` is told `noindex`
-(`SPAStaticFiles`). Which lists the catalogue serves is read again at most
-once a minute, since a moderator can hide or restore one while the process
-runs: every list the build knows is assembled, and served only while the
-catalogue serves it. A room's invite link keeps the generic card on purpose:
+(`SPAStaticFiles`). Which lists the catalogue serves is read again, in the
+background, at most once a minute, since a moderator can hide or restore one
+while the process runs: every list the build knows is assembled, and served
+only while the catalogue serves it. A room's invite link keeps the generic card on purpose:
 a room's name in a preview is not something to publish.
 """
 from __future__ import annotations
 
+import asyncio
 import gzip
 import hashlib
 import html
@@ -237,18 +238,31 @@ class SeoPages:
     reread: Callable[[], Awaitable[set[str]]] | None = None
     ttl_seconds: float = VISIBILITY_TTL_SECONDS
     read_at: float = 0.0
+    # The read in flight, held so it is not collected mid-way.
+    reading: asyncio.Task | None = field(default=None, repr=False)
 
-    async def follow_catalogue(self) -> None:
-        """Read the catalogue's official lists again once the last read is
-        older than `ttl_seconds`. Claimed before the read, so a burst of
-        requests makes one query; a read that fails keeps the last answer."""
-        if self.reread is None or time.monotonic() - self.read_at < self.ttl_seconds:
+    def follow_catalogue(self) -> None:
+        """Read the catalogue's official lists again, in the background, once
+        the last read is older than `ttl_seconds`. No page waits for the
+        database - the answer reaches the requests after it - and one read
+        runs at a time, so a burst of requests makes one query. A read that
+        fails keeps the last answer."""
+        if (
+            self.reread is None
+            or self.reading is not None
+            or time.monotonic() - self.read_at < self.ttl_seconds
+        ):
             return
         self.read_at = time.monotonic()
+        self.reading = asyncio.get_running_loop().create_task(self._read(self.reread))
+
+    async def _read(self, reread: Callable[[], Awaitable[set[str]]]) -> None:
         try:
-            self.list_slugs = frozenset(await self.reread())
+            self.list_slugs = frozenset(await reread())
         except Exception:
             logger.warning("Public pages keep the last list of official lists", exc_info=True)
+        finally:
+            self.reading = None
 
     def get(self, path: str) -> AssembledPage | None:
         key = page_key(path)

@@ -240,7 +240,7 @@ class SPAStaticFiles(StaticFiles):
             raise HTTPException(status_code=404)
         # GET and HEAD only: anything else is StaticFiles' 405, below.
         if self.seo_pages is not None and not Path(path).suffix:
-            await self.seo_pages.follow_catalogue()
+            self.seo_pages.follow_catalogue()
         page = (
             self.seo_pages.get(scope["path"])
             if self.seo_pages and scope.get("method") in ("GET", "HEAD")
