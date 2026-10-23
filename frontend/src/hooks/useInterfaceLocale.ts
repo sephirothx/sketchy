@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { queueSettingsSync } from "../lib/accountSettingsSync";
 import type { Locale } from "../lib/interfaceLocale.ts";
@@ -17,14 +17,9 @@ that makes it follow the player to another device (R-I18N-06). */
 export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
-  const { pathname, search, hash, state } = useLocation();
   const navigate = useNavigate();
   const choose = useCallback(
     (next: Locale) => {
-      // Over Settings, the page is the one the overlay was opened from.
-      const background = overlayBackgroundOf(state);
-      const [page, query = ""] = (background ?? pathname).split("?");
-      const { path } = splitLocalePath(page);
       // Saved to the account only once the words are here and showing: a
       // language whose chunk could not be fetched would otherwise follow the
       // player to every device while this one stays in the old language.
@@ -35,6 +30,15 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
       void setLocale(next).then((applied) => {
         if (!applied) return;
         queueSettingsSync({ locale: next });
+        // Where the reader is now, not where they were when they chose: the
+        // words may have taken a while, and they may have moved on - to
+        // another page, or out of Settings. The browser's own address, since
+        // inside the page table the router's has no language prefix.
+        const { pathname, search, hash } = window.location;
+        // Over Settings, the page is the one the overlay was opened from.
+        const background = overlayBackgroundOf(window.history.state?.usr);
+        const [page, query = ""] = (background ?? pathname).split("?");
+        const { path } = splitLocalePath(page);
         if (!isPublicPath(path)) return;
         const there = localePath(path, next) + (query && `?${query}`);
         navigate(
@@ -45,7 +49,7 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
         );
       });
     },
-    [setLocale, pathname, search, hash, state, navigate],
+    [setLocale, navigate],
   );
   return [locale, choose];
 }

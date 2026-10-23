@@ -6,6 +6,7 @@ language picker on a public page moves to that page's address in the choice.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import secrets
 import urllib.error
@@ -225,5 +226,36 @@ async def test_the_account_menu_keeps_the_address_s_language():
             await page.wait_for_url("**/de/rules")
             assert await page.evaluate("document.documentElement.lang") == "de"
         finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_slow_language_moves_the_page_the_reader_is_on_by_then():
+    # Review of #1462: the address follows the switch once the words arrive,
+    # and by then the reader may have moved on; it must not take them back.
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(locale="en-US", viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        release = asyncio.Event()
+
+        async def stall(route):
+            await release.wait()
+            await route.continue_()
+
+        try:
+            await page.goto(BASE_URL + "/rules")
+            await page.route(re.compile(r"/assets/de-[\w-]+\.js$"), stall)
+            await page.locator(".lobby-header .picker-trigger").click()
+            await page.get_by_role("option", name=re.compile("Deutsch")).click()
+            # On to the terms, inside the app, while German is on its way.
+            await page.locator('.document-links a[href="/terms"]').click()
+            await page.wait_for_url(re.compile(r"/terms$"))
+            await page.locator(".legal-page").wait_for()
+            release.set()
+            await page.wait_for_url("**/de/terms")
+            await page.wait_for_function("() => document.documentElement.lang === 'de'")
+        finally:
+            release.set()
             await context.close()
             await browser.close()
