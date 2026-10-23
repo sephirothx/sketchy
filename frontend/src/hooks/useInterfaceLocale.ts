@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { queueSettingsSync } from "../lib/accountSettingsSync";
-import { rememberLocale, type Locale } from "../lib/interfaceLocale.ts";
+import type { Locale } from "../lib/interfaceLocale.ts";
 import { isPublicPath, localePath, splitLocalePath } from "../lib/localePath";
 import { overlayBackgroundOf } from "../lib/overlayRoutes";
 import { useSettingsStore } from "../store/settingsStore";
@@ -21,15 +21,21 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
   const navigate = useNavigate();
   const choose = useCallback(
     (next: Locale) => {
-      // On a public page the choice is also a page: the same one at its
-      // address in that language (#1462). Remembered first, so leaving a
-      // prefixed page for English finds English as the reader's own.
       // Over Settings, the page is the one the overlay was opened from.
       const background = overlayBackgroundOf(state);
       const [page, query = ""] = (background ?? pathname).split("?");
       const { path } = splitLocalePath(page);
-      if (isPublicPath(path)) {
-        rememberLocale(next);
+      // Saved to the account only once the words are here and showing: a
+      // language whose chunk could not be fetched would otherwise follow the
+      // player to every device while this one stays in the old language.
+      // The address follows for the same reason (review of #1462): on a
+      // public page the choice is also a page, the same one at its address
+      // in that language, and only once the switch - which remembers the
+      // choice - has worked.
+      void setLocale(next).then((applied) => {
+        if (!applied) return;
+        queueSettingsSync({ locale: next });
+        if (!isPublicPath(path)) return;
         const there = localePath(path, next) + (query && `?${query}`);
         navigate(
           background ? pathname + search : there + search + hash,
@@ -37,12 +43,6 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
             ? { replace: true, state: { overlayBackground: there, overlayMoved: true } }
             : { replace: true },
         );
-      }
-      // Saved to the account only once the words are here and showing: a
-      // language whose chunk could not be fetched would otherwise follow the
-      // player to every device while this one stays in the old language.
-      void setLocale(next).then((applied) => {
-        if (applied) queueSettingsSync({ locale: next });
       });
     },
     [setLocale, pathname, search, hash, state, navigate],

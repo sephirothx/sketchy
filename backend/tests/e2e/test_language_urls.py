@@ -13,6 +13,8 @@ import urllib.request
 
 from playwright.async_api import async_playwright
 
+from tests.e2e.lobby_helpers import use_guest_name
+
 BASE_URL = "http://localhost:8000"
 
 
@@ -152,6 +154,8 @@ async def test_settings_over_a_language_address_move_the_page_behind_them():
             await page.locator(".settings-modal-card .picker-trigger").first.click()
             await page.get_by_role("option", name=re.compile("français", re.I)).click()
             await page.wait_for_function("() => document.documentElement.lang === 'fr'")
+            # The page behind moves once the switch has worked, just after it.
+            await page.wait_for_function("() => history.state?.usr?.overlayMoved === true")
             # Closing lands on the page in the language chosen, not back on
             # the German address it was opened from.
             await page.keyboard.press("Escape")
@@ -177,6 +181,48 @@ async def test_settings_over_a_filtered_language_address_keep_the_page_and_its_l
             await page.wait_for_url(re.compile(r"/settings"))
             await page.locator(".settings-modal-card").wait_for()
             assert await page.locator(".prompt-stats-page").count() == 1
+            assert await page.evaluate("document.documentElement.lang") == "de"
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_language_that_cannot_be_fetched_changes_neither_page_nor_choice():
+    # Review of #1462: the address and the remembered choice follow only a
+    # switch that worked, as R-I18N-06 asks of every switch.
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(locale="en-US", viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL + "/rules")
+            await page.evaluate("localStorage.setItem('sketchy_locale', 'en')")
+            await page.route(re.compile(r"/assets/de-[\w-]+\.js$"), lambda route: route.abort())
+            await page.locator(".lobby-header .picker-trigger").click()
+            await page.get_by_role("option", name=re.compile("Deutsch")).click()
+            await page.wait_for_timeout(1500)
+            assert page.url.endswith("/rules"), page.url
+            assert await page.evaluate("document.documentElement.lang") == "en"
+            assert await page.evaluate("localStorage.getItem('sketchy_locale')") == "en"
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_the_account_menu_keeps_the_address_s_language():
+    # Review of #1462: on a phone the account menu is a named player's way to
+    # the rules and the stats, and it too keeps the page's language.
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(locale="en-US", viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL + "/de")
+            await use_guest_name(page, f"Menu{secrets.token_hex(3)}")
+            await page.goto(BASE_URL + "/de/terms")
+            await page.locator(".identity-chip").click()
+            await page.get_by_role("menuitem", name="Regeln").click()
+            await page.wait_for_url("**/de/rules")
             assert await page.evaluate("document.documentElement.lang") == "de"
         finally:
             await context.close()
