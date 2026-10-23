@@ -239,6 +239,8 @@ class SPAStaticFiles(StaticFiles):
         if path.lower().startswith("seo/"):
             raise HTTPException(status_code=404)
         # GET and HEAD only: anything else is StaticFiles' 405, below.
+        if self.seo_pages is not None and not Path(path).suffix:
+            await self.seo_pages.follow_catalogue()
         page = (
             self.seo_pages.get(scope["path"])
             if self.seo_pages and scope.get("method") in ("GET", "HEAD")
@@ -920,10 +922,18 @@ async def flush_runtime_events(session_factory) -> None:
 seo_pages = SeoPages()
 
 
+async def official_list_slugs() -> set[str]:
+    return {entry.slug for entry in await prompt_list_repo.list_all()}
+
+
 async def load_seo_pages() -> None:
-    slugs = {entry.slug for entry in await prompt_list_repo.list_all()}
     await asyncio.to_thread(
-        seo_pages.load, _frontend_dist, list_slugs=slugs, base_url=public_base_url()
+        seo_pages.load,
+        _frontend_dist,
+        list_slugs=await official_list_slugs(),
+        base_url=public_base_url(),
+        # A list a moderator hides or restores while this process runs.
+        reread=official_list_slugs,
     )
 
 

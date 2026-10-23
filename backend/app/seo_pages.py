@@ -23,7 +23,10 @@ the `/api/auth/me` prefetch keeps its place (#983); the structured data is a
 **A page that is not known is not invented.** An official list the build did
 not write a head for, or one the catalogue no longer serves, keeps the plain
 shell, and `/prompt-lists/<anything else>` is told `noindex`
-(`SPAStaticFiles`). A room's invite link keeps the generic card on purpose:
+(`SPAStaticFiles`). Which lists the catalogue serves is read again at most
+once a minute, since a moderator can hide or restore one while the process
+runs: every list the build knows is assembled, and served only while the
+catalogue serves it. A room's invite link keeps the generic card on purpose:
 a room's name in a preview is not something to publish.
 """
 from __future__ import annotations
@@ -34,6 +37,8 @@ import html
 import json
 import logging
 import re
+import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -55,6 +60,9 @@ class PageHead:
     canonical_path: str
     lang: str
     home: bool = False
+    # The official list the page is about, which the catalogue must still
+    # serve for the page to be served (#1459 review), or None.
+    list_slug: str | None = None
 
 
 @dataclass(frozen=True)
@@ -162,12 +170,14 @@ def assemble(text: str) -> AssembledPage:
     return AssembledPage(identity, gzip.compress(identity, compresslevel=9, mtime=0), f'"{digest}"')
 
 
-def page_heads(pages: dict, list_slugs: set[str], *, locale: str = DEFAULT_LOCALE) -> dict[str, PageHead]:
+def page_heads(pages: dict, *, locale: str = DEFAULT_LOCALE) -> dict[str, PageHead]:
     """Every public page's head for *locale*, keyed by its path.
 
-    Only the lists in *list_slugs* - the ones the catalogue serves now - are
-    included, and the bare `/prompt-lists` is the reader's Standard list
-    (R-STAT-01) under that list's canonical URL.
+    Every list the build wrote a head for is included, whether or not the
+    catalogue serves it now: a moderator can hide or restore an official list
+    while the process runs, so which of them is served is asked when a page
+    is (`SeoPages.get`). The bare `/prompt-lists` is the reader's Standard
+    list (R-STAT-01) under that list's canonical URL.
     """
     entry = pages["locales"][locale]
     heads: dict[str, PageHead] = {}
@@ -180,13 +190,12 @@ def page_heads(pages: dict, list_slugs: set[str], *, locale: str = DEFAULT_LOCAL
             home=path == "/",
         )
     for slug, head in entry["promptLists"].items():
-        if slug not in list_slugs:
-            continue
         heads[f"/prompt-lists/{slug}"] = PageHead(
             title=head["title"],
             description=head["description"],
             canonical_path=f"/prompt-lists/{slug}",
             lang=locale,
+            list_slug=slug,
         )
     standard = entry.get("standardList")
     if standard and f"/prompt-lists/{standard}" in heads:
@@ -208,16 +217,47 @@ def page_key(path: str) -> str:
     return trimmed.lower()
 
 
+# How long one read of which official lists the catalogue serves stands: the
+# sitemap's minute (`api/seo.py`), so a list a moderator hides or restores
+# leaves or rejoins its page and the sitemap together.
+VISIBILITY_TTL_SECONDS = 60.0
+
+
 @dataclass
 class SeoPages:
-    """The assembled pages, filled once at startup."""
+    """The assembled pages, filled once at startup, and which official lists
+    the catalogue serves, read again at most once a minute."""
 
     pages: dict[str, AssembledPage] = field(default_factory=dict)
     loaded: bool = False
     list_slugs: frozenset[str] = frozenset()
+    # The official list each list page needs the catalogue to serve.
+    needs: dict[str, str] = field(default_factory=dict)
+    # Reads the slugs the catalogue serves now; None reads nothing again.
+    reread: Callable[[], Awaitable[set[str]]] | None = None
+    ttl_seconds: float = VISIBILITY_TTL_SECONDS
+    read_at: float = 0.0
+
+    async def follow_catalogue(self) -> None:
+        """Read the catalogue's official lists again once the last read is
+        older than `ttl_seconds`. Claimed before the read, so a burst of
+        requests makes one query; a read that fails keeps the last answer."""
+        if self.reread is None or time.monotonic() - self.read_at < self.ttl_seconds:
+            return
+        self.read_at = time.monotonic()
+        try:
+            self.list_slugs = frozenset(await self.reread())
+        except Exception:
+            logger.warning("Public pages keep the last list of official lists", exc_info=True)
 
     def get(self, path: str) -> AssembledPage | None:
-        return self.pages.get(page_key(path))
+        key = page_key(path)
+        needed = self.needs.get(key)
+        if needed is not None and needed not in self.list_slugs:
+            # A list a moderator hid gets no page of its own, nor does the
+            # bare catalogue that would show it (#1459 review).
+            return None
+        return self.pages.get(key)
 
     def is_unknown_list(self, path: str) -> bool:
         """Whether *path* names an official list the catalogue does not serve.
@@ -228,7 +268,14 @@ class SeoPages:
         key = page_key(path)
         return key.startswith(LIST_PREFIX) and key[len(LIST_PREFIX):] not in self.list_slugs
 
-    def load(self, dist: Path, *, list_slugs: set[str], base_url: str) -> None:
+    def load(
+        self,
+        dist: Path,
+        *,
+        list_slugs: set[str],
+        base_url: str,
+        reread: Callable[[], Awaitable[set[str]]] | None = None,
+    ) -> None:
         """Assemble every page from the build in *dist*.
 
         A checkout without a build, or a build without the pages file, serves
@@ -244,7 +291,7 @@ class SeoPages:
         try:
             if pages.get("version") != PAGES_FILE_VERSION:
                 raise ValueError(f"pages file version {pages.get('version')!r}")
-            heads = page_heads(pages, list_slugs)
+            heads = page_heads(pages)
             assembled = {
                 page_key(path): assemble(render_page(shell, head, base_url=base_url))
                 for path, head in heads.items()
@@ -258,5 +305,10 @@ class SeoPages:
             # with the generic head until the next build.
             logger.warning("Official lists served without a head of their own: %s", ", ".join(headless))
         self.pages = assembled
+        self.needs = {
+            page_key(path): head.list_slug for path, head in heads.items() if head.list_slug
+        }
         self.list_slugs = frozenset(list_slugs)
+        self.reread = reread
+        self.read_at = time.monotonic()
         self.loaded = True

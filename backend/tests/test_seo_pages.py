@@ -128,16 +128,79 @@ def test_a_shell_missing_a_tag_is_refused_rather_than_half_written():
         )
 
 
-def test_only_the_lists_the_catalogue_serves_get_a_page():
-    heads = page_heads(
-        pages_file(english_standard="English — Standard", retired="Retired"),
-        {"english_standard"},
-    )
-    assert "/prompt-lists/english_standard" in heads
-    assert "/prompt-lists/retired" not in heads
+def test_every_list_the_build_knows_gets_a_head():
+    # Whether one is served is asked when it is (review of #1459): a
+    # moderator can hide or restore a list while the process runs.
+    heads = page_heads(pages_file(english_standard="English — Standard", retired="Retired"))
+    assert heads["/prompt-lists/english_standard"].list_slug == "english_standard"
+    assert heads["/prompt-lists/retired"].list_slug == "retired"
     # The bare catalogue is the reader's Standard list, under that list's URL.
     assert heads["/prompt-lists"].canonical_path == "/prompt-lists/english_standard"
+    assert heads["/prompt-lists"].list_slug == "english_standard"
     assert heads["/"].home and not heads["/rules"].home
+    assert heads["/rules"].list_slug is None
+
+
+async def test_a_list_follows_the_catalogue_while_the_process_runs(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(
+        json.dumps(pages_file(english_standard="English — Standard", german_standard="Deutsch")),
+        encoding="utf-8",
+    )
+    catalogue = {"english_standard", "german_standard"}
+
+    async def reread() -> set[str]:
+        return set(catalogue)
+
+    pages = SeoPages(ttl_seconds=0)
+    pages.load(tmp_path, list_slugs=set(catalogue), base_url=BASE, reread=reread)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, pages)
+
+    # A moderator hides German: no page of its own, and noindex.
+    catalogue.discard("german_standard")
+    status, headers, body = await request(app, "/prompt-lists/german_standard")
+    assert status == 200 and headers["x-robots-tag"] == "noindex"
+    assert "<title>Sketchy</title>" in body.decode()
+    # And restores it: the page it had, findable again.
+    catalogue.add("german_standard")
+    status, headers, body = await request(app, "/prompt-lists/german_standard")
+    assert "x-robots-tag" not in headers
+    assert "<title>Deutsch · Sketchy</title>" in body.decode()
+    # The bare catalogue goes with the Standard list it shows.
+    catalogue.discard("english_standard")
+    _, headers, body = await request(app, "/prompt-lists")
+    assert "<title>Sketchy</title>" in body.decode()
+
+
+async def test_the_catalogue_is_read_at_most_once_a_minute(tmp_path: Path):
+    (tmp_path / "index.html").write_text(SHELL, encoding="utf-8")
+    (tmp_path / "seo").mkdir()
+    (tmp_path / "seo" / "pages.json").write_text(json.dumps(pages_file()), encoding="utf-8")
+    reads = 0
+
+    async def reread() -> set[str]:
+        nonlocal reads
+        reads += 1
+        return {"english_standard"}
+
+    pages = SeoPages()
+    pages.load(tmp_path, list_slugs={"english_standard"}, base_url=BASE, reread=reread)
+    app = FastAPI()
+    configure_frontend(app, tmp_path, pages)
+    for _ in range(5):
+        await request(app, "/prompt-lists/english_standard")
+    # Just loaded: the startup read stands for the minute.
+    assert reads == 0
+    pages.read_at -= pages.ttl_seconds + 1
+    for _ in range(5):
+        await request(app, "/rules")
+    assert reads == 1
+    # Assets never ask.
+    pages.read_at -= pages.ttl_seconds + 1
+    await request(app, "/favicon.svg")
+    assert reads == 1
 
 
 @pytest.fixture
