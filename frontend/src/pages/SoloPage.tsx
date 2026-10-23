@@ -32,6 +32,7 @@ import { soloCopyFor } from "../content/solo/index.ts";
 import { intlLocale } from "../content/ui/format.ts";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { usePublicPath } from "../hooks/usePublicPath";
 import { ApiError } from "../lib/api";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { formatDate } from "../lib/clock";
@@ -118,6 +119,7 @@ function SoloSession() {
   // The drawings this account's page decoded go with it.
   useEffect(() => () => decodedDrawings.clear(), []);
   const navigate = useNavigate();
+  const publicPath = usePublicPath();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const register = useAuthStore((state) => state.register);
@@ -360,7 +362,7 @@ function SoloSession() {
             body={signedOut ? words().signInBody : words().accountBody}
             action={
               signedOut ? (
-                <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
+                <button type="button" className="btn btn-secondary" onClick={() => navigate(publicPath("/"))}>
                   {words().backToLobby}
                 </button>
               ) : (

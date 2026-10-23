@@ -125,3 +125,35 @@ def test_no_route_has_opted_into_case_sensitivity():
 )
 def test_a_page_the_client_does_not_have_is_not_a_client_route(path):
     assert not is_client_route(path)
+
+
+@pytest.mark.parametrize(
+    "path,known",
+    [
+        # A public page at its address in another interface language (#1462).
+        ("/de", True),
+        ("/fr/rules", True),
+        ("/IT/prompt-lists/italian_standard", True),
+        ("/pl/solo/", True),
+        # Only a public page has one; English is the unprefixed address, and
+        # a language the interface is not written in is no prefix.
+        ("/de/room/ABC123", False),
+        ("/de/settings", False),
+        ("/en/rules", False),
+        ("/xx/rules", False),
+    ],
+)
+def test_a_language_prefix_is_known_only_in_front_of_a_public_page(path, known):
+    assert is_client_route(path) is known
+
+
+def test_the_client_reads_the_same_public_pages():
+    # `frontend/src/lib/localePath.ts` decides on its own which pages have an
+    # address per language; it must name the indexable routes and no others.
+    source = (APP_TSX.parent / "lib" / "localePath.ts").read_text(encoding="utf-8")
+    pattern = re.search(r"const PUBLIC_PATH = (/.+/i);", source).group(1)
+    named = set(re.findall(r"[a-z-]+", pattern.split("(?:", 1)[1]))
+    from app.client_routes import INDEXABLE_ROUTES
+
+    expected = {route.split("/")[1] for route in INDEXABLE_ROUTES if route != "/"}
+    assert named - {"i"} == expected

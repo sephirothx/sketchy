@@ -80,6 +80,10 @@ def test_anything_but_production_is_closed_to_crawlers():
         ("/terms", 304, False),
         ("/prompt-lists/english_standard", 200, False),
         ("/solo", 200, False),
+        ("/de", 200, False),
+        ("/fr/prompt-lists/english_standard", 200, False),
+        ("/de/room/ABC123", 404, True),
+        ("/en/rules", 301, False),
         ("/room/ABC123", 200, True),
         ("/create", 200, True),
         ("/settings/appearance", 200, True),
@@ -195,19 +199,38 @@ async def test_the_sitemap_lists_the_public_pages_and_every_official_list(
     assert answered.headers["content-type"].startswith("application/xml")
     # No cache may keep a hidden list listed longer than this process does.
     assert answered.headers["cache-control"] == "public, max-age=60"
-    locations = [
-        element.text
-        for element in ElementTree.fromstring(answered.content).iter(f"{SITEMAP}loc")
+    root = ElementTree.fromstring(answered.content)
+    locations = [element.text for element in root.iter(f"{SITEMAP}loc")]
+    pages = [
+        "/",
+        "/rules",
+        "/solo",
+        "/terms",
+        "/privacy",
+        "/prompt-lists/english_standard",
+        "/prompt-lists/german_standard",
     ]
+    # Every page at its address in every interface language (#1462),
+    # English unprefixed.
+    locales = ["en", "de", "es", "fr", "it", "nl", "pt", "pl"]
     assert locations == [
-        "https://sketchy.example.org/",
-        "https://sketchy.example.org/rules",
-        "https://sketchy.example.org/solo",
-        "https://sketchy.example.org/terms",
-        "https://sketchy.example.org/privacy",
-        "https://sketchy.example.org/prompt-lists/english_standard",
-        "https://sketchy.example.org/prompt-lists/german_standard",
+        "https://sketchy.example.org"
+        + (path if locale == "en" else f"/{locale}" + ("" if path == "/" else path))
+        for path in pages
+        for locale in locales
     ]
+    # And each address names the others, and English for everybody else.
+    rules_de = next(
+        url for url in root.iter(f"{SITEMAP}url")
+        if url.find(f"{SITEMAP}loc").text == "https://sketchy.example.org/de/rules"
+    )
+    alternates = {
+        link.get("hreflang"): link.get("href")
+        for link in rules_de.iter("{http://www.w3.org/1999/xhtml}link")
+    }
+    assert alternates["de"] == "https://sketchy.example.org/de/rules"
+    assert alternates["en"] == alternates["x-default"] == "https://sketchy.example.org/rules"
+    assert len(alternates) == 9
 
 
 async def test_head_is_answered_like_get(crawler_files):

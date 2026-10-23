@@ -441,6 +441,17 @@ contents of `#root` anyway. Without script it is the page,
 markup cost a slow phone 200 ms of first paint: the browser fetched the body font for
 the hidden text, competing with the reader's language.
 
+Each public page also has an **address per interface language** (#1462, R-SEO-07):
+`/de/rules` beside `/rules`, English unprefixed and `/en/…` redirected to it. The prefix is
+not part of a route. [`lib/localePath.ts`](../frontend/src/lib/localePath.ts) splits it off
+(only in front of a public page), `AppRoutes` matches the page table against the address
+without it and provides the language to `usePublicPath`, which keeps it on links between
+public pages, and `followPageLocale` in `settingsStore` puts it first in R-I18N-06's order
+for that page view without storing it. The shell's preload script reads the prefix first
+too, so `/de/rules` fetches German before the first paint. On the server
+`client_routes.split_locale` reads the same prefixes, `seo_pages` assembles every page in
+every language with `hreflang` alternates, and the sitemap lists every address.
+
 Four frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).

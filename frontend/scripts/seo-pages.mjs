@@ -42,6 +42,7 @@ import { rulesFor } from "../src/content/rules/index.ts";
 import { soloCopyFor } from "../src/content/solo/index.ts";
 import { SEO_COPY } from "../src/content/seo/index.ts";
 import { documentTitle } from "../src/lib/documentTitle.ts";
+import { localePath } from "../src/lib/localePath.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const LIST_DIRECTORY = join(here, "..", "..", "backend", "data", "prompt_lists");
@@ -101,7 +102,9 @@ const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}<
 
 /** The header's site links and the footer's legal ones, around a page's own
     words: the way a crawler that runs no script finds the rest of the site. */
-function framed(ui, legal, main) {
+function framed(ui, legal, main, locale) {
+  // Each page's links stay in its language (#1462).
+  const to = (path) => localePath(path, locale);
   const nav = [
     ["/", ui.lobbyBrowserPage.lobby],
     ["/solo", ui.solo.solo],
@@ -111,10 +114,10 @@ function framed(ui, legal, main) {
   ];
   return (
     '<noscript><div class="prerender">' +
-    `<header>${link("/", "Sketchy")}<nav aria-label="${escapeHtml(ui.appHeader.siteNav)}"><ul>` +
-    nav.map(([href, text]) => `<li>${link(href, text)}</li>`).join("") +
+    `<header>${link(to("/"), "Sketchy")}<nav aria-label="${escapeHtml(ui.appHeader.siteNav)}"><ul>` +
+    nav.map(([href, text]) => `<li>${link(to(href), text)}</li>`).join("") +
     `</ul></nav></header><main>${main}</main>` +
-    `<footer>${link("/terms", legal.terms.title)} · ${link("/privacy", legal.privacy.title)}</footer>` +
+    `<footer>${link(to("/terms"), legal.terms.title)} · ${link(to("/privacy"), legal.privacy.title)}</footer>` +
     "</div></noscript>"
   );
 }
@@ -178,7 +181,7 @@ export async function seoPages(lists) {
     const legal = legalFor(locale);
     const rules = rulesFor(locale);
     const home = documentTitle(null, ui.document.tagline);
-    const body = (main) => framed(ui, legal, main);
+    const body = (main) => framed(ui, legal, main, locale);
     const pages = {
       "/": {
         title: home,

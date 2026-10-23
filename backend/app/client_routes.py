@@ -15,9 +15,13 @@ syntax is react-router's, kept verbatim, and `tests/test_client_routes.py`
 reads `App.tsx` and refuses any difference between the two lists.
 
 Each route also says whether a search engine may index it (#1458), in the
-same table, so adding a page means deciding that too.
+same table, so adding a page means deciding that too. The indexable ones also
+have an address per interface language (#1462): `/de/rules` beside `/rules`,
+English unprefixed, as `frontend/src/lib/localePath.ts` reads them.
 """
 from __future__ import annotations
+
+from app.domain_values import InterfaceLocale
 
 
 # Mirrors the <Route path=...> list in frontend/src/App.tsx, in its order,
@@ -95,6 +99,34 @@ def _matches(route: str, segments: list[str]) -> bool:
     )
 
 
+# The languages a public page's address may name (#1462): every interface
+# language but English, which is the unprefixed address.
+DEFAULT_PATH_LOCALE = InterfaceLocale.ENGLISH.value
+PATH_LOCALES: tuple[str, ...] = tuple(
+    locale.value for locale in InterfaceLocale if locale.value != DEFAULT_PATH_LOCALE
+)
+
+
+def split_locale(path: str) -> tuple[str | None, str]:
+    """The language a public page's *path* names, and the path without it.
+
+    Only in front of an indexable route: `/de/rules` is German, `/de/room/X`
+    is no page at all. Without case, as react-router matches.
+    """
+    first, _, rest = path.lstrip("/").partition("/")
+    locale = first.lower()
+    if locale in PATH_LOCALES and is_indexable_route("/" + rest):
+        return locale, "/" + rest
+    return None, path
+
+
+def localized_path(path: str, locale: str) -> str:
+    """*path* at its address in *locale*."""
+    if locale == DEFAULT_PATH_LOCALE:
+        return path
+    return f"/{locale}" if path == "/" else f"/{locale}{path}"
+
+
 def _segments(path: str) -> list[str]:
     return (path.rstrip("/") or "/").split("/")
 
@@ -111,7 +143,9 @@ def is_client_route(path: str) -> bool:
     difference nobody typed.
     """
     segments = _segments(path)
-    return any(_matches(route, segments) for route in CLIENT_ROUTES)
+    return any(_matches(route, segments) for route in CLIENT_ROUTES) or (
+        split_locale(path)[0] is not None
+    )
 
 
 def is_indexable_route(path: str) -> bool:
@@ -121,4 +155,10 @@ def is_indexable_route(path: str) -> bool:
     capital letter does not turn a public page private or the reverse.
     """
     segments = _segments(path)
-    return any(_matches(route, segments) for route in INDEXABLE_ROUTES)
+    if any(_matches(route, segments) for route in INDEXABLE_ROUTES):
+        return True
+    # A language's address of one (#1462).
+    first, _, rest = path.lstrip("/").partition("/")
+    return first.lower() in PATH_LOCALES and any(
+        _matches(route, _segments("/" + rest)) for route in INDEXABLE_ROUTES
+    )

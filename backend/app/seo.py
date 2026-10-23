@@ -31,7 +31,12 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from xml.sax.saxutils import escape
 
-from app.client_routes import is_indexable_route
+from app.client_routes import (
+    DEFAULT_PATH_LOCALE,
+    PATH_LOCALES,
+    is_indexable_route,
+    localized_path,
+)
 
 ROBOTS_PATH = "/robots.txt"
 SITEMAP_PATH = "/sitemap.xml"
@@ -63,18 +68,29 @@ def public_paths(list_slugs: list[str]) -> list[str]:
 
 
 def sitemap_xml(*, base_url: str, paths: list[str]) -> str:
-    """A sitemap of *paths* on *base_url*.
+    """A sitemap of *paths* on *base_url*, each at its address in every
+    interface language (#1462), each address naming the others.
 
     No `lastmod`: the pages change with a deploy rather than on a date this
     process knows, and search engines ignore a `lastmod` that is not true.
     """
-    entries = "".join(
-        f"<url><loc>{escape(base_url + path)}</loc></url>" for path in paths
-    )
+    locales = (DEFAULT_PATH_LOCALE, *PATH_LOCALES)
+    entries = []
+    for path in paths:
+        alternates = "".join(
+            f'<xhtml:link rel="alternate" hreflang="{language}" '
+            f'href="{escape(base_url + localized_path(path, locale))}"/>'
+            for language, locale in (*((locale, locale) for locale in locales), ("x-default", DEFAULT_PATH_LOCALE))
+        )
+        entries.extend(
+            f"<url><loc>{escape(base_url + localized_path(path, locale))}</loc>{alternates}</url>"
+            for locale in locales
+        )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f"{entries}</urlset>"
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml">'
+        f"{''.join(entries)}</urlset>"
     )
 
 

@@ -15,7 +15,7 @@ import socketio
 from sqlalchemy import select
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
@@ -137,6 +137,7 @@ from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.seo import RobotsTagMiddleware
 from app.seo_pages import SeoPages
+from app.client_routes import DEFAULT_PATH_LOCALE, is_indexable_route
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.room_presets import RoomPresetService
@@ -171,6 +172,16 @@ class SPAStaticFiles(StaticFiles):
     def __init__(self, *args, seo_pages: SeoPages | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.seo_pages = seo_pages
+
+    @staticmethod
+    def english_redirect(scope) -> Response | None:
+        first, _, rest = scope["path"].lstrip("/").partition("/")
+        if first.lower() != DEFAULT_PATH_LOCALE or not is_indexable_route("/" + rest):
+            return None
+        query = scope.get("query_string", b"").decode("latin-1")
+        # One leading slash: `//x` would be a host, not a path.
+        target = "/" + rest.lstrip("/")
+        return RedirectResponse(target + (f"?{query}" if query else ""), status_code=301)
 
     def seo_page_response(self, page, scope) -> Response:
         """A public page's assembled copy (#1459), gzipped when the client
@@ -241,6 +252,11 @@ class SPAStaticFiles(StaticFiles):
         # GET and HEAD only: anything else is StaticFiles' 405, below.
         if self.seo_pages is not None and not Path(path).suffix:
             self.seo_pages.follow_catalogue()
+        # English is the unprefixed address (#1462): `/en/rules` is sent to
+        # `/rules` rather than being a second copy of it.
+        english = self.english_redirect(scope)
+        if english is not None:
+            return english
         page = (
             self.seo_pages.get(scope["path"])
             if self.seo_pages and scope.get("method") in ("GET", "HEAD")
