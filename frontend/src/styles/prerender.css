@@ -1,0 +1,18 @@
+/* The readable copy of a public page that the server puts inside #root, in a
+   <noscript>, for a reader that runs no script (#1460): a browser with
+   JavaScript off sees it as the page. A browser that runs script never parses
+   it, and React replaces it on mount. */
+.prerender {
+  color: var(--ink);
+  margin: 0 auto;
+  max-width: 72ch;
+  padding: 24px 16px 48px;
+}
+
+.prerender nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  list-style: none;
+  padding: 0;
+}

@@ -934,6 +934,7 @@ async def load_seo_pages() -> None:
         base_url=public_base_url(),
         # A list a moderator hides or restores while this process runs.
         reread=official_list_slugs,
+        contact=contact_address(),
     )
 
 

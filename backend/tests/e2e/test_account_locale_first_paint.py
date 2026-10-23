@@ -8,7 +8,9 @@ before that answer is drawn in English and then switches under its reader.
 
 What is measured is the document's language at the moment React first puts
 anything into `#root` - recorded by a script that runs before the app does, so
-nothing the app does afterwards can change the answer.
+nothing the app does afterwards can change the answer. A public page's
+`#root` arrives holding its readable copy in a `<noscript>` (#1460), which is
+the server's, not React's, so it is not counted.
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ FIRST_PAINT_PROBE = """
 window.__firstPaintLang = null;
 new MutationObserver((_, observer) => {
   const root = document.getElementById("root");
-  if (root && root.childElementCount > 0) {
+  if (root && root.querySelector(":scope > :not(noscript)")) {
     window.__firstPaintLang = document.documentElement.lang;
     observer.disconnect();
   }
