@@ -28,6 +28,7 @@ renderer either way.
 """
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from xml.sax.saxutils import escape
 
 from app.client_routes import is_indexable_route
@@ -80,15 +81,18 @@ def sitemap_xml(*, base_url: str, paths: list[str]) -> str:
 def wants_noindex(path: str, status: int) -> bool:
     """Whether the answer to *path* with *status* should carry noindex.
 
-    Static files keep no header: a dot in the last segment is a file, never
-    a client route (the SPA mount serves the shell only for extensionless
-    paths).
+    Static files keep no header: a path with a file extension is a file,
+    never a client route (the SPA mount serves the shell only for paths
+    without one).
     """
     if path in (ROBOTS_PATH, SITEMAP_PATH):
         return False
     if path.startswith(("/api/", "/socket.io")) or path == "/api":
         return True
-    if "." in path.rsplit("/", 1)[-1]:
+    # The static mount's own test (`SPAStaticFiles`: `Path(path).suffix`),
+    # so a client route whose parameter merely starts with a dot -
+    # `/settings/.account`, which the client opens - is not taken for a file.
+    if PurePosixPath(path).suffix:
         return False
     # A 304 updates the headers of the response it revalidates, so it must
     # say what its 200 said. A redirect is left alone too: some crawlers

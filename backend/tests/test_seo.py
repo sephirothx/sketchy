@@ -83,6 +83,10 @@ def test_anything_but_production_is_closed_to_crawlers():
         ("/room/ABC123", 200, True),
         ("/create", 200, True),
         ("/settings/appearance", 200, True),
+        # A dot at the start of a parameter is no file extension: the client
+        # opens it, so it keeps the route's policy (review of #1505).
+        ("/settings/.account", 200, True),
+        ("/profile/.x", 200, True),
         ("/gallery/0193f0c1-2b3d-7e00-8a11-6f9c0d2e4b5a", 200, True),
         ("/community-lists", 200, True),
         ("/profile", 200, True),
@@ -125,6 +129,7 @@ def indexed_app(tmp_path: Path):
         ("/rules", 200, False),
         ("/room/ABC123", 200, True),
         ("/settings", 200, True),
+        ("/settings/.account", 200, True),
         ("/not-a-page", 404, True),
         ("/api/thing", 200, True),
         ("/favicon.svg", 200, False),
