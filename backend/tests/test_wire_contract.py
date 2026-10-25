@@ -165,6 +165,24 @@ def _wire_alias(statement: ast.AnnAssign) -> str | None:
     return None
 
 
+def _structured_data_keys() -> set[str]:
+    from app.seo_pages import PageHead, _structured_data
+
+    data = json.loads(_structured_data(
+        PageHead(title="", description="", canonical_path="/", lang="en", home=True),
+        "https://example.org",
+    ).removeprefix('<script type="application/ld+json">').removesuffix("</script>"))
+
+    def keys(value) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | set().union(*(keys(item) for item in value.values()))
+        if isinstance(value, list):
+            return set().union(*(keys(item) for item in value))
+        return set()
+
+    return keys(data)
+
+
 def _mentions(frontend: str, name: str) -> bool:
     return re.search(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", frontend) is not None
 
@@ -189,7 +207,9 @@ def test_server_payload_keys_are_read_by_the_client(trees, frontend):
     # A data export is downloaded as an opaque artifact rather than parsed by
     # the browser. Its v1 field surface is pinned by a dedicated checked-in
     # contract and generation test instead of this live client/server check.
-    opaque = EXPORT_DOWNLOAD_FIELDS | _diagnostic_blob_keys()
+    # The structured data in a public page is schema.org's vocabulary, read
+    # by search engines and never by the client (#1459).
+    opaque = EXPORT_DOWNLOAD_FIELDS | _diagnostic_blob_keys() | _structured_data_keys()
     unread = sorted(
         key for key in keys if key not in opaque and not _mentions(frontend, key)
     )

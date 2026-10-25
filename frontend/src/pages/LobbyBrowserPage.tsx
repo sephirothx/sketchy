@@ -193,7 +193,7 @@ function identityMessage(error: unknown): string {
 
 export function LobbyBrowserPage() {
   // The front door: the tab says the site's name and nothing else.
-  useDocumentTitle(null);
+  useDocumentTitle(null, ui.document.tagline);
   const dockRef = useBottomDock();
   const navigate = useNavigate();
   const location = useLocation();

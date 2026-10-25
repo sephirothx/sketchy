@@ -12,8 +12,15 @@
 // Not copy: the product's name, the one word no language translates.
 export const BRAND_TITLE = "Sketchy";
 
-/** "Gallery · Sketchy", or the brand alone for a page with no name of its own. */
-export function documentTitle(page?: string | null): string {
+/** "Gallery · Sketchy", or the brand alone for a page with no name of its own.
+
+The home page has no name of its own but says what the game is beside the
+brand - "Sketchy – Free multiplayer drawing & guessing game" - because that
+title is what a search result shows (#1459), and the server writes the same
+words into the page it serves. */
+export function documentTitle(page?: string | null, tagline?: string): string {
   const name = page?.trim();
-  return name ? `${name} · ${BRAND_TITLE}` : BRAND_TITLE;
+  if (name) return `${name} · ${BRAND_TITLE}`;
+  const line = tagline?.trim();
+  return line ? `${BRAND_TITLE} – ${line}` : BRAND_TITLE;
 }

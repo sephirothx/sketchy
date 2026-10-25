@@ -19,7 +19,7 @@ they are free to diverge even though they hold the same eight today.
 Resolved before the first paint. A page that renders in English and then
 switches has already shown the wrong language to the person who reads slowest.
 */
-import { catalogueFor, FALLBACK_LOCALE, isCatalogueLoaded, LOCALES, type Locale } from "../content/ui/index.ts";
+import { FALLBACK_LOCALE, LOCALES, type Locale } from "../content/ui/index.ts";
 
 export { FALLBACK_LOCALE, LOCALES };
 export type { Locale };
@@ -82,17 +82,10 @@ export function resolveLocale(sources: {
 Not cosmetic: `lang` is what a screen reader picks a voice from, what a
 browser offers to translate, and what `:lang()` styling and hyphenation read.
 
-The description tags move with it. `index.html` carries the English ones for
-a crawler, which arrives before any script runs and is the reader those tags
-are really for; a person who has chosen another language gets theirs here. */
+The description tags are left alone. The server writes each public page's own
+(#1459), and a crawler that runs this script indexes what it leaves behind:
+rewriting them here gave every page the home page's words. */
 export function applyDocumentLocale(locale: Locale): void {
   if (typeof document === "undefined") return;
   document.documentElement.lang = locale;
-  // Called as the settings store loads, before any catalogue has arrived
-  // (#1426): the tags wait for the words, and are set again when they come.
-  if (!isCatalogueLoaded(locale)) return;
-  const description = catalogueFor(locale).document.description;
-  for (const selector of ['meta[name="description"]', 'meta[property="og:description"]']) {
-    document.querySelector(selector)?.setAttribute("content", description);
-  }
 }

@@ -23,9 +23,14 @@
     <meta property="og:site_name" content="Sketchy" />
     <meta property="og:title" content="Sketchy" />
     <meta property="og:description" content="Draw, guess and laugh with friends!" />
-    <!-- Root-relative on purpose. Slack, Discord and iMessage resolve it against
-         the page they just fetched, and this app has no canonical origin to
-         hard-code. og:url is omitted for the same reason. -->
+    <!-- Root-relative here, because the build knows no origin. The server
+         writes each public page's own title, description, canonical URL and
+         og:url into its copy of this file, with this image made absolute on
+         PUBLIC_BASE_URL (backend/app/seo_pages.py, #1459); every other page,
+         a room's invite link included, is served this file as it is, and
+         Slack, Discord and iMessage resolve the image against the page they
+         fetched. Keep these tags in this form: the server replaces each in
+         place, and serves every page this plain file when one is missing. -->
     <meta property="og:image" content="/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
