@@ -892,7 +892,7 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_SECURITY` | `starttls` | `starttls` upgrades the connection before anything is sent (port 587), `tls` encrypts from the first byte (port 465), `none` sends in the clear. Both encrypted modes verify the relay's certificate against the system trust store, so any public mail provider works with no further setup and a relay that fails verification fails the send. A relay signed by a private authority is trusted by pointing `SSL_CERT_FILE` (or `SSL_CERT_DIR`) at a bundle that includes it. Production refuses `none` together with `SMTP_PASSWORD`; an unknown value, or the retired `SMTP_STARTTLS`, fails startup |
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender. **Required in production** (#1418), on a domain mail can be delivered to - a `localhost`, `.local`, `.test` or `example` domain is refused at startup, since DMARC fails it - and a warning is logged when its domain is not `PUBLIC_BASE_URL`'s. A display name is allowed (`Sketchy <play@sketchy.app>`) |
 | `CONTACT_ADDRESS` | unset | The operator's address, which the privacy notice and the terms give for privacy requests, a parent asking for an under-age player's data to go, and anything Settings cannot do (`GET /api/legal`). Any environment refuses a malformed address; production refuses to start without one, or with one on a domain nobody can write to (`localhost`, `.local`, `.test`, `.example`, `.invalid`) (#1417) |
-| `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, where a plain-HTTP request is redirected in production, and the origin of every URL in `/sitemap.xml` and `robots.txt` (#1458). Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | The fallback interval for emptying the outbox: a queued message wakes the sender when its transaction commits, and a full batch is followed by another at once, so this only paces retries and anything queued by another process |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
 | `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets, e-mail addresses and client IP addresses (#1418), takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable, and the transport that prints them does not run in production. Production logs a warning at startup when `text` is chosen, since none of it is redacted |
@@ -1866,6 +1866,7 @@ backend/
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
     api/          REST routers: player profiles, prompt lists, prompt stats, and Solo (#1434)
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
+    seo.py        What search engines are told: robots.txt, the sitemap, and noindex
     compression.py Serving the build's precompressed copies; cheap gzip for what stays dynamic
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
@@ -2660,6 +2661,13 @@ for gets that same shell — it is what draws the not-found page — but with a 
 so a crawler or an uptime probe is not told a page exists where none does. The route list
 the server checks that against lives in `app/client_routes.py` and is held to the one in
 `App.tsx` by a test.
+
+The same table says which pages a search engine may index: the lobby, the rules, the
+terms, the privacy notice, Solo and the official word lists (#1458). Every other answer
+— private pages, rooms, the community catalogue, `/api/`, a URL with no page — carries
+`X-Robots-Tag: noindex`. `/robots.txt` keeps crawlers out of rooms in production and
+out of everything elsewhere, so a staging host or a tunnel is never indexed;
+`/sitemap.xml` lists the public pages and every official list on `PUBLIC_BASE_URL`.
 
 A screen whose own code throws shows the **crash page** instead of going blank: a render error
 is caught at the application root and again around the live room. The page offers a reload, a

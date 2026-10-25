@@ -406,6 +406,15 @@ refuses any difference, because the drift is invisible in a browser. The three s
 routes render the same page for the wrong role rather than naming the surface and
 refusing it (§7, *Authorization*), and keep their 200: the URL exists, the account is what does not.
 
+The same table says which routes a search engine may index (#1458): the lobby, the
+rules, the legal pages, Solo and the official word lists. Everything else is answered
+with `X-Robots-Tag: noindex` by [`app/seo.py`](../backend/app/seo.py), the outermost
+middleware, which also covers `/api/` and every URL with no page. `/robots.txt` and `/sitemap.xml`
+are routes of their own ([`app/api/seo.py`](../backend/app/api/seo.py)), built from
+`PUBLIC_BASE_URL` and the official catalogue; production's `robots.txt` keeps crawlers
+out of `/room/` only, because Google renders a public page by running it and needs
+`/api/` to do so (R-SEO-02).
+
 Four frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
@@ -1956,6 +1965,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | Module | Purpose |
 | --- | --- |
 | [`app/api/__init__.py`](../backend/app/api/__init__.py) | REST routers served alongside the Socket.IO application. |
+| [`app/api/seo.py`](../backend/app/api/seo.py) | robots.txt and sitemap.xml, the two files crawlers ask for by name (#1458). |
 | [`app/api/bug_reports.py`](../backend/app/api/bug_reports.py) | Player-filed bug reports and the administrator queue that triages them. |
 | [`app/announcements.py`](../backend/app/announcements.py) | What the room says about itself, as facts rather than as English sentences. |
 | [`app/api/errors.py`](../backend/app/api/errors.py) | The refused HTTP response, in the one shape the client reads. |
@@ -2043,6 +2053,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |
 | [`app/prompt_content.py`](../backend/app/prompt_content.py) | Language-aware normalization and bounded metadata for prompt content. |
 | [`app/refusals.py`](../backend/app/refusals.py) | Every reason the server refuses something, named once for both surfaces. |
+| [`app/seo.py`](../backend/app/seo.py) | What search engines are told: robots.txt, the sitemap, and noindex (#1458). |
 | [`app/prompts.py`](../backend/app/prompts.py) | Static prompt list used for turn prompt selection. |
 | [`app/repositories/__init__.py`](../backend/app/repositories/__init__.py) | Repository layer for Sketchy data persistence. |
 | [`app/repositories/interfaces.py`](../backend/app/repositories/interfaces.py) | Abstract repository interfaces and domain transfer objects. |

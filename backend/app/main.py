@@ -40,6 +40,7 @@ from app.services.gallery_shelf import (
 from app.api.profiles import create_profile_router, drawing_cache
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
+from app.api.seo import create_seo_router
 from app.api.bug_reports import create_bug_report_router
 from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
@@ -133,6 +134,7 @@ from app.services.afk import start_afk_loop, stop_afk_loop
 from app.services.idle_rooms import start_idle_room_loop, stop_idle_room_loop
 from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
+from app.seo import RobotsTagMiddleware
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
 from app.services.room_presets import RoomPresetService
@@ -1189,6 +1191,7 @@ api.include_router(
         ),
     )
 )
+api.include_router(create_seo_router(prompt_list_repo))
 api.include_router(
     create_avatar_router(
         user_repo,
@@ -1312,8 +1315,9 @@ api.add_middleware(RequestTimingMiddleware)
 # the browser headers a REST response does (#467). The HTTPS rule sits inside
 # the headers so that its redirect is a hardened response too; both are pure
 # ASGI and cost a header scan. The inline-script hash is read off the built
-# shell once, here, so a rebuilt page is admitted by the next start.
-app = SecurityHeadersMiddleware(
+# shell once, here, so a rebuilt page is admitted by the next start. Outermost
+# of all, the noindex tag (#1458), so a refusal from any layer carries it.
+app = RobotsTagMiddleware(SecurityHeadersMiddleware(
     HttpsOnlyMiddleware(
         socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io"),
         rule=HttpsOnly(enabled=is_production(), public_origin=public_origin(public_base_url())),
@@ -1323,4 +1327,4 @@ app = SecurityHeadersMiddleware(
         strict_transport_security=is_production(),
         cross_origin_resources=bool(configured_origins()),
     ),
-)
+))
