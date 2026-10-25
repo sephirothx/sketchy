@@ -426,9 +426,20 @@ for every interface language. At startup, once the catalogue is seeded,
 the built shell, gzips it once and keeps it in memory with an `ETag`; `SPAStaticFiles`
 serves that copy ahead of the file, and the plain shell to every other URL. Only the head
 changes: every inline script stays as built, so the policy's hashes still admit them. The
-app sets the same title when it runs (`useDocumentTitle`, the lobby's with the tagline,
-which is also its hidden `<h1>` while the name tag shows, a list's with its name and count) and no longer rewrites the description, because a
+app sets the same title when it runs (`useDocumentTitle`: the lobby's with the tagline,
+which is also its hidden `<h1>` while the name tag shows; a list's with its name and
+count) and no longer rewrites the description, because a
 crawler that renders the page indexes what the app leaves behind.
+
+The home page, the rules, the legal pages and Solo also carry their **readable text**
+inside `#root` (#1460, R-SEO-06): the build writes the same words as plain semantic
+HTML, with the header's site links and the footer's legal ones, and the server fills in
+the contact address. It sits in a `<noscript>`: a browser that runs script never parses
+it, so a player pays nothing for it but its bytes, and React's first render replaces the
+contents of `#root` anyway. Without script it is the page,
+[`styles/prerender.css`](../frontend/src/styles/prerender.css) its only styling. Hidden
+markup cost a slow phone 200 ms of first paint: the browser fetched the body font for
+the hidden text, competing with the reader's language.
 
 Four frontend conventions worth knowing:
 

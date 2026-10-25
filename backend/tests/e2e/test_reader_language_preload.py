@@ -85,7 +85,8 @@ async def test_a_language_that_stalls_paints_in_english_and_then_switches():
         try:
             await page.goto(BASE_URL)
             # Painted, in English, while French is still on its way.
-            await expect(page.locator("#root")).not_to_be_empty(timeout=6000)
+            # What React draws, not the <noscript> copy the server sent (#1460).
+            await expect(page.locator("#root > :not(noscript)").first).to_be_attached(timeout=6000)
             await expect(page.locator("html")).to_have_attribute("lang", "en")
             release.set()
             await expect(page.locator("html")).to_have_attribute("lang", "fr")
@@ -141,7 +142,7 @@ async def test_a_slow_language_still_paints_when_english_cannot(english):
         try:
             await page.goto(BASE_URL)
             await expect(page.locator("html")).to_have_attribute("lang", "fr", timeout=10000)
-            await expect(page.locator("#root")).not_to_be_empty()
+            await expect(page.locator("#root > :not(noscript)").first).to_be_attached()
             await expect(page.locator("#no-words")).to_be_hidden()
         finally:
             release.set()

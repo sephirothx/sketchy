@@ -2686,6 +2686,12 @@ plain shell and its generic card. The app sets the same title once it runs (the 
 "Sketchy – Free multiplayer drawing & guessing game"), since a crawler that runs the page
 indexes what it ends with.
 
+The home page, the rules, the legal pages and Solo are also **readable without
+JavaScript** (#1460): the same words, as plain HTML inside the page with the site's
+links, so a crawler that runs no script, a link checker or a browser with scripts off
+reads them. A player never sees that copy: it is in a `<noscript>`, which a browser
+running the app never parses.
+
 A screen whose own code throws shows the **crash page** instead of going blank: a render error
 is caught at the application root and again around the live room. The page offers a reload, a
 way back to the lobby — the room's releases the seat, since the socket outlives the crashed
