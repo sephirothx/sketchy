@@ -427,7 +427,7 @@ the built shell, gzips it once and keeps it in memory with an `ETag`; `SPAStatic
 serves that copy ahead of the file, and the plain shell to every other URL. Only the head
 changes: every inline script stays as built, so the policy's hashes still admit them. The
 app sets the same title when it runs (`useDocumentTitle`, the lobby's with the tagline,
-a list's with its name and count) and no longer rewrites the description, because a
+which is also its hidden `<h1>` while the name tag shows, a list's with its name and count) and no longer rewrites the description, because a
 crawler that renders the page indexes what the app leaves behind.
 
 Four frontend conventions worth knowing:
