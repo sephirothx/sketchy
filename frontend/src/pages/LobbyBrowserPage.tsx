@@ -36,6 +36,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { showsRoomCount, showsRoomFilters } from "../lib/lobbyControls.ts";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { usePublicPath } from "../hooks/usePublicPath";
 import { documentTitle } from "../lib/documentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
@@ -195,6 +196,7 @@ function identityMessage(error: unknown): string {
 export function LobbyBrowserPage() {
   // The front door: the tab says the site's name and nothing else.
   useDocumentTitle(null, ui.document.tagline);
+  const publicPath = usePublicPath();
   const dockRef = useBottomDock();
   const navigate = useNavigate();
   const location = useLocation();
@@ -582,7 +584,7 @@ export function LobbyBrowserPage() {
                 className="btn btn-secondary btn-compact lobby-solo"
                 data-testid="lobby-solo"
                 disabled={Boolean(pendingJoin)}
-                onClick={() => navigate("/solo")}
+                onClick={() => navigate(publicPath("/solo"))}
               >
                 <UserIcon size={15} />
                 {ui.solo.solo}
@@ -810,7 +812,7 @@ export function LobbyBrowserPage() {
               className="btn btn-secondary btn-big lobby-solo"
               data-testid="lobby-solo"
               disabled={Boolean(pendingJoin)}
-              onClick={() => navigate("/solo")}
+              onClick={() => navigate(publicPath("/solo"))}
             >
               <UserIcon size={16} />
               {ui.solo.solo}

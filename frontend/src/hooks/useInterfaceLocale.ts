@@ -1,7 +1,10 @@
 import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { queueSettingsSync } from "../lib/accountSettingsSync";
 import type { Locale } from "../lib/interfaceLocale.ts";
+import { isPublicPath, localePath, splitLocalePath } from "../lib/localePath";
+import { overlayBackgroundOf } from "../lib/overlayRoutes";
 import { useSettingsStore } from "../store/settingsStore";
 
 /** The language the interface is read in, and the one way to change it.
@@ -14,16 +17,39 @@ that makes it follow the player to another device (R-I18N-06). */
 export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
   const locale = useSettingsStore((state) => state.locale);
   const setLocale = useSettingsStore((state) => state.setLocale);
+  const navigate = useNavigate();
   const choose = useCallback(
     (next: Locale) => {
       // Saved to the account only once the words are here and showing: a
       // language whose chunk could not be fetched would otherwise follow the
       // player to every device while this one stays in the old language.
+      // The address follows for the same reason (review of #1462): on a
+      // public page the choice is also a page, the same one at its address
+      // in that language, and only once the switch - which remembers the
+      // choice - has worked.
       void setLocale(next).then((applied) => {
-        if (applied) queueSettingsSync({ locale: next });
+        if (!applied) return;
+        queueSettingsSync({ locale: next });
+        // Where the reader is now, not where they were when they chose: the
+        // words may have taken a while, and they may have moved on - to
+        // another page, or out of Settings. The browser's own address, since
+        // inside the page table the router's has no language prefix.
+        const { pathname, search, hash } = window.location;
+        // Over Settings, the page is the one the overlay was opened from.
+        const background = overlayBackgroundOf(window.history.state?.usr);
+        const [page, query = ""] = (background ?? pathname).split("?");
+        const { path } = splitLocalePath(page);
+        if (!isPublicPath(path)) return;
+        const there = localePath(path, next) + (query && `?${query}`);
+        navigate(
+          background ? pathname + search : there + search + hash,
+          background
+            ? { replace: true, state: { overlayBackground: there, overlayMoved: true } }
+            : { replace: true },
+        );
       });
     },
-    [setLocale],
+    [setLocale, navigate],
   );
   return [locale, choose];
 }

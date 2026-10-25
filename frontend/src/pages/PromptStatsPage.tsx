@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { SectionLabel } from "../components/ui/Card";
 import { Picker } from "../components/ui/Picker";
@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { usePublicPath } from "../hooks/usePublicPath";
 import "../styles/lazy/profile.css";
 import "../styles/lazy/prompt-lists.css";
 import "../styles/lazy/prompt-stats.css";
@@ -63,7 +64,9 @@ const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
 export function PromptStatsPage() {
   const params = useParams<{ slug?: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const publicPath = usePublicPath();
+  const [searchParams] = useSearchParams();
+  const { pathname } = useLocation();
 
   const [lists, setLists] = useState<PromptListSummary[] | null>(null);
   const [stats, setStats] = useState<PromptStatsResponse | null>(null);
@@ -198,14 +201,17 @@ export function PromptStatsPage() {
   function chooseList(nextSlug: string) {
     setQuery("");
     const queryString = searchParams.toString();
-    navigate(`/prompt-lists/${nextSlug}${queryString ? `?${queryString}` : ""}`);
+    navigate(publicPath(`/prompt-lists/${nextSlug}`) + (queryString ? `?${queryString}` : ""));
   }
 
   function setFilter(name: string, value: string, defaultValue: string) {
     const next = new URLSearchParams(searchParams);
     if (value === defaultValue) next.delete(name);
     else next.set(name, value);
-    setSearchParams(next);
+    // Not `setSearchParams`: in here the address comes without its language
+    // (#1462), and a relative navigation would drop it.
+    const query = next.toString();
+    navigate(publicPath(pathname) + (query ? `?${query}` : ""));
   }
 
   return (

@@ -44,16 +44,18 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+from app.client_routes import DEFAULT_PATH_LOCALE, PATH_LOCALES, localized_path, split_locale
 
 logger = logging.getLogger(__name__)
 
 PAGES_FILE = Path("seo") / "pages.json"
 PAGES_FILE_VERSION = 1
-# The language the unprefixed URLs are read in. Other languages get their own
-# URLs (#1462); until then this is the only one assembled.
-DEFAULT_LOCALE = "en"
+# The language the unprefixed URLs are read in; every other language's pages
+# are under its own prefix (#1462, `app/client_routes.py`).
+DEFAULT_LOCALE = DEFAULT_PATH_LOCALE
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,8 @@ class PageHead:
     list_slug: str | None = None
     # The page's readable copy (#1460), or None for a page that has none.
     body: str | None = None
+    # The same page in every interface language, as (hreflang, path) (#1462).
+    alternates: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -159,6 +163,11 @@ def render_page(shell: str, head: PageHead, *, base_url: str) -> str:
     added = [
         f'<link rel="canonical" href="{_attribute(canonical)}" />',
         f'<meta property="og:url" content="{_attribute(canonical)}" />',
+        *(
+            f'<link rel="alternate" hreflang="{_attribute(language)}" '
+            f'href="{_attribute(base_url + path)}" />'
+            for language, path in head.alternates
+        ),
     ]
     if head.home:
         added.append(_structured_data(head, base_url))
@@ -194,13 +203,14 @@ def page_heads(
     locale: str = DEFAULT_LOCALE,
     contact: str | None = None,
 ) -> dict[str, PageHead]:
-    """Every public page's head for *locale*, keyed by its path.
+    """Every public page's head for *locale*, keyed by its English path.
 
     Every list the build wrote a head for is included, whether or not the
     catalogue serves it now: a moderator can hide or restore an official list
     while the process runs, so which of them is served is asked when a page
     is (`SeoPages.get`). The bare `/prompt-lists` is the reader's Standard
-    list (R-STAT-01) under that list's canonical URL.
+    list (R-STAT-01) under that list's canonical URL. Each canonical URL is the
+    page's address in *locale* (#1462).
     """
     entry = pages["locales"][locale]
     contact_html = contact_text(contact, entry["contactPending"])
@@ -210,7 +220,7 @@ def page_heads(
         heads[path] = PageHead(
             title=head["title"],
             description=head["description"],
-            canonical_path=path,
+            canonical_path=localized_path(path, locale),
             lang=locale,
             home=path == "/",
             body=body.replace("{contact}", contact_html) if body is not None else None,
@@ -219,7 +229,7 @@ def page_heads(
         heads[f"/prompt-lists/{slug}"] = PageHead(
             title=head["title"],
             description=head["description"],
-            canonical_path=f"/prompt-lists/{slug}",
+            canonical_path=localized_path(f"/prompt-lists/{slug}", locale),
             lang=locale,
             list_slug=slug,
         )
@@ -232,15 +242,22 @@ def page_heads(
 LIST_PREFIX = "/prompt-lists/"
 
 
-def page_key(path: str) -> str:
-    """How a request path finds its page: as react-router matches it, with
-    case and a trailing slash ignored - except in a list's slug, which the
-    page asks the server for exactly as written, so `English_Standard` is a
-    list that does not exist rather than a second copy of one that does."""
+def _english_key(path: str) -> str:
     trimmed = path.rstrip("/") or "/"
     if trimmed.lower().startswith(LIST_PREFIX) and trimmed.count("/") == 2:
         return LIST_PREFIX + trimmed[len(LIST_PREFIX):]
     return trimmed.lower()
+
+
+def page_key(path: str) -> str:
+    """How a request path finds its page: as react-router matches it, with
+    case and a trailing slash ignored - except in a list's slug, which the
+    page asks the server for exactly as written, so `English_Standard` is a
+    list that does not exist rather than a second copy of one that does. A
+    language prefix (#1462) is kept, in lower case."""
+    locale, rest = split_locale(path.rstrip("/") or "/")
+    key = _english_key(rest)
+    return localized_path(key, locale) if locale else key
 
 
 # How long one read of which official lists the catalogue serves stands: the
@@ -306,7 +323,7 @@ class SeoPages:
         Asked of the catalogue, not of the pages: a list the build wrote no
         head for is still a real page, served the plain shell, and must stay
         indexable - it is in the sitemap."""
-        key = page_key(path)
+        _, key = split_locale(page_key(path))
         return key.startswith(LIST_PREFIX) and key[len(LIST_PREFIX):] not in self.list_slugs
 
     def load(
@@ -333,11 +350,32 @@ class SeoPages:
         try:
             if pages.get("version") != PAGES_FILE_VERSION:
                 raise ValueError(f"pages file version {pages.get('version')!r}")
-            heads = page_heads(pages, contact=contact)
-            assembled = {
-                page_key(path): assemble(render_page(shell, head, base_url=base_url))
-                for path, head in heads.items()
+            locales = [
+                locale
+                for locale in (DEFAULT_PATH_LOCALE, *PATH_LOCALES)
+                if locale in pages["locales"]
+            ]
+            by_locale = {
+                locale: page_heads(pages, locale=locale, contact=contact)
+                for locale in locales
             }
+            heads = by_locale[DEFAULT_PATH_LOCALE]
+            assembled = {}
+            for locale, localized in by_locale.items():
+                for path, head in localized.items():
+                    if path != "/prompt-lists":
+                        # The same page in every language that has it, and
+                        # English for a reader whose language is none of them.
+                        alternates = [
+                            (other, localized_path(path, other))
+                            for other in locales
+                            if path in by_locale[other]
+                        ]
+                        alternates.append(("x-default", path))
+                        head = replace(head, alternates=tuple(alternates))
+                    assembled[page_key(localized_path(path, locale))] = assemble(
+                        render_page(shell, head, base_url=base_url)
+                    )
         except (KeyError, TypeError, ValueError):
             logger.exception("Public pages keep the plain shell: %s could not be used", PAGES_FILE)
             return
@@ -347,8 +385,12 @@ class SeoPages:
             # with the generic head until the next build.
             logger.warning("Official lists served without a head of their own: %s", ", ".join(headless))
         self.pages = assembled
+        # Every language's address of a list needs the list (#1462).
         self.needs = {
-            page_key(path): head.list_slug for path, head in heads.items() if head.list_slug
+            page_key(localized_path(path, locale)): head.list_slug
+            for locale, localized in by_locale.items()
+            for path, head in localized.items()
+            if head.list_slug
         }
         self.list_slugs = frozenset(list_slugs)
         self.reread = reread

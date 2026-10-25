@@ -11,6 +11,7 @@ raise it without importing React. */
 import { formatDateTime, type TimeFormat } from "./clock.ts";
 import { reportedDrawing, type PlayerReportDrawing } from "./moderation.ts";
 import { ui } from "../content/ui/index.ts";
+import { splitLocalePath } from "./localePath.ts";
 
 
 export type ReportedMessage = {
@@ -48,7 +49,9 @@ delete their data, and the rules say what a decision's category means. Read
 as the router and the server read it - any case, trailing slashes or not -
 so `/privacy/` is the same page as `/privacy`. */
 export function readableWhileSuspended(pathname: string): boolean {
-  return READABLE_WHILE_SUSPENDED.has(pathname.toLowerCase().replace(/\/+$/, ""));
+  // In any interface language (#1462).
+  const { path } = splitLocalePath(pathname);
+  return READABLE_WHILE_SUSPENDED.has(path.toLowerCase().replace(/\/+$/, ""));
 }
 
 export function onSuspended(listener: Listener): () => void {

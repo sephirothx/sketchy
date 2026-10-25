@@ -2692,6 +2692,14 @@ links, so a crawler that runs no script, a link checker or a browser with script
 reads them. A player never sees that copy: it is in a `<noscript>`, which a browser
 running the app never parses.
 
+Every one of those pages also has an **address in each interface language** (#1462):
+`/de/rules`, `/fr/prompt-lists/english_standard`, `/it` for the lobby, with English
+unprefixed (`/en/…` redirects there). The address's language is the one that page is read
+in, whatever the reader's own, and is not remembered: the rest of the app stays in theirs.
+Links between public pages keep it, and choosing a language on a public page moves to
+that page's address in it. Each address names the others for search engines (`hreflang`),
+and the sitemap lists them all.
+
 A screen whose own code throws shows the **crash page** instead of going blank: a render error
 is caught at the application root and again around the live room. The page offers a reload, a
 way back to the lobby — the room's releases the seat, since the socket outlives the crashed

@@ -14,6 +14,7 @@ import { installCrashTestSeam } from './lib/crashTestSeam.ts'
 import { installChunkReload } from './lib/chunkReload.ts'
 import { installScrollHandles } from './lib/scrollHandles.ts'
 import { prefetchPlayRoutes, prefetchRouteFor } from './routeModules.ts'
+import { splitLocalePath } from './lib/localePath.ts'
 import { beforeFirstPaint } from './lib/startup.ts'
 import { useAuthStore } from './store/authStore.ts'
 import { firstPaintWords, initialLocaleReady } from './store/settingsStore.ts'
@@ -29,7 +30,7 @@ installScrollHandles()
 
 // The page this address draws is a chunk of its own (#475): fetched now, while
 // the paint waits on the account below, rather than once it is over.
-const routeFetched = prefetchRouteFor(window.location.pathname)
+const routeFetched = prefetchRouteFor(splitLocalePath(window.location.pathname).path)
 
 // The account's language outranks the browser's (R-I18N-06), and is only
 // known once the account is: so the first paint waits for it, bounded, and

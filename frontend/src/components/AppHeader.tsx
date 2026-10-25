@@ -8,6 +8,7 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { BackIcon, BarChartIcon, ChevronRightIcon, GearIcon, HomeIcon, ImageIcon, InfoIcon, StarIcon, UserIcon, Wordmark } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import { usePublicPath } from "../hooks/usePublicPath";
 import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
 import { linksToGallery } from "../lib/lobbyControls.ts";
 import { siteLinkCurrent, siteNavMode } from "../lib/siteNav.ts";
@@ -77,6 +78,8 @@ export function AppHeader({
   languageSwitch?: boolean;
 } = {}) {
   const navigate = useNavigate();
+  const publicPath = usePublicPath();
+  const home = publicPath("/");
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const showBack = Boolean(backLabel) && isNarrow;
   const openSettings = useOpenSettings();
@@ -93,7 +96,7 @@ export function AppHeader({
           <button
             type="button"
             className="btn btn-ghost header-back-button"
-            onClick={() => navigate(backTo)}
+            onClick={() => navigate(publicPath(backTo))}
             aria-label={backLabel}
             title={backLabel}
           >
@@ -105,13 +108,13 @@ export function AppHeader({
             wordmark's name, "Sketchy". */}
         <div className="lobby-wordmark">
           <a
-            href="/"
+            href={home}
             className="header-home-link"
             title={ui.appHeader.sketchyHome}
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
               event.preventDefault();
-              navigate("/");
+              navigate(home);
             }}
           >
             <Wordmark size={34} />
@@ -121,11 +124,11 @@ export function AppHeader({
           <p className="header-crumb">
             <ChevronRightIcon size={14} />
             <a
-              href={parent.to}
+              href={publicPath(parent.to)}
               onClick={(event) => {
                 if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
                 event.preventDefault();
-                navigate(parent.to);
+                navigate(publicPath(parent.to));
               }}
             >
               {parent.label}
@@ -179,7 +182,10 @@ export function AppHeader({
  * name the pages more briefly here.
  */
 function SiteNav() {
+  // Inside the page table the address comes without its language (#1462):
+  // matched as it is, linked in the page's language.
   const { pathname } = useLocation();
+  const publicPath = usePublicPath();
   const hasSession = useAuthStore((state) => linksToGallery(state.user));
   useLocaleRerender();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -240,7 +246,7 @@ function SiteNav() {
           {pages.map((page) => (
             <li key={page.to}>
               <Link
-                to={page.to}
+                to={publicPath(page.to)}
                 className="site-nav-link"
                 aria-current={siteLinkCurrent(page.to, pathname)}
                 title={mode === "icons" ? page.label : undefined}

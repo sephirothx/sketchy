@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { bundledLists, expandedLists, LIST_DIRECTORY, seoPages } from "../scripts/seo-pages.mjs";
 import { LOCALES } from "../src/content/ui/index.ts";
+import { localePath } from "../src/lib/localePath.ts";
 
 const lists = bundledLists();
 const pages = await seoPages(lists);
@@ -94,9 +95,13 @@ test("the readable text is the words each page draws, in every language", async 
     assert.ok(entry.pages["/privacy"].body.includes("{contact}"), locale);
     // The site's links, for a crawler that follows no script.
     const home = entry.pages["/"].body;
+    // In the page's own language where the target has an address in it
+    // (#1462); the community catalogue has one address.
     for (const href of ["/solo", "/community-lists", "/prompt-lists", "/rules", "/terms", "/privacy"]) {
-      assert.ok(home.includes(`href="${href}"`), `${locale} ${href}`);
+      assert.ok(home.includes(`href="${localePath(href, locale)}"`), `${locale} ${href}`);
     }
+    if (locale !== "en") assert.ok(home.includes(`href="/${locale}/rules"`), locale);
+    assert.ok(home.includes('href="/community-lists"'), locale);
     assert.ok(home.includes(`<h1>${escapeHtml(entry.pages["/"].title)}</h1>`), locale);
     for (const page of Object.values(entry.pages)) assert.match(page.body, /^<noscript><div class="prerender">.*<\/div><\/noscript>$/s);
   }

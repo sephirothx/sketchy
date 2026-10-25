@@ -51,6 +51,7 @@ import {
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { usePublicPath } from "../hooks/usePublicPath";
 import { fill } from "../content/ui/slots.tsx";
 import { MINIMUM_AGE } from "../lib/minimumAge.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
@@ -111,6 +112,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   inRoom?: boolean;
 } = {}) {
   const navigate = useNavigate();
+  // Its public pages in the language of the page it is on (#1462).
+  const publicPath = usePublicPath();
   const openSettings = useOpenSettings();
   const openOverlay = useOpenOverlay();
   const waiting = useFriendsStore((state) => waitingRequestCount(state.lists));
@@ -314,7 +317,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 icon={<BarChartIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
-                  navigate("/prompt-lists");
+                  navigate(publicPath("/prompt-lists"));
                 }}
               >
                 {ui.accountMenu.promptStats}
@@ -347,7 +350,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 icon={<InfoIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
-                  navigate("/rules");
+                  navigate(publicPath("/rules"));
                 }}
               >
                 {ui.accountMenu.rules}
@@ -357,7 +360,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 icon={<LockIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
-                  navigate("/privacy");
+                  navigate(publicPath("/privacy"));
                 }}
               >
                 {ui.accountMenu.privacyAndTerms}
@@ -485,6 +488,8 @@ export function AuthDialog({
       went into `login`'s third parameter, which is not `code`. */
   onSubmit: (credentials: AuthCredentials) => Promise<unknown>;
 }) {
+  // The documents in the language of the page the dialog is over (#1462).
+  const publicPath = usePublicPath();
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const fieldId = useId();
   const formId = `${fieldId}-form`;
@@ -775,19 +780,19 @@ export function AuthDialog({
           <p className="auth-hint auth-rules-note">
             {fill(ui.accountMenu.agreeToRules, {
               rules: (
-                <a className="auth-link" href="/rules" target="_blank" rel="noreferrer">
+                <a className="auth-link" href={publicPath("/rules")} target="_blank" rel="noreferrer">
                   {ui.accountMenu.rules2}
                 </a>
               ),
               // An account made from nothing is a new identity's first
               // agreement as much as the name step is (#1417).
               terms: (
-                <a className="auth-link" href="/terms" target="_blank" rel="noreferrer">
+                <a className="auth-link" href={publicPath("/terms")} target="_blank" rel="noreferrer">
                   {ui.accountMenu.terms2}
                 </a>
               ),
               privacy: (
-                <a className="auth-link" href="/privacy" target="_blank" rel="noreferrer">
+                <a className="auth-link" href={publicPath("/privacy")} target="_blank" rel="noreferrer">
                   {ui.accountMenu.privacy2}
                 </a>
               ),

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { ui } from "../content/ui/index.ts";
+import { usePublicPath } from "../hooks/usePublicPath";
 
 type Document = "rules" | "terms" | "privacy";
 
@@ -16,12 +17,13 @@ export function DocumentLinks({ current }: { current: Document }) {
     { document: "privacy", to: "/privacy", label: ui.legalPage.privacy },
   ];
   const others = all.filter((entry) => entry.document !== current);
+  const publicPath = usePublicPath();
   return (
     <p className="document-links">
       {others.map((entry, index) => (
         <span key={entry.document}>
           {index > 0 && <span aria-hidden="true"> · </span>}
-          <Link to={entry.to}>{entry.label}</Link>
+          <Link to={publicPath(entry.to)}>{entry.label}</Link>
         </span>
       ))}
     </p>

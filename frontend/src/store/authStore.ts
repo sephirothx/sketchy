@@ -4,7 +4,7 @@ import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { historyPortFor, releaseRoomHistory } from "../lib/roomHistory";
 import { useGameStore } from "./gameStore";
-import { isPaletteColor, useSettingsStore } from "./settingsStore";
+import { isPaletteColor, pageLocaleInForce, useSettingsStore } from "./settingsStore";
 import { nicknameError } from "../lib/roomEntryState";
 import {
   applyAccountSettings,
@@ -208,7 +208,10 @@ async function loadRegisteredSettings(
     const settings = known ?? await fetchUserSettings();
     // Fetched before they are applied, so an account's language is in place
     // by the time the paint this read is holding goes ahead (R-I18N-06).
-    await loadCatalogue(settings.locale);
+    // Not while a page's address names the language (#1462): the account's
+    // is stored for later, and the first paint must not wait for words it
+    // will not show.
+    if (!pageLocaleInForce()) await loadCatalogue(settings.locale);
     applyAccountSettings(settings);
   } catch {
     // Settings are an enhancement, not an authentication dependency. Keep the

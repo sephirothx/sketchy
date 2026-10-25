@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import {
+  ownLocale,
   useSettingsStore,
   type AppTheme,
   type BrushCursorStyle,
@@ -48,7 +49,9 @@ export function currentSettingsPayload(): AccountSettings {
     timeFormat: settings.timeFormat,
     promptLanguage: settings.promptLanguage,
     extraPromptLanguages: settings.extraPromptLanguages,
-    locale: settings.locale,
+    // The reader's own, not a language a page's address put in force for
+    // that page (#1462): that one is never stored.
+    locale: ownLocale(),
   };
 }
 
