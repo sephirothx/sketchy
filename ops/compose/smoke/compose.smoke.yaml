@@ -1,0 +1,36 @@
+# Added on top of ../compose.yaml by smoke.sh only. Two stand-ins for what the
+# smoke cannot have:
+#
+#   proxy    nginx in cloudflared's place: on its address, so the app trusts
+#            it as it would trust the tunnel, saying the request came over
+#            HTTPS as Cloudflare would. Published on the loopback only, for
+#            the smoke's clients on the host.
+#   mailpit  a mail relay that delivers nothing and lets the smoke read what
+#            arrived.
+services:
+  proxy:
+    image: nginx:1.30.6-alpine
+    volumes:
+      # Relative to the project directory (ops/compose/, the first file's),
+      # not to this file.
+      - ./smoke/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:${SMOKE_HTTP_PORT:-18080}:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      edge:
+        ipv4_address: ${SKETCHY_PROXY_IP:-172.31.240.10}
+
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "127.0.0.1:${SMOKE_MAIL_PORT:-18025}:8025"
+    networks: [edge]
+
+  # Production refuses to start without a relay, so the relay comes first.
+  app:
+    depends_on:
+      mailpit:
+        condition: service_started

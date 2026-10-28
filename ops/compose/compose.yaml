@@ -1,0 +1,192 @@
+# The production deployment (#405, #408): one Sketchy worker, its own
+# PostgreSQL, and a Cloudflare tunnel as the only way in.
+#
+#   cp .env.example .env && chmod 600 .env     # then fill it in
+#   docker compose build                       # until #457 publishes an image
+#   docker compose up -d
+#
+# Four services:
+#
+#   db           PostgreSQL 17, created once with the tracked initdb flags and
+#                config (ops/postgres/), on a network with no route out.
+#   migrate      The same image as the app, run once per `up`: a snapshot,
+#                then `python -m app.db.migrate` as the schema owner. The app
+#                does not start unless it exits 0.
+#   app          The single worker (R-PLAT-05). No port is published: nothing
+#                on the host or the home network can reach it, only the
+#                tunnel.
+#   cloudflared  Runs when COMPOSE_PROFILES includes `tunnel`. Cloudflare
+#                terminates HTTPS and cloudflared forwards to http://app:8000.
+#
+# Each service is given the variables it needs by name rather than the whole
+# .env, so the web process never holds the schema owner's password (#896).
+# The step-by-step setup is in README → Deploying with Docker Compose.
+
+name: ${COMPOSE_PROJECT_NAME:-sketchy}
+
+x-app-image: &app-image
+  image: ${SKETCHY_IMAGE:-sketchy:local}
+  build:
+    context: ../..
+    args:
+      SKETCHY_COMMIT_SHA: ${SKETCHY_COMMIT_SHA:-unknown}
+      SKETCHY_COMMIT_DATE: ${SKETCHY_COMMIT_DATE:-unknown}
+
+x-logging: &logging
+  # Docker's default keeps every line for ever; on UnRaid that fills
+  # docker.img and takes every container on the machine down with it.
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-database-urls:
+  - &app-database-url postgresql+asyncpg://sketchy_app:${SKETCHY_APP_DB_PASSWORD:?set SKETCHY_APP_DB_PASSWORD in .env}@db:5432/sketchy
+  - &owner-database-url postgresql+asyncpg://sketchy_owner:${SKETCHY_OWNER_DB_PASSWORD:?set SKETCHY_OWNER_DB_PASSWORD in .env}@db:5432/sketchy
+
+services:
+  db:
+    image: postgres:17.11-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      POSTGRES_DB: sketchy
+      # The same flags as ops/postgres/initdb.args, which says why each one
+      # cannot be changed later; the smoke checks that checksums are on.
+      POSTGRES_INITDB_ARGS: --data-checksums --encoding=UTF8
+      # Read once, by initdb/10-sketchy.sh, when the cluster is created.
+      SKETCHY_OWNER_DB_PASSWORD: ${SKETCHY_OWNER_DB_PASSWORD:?set SKETCHY_OWNER_DB_PASSWORD in .env}
+      SKETCHY_APP_DB_PASSWORD: ${SKETCHY_APP_DB_PASSWORD:?set SKETCHY_APP_DB_PASSWORD in .env}
+      SKETCHY_MONITOR_DB_PASSWORD: ${SKETCHY_MONITOR_DB_PASSWORD:-}
+    volumes:
+      # The cluster itself: put SKETCHY_DATA_DIR on an SSD pool, not UnRaid's
+      # parity array, where every commit waits for a parity write.
+      - ${SKETCHY_DATA_DIR:?set SKETCHY_DATA_DIR in .env}/postgres:/var/lib/postgresql/data
+      - ../postgres/sketchy.conf:/etc/postgresql/sketchy.conf:ro
+      - ../postgres/init.sql:/opt/sketchy/init.sql:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    # Parallel query and pg_stat_statements use /dev/shm; Docker's 64 MB
+    # default fails a large sort with "could not resize shared memory".
+    shm_size: 256m
+    mem_limit: ${SKETCHY_DB_MEMORY:-2g}
+    # A fast shutdown (the image's SIGINT) checkpoints first; give it time.
+    stop_grace_period: 60s
+    healthcheck:
+      # Over TCP on purpose: during first-time setup the entrypoint runs a
+      # temporary server on the Unix socket only, and a socket check would
+      # call that ready and let the migration race the restart.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "sketchy"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [backend]
+    logging: *logging
+
+  migrate:
+    <<: *app-image
+    command: ["bash", "/app/ops/postgres/migrate-with-snapshot.sh"]
+    restart: "no"
+    user: "${SKETCHY_UID:-10001}:${SKETCHY_GID:-10001}"
+    environment:
+      SKETCHY_ENV: production
+      MIGRATION_DATABASE_URL: *owner-database-url
+      DATABASE_URL: *app-database-url
+      SNAPSHOT_DIR: /var/lib/sketchy/snapshots
+    volumes:
+      # One dump per deploy, taken before the schema changes (#893), named
+      # for the time and the revision it holds. Restore with the command the
+      # migrate log prints. Owned by SKETCHY_UID, mode 700.
+      - ${SKETCHY_DATA_DIR:?set SKETCHY_DATA_DIR in .env}/snapshots:/var/lib/sketchy/snapshots
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    logging: *logging
+
+  app:
+    <<: *app-image
+    restart: unless-stopped
+    init: true
+    user: "${SKETCHY_UID:-10001}:${SKETCHY_GID:-10001}"
+    environment:
+      SKETCHY_ENV: production
+      DATABASE_URL: *app-database-url
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+      CONTACT_ADDRESS: ${CONTACT_ADDRESS:?set CONTACT_ADDRESS in .env}
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST in .env}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:?set SMTP_FROM in .env}
+      IP_HASH_SECRET: ${IP_HASH_SECRET:?set IP_HASH_SECRET in .env}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Only the tunnel's address may say what the visitor's address and
+      # scheme were (R-PLAT-10). Not the whole subnet: a port published for
+      # debugging arrives through the network's gateway, which is inside it,
+      # and would let anyone on the home network name their own address.
+      FORWARDED_ALLOW_IPS: ${SKETCHY_PROXY_IP:-172.31.240.10}
+      # One per CPU the container may use, not per CPU the NAS has (README →
+      # Database & Configuration, PASSWORD_HASH_WORKERS).
+      PASSWORD_HASH_WORKERS: ${SKETCHY_PASSWORD_HASH_WORKERS:-1}
+      SHUTDOWN_DRAIN_SECONDS: ${SHUTDOWN_DRAIN_SECONDS:-30}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    cpus: ${SKETCHY_APP_CPUS:-2}
+    mem_limit: ${SKETCHY_APP_MEMORY:-2g}
+    pids_limit: 512
+    # The drain (SHUTDOWN_DRAIN_SECONDS, 30 by default) plus the 10 s history
+    # write bound plus the 20 s teardown ceiling, with room to spare: SIGTERM
+    # to exit measured 30.4 s under load (#1418). Docker's default is 10 s,
+    # which would cut every planned restart short.
+    stop_grace_period: 90s
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend, edge]
+    logging: *logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: [tunnel]
+    restart: unless-stopped
+    # The tunnel and its public hostname are configured in Cloudflare's
+    # dashboard; the hostname's service is http://app:8000.
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      # Not marked required: Compose checks every service's variables, even
+      # one whose profile is off, and the smoke runs without a tunnel. With
+      # the profile on and no token, cloudflared refuses to start and says so.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      edge:
+        ipv4_address: ${SKETCHY_PROXY_IP:-172.31.240.10}
+    logging: *logging
+
+networks:
+  # The database's network has no route out: nothing in it can reach the
+  # internet, and nothing outside the stack can reach it.
+  backend:
+    internal: true
+  # The app and the tunnel. Outbound traffic is allowed, for mail and for
+  # cloudflared's connection to Cloudflare.
+  edge:
+    ipam:
+      config:
+        - subnet: ${SKETCHY_EDGE_SUBNET:-172.31.240.0/24}
