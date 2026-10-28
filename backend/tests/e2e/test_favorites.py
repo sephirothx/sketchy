@@ -187,6 +187,9 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await lobby.keyboard.press("Space")
             await expect(prompts).to_have_text([second, first])
             await expect(lobby.locator(".profile-shelf-handle").first).to_be_enabled()
+            # The drawings slide to their new places; measure where they land,
+            # not where a slide still running draws them.
+            await lobby.wait_for_function("() => document.getAnimations().length === 0")
             frames = lobby.locator(".profile-shelf-frame")
             start = await frames.nth(0).bounding_box()
             end = await frames.nth(1).bounding_box()

@@ -128,7 +128,7 @@ export function FavoritesShelf({
   const order = (draft ?? turnIds).filter((id) => byId.has(id));
   const preview = drag?.moving ? moveFavoriteTo(order, drag.turnId, drag.to) : order;
   const canArrange = isOwner && Boolean(onReorder);
-  // An emptied shelf has nothing left to arrange, so the mode ends with it.
+  // An emptied shelf has nothing to arrange.
   const arranging = arrangeOn && canArrange && favorites.length > 0;
   const held = busy || disabled;
   const shown = (favorite: ProfileFavorite): ProfileFavorite =>
@@ -240,6 +240,9 @@ export function FavoritesShelf({
   const remove = (turnId: string) => {
     if (held) return;
     setLifted(null);
+    // The last one out ends the mode, rather than leaving it to come back
+    // on its own the next time the shelf has something on it.
+    if (order.length === 1) setArranging(false);
     setAnnouncement(ui.profilePage.favoriteRemoved({ prompt: promptOf(turnId) }));
     void change(withoutFavorite(order, turnId));
   };
@@ -266,15 +269,29 @@ export function FavoritesShelf({
     setDrag(next);
   };
 
+  // The pointer is followed on the window, not captured: a capture would send
+  // the click a tap ends in to the frame rather than the button under it. The
+  // listeners go on in the press itself rather than in an effect after it, so
+  // a quick drag cannot finish before anything is listening.
+  const stopFollowing = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopFollowing.current?.(), []);
+
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>, turnId: string) => {
     if (!arranging || held || !event.isPrimary || event.button !== 0 || dragRef.current) return;
-    // The remove button and the handle are buttons of their own.
+    // The remove button is a button of its own.
     if ((event.target as HTMLElement).closest(".profile-shelf-remove")) return;
+    // Where the places are, not where a slide still running draws them.
+    for (const item of itemRefs.current.values()) {
+      item.style.transition = "none";
+      item.style.translate = "";
+    }
     const slots = order.map((id) => itemRefs.current.get(id)?.getBoundingClientRect() ?? new DOMRect());
+    for (const item of itemRefs.current.values()) item.style.transition = "";
     const from = order.indexOf(turnId);
+    const pointerId = event.pointerId;
     updateDrag({
       turnId,
-      pointerId: event.pointerId,
+      pointerId,
       from,
       to: from,
       moving: false,
@@ -284,26 +301,22 @@ export function FavoritesShelf({
       dy: 0,
       slots,
     });
-  };
-
-  // The pointer is followed on the window, not captured: a capture would send
-  // the click a tap ends in to the frame rather than the button under it.
-  useEffect(() => {
-    if (!drag) return;
-    const move = (event: PointerEvent) => {
+    const startOrder = order;
+    const move = (moved: PointerEvent) => {
       const current = dragRef.current;
-      if (!current || event.pointerId !== current.pointerId) return;
-      const dx = event.clientX - current.startX;
-      const dy = event.clientY - current.startY;
+      if (!current || moved.pointerId !== pointerId) return;
+      const dx = moved.clientX - current.startX;
+      const dy = moved.clientY - current.startY;
       if (!current.moving && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-      event.preventDefault();
+      moved.preventDefault();
       const next = { ...current, moving: true, dx, dy };
       next.to = placeFor(next);
       updateDrag(next);
     };
-    const end = (event: PointerEvent) => {
+    const end = (ended: PointerEvent) => {
       const current = dragRef.current;
-      if (!current || event.pointerId !== current.pointerId) return;
+      if (!current || ended.pointerId !== pointerId) return;
+      stop();
       updateDrag(null);
       if (!current.moving) return;
       // The click this pointer-up makes is the drop, not a tap on the drawing.
@@ -311,22 +324,25 @@ export function FavoritesShelf({
       window.setTimeout(() => {
         suppressClick.current = false;
       }, 0);
-      drop(current.turnId, moveFavoriteTo(order, current.turnId, current.to));
+      drop(current.turnId, moveFavoriteTo(startOrder, current.turnId, current.to));
     };
-    const cancel = (event: PointerEvent) => {
-      if (dragRef.current?.pointerId === event.pointerId) updateDrag(null);
+    const cancel = (cancelled: PointerEvent) => {
+      if (cancelled.pointerId !== pointerId) return;
+      stop();
+      updateDrag(null);
     };
-    window.addEventListener("pointermove", move, { passive: false });
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", cancel);
-    return () => {
+    function stop() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", cancel);
-    };
-    // Bound once per drag: the handlers read the drag through its ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag === null]);
+      stopFollowing.current = null;
+    }
+    stopFollowing.current?.();
+    stopFollowing.current = stop;
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+  };
 
   const pressDrawing = (turnId: string, index: number) => {
     if (suppressClick.current) return;
