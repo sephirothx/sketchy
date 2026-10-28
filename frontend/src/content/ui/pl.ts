@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "W tej chwili nie ma już rysunków do zagrania. Spróbuj później.",
   solo_date_out_of_range: "Wyzwanie dnia z tego dnia nie jest otwarte.",
   no_such_daily: "Dziś nie ma wyzwania dnia. Spróbuj wolnej gry.",
-  favorites_full: "Masz już komplet ulubionych. Najpierw usuń któryś w swoim profilu.",
+  favorites_full: "Masz już sześć ulubionych. Najpierw usuń któryś w swoim profilu.",
 
   // Prompt lists
   prompt_list_not_found: "Nie znaleziono listy haseł.",
