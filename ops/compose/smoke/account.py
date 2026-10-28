@@ -63,7 +63,7 @@ def run(base: str, mail_api: str) -> None:
     password = f"compose-smoke-{secrets.token_hex(12)}"
     email = f"smoke-{suffix}@sketchy-smoke.org"
 
-    status, headers, body = request("POST", f"{base}/api/auth/display-name", body={"displayName": f"Smoke {suffix}"})
+    status, headers, body = request("POST", f"{base}/api/auth/display-name", body={"displayName": f"Smoke-{suffix}"})
     expect(status, 200, "guest", body)
     cookie = session_cookie(headers)
     if not cookie:
