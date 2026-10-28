@@ -29,8 +29,8 @@ FROM python:3.14.10-slim-trixie AS runtime
 
 # pg_dump and psql for ops/postgres/migrate-with-snapshot.sh. A dump needs a
 # client of the server's major version or newer, and trixie's is 17, the
-# version the db service runs (R-PLAT-11). A server upgrade to 18 moves this
-# base image too.
+# version the db service runs and the app requires (#1367, README → Database
+# & Configuration). A server upgrade to 18 moves this base image too.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/*
@@ -49,7 +49,7 @@ COPY ops/postgres/migrate-with-snapshot.sh /app/ops/postgres/migrate-with-snapsh
 COPY --from=frontend /src/frontend/dist /app/frontend/dist
 # Compiled once here, because the container's root filesystem is read-only
 # at run time and Python would otherwise recompile on every start.
-RUN .venv/bin/python -m compileall -q app .venv
+RUN .venv/bin/python -m compileall -q app alembic .venv
 
 # Not root, and owning nothing it runs: the code and the venv stay root's, so
 # a compromised process cannot rewrite what it serves. The one place it

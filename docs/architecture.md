@@ -707,7 +707,8 @@ point (#458). **Stop:** the worker's grace is 90 s, which covers the default dra
 history write bound and the forced-exit teardown above; Docker's default of 10 s would cut
 every planned restart short of its drain. **Trust:** no port is published, the database's
 network has no route out, and the worker believes forwarded headers only from the tunnel's
-fixed address (R-PLAT-10) — its subnet would include the gateway a published port arrives
+fixed address (R-PLAT-10), which no other container can be handed — its subnet would also
+cover every other container on the network and the gateway a published port can arrive
 through. **Process:** the worker is uid 10001 on a read-only root filesystem with no
 capabilities, and owns none of the code it runs. One worker per stack, as everywhere
 (R-PLAT-05).

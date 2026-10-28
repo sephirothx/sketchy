@@ -128,9 +128,10 @@ services:
       IP_HASH_SECRET: ${IP_HASH_SECRET:?set IP_HASH_SECRET in .env}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Only the tunnel's address may say what the visitor's address and
-      # scheme were (R-PLAT-10). Not the whole subnet: a port published for
-      # debugging arrives through the network's gateway, which is inside it,
-      # and would let anyone on the home network name their own address.
+      # scheme were (R-PLAT-10). Not the whole subnet: anything else that
+      # joins the network would be believed too, and a port published for
+      # debugging can arrive from the network's gateway (Docker's userland
+      # proxy does that), which is inside it.
       FORWARDED_ALLOW_IPS: ${SKETCHY_PROXY_IP:-172.31.240.10}
       # One per CPU the container may use, not per CPU the NAS has (README →
       # Database & Configuration, PASSWORD_HASH_WORKERS).
@@ -190,3 +191,6 @@ networks:
     ipam:
       config:
         - subnet: ${SKETCHY_EDGE_SUBNET:-172.31.240.0/24}
+          # Containers without a fixed address are given one from the upper
+          # half only, so none can ever be handed the tunnel's trusted .10.
+          ip_range: ${SKETCHY_EDGE_IP_RANGE:-172.31.240.128/25}

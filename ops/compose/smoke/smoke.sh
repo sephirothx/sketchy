@@ -63,6 +63,11 @@ SMTP_FROM=Sketchy <play@sketchy-smoke.org>
 SMOKE_HTTP_PORT=$http_port
 SMOKE_MAIL_PORT=$mail_port
 SKETCHY_COMMIT_SHA=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || echo unknown)
+# Not the production defaults, so the smoke can run on the host that runs the
+# real stack without the two networks overlapping.
+SKETCHY_EDGE_SUBNET=172.31.241.0/24
+SKETCHY_EDGE_IP_RANGE=172.31.241.128/25
+SKETCHY_PROXY_IP=172.31.241.10
 EOF
 app_password="$(grep '^SKETCHY_APP_DB_PASSWORD=' "$work/smoke.env" | cut -d= -f2)"
 
@@ -121,9 +126,11 @@ wait_for "$base/api/ready" 240
 [[ "$(sql 'SHOW shared_preload_libraries')" == *pg_stat_statements* ]] || fail "sketchy.conf was not included"
 [[ "$(sql "SELECT count(*) FROM pg_roles WHERE rolname IN ('sketchy_owner', 'sketchy_app', 'sketchy_monitor')")" == 3 ]] \
   || fail "the three roles are not all there"
-if dc exec -T -e PGPASSWORD="$app_password" db psql -X -h 127.0.0.1 -U sketchy_app -d sketchy -c "CREATE TABLE smoke_probe (i int)" >/dev/null 2>&1; then
-  fail "sketchy_app can create a table"
-fi
+# Refused for the right reason: a failed sign-in would refuse it too.
+refusal="$(dc exec -T -e PGPASSWORD="$app_password" db psql -X -h 127.0.0.1 -U sketchy_app -d sketchy \
+  -c "CREATE TABLE smoke_probe (i int)" 2>&1 || true)"
+[[ "$refusal" == *"permission denied"* ]] || fail "sketchy_app was not refused a table for lack of privilege: $refusal"
+
 ok "cluster: checksums on, sketchy.conf included, roles in place, the app role cannot create a table"
 
 # --- 3. snapshot and head ------------------------------------------------------
@@ -139,7 +146,10 @@ ok "snapshot taken before migrating; database at the one head ($head)"
 # Two things only production does: keep the API docs unserved (#1418), and
 # let crawlers in everywhere but rooms (R-SEO-02).
 [[ "$(curl -s -o /dev/null -w '%{http_code}' "$base/docs")" == 404 ]] || fail "/docs is served: not production"
-if curl -fsS "$base/robots.txt" | grep -qx 'Disallow: /'; then
+# Every response is read whole before it is searched: `grep -q` stops at its
+# first match, and under pipefail the curl it cut off would fail the step.
+robots="$(curl -fsS "$base/robots.txt")"
+if grep -qx 'Disallow: /' <<<"$robots"; then
   fail "robots.txt disallows everything: not production"
 fi
 lists="$(sql 'SELECT count(*) FROM prompt_lists')"
@@ -147,9 +157,11 @@ lists="$(sql 'SELECT count(*) FROM prompt_lists')"
 ok "app in production mode, $lists prompt lists seeded"
 
 # --- 5. through the proxy --------------------------------------------------------
-curl -fsS "$base/" | grep -q '<div id="root"' || fail "/ did not serve the app's page"
+page="$(curl -fsS "$base/")"
+grep -q '<div id="root"' <<<"$page" || fail "/ did not serve the app's page"
 [[ "$(curl -s -o /dev/null -w '%{http_code}' "$base/metrics")" == 401 ]] || fail "/metrics answered without its token"
-curl -fsS -H "Authorization: Bearer $metrics_token" "$base/metrics" | grep -q '^sketchy_' || fail "/metrics did not answer with the token"
+metrics() { curl -fsS -H "Authorization: Bearer $metrics_token" "$base/metrics"; }
+grep -q '^sketchy_' <<<"$(metrics)" || fail "/metrics did not answer with the token"
 ok "page, readiness and /metrics answer through the proxy"
 
 # --- 6. probe --------------------------------------------------------------------
@@ -161,7 +173,7 @@ ok "the probe played"
 # are for the reference machine (#461), and a CI runner breaching one says
 # nothing about the deployment. What it must have done is checked below.
 "$python" "$root/benchmarks/load.py" --base-url "$base" --rooms 1 --seats 3 --lobby-watchers 1 \
-  --slow-viewers 0 --reconnect-share 0 --duration 75 --finish-games --shared-address \
+  --slow-viewers 0 --reconnect-share 0 --duration 120 --finish-games --shared-address \
   --metrics-token "$metrics_token" --json-output "$work/load.json" >"$work/load.log" 2>&1 \
   || echo "note: load.py reported breaches; functional results are judged below (log: load.log)"
 "$python" - "$work/load.json" <<'PY' || { cat "$work/load.log" >&2; fail "games were not played to the end and written"; }
@@ -180,6 +192,17 @@ wrong = {key: measured.get(key) for key, good in wanted.items() if measured.get(
 print("load:", {key: measured.get(key) for key in wanted})
 sys.exit(1 if wrong else 0)
 PY
+# The harness leaves with a game under way (it starts the next one two
+# seconds after each ends), and its seats keep their places for the
+# reconnect grace (R-CONN-01); when that lapses the game is written as
+# abandoned. Count history only once no room is left and nothing is staged,
+# or that write lands during the restart and reads as history changing.
+deadline=$((SECONDS + 120))
+until grep -qx 'sketchy_rooms_live 0' <<<"$(metrics)" \
+  && [[ "$(sql 'SELECT count(*) FROM finished_game_envelopes')" == 0 ]]; do
+  (( SECONDS < deadline )) || fail "rooms were still live, or games still staged, 120 s after the games ended"
+  sleep 3
+done
 games="$(sql 'SELECT count(*) FROM game_records')"
 drawings="$(sql 'SELECT count(*) FROM turn_drawings')"
 (( games > 0 && drawings > 0 )) || fail "history holds $games games and $drawings drawings"

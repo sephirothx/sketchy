@@ -2732,12 +2732,14 @@ no published port.
 | `app` | The single worker, from the [`Dockerfile`](Dockerfile): non-root, read-only root filesystem, no capabilities, 90 s to drain |
 | `cloudflared` | Runs when `COMPOSE_PROFILES` includes `tunnel`. Cloudflare terminates HTTPS; the tunnel forwards to `http://app:8000` |
 
-Two rules the file holds, and `tests/test_compose_config.py` holds it to. **Nothing is
+Three rules the file holds, and `tests/test_compose_config.py` holds it to. **Nothing is
 published to the host**, so the tunnel is the only way in. **Forwarded headers are trusted
 from cloudflared's fixed address alone** (`FORWARDED_ALLOW_IPS`, R-PLAT-10), not from its
-subnet: a port published for debugging arrives through the network's gateway, which is
-inside the subnet, and would let anyone on the home network name their own address to the
-rate limits. And **each service is given its variables by name**, never the whole `.env`,
+subnet: anything else on that network would be believed too, and a port published for
+debugging can arrive from the network's gateway (Docker's userland proxy does that), which
+would let anyone on the home network name their own address to the rate limits. Other
+containers are given addresses from the subnet's upper half only (`ip_range`), so none can
+be handed the tunnel's. And **each service is given its variables by name**, never the whole `.env`,
 so the web process never holds the schema owner's password (#896).
 
 First start, on the host (UnRaid needs the Compose Manager plugin, or `docker compose`

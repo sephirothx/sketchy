@@ -8,6 +8,7 @@ to debug something, an `env_file` to save typing) could quietly undo.
 """
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 import re
 
@@ -58,6 +59,19 @@ def test_forwarded_headers_are_trusted_from_the_tunnel_alone():
     assert "/" not in trusted and "*" not in trusted
 
 
+def test_no_other_container_can_be_handed_the_tunnels_address():
+    """Dynamic addresses come from `ip_range`; the tunnel's must lie outside it."""
+    def default(value: str) -> str:
+        return re.fullmatch(r"\$\{\w+:-([^}]+)\}", value).group(1)
+
+    network = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["networks"]["edge"]["ipam"]["config"][0]
+    subnet = ipaddress.ip_network(default(network["subnet"]))
+    dynamic = ipaddress.ip_network(default(network["ip_range"]))
+    tunnel = ipaddress.ip_address(default(services()["cloudflared"]["networks"]["edge"]["ipv4_address"]))
+    assert dynamic.subnet_of(subnet)
+    assert tunnel in subnet and tunnel not in dynamic
+
+
 def test_the_app_waits_for_its_migration_and_outlasts_its_drain():
     app = services()["app"]
     assert app["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
@@ -79,7 +93,7 @@ def test_the_application_containers_run_unprivileged_and_read_only():
 
 
 def test_the_database_and_its_dump_client_are_the_same_major_version():
-    """pg_dump refuses a newer server, and the app needs 17 or later (R-PLAT-11)."""
+    """pg_dump refuses a newer server, and the app needs 17 or later (#1367)."""
     server = re.fullmatch(r"postgres:(\d+)\.\d+-\w+", services()["db"]["image"]).group(1)
     client = re.search(r"postgresql-client-(\d+)", (ROOT / "Dockerfile").read_text(encoding="utf-8")).group(1)
     assert server == client
