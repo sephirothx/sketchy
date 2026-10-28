@@ -17,6 +17,12 @@ interface FavoriteControlProps {
   disabled?: boolean;
   /** Toggle: favorite when not favorited, unfavorite when favorited. Rejections are announced here. */
   onToggle: () => Promise<void>;
+  /** The star alone (the viewer, a history row, a Gallery post), or with its
+      word beside it where there is room for one (a drawing's Gallery page). */
+  look?: "icon" | "labelled";
+  /** What adding it says, for a drawing that is in the Gallery already and
+      so is not shared by being favorited (#1501). */
+  addLabel?: string;
 }
 
 /**
@@ -28,7 +34,14 @@ interface FavoriteControlProps {
  * reaction control beside it already tells a guest about accounts, and a
  * second line saying the same would be noise.
  */
-export function FavoriteControl({ favorited, eligibility, disabled = false, onToggle }: FavoriteControlProps) {
+export function FavoriteControl({
+  favorited,
+  eligibility,
+  disabled = false,
+  onToggle,
+  look = "icon",
+  addLabel = ui.favoriteControl.favoriteThisDrawing,
+}: FavoriteControlProps) {
   const { notify } = useToast();
   const [busy, setBusy] = useState(false);
   if (eligibility !== "offered") return null;
@@ -45,18 +58,24 @@ export function FavoriteControl({ favorited, eligibility, disabled = false, onTo
     }
   }
 
+  const label = favorited ? ui.favoriteControl.unfavoriteThisDrawing : addLabel;
   return (
     <button
       type="button"
       className={`btn btn-secondary btn-compact favorite-control${favorited ? " is-favorited" : ""}`}
       aria-pressed={favorited}
-      aria-label={favorited ? ui.favoriteControl.unfavoriteThisDrawing : ui.favoriteControl.favoriteThisDrawing}
-      title={favorited ? ui.favoriteControl.unfavoriteThisDrawing : ui.favoriteControl.favoriteThisDrawing}
+      aria-label={label}
+      title={label}
       disabled={busy || disabled}
       data-testid="favorite-toggle"
       onClick={() => void toggle()}
     >
       <StarIcon size={18} />
+      {look === "labelled" && (
+        <span aria-hidden="true">
+          {favorited ? ui.favoriteControl.inYourFavorites : ui.favoriteControl.favorite}
+        </span>
+      )}
     </button>
   );
 }

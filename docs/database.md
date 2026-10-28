@@ -1997,9 +1997,13 @@ history graph uses (#512), so a turn from another game can never be named by mis
 What may be favorited is checked by the write, since neither rule is expressible here: a turn
 with a `ready`, unhidden, non-blank drawing the owner sat in the game of and may share
 (R-SHARE-02) — their own from any game, another player's from a public one its drawer has
-not taken out — credited through the turn's frozen drawer snapshot. A favorite **is** a share
-(R-PIN-03): the write shares every favorite the owner has not shared yet, in the
-same transaction, with its inbox entry for the drawer. Only a `registered` account may favorite, so a guest merge
+not taken out — or, since #1501, any drawing in the Gallery (`_gallery_shows`), credited
+through the turn's frozen drawer snapshot. A favorite from a game the owner sat in **is** a
+share (R-PIN-03): the write shares every such favorite the owner has not shared yet, in the
+same transaction, with its inbox entry for the drawer. Any other favorite shares nothing and
+writes no inbox entry. When a drawing's share count falls to zero (`refresh_share_projection`,
+the one place every share deletion ends), every favorite of it is deleted in the same
+transaction (R-PIN-05): a stranger's has nothing else to hang on. Only a `registered` account may favorite, so a guest merge
 never brings a shelf with it.
 
 **Reads.** `get_profile_favorites` lists the shelf, joined to the turn and the drawing so a favorite

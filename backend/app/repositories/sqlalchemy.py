@@ -4482,11 +4482,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     ).all()
                 }
-                # Everything a turn has to be: a seat for this identity in its
-                # game, a drawing there to show, and one this identity may
-                # share (R-SHARE-02) - favoriting shares it. Checked before
-                # anything is written, so a refused list leaves the shelf as
-                # it was.
+                # Everything a turn has to be, two ways (#1501). From a game
+                # this identity sat in, a drawing it may share (R-SHARE-02):
+                # favoriting shares it, as it always did (R-PIN-03). From
+                # anywhere else - or a game it sat in but may not share from,
+                # a co-player's private drawing its drawer shared - a drawing
+                # in the Gallery, which a favorite only lists: it is public
+                # already, so nothing is shared and nobody is told. Checked
+                # before anything is written, so a refused list leaves the
+                # shelf as it was.
                 rows: list[tuple[UUID, UUID]] = []
                 seats: dict[UUID, tuple[TurnRecord, UUID, bool]] = {}
                 for db_turn_id in db_turn_ids:
@@ -4495,27 +4499,30 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         .where(TurnRecord.id == db_turn_id)
                         .options(selectinload(TurnRecord.game))
                     )
-                    if turn is None:
+                    drawing_row = drawing_rows.get(db_turn_id)
+                    if turn is None or drawing_row is None:
                         return None
                     seat_id = await session.scalar(
                         _own_seat_in(turn, identity_ids)
                         .with_only_columns(GameParticipant.id)
                         .limit(1)
                     )
-                    drawing_row = drawing_rows.get(db_turn_id)
-                    if seat_id is None or drawing_row is None:
-                        return None
-                    is_drawer = (
+                    is_drawer = seat_id is not None and (
                         turn.drawer_participant_id == seat_id
                         or turn.drawer_user_id in identity_ids
                     )
-                    if not _shareable(drawing_row, turn) or not _may_share(
-                        is_drawer=is_drawer,
-                        visibility=turn.game.visibility,
-                        withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                    if (
+                        seat_id is not None
+                        and _shareable(drawing_row, turn)
+                        and _may_share(
+                            is_drawer=is_drawer,
+                            visibility=turn.game.visibility,
+                            withdrawn=drawing_row.gallery_withdrawn_at is not None,
+                        )
                     ):
+                        seats[db_turn_id] = (turn, seat_id, is_drawer)
+                    elif not _gallery_shows(drawing_row):
                         return None
-                    seats[db_turn_id] = (turn, seat_id, is_drawer)
                     rows.append((turn.game_id, db_turn_id))
                 # Replace rather than diff: the unique position per account
                 # would otherwise have to be shuffled through a spare slot.
