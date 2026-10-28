@@ -2184,8 +2184,6 @@ export const FR: Catalogue = {
     sound: "Son",
     volume: "Volume",
     effects: "Effets",
-    noKeyboardThisDevice: "Pas de clavier sur cet appareil",
-    yourBindingsAreStillSavedStill: "Tes raccourcis restent enregistrés et fonctionnent. Ouvre Sketchy avec un clavier\n            branché pour les changer.",
     drawingTools: "Outils de dessin",
     resetDefaults: "Rétablir les valeurs par défaut",
     settings: "Paramètres",

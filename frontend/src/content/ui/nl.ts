@@ -2182,8 +2182,6 @@ export const NL: Catalogue = {
     sound: "Geluid",
     volume: "Volume",
     effects: "Effecten",
-    noKeyboardThisDevice: "Geen toetsenbord op dit apparaat",
-    yourBindingsAreStillSavedStill: "Je sneltoetsen blijven bewaard en werken gewoon. Open Sketchy met een\n            toetsenbord eraan om ze te wijzigen.",
     drawingTools: "Tekengereedschap",
     resetDefaults: "Terug naar standaard",
     settings: "Instellingen",

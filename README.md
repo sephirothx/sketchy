@@ -1485,7 +1485,9 @@ complete supported action set.
 `/settings/sound`, `/settings/shortcuts` — drawn over the page it was opened
 from, so changing the volume mid-turn never gives up a seat; somebody arriving
 on the URL itself gets the lobby behind it. It is one rail of four sections on
-every device, a full-screen sheet below 1000 px. Every row applies as it
+every device, a full-screen sheet below 1000 px - except that a touch screen,
+with no mouse or trackpad to go with a keyboard, is not offered **Shortcuts**
+and its URL opens Account there. Every row applies as it
 changes and there is no Save: changes made together are merged into one write,
 success is silent, and a write the account refuses raises a notice while the
 value stays applied locally. The rows a server can refuse — the display name,

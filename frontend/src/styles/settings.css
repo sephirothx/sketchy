@@ -438,32 +438,6 @@
   border-color: var(--danger);
 }
 
-.settings-empty {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13.5px;
-  line-height: 1.5;
-  background: var(--well);
-  border: 1.5px dashed var(--line-strong);
-  border-radius: var(--radius);
-  padding: 22px 18px;
-  margin-bottom: 14px;
-}
-
-.settings-empty > svg {
-  color: var(--faint);
-}
-
-.settings-empty b {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--ink);
-}
-
 /* --------------------------------------------------------------- toggles */
 
 /* The pane's own on/off control: the switch recipe's track and thumb, driven
