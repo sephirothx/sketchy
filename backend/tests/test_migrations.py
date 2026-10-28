@@ -1065,3 +1065,83 @@ async def test_lists_deleted_outright_migrate_over_rows(tmp_path):
         assert uuid.UUID(str(source)) == tombstone
     finally:
         await engine.dispose()
+
+
+async def test_a_pinned_drawing_crosses_into_favorites_and_back(tmp_path):
+    """`c8d9e0f1a2b5` rebuilds the shelf table under its new name (#1501):
+    the rows go with it both ways, in their order."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'favorites.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "b6c7d8e9f0a3")
+        ids = {
+            "user": uuid.uuid4().hex,
+            "game": uuid.uuid4().hex,
+            "participant": uuid.uuid4().hex,
+            "turn": uuid.uuid4().hex,
+        }
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, display_name, state, created_at,"
+                    " updated_at) VALUES (:user, 'shelf', 'Shelf', 'anonymous',"
+                    " datetime('now'), datetime('now'))"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records (id, room_name, scoring_mode, hint_mode,"
+                    " prompt_source_mode, drawing_seconds, total_rounds, player_count,"
+                    " started_at, finished_at) VALUES (:game, 'Room', 'default', 'none',"
+                    " 'custom', 60, 1, 1, datetime('now'), datetime('now'))"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_participants (id, game_id, user_id,"
+                    " display_name_snapshot, is_anonymous_snapshot, final_score,"
+                    " final_rank) VALUES (:participant, :game, :user, 'Shelf', 0, 100, 1)"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO turn_records (id, game_id, round_number, turn_number,"
+                    " drawer_user_id, drawer_participant_id, drawer_display_name_snapshot,"
+                    " drawer_is_anonymous_snapshot, prompt, duration_seconds,"
+                    " prompt_source_kind) VALUES (:turn, :game, 1, 1, :user,"
+                    " :participant, 'Shelf', 0, 'apple', 30, 'custom')"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO profile_drawing_pins (user_id, turn_id, game_id, position)"
+                    " VALUES (:user, :turn, :game, 3)"
+                ),
+                ids,
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.begin() as connection:
+            moved = (
+                await connection.execute(
+                    text("SELECT user_id, turn_id, game_id, position FROM profile_favorites")
+                )
+            ).all()
+        assert [(uuid.UUID(str(a)).hex, uuid.UUID(str(b)).hex, uuid.UUID(str(c)).hex, d) for a, b, c, d in moved] == [
+            (ids["user"], ids["turn"], ids["game"], 3)
+        ]
+
+        await _migrate(engine, alembic_command.downgrade, "b6c7d8e9f0a3")
+        async with engine.begin() as connection:
+            back = await connection.scalar(text("SELECT position FROM profile_drawing_pins"))
+            tables = (
+                await connection.execute(
+                    text("SELECT name FROM sqlite_master WHERE name = 'profile_favorites'")
+                )
+            ).all()
+        assert back == 3 and tables == []
+    finally:
+        await engine.dispose()

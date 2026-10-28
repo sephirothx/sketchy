@@ -91,14 +91,14 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self.reaction_writes: list[ReactionWrite] = []
         self.reaction_result: DrawingReactionResult | None = None
         self.accept_reactions = False
-        self.pin_writes: list[tuple[str, tuple[str, ...]]] = []
+        self.favorite_writes: list[tuple[str, tuple[str, ...]]] = []
         # Later share writes, and what the next one answers; `None` refuses.
         self.share_writes: list[ShareWrite] = []
         self.share_result: DrawingShareResult | None = None
         # What a share-state read answers per turn, and the reads made.
         self.share_state: dict[str, DrawingShareResult] = {}
         self.share_reads: list[str] = []
-        self.accept_pins = True
+        self.accept_favorites = True
         self.reaction_seat_id = "seat-1"
 
     async def save_game(
@@ -206,8 +206,8 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         requesting_user_id: str,
         turn_ids: Sequence[str],
     ) -> ProfileFavoritesResult | None:
-        self.pin_writes.append((requesting_user_id, tuple(turn_ids)))
-        if not self.accept_pins:
+        self.favorite_writes.append((requesting_user_id, tuple(turn_ids)))
+        if not self.accept_favorites:
             return None
         return ProfileFavoritesResult(
             favorites=tuple(

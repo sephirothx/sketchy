@@ -820,7 +820,7 @@ handler_context.on_gallery_changed = gallery_shelf.invalidate
 
 
 async def refresh_recap_shares(turn_ids: tuple[str, ...]) -> None:
-    """A share written from history, a pin or the Gallery reaches the room
+    """A share written from history, a favorite or the Gallery reaches the room
     whose recap shows that drawing (R-SHARE-07)."""
     await refresh_recaps(handler_context, turn_ids)
 

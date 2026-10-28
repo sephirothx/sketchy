@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Er is nu geen tekening meer om te spelen. Probeer het later opnieuw.",
   solo_date_out_of_range: "De dagpuzzel van die dag is niet open.",
   no_such_daily: "Vandaag is er geen dagpuzzel. Probeer een vrije ronde.",
-  favorites_full: "Je favorieten zijn vol. Haal er eerst een weg in je profiel.",
+  favorites_full: "Je hebt al zes favorieten. Haal er eerst een weg in je profiel.",
 
   // Prompt lists
   prompt_list_not_found: "Woordenlijst niet gevonden.",

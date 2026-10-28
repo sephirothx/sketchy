@@ -30,7 +30,7 @@ from tests.e2e.lobby_helpers import (
     use_guest_name,
 )
 from tests.e2e.staff_helpers import set_role
-from tests.e2e.test_pinned_drawings import scribble
+from tests.e2e.test_favorites import scribble
 from tests.e2e.test_profile_page import choose_prompt
 
 CARDS = '[data-testid="gallery-card"]'

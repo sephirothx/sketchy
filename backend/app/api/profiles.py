@@ -763,7 +763,7 @@ def create_profile_router(
             raise Refusal(
                 409,
                 ErrorCode.FAVORITES_FULL,
-                "Your favorites are full.",
+                "You already have six favorites.",
                 params={"slots": PROFILE_FAVORITE_SLOTS},
             )
         result = await game_history_repo.set_profile_favorites(

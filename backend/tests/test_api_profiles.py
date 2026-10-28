@@ -688,7 +688,7 @@ async def test_every_gallery_reaction_refusal_is_a_404(env):
 # ---- favorites (#440)
 
 
-async def _pins_in_store(factory, user_id: str) -> list[tuple[str, int]]:
+async def _favorites_in_store(factory, user_id: str) -> list[tuple[str, int]]:
     from sqlalchemy import select
 
     from app.db.models import ProfileFavorite
@@ -719,17 +719,17 @@ async def test_a_participant_favorites_reorders_and_unfavorites_with_one_write(e
     put = await http.put("/api/me/favorites", json={"turnIds": [anns_drawing, bobs_drawing]})
     assert put.status_code == 200
     assert put.json() == {"favorites": [{"turnId": anns_drawing}, {"turnId": bobs_drawing}]}
-    assert await _pins_in_store(factory, bob.id) == [(anns_drawing, 0), (bobs_drawing, 1)]
+    assert await _favorites_in_store(factory, bob.id) == [(anns_drawing, 0), (bobs_drawing, 1)]
 
     reordered = await http.put("/api/me/favorites", json={"turnIds": [bobs_drawing, anns_drawing]})
     assert reordered.json()["favorites"] == [{"turnId": bobs_drawing}, {"turnId": anns_drawing}]
-    assert await _pins_in_store(factory, bob.id) == [(bobs_drawing, 0), (anns_drawing, 1)]
+    assert await _favorites_in_store(factory, bob.id) == [(bobs_drawing, 0), (anns_drawing, 1)]
 
     unfavorited = await http.put("/api/me/favorites", json={"turnIds": [anns_drawing]})
     assert unfavorited.json() == {"favorites": [{"turnId": anns_drawing}]}
     cleared = await http.put("/api/me/favorites", json={"turnIds": []})
     assert cleared.json() == {"favorites": []}
-    assert await _pins_in_store(factory, bob.id) == []
+    assert await _favorites_in_store(factory, bob.id) == []
 
 
 async def test_every_favorite_refusal_is_a_404_and_leaves_the_shelf_as_it_was(env):
@@ -768,7 +768,7 @@ async def test_every_favorite_refusal_is_a_404_and_leaves_the_shelf_as_it_was(en
     ):
         response = await http.put("/api/me/favorites", json={"turnIds": [public_turn, turn_id]})
         assert response.status_code == 404, why
-        assert await _pins_in_store(factory, bob.id) == [(public_turn, 0)], why
+        assert await _favorites_in_store(factory, bob.id) == [(public_turn, 0)], why
 
 
 async def test_a_seventh_favorite_is_refused_as_full_and_a_repeat_as_malformed(env):
@@ -786,7 +786,7 @@ async def test_a_seventh_favorite_is_refused_as_full_and_a_repeat_as_malformed(e
     assert full.status_code == 409
     assert full.json()["errorCode"] == "favorites_full"
     assert full.json()["params"] == {"slots": 6}
-    assert await _pins_in_store(factory, bob.id) == [(turn, i) for i, turn in enumerate(turns[:6])]
+    assert await _favorites_in_store(factory, bob.id) == [(turn, i) for i, turn in enumerate(turns[:6])]
 
     assert (await http.put("/api/me/favorites", json={"turnIds": [turns[0], turns[0]]})).status_code == 422
     assert (await http.put("/api/me/favorites", json={"turnIds": turns * 2})).status_code == 422
@@ -822,7 +822,7 @@ async def test_an_erased_drawing_keeps_its_favorite_row_only_until_the_erasure_p
             drawing.format_magic = None
             drawing.format_version = None
             drawing.deleted_at = datetime.now(timezone.utc)
-    assert await _pins_in_store(factory, bob.id) == [(turn_id, 0)]
+    assert await _favorites_in_store(factory, bob.id) == [(turn_id, 0)]
     assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 404
 
 

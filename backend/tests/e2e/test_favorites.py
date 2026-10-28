@@ -106,7 +106,7 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await visitor.goto(f"{BASE_URL}/profile/{host_id}")
             await visitor.locator('[data-testid="favorites"]').wait_for()
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
-            await expect(visitor.get_by_role("button", name="Remove")).to_have_count(0)
+            await expect(visitor.locator('[data-testid="favorites"]').get_by_role("button", name="Remove", exact=True)).to_have_count(0)
 
             # A stranger - registered, never in the game - reacts to the favorited
             # drawing from the shelf through the gallery door (R-PIN-08,

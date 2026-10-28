@@ -327,7 +327,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "There is no drawing left to play right now. Try again later.",
   solo_date_out_of_range: "That day's Daily is not open.",
   no_such_daily: "There is no Daily today. Try a free run.",
-  favorites_full: "Your favorites are full. Remove one from your profile first.",
+  favorites_full: "You already have six favorites. Remove one from your profile first.",
 
   // Prompt lists
   prompt_list_not_found: "Prompt list not found.",

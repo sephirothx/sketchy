@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Gerade ist keine Zeichnung zum Spielen übrig. Versuch es später noch einmal.",
   solo_date_out_of_range: "Das Tagesrätsel für diesen Tag ist nicht offen.",
   no_such_daily: "Heute gibt es kein Tagesrätsel. Probier eine freie Runde.",
-  favorites_full: "Deine Favoriten sind voll. Entferne zuerst einen in deinem Profil.",
+  favorites_full: "Du hast schon sechs Favoriten. Entferne zuerst einen in deinem Profil.",
 
   // Prompt lists
   prompt_list_not_found: "Begriffsliste nicht gefunden.",
@@ -1580,7 +1580,7 @@ export const DE: Catalogue = {
     erased: "gelöscht",
     removedByModeration: "von der Moderation entfernt",
     favorites: "Favoriten",
-    noFavoritesYet: "Noch keine Favoriten. Füge eine Zeichnung aus dem Rückblick eines Spiels hinzu, oder aus einem Spiel in deinem Verlauf unten.",
+    noFavoritesYet: "Noch keine Favoriten. Füge eine Zeichnung aus dem Rückblick eines Spiels oder aus einem Spiel in deinem Verlauf unten hinzu.",
     openFavorite: (p: { prompt: string; drawer: string }) => `${p.prompt} von ${p.drawer} öffnen`,
     moveLeft: "Nach links",
     moveRight: "Nach rechts",

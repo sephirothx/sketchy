@@ -33,7 +33,7 @@ interface ShareControlProps {
  * And, for everybody else after that, a line saying its drawer kept it out,
  * so a missing button is not a mystery.
  *
- * Taking it out asks first: it ends every other player's share and pin of
+ * Taking it out asks first: it ends every other player's share and favorite of
  * it, and nobody but its drawer can put it back.
  */
 export function ShareControl({
