@@ -14,6 +14,9 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-fund --no-audit
 COPY frontend/ ./
+# The build reads the bundled prompt lists, for the official lists' pages
+# and the sitemap (scripts/seo-pages.mjs), from where they sit in the tree.
+COPY backend/data/ /src/backend/data/
 # The build stamps the commit it was made from (vite.config.ts). There is no
 # .git in the build context, so the caller says which commit it is.
 ARG SKETCHY_COMMIT_SHA=unknown

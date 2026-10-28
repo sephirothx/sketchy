@@ -111,7 +111,7 @@ print(" ".join(name for name, service in services.items() if service.get("ports"
 [[ -z "$published" ]] || fail "the base compose file publishes ports for: $published"
 ok "the base compose file publishes no port"
 
-dc build --quiet
+BUILDKIT_PROGRESS=plain dc build
 dc up -d
 wait_for "$base/api/ready" 240
 [[ "$(migrate_exit_code)" == 0 ]] || fail "the migration did not exit 0"
