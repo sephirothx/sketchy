@@ -17,8 +17,9 @@
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
     [data-theme] a:hover { color: var(--primaryInk); }
-    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
-    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="account"] [data-pref-panel]:not([data-pref-panel="account"]) { display: none; }
+    [data-tab="appearance"] [data-pref-panel]:not([data-pref-panel="appearance"]) { display: none; }
+    [data-tab="sound"] [data-pref-panel]:not([data-pref-panel="sound"]) { display: none; }
     [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
     [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
     [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
@@ -32,310 +33,330 @@
 </helmet>
 <div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
 
-<div style="width: 1080px; min-height: 900px; margin: 0 auto; padding: 24px 24px 40px">
-  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 18px">
-    <div>
-      <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Personal preferences</p>
-      <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 27px; color: var(--ink); margin-top: 4px">Settings</h1>
-    </div>
-    <span style="display: inline-flex; align-items: center; gap: 5px; background: var(--successSoft); color: var(--successInk); border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 800; white-space: nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg> Synced to your account</span>
-  </header>
+<div style="width: 1080px; min-height: 900px; margin: 0 auto; padding: 24px 70px 40px">
+  <div role="dialog" aria-label="Settings" style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); padding: 14px 22px 18px">
+    <header style="display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1.5px solid var(--line); margin-bottom: 14px">
+      <h2 style="display: flex; align-items: center; gap: 8px; flex: 1; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 20px; color: var(--ink); margin: 0"><span style="display: inline-flex; color: var(--primary)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></span>Settings</h2>
+      <button type="button" aria-label="Close settings" title="Close settings" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </header>
 
-  <div style="display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start">
-    <aside style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: grid; gap: 4px; position: sticky; top: 0">
-      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 12px">
-        <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 16px; flex: none">M</span>
-        <span style="display: grid; gap: 0"><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Marta</strong><small style="font-size: 11.5px; color: var(--faint); font-weight: 700">Signed in</small></span>
-      </div>
-      <div style="border-top: 1.5px solid var(--line); margin: 0 6px 4px"></div>
-      
-<button type="button" role="tab" data-pref-tab="general" aria-current="true" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
-  <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></span>
-  <span style="display: grid; gap: 1px; min-width: 0">
-    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">General</strong>
-    <small style="font-size: 11.5px; color: var(--faint); font-weight: 700">Account, appearance & sound</small>
-  </span>
-  <span style="margin-left: auto; display: inline-flex; color: var(--faint)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+    <div data-tab="{{tab}}" style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start">
+      <nav role="tablist" aria-label="Settings sections" style="display: grid; gap: 4px">
+        
+<button type="button" role="tab" data-pref-tab="account" aria-current="true" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></span>
+  <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Account</strong>
 </button>
-      
-<button type="button" role="tab" data-pref-tab="game" aria-current="false" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
-  <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9.06 11.9 18.8 4.2a2 2 0 0 1 3 3l-7.7 9.74"/><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5"/></svg></span>
-  <span style="display: grid; gap: 1px; min-width: 0">
-    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Game</strong>
-    <small style="font-size: 11.5px; color: var(--faint); font-weight: 700">Drawing & celebrations</small>
-  </span>
-  <span style="margin-left: auto; display: inline-flex; color: var(--faint)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+        
+<button type="button" role="tab" data-pref-tab="appearance" aria-current="false" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+  <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Appearance</strong>
 </button>
-      
+        
+<button type="button" role="tab" data-pref-tab="sound" aria-current="false" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+  <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Sound &amp; effects</strong>
+</button>
+        
 <button type="button" role="tab" data-pref-tab="shortcuts" aria-current="false" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: 10px; padding: 11px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
   <span style="display: inline-flex; color: var(--faint)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01"/><path d="M10 10h.01"/><path d="M14 10h.01"/><path d="M18 10h.01"/><path d="M6 14h.01"/><path d="M18 14h.01"/><path d="M9 14h6"/></svg></span>
-  <span style="display: grid; gap: 1px; min-width: 0">
-    <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Shortcuts</strong>
-    <small style="font-size: 11.5px; color: var(--faint); font-weight: 700">Drawing tool key bindings</small>
-  </span>
-  <span style="margin-left: auto; display: inline-flex; color: var(--faint)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></span>
+  <strong style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Shortcuts</strong>
 </button>
-      <div style="border-top: 1.5px solid var(--line); margin: 6px 6px 2px"></div>
-      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; justify-content: flex-start"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
-    </aside>
+      </nav>
 
-    <section data-tab="{{tab}}" style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 6px 24px 18px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
-      <div data-pref-panel="general">
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">You</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">How you appear to other players.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
+      <div>
+      <div data-pref-panel="account">
         
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Username</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">Your account login and in-game name.</p>
-  </div>
-  <span style="display: inline-flex; align-items: center; gap: 10px"><span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 12px; flex: none">M</span><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Marta</strong><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); min-height: 38px; padding: 7px 13px; font-size: 13px">Manage account</button></span>
-</div>
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Name color</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">How your name reads in every room. Guests stay grey.</p>
-  </div>
-  <span style="display: inline-flex; align-items: center; gap: 14px"><span style="color: var(--pcMarta); font-weight: 800; font-size: 15px">Marta</span><span style="display: inline-flex; gap: 8px"><button type="button" aria-label="#0F766E" style="width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: #0F766E; box-shadow: 0 0 0 2.5px var(--card), 0 0 0 5px var(--primary)"></button><button type="button" aria-label="#C2410C" style="width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: #C2410C"></button><button type="button" aria-label="#7E22CE" style="width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: #7E22CE"></button><button type="button" aria-label="#0369A1" style="width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: #0369A1"></button></span></span>
-</div></div>
-</section>
-
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Appearance</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">Theme and accessible color behavior.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Theme</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">Follow your device, or lock an appearance.</p>
-  </div>
-  <span style="display: inline-flex; gap: 8px">
-          
-<button type="button" aria-pressed="false" style="display: grid; gap: 7px; justify-items: center; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px 9px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-width: 92px">
-  <span aria-hidden="true" style="width: 62px; height: 38px; border-radius: 7px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; border: 1px solid var(--lineStrong)"><i style="background: #FAF6EF"></i><i style="background: #FFFFFF"></i></span>
-  <strong style="font-size: 12.5px; font-weight: 800; color: var(--ink)">Light</strong>
-</button>
-          
-<button type="button" aria-pressed="false" style="display: grid; gap: 7px; justify-items: center; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px 9px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-width: 92px">
-  <span aria-hidden="true" style="width: 62px; height: 38px; border-radius: 7px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; border: 1px solid var(--lineStrong)"><i style="background: #0F172A"></i><i style="background: #1E293B"></i></span>
-  <strong style="font-size: 12.5px; font-weight: 800; color: var(--ink)">Dark</strong>
-</button>
-          
-<button type="button" aria-pressed="true" style="display: grid; gap: 7px; justify-items: center; background: var(--primarySoft); border: 1.5px solid var(--primary); border-radius: 10px; padding: 10px 14px 9px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; min-width: 92px">
-  <span aria-hidden="true" style="width: 62px; height: 38px; border-radius: 7px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; border: 1px solid var(--lineStrong)"><i style="background: linear-gradient(100deg, #FAF6EF 50%, #0F172A 50%)"></i><i style="background: linear-gradient(100deg, #FFFFFF 50%, #1E293B 50%)"></i></span>
-  <strong style="font-size: 12.5px; font-weight: 800; color: var(--primaryInk)">System<small style="display: block; font-weight: 700; color: var(--faint)">Current: Light</small></strong>
-</button>
-        </span>
-</div>
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Colorblind-safe colors</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">Hosts of rooms you join get a quiet suggestion to switch the palette. Never shown with your name.</p>
-  </div>
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">You</h4>
   
+          <div style="display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 22px; padding: 8px 0 12px">
+            <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 42px; flex: none">M</span>
+            <div style="display: grid; gap: 10px">
+              <span style="color: var(--pcMarta); font-weight: 800; font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-size: 24px; font-weight: 600">Marta</span>
+              <span style="display: flex; flex-wrap: wrap; gap: 7px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #E11D48"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #F97316"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #EAB308"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #84CC16"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #16A34A"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #0F766E; box-shadow: 0 0 0 2.5px var(--card), 0 0 0 4.5px var(--ink)"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #38BDF8"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #2563EB"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #6366F1"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #A855F7"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #D946EF"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #F472B6"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #A0522D"></span></span>
+            </div>
+          </div>
+</section>
+        
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Signing in</h4>
+  
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Email</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">m•••••a@e•••••e.com · <span style="color: var(--successInk); font-weight: 800"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M4 12.5 9.5 18 20 6.5"/></svg> Confirmed</span></small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Change</button></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Password</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Changing it signs every other device out.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Change password</button></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Signed-in devices</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Revoke any device you no longer recognize. Device names are coarse and do not store browser versions. A device you stop using signs itself out after ninety days.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--danger); border: 1.5px solid transparent; border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Sign out everywhere</button></span>
+</div>
+          <ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px">
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--lineStrong); border-radius: 10px">
+  <span style="display: grid; gap: 3px; min-width: 0"><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Chrome on macOS</strong><span style="color: var(--successInk); font-size: 12px; font-weight: 700">Current device</span><small style="font-size: 12.5px; color: var(--muted); font-weight: 600">Last used today, 14:02</small></span>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Revoke</button>
+</li>
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--lineStrong); border-radius: 10px">
+  <span style="display: grid; gap: 3px; min-width: 0"><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Safari on iOS</strong><small style="font-size: 12.5px; color: var(--muted); font-weight: 600">Last used 26 Oct, 21:40</small></span>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Revoke</button>
+</li>
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--lineStrong); border-radius: 10px">
+  <span style="display: grid; gap: 3px; min-width: 0"><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Firefox on Windows</strong><small style="font-size: 12.5px; color: var(--warning); font-weight: 700">Used from a different browser on 20 Oct. Revoke this device if that was not you.</small></span>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Revoke</button>
+</li></ul>
+</section>
+        
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Your data</h4>
+  
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Download everything</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Every game, list and setting Sketchy holds about you, as one JSON file.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><button type="button" disabled style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap; opacity: 0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Request export</button></span>
+</div>
+          <ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px">
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--lineStrong); border-radius: 10px">
+  <span style="display: grid; gap: 3px; min-width: 0"><strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Ready</strong><small style="font-size: 12.5px; color: var(--muted); font-weight: 600">Requested 21 Oct, 09:15</small></span>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; border: 1.5px solid var(--primary); box-shadow: 0 2px 0 var(--primaryEdge); border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Download</button>
+</li></ul>
+          <p style="margin: 0 0 10px; font-size: 12.5px; color: var(--muted)">One export a week; ready exports expire after seven days. You can request another on 4 Nov.</p>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--danger)">Delete your account</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Games you played stay in other players&rsquo; histories, without your name on them.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--danger); border: 1.5px solid transparent; border-radius: 10px; padding: 6px 12px; min-height: 36px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; white-space: nowrap">Delete…</button></span>
+</div>
+</section>
+      </div>
+
+      <div data-pref-panel="appearance">
+        
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Display</h4>
+  
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Color scheme</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Applies the moment you pick it.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Light</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Dark</button><button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">System</button>
+  </div></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Language you read in</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Every word of Sketchy itself.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">English<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Your language</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Rooms in this language come first in the lobby.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">English<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Time format</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">System follows your device.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
+    <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">System</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">12-hour</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">24-hour</button>
+  </div></span>
+</div>
+</section>
+        
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Accessibility</h4>
+  
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">I have trouble telling colors apart</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Nudges hosts toward room colors that stay distinguishable. Nothing changes on its own.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">
 <span role="switch" aria-checked="false" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--lineStrong); flex: none; cursor: pointer">
   <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(0)"></span>
-</span>
-</div></div>
+</span></span>
+</div>
 </section>
-
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Audio</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">Feedback for guesses, rounds, and timers.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
         
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Sound</strong>
-    
-  </div>
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">The canvas</h4>
   
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Brush cursor</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">A crosshair is precise at the point; an outline shows how wide the stroke will be.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px"><div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
+    <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">Crosshair</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Outline</button>
+  </div></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Pen pressure</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">
 <span role="switch" aria-checked="true" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--primary); flex: none; cursor: pointer">
   <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(18px)"></span>
-</span>
+</span></span>
 </div>
+</section>
+      </div>
+
+      <div data-pref-panel="sound">
         
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Volume</strong>
-    
-  </div>
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Sound</h4>
   
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Sound effects</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">Chimes for a correct guess, the start of a turn, the last ten seconds, and players coming and going.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">
+<span role="switch" aria-checked="true" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--primary); flex: none; cursor: pointer">
+  <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(18px)"></span>
+</span></span>
+</div>
+          
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; border-top: 1px solid var(--line)">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Volume</b>
+    
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">
 <span style="display: inline-flex; align-items: center; gap: 10px; width: 200px">
   <span aria-label="Volume, 70%" role="slider" aria-valuenow="70" style="position: relative; flex: 1; height: 8px; border-radius: 999px; background: var(--track); cursor: pointer">
     <span style="position: absolute; inset: 0 30% 0 0; border-radius: 999px; background: var(--primary)"></span>
     <span style="position: absolute; left: 70%; top: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%; background: var(--card); border: 1.5px solid var(--lineStrong); box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"></span>
   </span>
   <span style="font-size: 12.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; width: 34px; text-align: right">70%</span>
-</span>
-</div></div>
-</section>
-      </div>
-
-      <div data-pref-panel="game">
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Drawing</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">Your drawing experience only — rooms set the rules.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Brush cursor</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">A precise crosshair, or the full brush outline.</p>
-  </div>
-  <div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
-    <button type="button" aria-pressed="false" style="width: 92px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap">Crosshair</button><button type="button" aria-pressed="true" style="width: 92px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap">Outline</button>
-  </div>
+</span></span>
 </div>
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Brush presets</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">3 of 20 saved.</p>
-  </div>
-  <span style="display: inline-flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end">
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
-  <span style="width: 8px; height: 8px; border-radius: 50%; background: #000000; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Ink · 4px
-</button>
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
-  <span style="width: 13px; height: 13px; border-radius: 50%; background: #ED1C24; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Marker · 12px
-</button>
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: var(--well); border: 1.5px solid var(--line); border-radius: 999px; padding: 8px 14px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); min-height: 40px">
-  <span style="width: 17px; height: 17px; border-radius: 50%; background: #7AC9E8; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>Sky wash · 24px
-</button></span>
-</div></div>
 </section>
-
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Celebrations</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">Keep the energy without covering the canvas.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
         
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Confetti</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">On correct guesses and podiums.</p>
-  </div>
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Effects</h4>
   
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: var(--ink)">Confetti</b>
+    <small style="font-size: 12.5px; color: var(--muted); line-height: 1.45">A burst when you guess right, and again for the winner at the end of a game.</small>
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">
 <span role="switch" aria-checked="true" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--primary); flex: none; cursor: pointer">
   <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(18px)"></span>
-</span>
+</span></span>
 </div>
-        
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: var(--ink)">Clear the guess box after each guess</strong>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700">Off keeps your last guess for quick edits.</p>
-  </div>
-  
-<span role="switch" aria-checked="true" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: var(--primary); flex: none; cursor: pointer">
-  <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(18px)"></span>
-</span>
-</div></div>
 </section>
       </div>
 
       <div data-pref-panel="shortcuts">
-      
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid var(--line)">
-  <div>
-    <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink)">Keyboard shortcuts</h3>
-    <p style="font-size: 12.5px; color: var(--faint); font-weight: 700; margin-top: 4px; line-height: 1.45">Select a key to rebind it. Each action can carry a main and a secondary key.</p>
-  </div>
-  <div style="display: grid; gap: 4px">
-        <div style="display: grid; grid-template-columns: 1fr; background: var(--well); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px">
-          
+        
+<section style="border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); margin: 0; padding-top: 9px">Drawing tools</h4>
+  
+          <p style="margin: 2px 0 8px; font-size: 12.5px; color: var(--muted)">Click a key to rebind it. Each action can hold two. Press Esc to cancel.</p>
+          <div style="display: grid; background: var(--well); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 16px; margin-bottom: 12px">
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9.06 11.9 18.8 4.2a2 2 0 0 1 3 3l-7.7 9.74"/><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Brush</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Brush tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">P</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">1</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 2-4 2-4s2 2.4 2 4Z"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Fill</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Fill tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">F</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">2</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l12-12a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4L8.4 21a1 1 0 0 1-1.4 0Z"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Eraser</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Eraser tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">E</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">3</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Rectangle</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Rectangle tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">R</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">4</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Triangle</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Triangle tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">T</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">5</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"/></svg></span>
-  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Ellipse</span>
+  <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Ellipse tool</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">C</button><button type="button" title="Change secondary shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--line); border-bottom-width: 3px; background: var(--well); color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">6</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span>
   <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Decrease brush size</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">[</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 15 6-6 6 6"/></svg></span>
   <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Increase brush size</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">]</button></span>
 </div>
-          
+            
 <div style="display: flex; align-items: center; gap: 9px; min-height: 40px">
   <span style="display: inline-flex; color: var(--faint)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></span>
   <span style="font-size: 13px; font-weight: 700; color: var(--muted)">Undo stroke</span>
   <span style="margin-left: auto; display: inline-flex; gap: 5px"><button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid var(--lineStrong); border-bottom-width: 3px; background: var(--card); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800">Z</button></span>
 </div>
-        </div>
-        <div style="display: flex; justify-content: flex-end; margin-top: 8px"><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 34px; padding: 4px 8px; font-size: 12.5px">Reset to defaults</button></div></div>
+          </div>
 </section>
       </div>
-
-      <footer style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px">
-        <span style="font-size: 12.5px; font-weight: 700; color: var(--faint)">Changes apply immediately, on every device you're signed in on.</span>
-        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)">Done</button>
-      </footer>
-    </section>
+      </div>
+    </div>
   </div>
 </div>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "tab": {"editor":"enum","options":["general","game","shortcuts"],"default":"general"}, "$preview": {"width": 1080, "height": 900}}'>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "tab": {"editor":"enum","options":["account","appearance","sound","shortcuts"],"default":"account"}, "$preview": {"width": 1080, "height": 1180}}'>
 class Component extends DCLogic {
   renderVals() {
-    const defaults = { theme: 'light', tab: "general" };
+    const defaults = { theme: 'light', tab: "account" };
     return Object.assign({}, defaults, this.props);
   }
 }

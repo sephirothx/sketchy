@@ -60,50 +60,46 @@ const waitingChat = chat.panel({
   inputHTML: chat.input({}),
 });
 
-const settingChip = (label, value) =>
-  `<span style="display: inline-flex; align-items: center; gap: 6px; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: ${T.muted}">${label}<strong style="color: ${T.ink}; font-weight: 800">${value}</strong></span>`;
+// One of the six room facts (#861): the same cells, in the same order, on the
+// lobby card's invite page and here, so the rules read the same before joining
+// as after.
+const fact = (svg, value, label) => `
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px; min-width: 0; text-align: center">
+  <span style="display: inline-flex; color: ${T.muted}">${svg}</span>
+  <strong style="font-size: 15px; font-weight: 800; color: ${T.ink}; white-space: nowrap">${value}</strong>
+  <span style="font-size: 12px; font-weight: 700; color: ${T.muted}; white-space: nowrap">${label}</span>
+</div>`;
 
 export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
   waitingPlayers,
   `
   <div style="display: grid; gap: 14px">
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 24px; box-shadow: ${T.shadow}; text-align: center">
-      ${sectionLabel('Public room · waiting for players')}
-      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 28px; color: ${T.ink}; margin-top: 5px">${ROOM.name}</h1>
-      <p style="color: ${T.muted}; font-size: 14px; margin-top: 6px">Send friends the code or the link — they can join mid-lobby.</p>
-      <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin: 18px 0 14px" aria-label="Room code ${ROOM.code}">
-        ${ROOM.code.split('').map((c) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; background: ${T.well}; font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}">${c}</span>`).join('')}
-      </div>
+    <section aria-label="Invite your friends" style="background: ${T.primarySoft}; border: 1.5px solid ${T.primaryEdgeSoft}; border-radius: ${T.radius}; padding: 18px 22px 20px; text-align: center">
+      <p style="color: ${T.primaryInk}; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin: 0">Invite your friends</p>
+      <p aria-label="Room code ${ROOM.code}" style="font-family: ${T.display}; font-weight: 600; font-size: 34px; letter-spacing: 0.14em; color: ${T.primaryInk}; margin: 6px 0 12px">${ROOM.code}</p>
       <div style="display: flex; align-items: center; justify-content: center; gap: 10px">
-        ${btn.primary('Copy invite link', { iconL: icon.link(15) })}
-        ${btn.ghost('Copy code', { iconL: icon.copy(14) })}
+        ${btn.primary('Copy the invite link', { iconL: icon.link(15) })}
+        ${btn.secondary('Copy code', { iconL: icon.copy(14) })}
+        ${btn.iconOnly(icon.qr(19), 'Show a QR code')}
       </div>
     </section>
 
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px">
-        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Room settings</h2>
-        ${btn.secondary('Edit settings', { iconL: icon.gear(15) })}
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}">
+        ${[
+          fact(icon.users(17), '8', 'Seats'),
+          fact(icon.rounds(17), '3', 'Rounds'),
+          fact(icon.clock(17), '90s', 'Drawing time'),
+          fact(icon.trophy(17), 'Default', 'Scoring'),
+          fact(icon.bulb(17), 'Timed hints', 'Hints'),
+          fact(icon.deck(17, 'deck-facts'), 'English', 'Prompts'),
+        ].map((cell, i) => i === 0 ? cell : cell.replace('<div style="', `<div style="border-left: 1.5px solid ${T.line}; `)).join('')}
       </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 7px">
-        ${settingChip('Players', '8 max')}
-        ${settingChip('Rounds', '3')}
-        ${settingChip('Drawing time', '90s')}
-        ${settingChip('Scoring', 'Default')}
-        ${settingChip('Hints', 'Timed')}
-        ${settingChip('Prompts', 'Standard English · 432')}
-        ${settingChip('Colors', 'All')}
-        ${settingChip('Spectators', 'See the prompt')}
+      <div style="display: flex; align-items: center; gap: 12px; border-top: 1.5px solid ${T.line}; margin-top: 16px; padding-top: 16px">
+        ${btn.secondary('Edit room rules', { iconL: icon.pencil(14), style: 'white-space: nowrap; padding-inline: 14px' })}
+        ${btn.secondary('Draw while you wait', { iconL: icon.brush(15), style: 'white-space: nowrap; padding-inline: 14px' })}
+        ${btn.warm('Start game', { iconL: icon.play(15), style: 'flex: 1; white-space: nowrap' })}
       </div>
-      <p style="color: ${T.faint}; font-size: 12.5px; margin-top: 10px">Only you can edit settings while the room waits. Everyone sees changes instantly.</p>
-    </section>
-
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; display: flex; align-items: center; justify-content: space-between; gap: 16px">
-      <div>
-        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Ready when you are</h2>
-        <p style="color: ${T.muted}; font-size: 13.5px; margin-top: 4px">4 players are ready. Ines is AFK and will sit out until she's back.</p>
-      </div>
-      ${btn.success('Start game', { big: true })}
     </section>
   </div>`,
   waitingChat,
@@ -126,7 +122,7 @@ const inGamePlayersChoosing = playersPanel({
   ],
 });
 
-export const PromptChoicePage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(11, 11 / 15, T.success, 40) }) }) + roomGrid(
+export const PromptChoicePage = roomPage(roomHeader({ status: headerStatus({ round: 'Round 2 of 3', timer: icon.timerRing(11, 11 / 15, T.success, 40) }) }) + roomGrid(
   inGamePlayersChoosing,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
@@ -215,7 +211,7 @@ const inGamePlayersDrawing = playersPanel({
   ],
 });
 
-export const DrawingPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(21, 21 / 90, T.warm, 40) }) }) + roomGrid(
+export const DrawingPage = roomPage(roomHeader({ status: headerStatus({ round: 'Round 2 of 3', timer: icon.timerRing(21, 21 / 90, T.warm, 40) }) }) + roomGrid(
   inGamePlayersDrawing,
   `
   <main style="display: flex; flex-direction: column; gap: 10px; align-items: center">
@@ -267,7 +263,7 @@ const guessingPlayers = playersPanel({
   ],
 });
 
-export const GuessingPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4', timer: icon.timerRing(15, 15 / 90, T.warm, 40) }) }) + roomGrid(
+export const GuessingPage = roomPage(roomHeader({ status: headerStatus({ round: 'Round 2 of 3', timer: icon.timerRing(15, 15 / 90, T.warm, 40) }) }) + roomGrid(
   guessingPlayers,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">
@@ -324,7 +320,7 @@ const turnResultsPlayers = playersPanel({
   ],
 });
 
-export const TurnResultsPage = roomPage(roomHeader({ inGame: true, status: headerStatus({ round: 'Round 2 of 3', turn: 'Turn 1 of 4' }) }) + roomGrid(
+export const TurnResultsPage = roomPage(roomHeader({ status: headerStatus({ round: 'Round 2 of 3' }) }) + roomGrid(
   turnResultsPlayers,
   `
   <main style="display: flex; flex-direction: column; gap: 12px; align-items: center">

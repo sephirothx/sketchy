@@ -1,6 +1,6 @@
 // The shared in-room shell: header, players sidebar, chat panel, canvas art.
 // One story, six-plus artboards — rosters and scores must agree everywhere.
-import { T, P, icon, avatar, pname, btn, chip, sectionLabel } from './ui.mjs';
+import { T, P, icon, avatar, pname, btn, chip, sectionLabel, wordmark } from './ui.mjs';
 
 export const ROOM = { name: 'Coffee break doodles', code: 'BQ7F2K' };
 
@@ -31,30 +31,35 @@ export const lighthouseSVG = `<svg viewBox="0 0 800 600" style="display: block; 
 const panelHeading = (text, size = 15) =>
   `<h2 style="font-family: ${T.body}; font-weight: 800; font-size: ${size}px; letter-spacing: 0.2em; text-transform: uppercase; color: ${T.ink}">${text}</h2>`;
 
-// Room header, one lean row: room identity left, live game status center,
-// self controls right — the destructive Leave separated at the far edge.
-export const roomHeader = ({ inGame = false, status = '' } = {}) => `
+// The room's bar (#580): where you are on the left - the wordmark, which is
+// the way home, the room's name and whether it is public - what is going on
+// in the middle, and you on the right: the Room menu, the inbox's bell and
+// your chip. Everything a player does to the room is a row of the Room menu
+// (invite link, AFK, save the image, start over, Leave last and red), so the
+// bar carries three controls where it used to carry seven.
+export const roomHeader = ({ status = '' } = {}) => `
 <header style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
-  <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
-    <span style="font-weight: 800; font-size: 16px; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${ROOM.name}</span>
-    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; letter-spacing: 0.08em">
-      ${ROOM.code}<span style="display: inline-flex; color: ${T.faint}">${icon.copy(13)}</span>
-    </button>
+  <div style="display: flex; align-items: center; gap: 14px; min-width: 0">
+    ${wordmark(22, 'wm-room')}
+    <span style="display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 800; font-size: 16px; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${ROOM.name}<span title="Public room" style="display: inline-flex; color: ${T.faint}; flex: none">${icon.globe(14)}</span></span>
   </div>
   ${status ? `<div style="display: flex; align-items: center; gap: 10px; flex: none">${status}</div>` : '<span></span>'}
-  <div style="display: flex; align-items: center; gap: 7px; flex: none; justify-self: end">
-    ${inGame ? btn.iconOnly(icon.rounds(16), 'Vote to restart', 38) : ''}
-    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 6px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 7px 13px; font-family: ${T.body}; font-size: 13px; font-weight: 800; color: ${T.muted}; min-height: 38px">${icon.moon(14)}AFK</button>
-    ${inGame ? btn.iconOnly(icon.download(16), 'Save drawing as PNG', 38) : ''}
-    ${btn.iconOnly(icon.gear(16), 'Settings', 38)}
-    <span style="width: 1.5px; height: 22px; background: ${T.line}; margin: 0 3px"></span>
-    ${btn.dangerGhost('Leave', { iconL: icon.leave(14), style: 'min-height: 38px; padding: 7px 10px; font-size: 13px' })}
+  <div style="display: flex; align-items: center; gap: 8px; flex: none; justify-self: end">
+    <button type="button" aria-haspopup="menu" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 7px 12px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; min-height: 40px; box-shadow: ${T.shadow}">${icon.dots(16)}Room</button>
+    ${btn.iconOnly(icon.bell(17), 'Inbox', 40)}
+    <button type="button" aria-haspopup="menu" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 4px 12px 4px 4px; min-height: 40px; font-family: ${T.body}; box-shadow: ${T.shadow}">
+      ${avatar(P.marta, 30)}
+      <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
+      <span style="display: inline-flex; color: ${T.faint}">${icon.chevD(14)}</span>
+    </button>
   </div>
 </header>`;
 
-// The game status shown in the header's center slot.
-export const headerStatus = ({ round = 'Round 2 of 3', turn = 'Turn 1 of 4', timer = '' }) =>
-  `${chip(round, 'primary')}<span style="color: ${T.faint}; font-size: 12.5px; font-weight: 800">${turn}</span>${timer}`;
+// The game status in the bar's middle: the round, and the clock while a turn
+// runs. The turn count is not in the bar - the players column says who is
+// drawing, which is what it was standing in for.
+export const headerStatus = ({ round = 'Round 2 of 3', timer = '' }) =>
+  `${chip(round, 'primary')}${timer}`;
 
 // Players sidebar.
 export const playersPanel = ({ heading = 'Players', count = '5/8', spectators = 2, rows, footer = '', ready = null }) => `

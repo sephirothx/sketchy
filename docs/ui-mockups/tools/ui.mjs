@@ -187,6 +187,9 @@ export const icon = {
   pin: (s) => stroke('<path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z"/>', s),
   back: (s) => stroke('<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>', s),
   medal: (s) => stroke('<circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/>', s),
+  bell: (s) => stroke('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', s),
+  qr: (s) => stroke('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/><path d="M14 21h7"/><path d="M21 17v4"/>', s),
+  play: (s) => stroke('<path d="m7 4 12 8-12 8V4Z"/>', s),
   globe: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z"/>', s),
   lock: (s) => stroke('<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', s),
   dice: (s) => stroke('<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.2" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.2" cy="15.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="15.8" r="1.1" fill="currentColor" stroke="none"/>', s),
@@ -340,8 +343,9 @@ export const themeStyles = `
     [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
     [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
     [data-theme] a:hover { color: var(--primaryInk); }
-    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
-    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="account"] [data-pref-panel]:not([data-pref-panel="account"]) { display: none; }
+    [data-tab="appearance"] [data-pref-panel]:not([data-pref-panel="appearance"]) { display: none; }
+    [data-tab="sound"] [data-pref-panel]:not([data-pref-panel="sound"]) { display: none; }
     [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
     [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
     [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
