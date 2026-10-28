@@ -4572,8 +4572,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
     def _favorite_drawing_predicate(self, profile_user_id: UUID, turn_id: UUID):
         """Everything a favorite-drawing read has to hold, as one predicate the
         bytes and the validator share: this account favorited this turn, and the
-        drawing is in the Gallery - a favorite is a share (R-PIN-03), so a drawing
-        taken back out is off every shelf in the same act. Deliberately not
+        drawing is in the Gallery - every favorite is of a Gallery drawing (R-PIN-01), so a
+        drawing taken back out is off every shelf in the same act. Deliberately not
         the participant subquery `get_turn_drawing` uses, nor the gallery
         query - this is its own door (R-PIN-06), and it stays a separate
         query so a later edit to either cannot loosen the other by accident."""

@@ -64,7 +64,9 @@ export function FavoriteControl({
       type="button"
       className={`btn btn-secondary btn-compact favorite-control${favorited ? " is-favorited" : ""}`}
       aria-pressed={favorited}
-      aria-label={label}
+      // The star alone is named by its label; with its word beside it, by
+      // that word, so what is said is what is seen (WCAG 2.5.3).
+      aria-label={look === "icon" ? label : undefined}
       title={label}
       disabled={busy || disabled}
       data-testid="favorite-toggle"
@@ -72,9 +74,7 @@ export function FavoriteControl({
     >
       <StarIcon size={18} />
       {look === "labelled" && (
-        <span aria-hidden="true">
-          {favorited ? ui.favoriteControl.inYourFavorites : ui.favoriteControl.favorite}
-        </span>
+        <span>{favorited ? ui.favoriteControl.inYourFavorites : ui.favoriteControl.favorite}</span>
       )}
     </button>
   );

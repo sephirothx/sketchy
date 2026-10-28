@@ -257,7 +257,18 @@ export function GalleryDrawingPage() {
                     onRequestAccount={() => setAuthMode("claim")}
                     placement="panel"
                   />
-                  <GalleryFavoriteControl turnId={shown.turnId} look="labelled" />
+                  <GalleryFavoriteControl
+                    turnId={shown.turnId}
+                    look="labelled"
+                    // A player who sat in the game shares it by favoriting
+                    // it (R-PIN-03): read the entry again, so their new share
+                    // can be taken back from here.
+                    onChanged={() => {
+                      void fetchGalleryEntry(shown.turnId)
+                        .then((fetched) => setEntry({ reader, entry: fetched }))
+                        .catch(() => undefined);
+                    }}
+                  />
                   {user && !shown.drawnByMe && (
                     <button
                       type="button"

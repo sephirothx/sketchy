@@ -926,8 +926,8 @@ told about and no entry about a fact that rolled back; the account's sockets are
   removal (`services/avatars.py`), its subject the `user_warnings` row. Answering the
   warning marks it read.
 - `drawing_shared` — the first share of a drawing by somebody other than its drawer, in
-  the share's write; a live share's in the finished-game write (`save_game`); a favorite, since
-  a favorite is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
+  the share's write; a live share's in the finished-game write (`save_game`); a favorite from
+  a game its owner sat in, since that favorite is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
 (R-SHARE-09). The drawer's withdrawal
   marks it read — they have just acted on it — and the entry stays, naming nobody once no
   share stands.
@@ -1957,7 +1957,7 @@ being written like the reactions — a share by somebody other than the drawer o
 private game's drawing, or of one its drawer took out, is a `ValueError`; a blank or
 unkept drawing's is dropped. They are part of the payload digest and of the handoff
 envelope (version 4). Later writes — the recap, history, the Gallery's door, and the
-favorite write, since a favorite is a share (R-PIN-03) — go through `set_drawing_share` (or the favorite
+favorite write, since a favorite from a game its owner sat in is a share (R-PIN-03) — go through `set_drawing_share` (or the favorite
 write's own copy of its rules), one transaction that locks the sharer's and the drawer's
 accounts in one ascending statement and then the drawing row, checks who may share,
 inserts or deletes, and sets the projections. The drawer's withdrawal deletes every

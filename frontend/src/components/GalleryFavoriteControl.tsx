@@ -18,9 +18,12 @@ import { ui } from "../content/ui/index.ts";
 export function GalleryFavoriteControl({
   turnId,
   look = "icon",
+  onChanged,
 }: {
   turnId: string;
   look?: "icon" | "labelled";
+  /** Told once a write has landed, for a page whose own state it may change. */
+  onChanged?: () => void;
 }) {
   const navigate = useNavigate();
   const { notify } = useToast();
@@ -46,7 +49,10 @@ export function GalleryFavoriteControl({
         );
         if (!done) {
           notify(refusalSentence("favorites_full"), "error");
-        } else if (adding) {
+          return;
+        }
+        onChanged?.();
+        if (adding) {
           notify(ui.favoriteControl.addedToYourFavorites, "success", undefined, {
             label: ui.favoriteControl.seeThem,
             onClick: () => navigate("/profile"),

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
+import { ApiError } from "../lib/api";
 import { fetchProfileFavorites, setMyFavorites } from "../lib/profile";
 import { useAuthStore } from "./authStore";
 
@@ -122,7 +123,25 @@ export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
       const mine = ++generation;
       set({ pending: true });
       try {
-        const answer = await setMyFavorites(next);
+        let answer: Awaited<ReturnType<typeof setMyFavorites>>;
+        try {
+          answer = await setMyFavorites(next);
+        } catch (failure) {
+          // A 404 for a shelf this tab read is most often a favorite the
+          // server has already dropped - a drawing that left the Gallery
+          // (R-PIN-05), which nothing tells this tab - and the whole-list
+          // write would send it again on every later press until a reload.
+          // So the shelf is read again and the change computed once more
+          // from it; a second refusal is this press's own.
+          if (!(failure instanceof ApiError) || failure.status !== 404) throw failure;
+          const fresh = (await fetchProfileFavorites(ownerId)).favorites.map((favorite) => favorite.turnId);
+          if (mine !== generation || get().ownerId !== ownerId) return true;
+          set({ turnIds: fresh });
+          const retried = change(fresh);
+          if (retried === null) return false;
+          if (retried.join(",") === fresh.join(",")) return true;
+          answer = await setMyFavorites(retried);
+        }
         if (mine !== generation || get().ownerId !== ownerId) return true;
         set({ turnIds: answer.favorites.map((favorite) => favorite.turnId), loaded: true });
         return true;
