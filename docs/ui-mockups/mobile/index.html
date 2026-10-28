@@ -554,8 +554,8 @@ const menuBtn = `<button class="iconbtn"><span class="dots"><i></i><i></i><i></i
 
 /* The room's bar as shipped (#580): the wordmark, what is going on, then the
    Room menu (⋯), the inbox's bell and your avatar. The room code is a row of
-   the Room menu rather than a chip here, and the turn's results and game over
-   say nothing in the bar: the stage under it already does. */
+   the Room menu rather than a chip here. The round stays through the turn's
+   results; the clock goes, and at game over so does the round. */
 const bellBtn = () => `<button class="iconbtn" aria-label="Inbox">${ic.bell}</button>`;
 const meBtn = `<button class="iconbtn" aria-label="Marta" style="border-radius:50%"><span class="av" style="width:32px;height:32px;background:#0F766E;color:#fff">M</span></button>`;
 const roundChip = (n) => `<span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">Round ${n}/3</span>`;

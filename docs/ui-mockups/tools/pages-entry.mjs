@@ -514,7 +514,8 @@ const listItem = (title, lines, action) => `
 const listNote = (text, color = T.muted, weight = 600) => `<small style="font-size: 12.5px; color: ${color}; font-weight: ${weight}">${text}</small>`;
 const rowList = (items) => `<ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px">${items.join('')}</ul>`;
 
-const nameSwatches = ['#E11D48', '#F97316', '#EAB308', '#84CC16', '#16A34A', '#0F766E', '#38BDF8', '#2563EB', '#6366F1', '#A855F7', '#D946EF', '#F472B6', '#A0522D'];
+// NAME_COLOR_PALETTE in frontend/src/store/settingsStore.ts, in its order.
+const nameSwatches = ['#e11d48', '#f97316', '#eab308', '#84cc16', '#16a34a', '#0d9488', '#38bdf8', '#2563eb', '#6366f1', '#a855f7', '#d946ef', '#f472b6', '#a0522d'];
 
 const keyChip = (key) =>
   `<button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid ${T.lineStrong}; border-bottom-width: 3px; background: ${T.card}; color: ${T.ink}; font-family: ${T.body}; font-size: 12.5px; font-weight: 800">${key}</button>`;
@@ -549,9 +550,9 @@ export const SettingsPage = `
 
     <div data-tab="{{tab}}" style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start">
       <nav role="tablist" aria-label="Settings sections" style="display: grid; gap: 4px">
-        ${railTab('account', icon.user(16), 'Account', true)}
-        ${railTab('appearance', icon.eye(16), 'Appearance')}
-        ${railTab('sound', icon.bell(16), 'Sound &amp; effects')}
+        ${railTab('account', icon.user(16), 'Account')}
+        ${railTab('appearance', icon.sun(16), 'Appearance')}
+        ${railTab('sound', icon.volume(16), 'Sound &amp; effects')}
         ${railTab('shortcuts', icon.keyboard(16), 'Shortcuts')}
       </nav>
 
@@ -574,6 +575,7 @@ export const SettingsPage = `
             listItem('Safari on iOS', listNote('Last used 26 Oct, 21:40'), compactBtn('Revoke')),
             listItem('Firefox on Windows', listNote('Used from a different browser on 20 Oct. Revoke this device if that was not you.', T.warning, 700), compactBtn('Revoke')),
           ])}`)}
+        ${sGroup('Solo', sRow('Let Solo players guess my public drawings', 'Solo never shows who drew a drawing. Turn this off and none of yours is served to anybody.', bareSwitch(true), { first: true }))}
         ${sGroup('Your data', `
           ${sRow('Download everything', 'Every game, list and setting Sketchy holds about you, as one JSON file.', compactBtn('Request export', icon.download(14), { disabled: true }), { first: true })}
           ${rowList([listItem('Ready', listNote('Requested 21 Oct, 09:15'), compactBtn('Download', '', { tone: 'primary' }))])}
@@ -584,13 +586,15 @@ export const SettingsPage = `
       <div data-pref-panel="appearance">
         ${sGroup('Display', `
           ${sRow('Color scheme', 'Applies the moment you pick it.', segmented(['Light', 'Dark', 'System'], 2), { first: true })}
-          ${sRow('Language you read in', 'Every word of Sketchy itself.', selectBox('English'))}
-          ${sRow('Your language', 'Rooms in this language come first in the lobby.', selectBox('English'))}
-          ${sRow('Time format', 'System follows your device.', segmented(['System', '12-hour', '24-hour'], 0))}`)}
-        ${sGroup('Accessibility', sRow('I have trouble telling colors apart', 'Nudges hosts toward room colors that stay distinguishable. Nothing changes on its own.', bareSwitch(false), { first: true }))}
+          ${sRow('Language you read in', 'Every word of Sketchy itself. Separate from the language you play in: reading in one and playing in another is perfectly ordinary.', selectBox('English'))}
+          ${sRow('Your language', 'Rooms in this language come first in the lobby, and in a mixed room it is the language you play the prompts in. It is separate from the language you read Sketchy in.', selectBox('English'))}
+          ${sRow('Also comfortable in', 'Rooms in these languages come after mixed rooms in the lobby, in this order. Drag a language, or use its arrows, to move it.', `<span style="display: inline-flex; gap: 6px">${chip('Italiano')}${chip('Deutsch')}</span>`)}
+          ${sRow('Time format', 'How every clock reads: chat timestamps, sign-in dates, notices. System follows your device.', segmented(['System', '12-hour', '24-hour'], 0))}`)}
+        ${sGroup('Accessibility', sRow('I have trouble telling colors apart', 'Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own.', bareSwitch(false), { first: true }))}
         ${sGroup('The canvas', `
           ${sRow('Brush cursor', 'A crosshair is precise at the point; an outline shows how wide the stroke will be.', segmented(['Crosshair', 'Outline'], 0), { first: true })}
-          ${sRow('Pen pressure', 'With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke.', bareSwitch(true))}`)}
+          ${sRow('Default brush size', 'The size the brush starts every turn at. Marked on the size slider.', segmented(['2', '4', '6', '8', '12', '16', '24', '32'], 2))}
+          ${sRow('Pen pressure', 'With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke. Brush size is the widest it gets.', bareSwitch(true))}`)}
       </div>
 
       <div data-pref-panel="sound">
@@ -602,6 +606,7 @@ export const SettingsPage = `
 
       <div data-pref-panel="shortcuts">
         ${sGroup('Drawing tools', `
+          <div style="display: flex; justify-content: flex-end; margin-top: -26px">${btn.ghost('Reset to defaults', { style: 'min-height: 32px; padding: 4px 8px; font-size: 12.5px' })}</div>
           <p style="margin: 2px 0 8px; font-size: 12.5px; color: ${T.muted}">Click a key to rebind it. Each action can hold two. Press Esc to cancel.</p>
           <div style="display: grid; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px; margin-bottom: 12px">
             ${shortcutRow(icon.brush(15), 'Brush tool', 'P', '1')}

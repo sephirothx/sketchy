@@ -184,9 +184,10 @@ on from a link was the one that never said whose site it was. On a phone the
 back control is the arrow alone, with the label kept as its accessible name.
 
 Alongside those: the eight-icon header strip — which put a red **Leave** one
-thumb-width from **Settings** — is now a code chip, the round and countdown
-ring, and a ⋯ sheet holding the rest as labelled rows, with leaving separated
-and styled as the destructive thing it is. Game over drops from five
+thumb-width from **Settings** — is now the wordmark, the round and countdown
+ring, then the ⋯ sheet holding the rest as labelled rows (the room's code and
+link among them, with leaving separated and styled as the destructive thing it
+is), the inbox's bell and your avatar (#580). Game over drops from five
 near-equal actions to one loud **Continue**. The drawings recap gains horizontal
 swipe and a dot pager. The lobby puts open rooms first and demotes **Spectate**
 from a twin primary to a link.

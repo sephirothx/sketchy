@@ -235,13 +235,18 @@ one token sheet.
 
 ### Waiting room (`WaitingRoom`)
 
-- **The invite is the hero**: big code tiles, *Copy invite link* as the
-  primary action (resurrecting the designed-but-dead invite button, §1.6).
-- **Settings collapse to a chip summary** with an *Edit settings* button for
-  the host. Guests now see a sensible screen: who's here, how to invite, what
-  the rules are. The full editor already has a home (the create form).
+- **The invite is the hero**: the code at a size you can read across a room,
+  *Copy the invite link* as the primary action (resurrecting the
+  designed-but-dead invite button, §1.6), *Copy code*, and a QR code button
+  for the friend across the table (#864).
+- **The rules read as six facts** — seats, rounds, drawing time, scoring,
+  hints, prompts — the same cells the invite page shows (#861), with *Edit
+  room rules* for the host and *Draw while you wait* beside it. Guests see a
+  sensible screen: who's here, how to invite, what the rules are. The full
+  editor already has a home (the create form).
 - **Start game is marker-orange** — the one "game moment" button on the
-  screen — with an honest readiness line ("Ines is AFK and will sit out").
+  screen — in the same card as the rules, and it says what is missing when the
+  room cannot start yet ("Need 1 more player").
 
 ### Prompt choice (`PromptChoice`) — new screen
 
@@ -255,10 +260,12 @@ drawer's highest-pressure moment. The redesign gives it one:
 
 ### Drawing — drawer view (`Drawing`)
 
-- **One lean header row carries everything**: room name and code on the left,
-  **Round 2 of 3 · Turn 1 of 4 and the ring timer** (orange as time runs low,
-  §1.4) in the center, and compact controls on the right — restart vote, AFK,
-  save, settings, with the destructive *Leave* separated at the far edge.
+- **One bar, three slots** (#580): where you are — the wordmark and the
+  room's name — on the left; what is going on — **Round 2 of 3 and the ring
+  timer**, orange as time runs low (§1.4) — in the center; and you on the
+  right: the **Room** menu (invite link, AFK, save, start over, and *Leave*
+  last and red), the inbox's bell and your chip. It replaced a row of seven
+  controls with *Leave* at the far edge.
 - **Above the canvas: only the prompt.** No "You're drawing" label, no
   guessed-count chip — the pencil status and the per-player *Got it* lines
   already say both, and the canvas gets the reclaimed space.
@@ -380,33 +387,27 @@ guessers forget sometimes.") beside the form — wordmark, one field, one
 primary action, quiet back link. The copy stays honest to R-AUTH-09: the
 response never reveals whether the account exists.
 
-### Settings (`Settings`) — new screen
+### Settings (`Settings`)
 
-The settings surface was on the shipped canvas's "not covered" list; this
-canvas gives it a **full page**: a category rail (General / Game /
-Shortcuts, with the signed-in player pinned on top) beside two-column
-preference groups — each group's purpose on the left, its rows on the
-right. The categories are **real, separated tabs**: the pane shows one at a
-time (a `tab` tweak switches them on the canvas; the rail switches them
-live in the explorer). It covers exactly the R-SET-01 set, nothing
-invented:
+Drawn as the sheet that shipped (R-SET-06): it opens over whatever page it
+was reached from, with one rail of four sections — **Account**,
+**Appearance**, **Sound & effects** and **Shortcuts**, the last left out on a
+touch screen (#864) — and every row applies as it changes, so there is no
+*Done* (R-SET-05). A `tab` tweak switches the section on the canvas; the rail
+switches it live in the explorer.
 
-- **You**: username with a *Manage account* action, and the **account name
-  color** with live preview swatches ("guests stay grey", R-ACCT-05).
-- **Appearance**: theme as three **preview cards** (Light / Dark / System
-  with the current resolution), and the **colorblind-safe preference** with
-  its guarantee written where the choice is made (R-CB-01).
-- **Audio / Game**: sound, volume, confetti, brush cursor
-  (crosshair/outline), guess-box clearing, and **brush presets** against
-  the 20-preset cap (R-SET-02).
-- **Keyboard shortcuts** as a grid of editable key caps showing **both the
-  main and the secondary key** per action (P·1 … C·6, plus brush size and
-  undo), with a reset.
-- The footer states the honest sync rule — *"changes apply immediately, on
-  every device you're signed in on"* (local-only for guests, R-SET-03).
+- **Account**: the disc and the **name color** swatches; **Signing in** — the
+  email, masked (R-SET-08), the password, and the **signed-in devices listed
+  in the page** with *Sign out everywhere* (#864); **Solo**; **Your data** —
+  the exports listed under *Download everything*, then *Delete…* last.
+- **Appearance**: color scheme, the language you read in, the languages you
+  play in and time format; the **colorblind-safe preference** (R-CB-01); brush
+  cursor, default brush size and pen pressure.
+- **Sound & effects**: sound, volume and confetti.
+- **Shortcuts**: each action's **main and secondary key** (P·1 … C·6, plus
+  brush size and undo), with a reset.
 
-In the explorer, every Settings gear (lobby and in-room) opens it; *Done*
-returns to the lobby.
+In the explorer, your chip opens it; ✕ returns to the lobby.
 
 ---
 
@@ -459,12 +460,6 @@ artboards, kept for stability or clarity rather than drift:
   with the same defaults one click away.
 - **The name-roll dice** — random room names remain a server behavior
   (leave the field blank); no client-side dice button.
-- **Settings is a modal, not a page** — as decided at planning; the modal
-  carries the artboard's separated tabs, theme cards, and shortcut chips.
-  The Brush presets and clear-guess-box rows are omitted by decision.
-- **Waiting-room settings chips** — chip values reuse the app's established
-  copy ("Custom prompts only (2)", "2 custom prompts + curated lists")
-  rather than the artboards' shortened variants.
 - **Ops chart granularity** — the operations dashboard draws the artboard's
   bar chart from daily aggregates (metric selectable); hourly buckets are
   not recorded.
@@ -477,8 +472,6 @@ artboards, kept for stability or clarity rather than drift:
   out from them — a warm border and a two-step confirm — because it is the one
   control on the page that ends the process, and nothing in the app starts it
   again.
-- **Identity chip stays in the room header** — the artboards drop it, but
-  it is the only in-room path to claiming an account and account menus.
 
 ## 5. What was deliberately kept
 
