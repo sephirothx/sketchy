@@ -1,16 +1,16 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { fetchProfilePins, setMyPins } from "../lib/profile";
+import { fetchProfileFavorites, setMyFavorites } from "../lib/profile";
 import { useAuthStore } from "./authStore";
 
 /** What a mutation computes: the next whole shelf, or `null` to refuse without a request. */
 export type ShelfMutation = (current: readonly string[]) => string[] | null;
 
-interface PinsStore {
+interface FavoritesStore {
   /** Whose shelf `turnIds` describes, so a second account never inherits the first's. */
   ownerId: string | null;
-  /** The signed-in player's pinned turn ids, in shelf order. */
+  /** The signed-in player's favorited turn ids, in shelf order. */
   turnIds: string[];
   /** Whether `turnIds` is an answer about `ownerId` rather than a starting value.
 
@@ -30,7 +30,7 @@ interface PinsStore {
    * Change the shelf. Mutations are one queue: each computes its list from
    * the state as it stands when its turn comes, never from the state at the
    * press, so two controls pressed together cannot each send a list that
-   * forgets the other's pin. Refused with `ShelfNotReadyError` until the
+   * forgets the other's favorite. Refused with `ShelfNotReadyError` until the
    * shelf for the signed-in account has been read - a whole-list write from
    * an unread shelf would erase it. Resolves `false` when the mutation
    * itself declined (`null`), `true` once the server has the new list.
@@ -38,9 +38,9 @@ interface PinsStore {
   mutate: (change: ShelfMutation) => Promise<boolean>;
   /**
    * Drop a turn the server already took off the shelf: a share taken back,
-   * or a drawing its drawer took out of the Gallery, takes the pins of it with
+   * or a drawing its drawer took out of the Gallery, takes the favorites of it with
    * it (R-SHARE-04). Without this the next whole-list write would send it
-   * again - and pin it, and share it, again.
+   * again - and favorite it, and share it, again.
    */
   forget: (turnId: string) => void;
   reset: () => void;
@@ -48,7 +48,7 @@ interface PinsStore {
 
 export class ShelfNotReadyError extends Error {
   constructor() {
-    super("pinned drawings not loaded yet");
+    super("favorites not loaded yet");
     this.name = "ShelfNotReadyError";
   }
 }
@@ -63,7 +63,7 @@ let generation = 0;
 export const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000] as const;
 let inFlight: { accountId: string; token: object; promise: Promise<void> } | null = null;
 
-export const usePinsStore = create<PinsStore>((set, get) => ({
+export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
   ownerId: null,
   turnIds: [],
   loaded: false,
@@ -88,11 +88,11 @@ export const usePinsStore = create<PinsStore>((set, get) => ({
     set({ ownerId: accountId, turnIds: [], loaded: false, failed: false, attempt });
     const promise = (async () => {
       try {
-        const shelf = await fetchProfilePins(accountId);
+        const shelf = await fetchProfileFavorites(accountId);
         // A mutation or a newer load since this was sent has fresher ids
         // than this answer; an old answer must not roll them back.
         if (mine !== generation) return;
-        set({ turnIds: shelf.pins.map((pin) => pin.turnId), loaded: true, failed: false, attempt: 0 });
+        set({ turnIds: shelf.favorites.map((favorite) => favorite.turnId), loaded: true, failed: false, attempt: 0 });
       } catch {
         if (mine !== generation) return;
         set({ turnIds: [], loaded: false, failed: true, attempt: attempt + 1 });
@@ -122,9 +122,9 @@ export const usePinsStore = create<PinsStore>((set, get) => ({
       const mine = ++generation;
       set({ pending: true });
       try {
-        const answer = await setMyPins(next);
+        const answer = await setMyFavorites(next);
         if (mine !== generation || get().ownerId !== ownerId) return true;
-        set({ turnIds: answer.pins.map((pin) => pin.turnId), loaded: true });
+        set({ turnIds: answer.favorites.map((favorite) => favorite.turnId), loaded: true });
         return true;
       } finally {
         set({ pending: false });
@@ -152,16 +152,16 @@ export const usePinsStore = create<PinsStore>((set, get) => ({
  * registered account, forgotten when there is none. Guests hold no shelf and
  * are not asked for one. `ready` says the controls may be offered.
  */
-export function useMyPins(): PinsStore & { ready: boolean } {
+export function useMyFavorites(): FavoritesStore & { ready: boolean } {
   const user = useAuthStore((s) => s.user);
   const accountId = user && !user.isAnonymous ? user.id : null;
-  const store = usePinsStore();
+  const store = useFavoritesStore();
   useEffect(() => {
     if (store.ownerId === accountId) return;
-    void usePinsStore.getState().load(accountId);
+    void useFavoritesStore.getState().load(accountId);
   }, [accountId, store.ownerId]);
   // A failed read is retried with a growing pause, a bounded number of
-  // times, so a blip in connectivity does not leave every Pin control
+  // times, so a blip in connectivity does not leave every Favorite control
   // disabled until the page is reloaded - and a server that keeps refusing
   // is not asked for ever.
   useEffect(() => {
@@ -169,7 +169,7 @@ export function useMyPins(): PinsStore & { ready: boolean } {
     const delay = RETRY_DELAYS_MS[store.attempt - 1];
     if (delay === undefined) return;
     const timer = window.setTimeout(() => {
-      void usePinsStore.getState().load(accountId);
+      void useFavoritesStore.getState().load(accountId);
     }, delay);
     return () => window.clearTimeout(timer);
   }, [store.failed, store.attempt, store.ownerId, accountId]);

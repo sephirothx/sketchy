@@ -28,15 +28,15 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
-from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
+from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_FAVORITE_SLOTS
 from app.compression import accepted_encodings
 from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
     DrawingShareResult,
     GameHistoryRepository,
-    ProfilePinEntry,
-    ProfilePinsResult,
+    ProfileFavoriteEntry,
+    ProfileFavoritesResult,
     TurnDrawingDetail,
     UserRepository,
 )
@@ -78,7 +78,7 @@ class ReactionBody(ControlFreeModel):
     emoji: str = Field(min_length=1, max_length=16)
 
 
-class PinsBody(ControlFreeModel):
+class FavoritesBody(ControlFreeModel):
     """The whole shelf, in order: the turn ids of the drawings to show (#440).
 
     Bounded to the slot count here, so a body twice the cap is refused before
@@ -88,42 +88,42 @@ class PinsBody(ControlFreeModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    turnIds: list[str] = Field(max_length=PROFILE_PIN_SLOTS * 2)
+    turnIds: list[str] = Field(max_length=PROFILE_FAVORITE_SLOTS * 2)
 
     @field_validator("turnIds")
     @classmethod
     def _distinct(cls, turn_ids: list[str]) -> list[str]:
         if len(set(turn_ids)) != len(turn_ids):
-            raise ValueError("a drawing can be pinned once")
+            raise ValueError("a drawing can be favorited once")
         if any(not 1 <= len(turn_id) <= 64 for turn_id in turn_ids):
             raise ValueError("not a turn id")
         return turn_ids
 
 
-def pin_entry_payload(pin: ProfilePinEntry) -> dict:
+def favorite_entry_payload(favorite: ProfileFavoriteEntry) -> dict:
     """The shelf's shape mirrors a game-detail turn where the two overlap, so
     the client's recap metadata is built the same way from either."""
     return {
-        "turnId": pin.turn_id,
-        "roundNumber": pin.round_number,
-        "turnNumber": pin.turn_number,
-        "drawerDisplayName": pin.drawer_display_name,
-        "drawerNameColor": pin.drawer_name_color,
-        "drawerIsAnonymous": pin.drawer_is_anonymous,
-        "prompt": pin.prompt,
-        "strokeCount": pin.stroke_count,
+        "turnId": favorite.turn_id,
+        "roundNumber": favorite.round_number,
+        "turnNumber": favorite.turn_number,
+        "drawerDisplayName": favorite.drawer_display_name,
+        "drawerNameColor": favorite.drawer_name_color,
+        "drawerIsAnonymous": favorite.drawer_is_anonymous,
+        "prompt": favorite.prompt,
+        "strokeCount": favorite.stroke_count,
         "reactions": [
             {"seatId": reaction.seat_id, "emoji": reaction.emoji}
-            for reaction in pin.reactions
+            for reaction in favorite.reactions
         ],
-        "reactionCounts": dict(pin.reaction_counts),
-        "myReaction": pin.my_reaction,
-        "drawnByMe": pin.drawn_by_me,
+        "reactionCounts": dict(favorite.reaction_counts),
+        "myReaction": favorite.my_reaction,
+        "drawnByMe": favorite.drawn_by_me,
     }
 
 
-def pins_payload(result: ProfilePinsResult) -> dict:
-    return {"pins": [{"turnId": pin.turn_id} for pin in result.pins]}
+def favorites_payload(result: ProfileFavoritesResult) -> dict:
+    return {"favorites": [{"turnId": favorite.turn_id} for favorite in result.favorites]}
 
 
 def reaction_payload(result: DrawingReactionResult) -> dict:
@@ -240,13 +240,13 @@ async def serve_drawing(
 ) -> Response:
     """The body the drawing routes share: the conditional answer, the decode,
     and the refusals. They differ only in *which* query says the caller may
-    have the bytes - the participant check, the pin (R-PIN-06) or the gallery
+    have the bytes - the participant check, the favorite (R-PIN-06) or the gallery
     predicate (R-GAL-06) - and each passes its own, so none can borrow another's.
     """
     cache_headers = {
         # Reader-scoped bytes must never reach a shared cache, and a
         # browser's own copy is revalidated on every open: an erased or
-        # unpinned drawing stops being shown at once rather than when a
+        # unfavorited drawing stops being shown at once rather than when a
         # lifetime runs out.
         "Cache-Control": "private, no-cache",
     }
@@ -404,7 +404,7 @@ def share_payload(result: DrawingShareResult) -> dict:
 
 
 async def announce_share(
-    result: DrawingShareResult | ProfilePinsResult,
+    result: DrawingShareResult | ProfileFavoritesResult,
     *,
     on_inbox_changed: Callable[[str], Awaitable[None]] | None,
     on_gallery_changed: Callable[[], None] | None,
@@ -421,7 +421,7 @@ async def announce_share(
         turn_ids = (
             (result.turn_id,)
             if isinstance(result, DrawingShareResult)
-            else tuple(pin.turn_id for pin in result.pins)
+            else tuple(favorite.turn_id for favorite in result.favorites)
         )
         try:
             await on_shares_changed(turn_ids)
@@ -590,19 +590,19 @@ def create_profile_router(
             ),
         )
 
-    @router.get("/users/{user_id}/pins")
-    async def user_pins(user_id: str, request: Request):
-        """The player's **Pinned drawings**, in their order, for anyone signed in.
+    @router.get("/users/{user_id}/favorites")
+    async def user_favorites(user_id: str, request: Request):
+        """The player's **Favorites**, in their order, for anyone signed in.
 
         Any session will do, a guest's included (R-PIN-06): the shelf is a
         deliberate widening of who may see a drawing, by the explicit act of
-        the account that pinned it, and the one thing it keeps out is
+        the account that favorited it, and the one thing it keeps out is
         unauthenticated scraping. A visitor with no session gets the same
         404 an unknown player does, so the route never says which - and the
         client renders no shelf at all for a signed-out viewer, not an empty
         one. Each entry credits the drawer through the turn's frozen snapshot
         (#387) and carries no game id: a viewer who was not in the game has
-        no page to open, and a private game could not be pinned to begin
+        no page to open, and a private game could not be favorited to begin
         with (R-PIN-03).
         """
         throttle(request)
@@ -612,19 +612,19 @@ def create_profile_router(
         user = await user_repo.get_by_id(user_id)
         if user is None:
             raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
-        pins = await game_history_repo.get_profile_pins(
+        favorites = await game_history_repo.get_profile_favorites(
             user.id, viewer_user_id=viewer_id
         )
-        return {"pins": [pin_entry_payload(pin) for pin in pins]}
+        return {"favorites": [favorite_entry_payload(favorite) for favorite in favorites]}
 
-    @router.get("/users/{user_id}/pins/{turn_id}/drawing")
-    async def pinned_drawing(user_id: str, turn_id: str, request: Request):
-        """A pinned drawing's bytes, for anyone signed in (R-PIN-06).
+    @router.get("/users/{user_id}/favorites/{turn_id}/drawing")
+    async def favorite_drawing(user_id: str, turn_id: str, request: Request):
+        """A favorite's bytes, for anyone signed in (R-PIN-06).
 
         The one other door beside the participant route above, and its own
-        query rather than an `OR` in that one: the join to the pins table is
+        query rather than an `OR` in that one: the join to the favorites table is
         the authorization. Same conditional handling (R-HIST-24) and the same
-        404 for every refusal - signed out, not pinned any more, erased, or a
+        404 for every refusal - signed out, not favorited any more, erased, or a
         player that does not exist.
         """
         throttle(request)
@@ -633,10 +633,10 @@ def create_profile_router(
         return await serve_drawing(
             request,
             turn_id,
-            checksum_of=lambda: game_history_repo.get_pinned_drawing_checksum(
+            checksum_of=lambda: game_history_repo.get_favorite_drawing_checksum(
                 user_id, turn_id
             ),
-            drawing_of=lambda: game_history_repo.get_pinned_drawing(user_id, turn_id),
+            drawing_of=lambda: game_history_repo.get_favorite_drawing(user_id, turn_id),
         )
 
     async def _write_reaction(
@@ -740,11 +740,11 @@ def create_profile_router(
         next request on, and the Daily replaces it for everybody (#1434)."""
         return await _write_solo_take_out(game_id, turn_id, request, True)
 
-    @router.put("/me/pins")
-    async def set_my_pins(body: PinsBody, request: Request):
-        """Replace the signed-in player's pinned drawings with the list given.
+    @router.put("/me/favorites")
+    async def set_my_favorites(body: FavoritesBody, request: Request):
+        """Replace the signed-in player's favorites with the list given.
 
-        Pinning, unpinning and reordering are the same request: the body is
+        Favoriting, unfavoriting and reordering are the same request: the body is
         the whole shelf in order, so the six-slot cap and the order fall out
         of the list itself and the client never has to shuffle positions.
         Which drawings may be on it (#440): any turn with a ready drawing from
@@ -752,21 +752,21 @@ def create_profile_router(
         credited to the drawer's frozen name. The repository applies those
         rules; every refusal is the same 404 (R-HIST-16), so the route never
         says which of stranger, guest, private game or erased drawing applied.
-        A seventh pin is the one refusal that is not a 404: nothing was
+        A seventh favorite is the one refusal that is not a 404: nothing was
         hidden from the caller, they are simply out of room.
         """
         throttle(request)
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        if len(body.turnIds) > PROFILE_PIN_SLOTS:
+        if len(body.turnIds) > PROFILE_FAVORITE_SLOTS:
             raise Refusal(
                 409,
-                ErrorCode.PINNED_DRAWINGS_FULL,
-                "Your pinned drawings are full.",
-                params={"slots": PROFILE_PIN_SLOTS},
+                ErrorCode.FAVORITES_FULL,
+                "Your favorites are full.",
+                params={"slots": PROFILE_FAVORITE_SLOTS},
             )
-        result = await game_history_repo.set_profile_pins(
+        result = await game_history_repo.set_profile_favorites(
             requesting_user_id=requesting_user_id, turn_ids=body.turnIds
         )
         if result is None:
@@ -777,6 +777,6 @@ def create_profile_router(
             on_gallery_changed=on_gallery_changed,
             on_shares_changed=on_shares_changed,
         )
-        return pins_payload(result)
+        return favorites_payload(result)
 
     return router

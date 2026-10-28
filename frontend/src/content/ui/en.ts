@@ -327,7 +327,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "There is no drawing left to play right now. Try again later.",
   solo_date_out_of_range: "That day's Daily is not open.",
   no_such_daily: "There is no Daily today. Try a free run.",
-  pinned_drawings_full: "Your pinned drawings are full. Unpin one from your profile first.",
+  favorites_full: "Your favorites are full. Remove one from your profile first.",
 
   // Prompt lists
   prompt_list_not_found: "Prompt list not found.",
@@ -969,10 +969,10 @@ export const EN = {
       (p: { label: string }) => `${p.label}, your reaction. Press to remove it`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Pin this drawing to your profile and share it to the gallery",
-    unpinThisDrawing: "Unpin this drawing from your profile",
-    thatDrawingCouldNotBePinned: "That drawing could not be pinned.",
+  favoriteControl: {
+    favoriteThisDrawing: "Add this drawing to your favorites and share it to the gallery",
+    unfavoriteThisDrawing: "Remove this drawing from your favorites",
+    thatDrawingCouldNotBeFavorited: "That drawing could not be added to your favorites.",
   },
 
   shareControl: {
@@ -990,7 +990,7 @@ export const EN = {
     thatDrawingCouldNotBeShared: "That drawing could not be shared.",
     thatCouldNotBeTakenBack: "That could not be taken back. Try again.",
     takeOutTitle: "Take this drawing out of the gallery?",
-    takeOutDescription: "It leaves the gallery for everyone and comes off every profile it is pinned to. Only you can put it back.",
+    takeOutDescription: "It leaves the gallery for everyone and comes off every profile that has it as a favorite. Only you can put it back.",
     takeOutConfirm: "Take it out",
   },
 
@@ -1601,13 +1601,13 @@ export const EN = {
     notKept: "not kept",
     erased: "erased",
     removedByModeration: "removed by moderation",
-    pinnedDrawings: "Pinned drawings",
-    nothingPinnedYet: "Nothing pinned yet. Pin a drawing from a game's recap, or from a game in your history below.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `Open ${p.prompt} by ${p.drawer}`,
+    favorites: "Favorites",
+    noFavoritesYet: "No favorites yet. Add a drawing from a game's recap, or from a game in your history below.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `Open ${p.prompt} by ${p.drawer}`,
     moveLeft: "Move left",
     moveRight: "Move right",
-    unpin: "Unpin",
-    couldNotUpdatePinnedDrawings: "Could not update your pinned drawings. Please try again.",
+    unfavorite: "Remove",
+    couldNotUpdateFavorites: "Could not update your favorites. Please try again.",
     couldNotLoadThisDrawing: "Could not load this drawing.",
     nothingDrawn: "nothing drawn",
     onlyThePlayersInThis: "Only the players in this game can see its turns.",

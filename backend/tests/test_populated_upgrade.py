@@ -92,8 +92,8 @@ async def test_the_populated_baseline_upgrades_to_head_and_reads_back_whole():
         )
         gallery = await history.list_gallery(sort="top")
         assert [entry.turn_id for entry in gallery.entries] == [str(turn)]
-        pins = await history.get_profile_pins(drawer)
-        assert pins is not None
+        favorites = await history.get_profile_favorites(drawer)
+        assert favorites is not None
         from datetime import datetime, timezone
 
         assert await history.get_recent_co_players(drawer, since=datetime(2020, 1, 1, tzinfo=timezone.utc))

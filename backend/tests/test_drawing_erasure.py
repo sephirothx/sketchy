@@ -26,7 +26,7 @@ from app.db.models import (
     UserStatsDaily,
     generate_uuid,
     InboxEntry,
-    ProfileDrawingPin,
+    ProfileFavorite,
     TurnDrawing,
     TurnDrawingReaction,
     TurnDrawingShare,
@@ -92,7 +92,7 @@ async def _staff(users, factory, name: str, role: UserRole):
 
 
 async def _reported_drawing(http, users, history, factory):
-    """A public game's drawing, shared, reacted to and pinned, with a share
+    """A public game's drawing, shared, reacted to and favorited, with a share
     entry in its drawer's inbox, and reported from the Gallery so a report
     carries a copy of it."""
     ann = await _registered(users, "Ann")
@@ -106,7 +106,7 @@ async def _reported_drawing(http, users, history, factory):
     async with factory() as session:
         async with session.begin():
             session.add(
-                ProfileDrawingPin(
+                ProfileFavorite(
                     user_id=UUID(bob.id), turn_id=turn, game_id=UUID(game.game_id),
                     position=0, created_at=NOW,
                 )
@@ -132,7 +132,7 @@ async def test_an_administrator_erases_a_drawing_everywhere_a_player_could_meet_
     admin = await _staff(users, factory, "Admin", UserRole.ADMIN)
     assert await _count(factory, TurnDrawingReaction, turn) == 1
     assert await _count(factory, TurnDrawingShare, turn) == 1
-    assert await _count(factory, ProfileDrawingPin, turn) == 1
+    assert await _count(factory, ProfileFavorite, turn) == 1
 
     await _as_moderator(http, factory, admin.id)
     path = f"/api/moderation/drawings/{game.turn_id}/erase"
@@ -153,7 +153,7 @@ async def test_an_administrator_erases_a_drawing_everywhere_a_player_could_meet_
         assert await session.scalar(
             select(func.count()).select_from(InboxEntry).where(InboxEntry.subject_id == turn)
         ) == 0, "the drawer is not offered View on what is gone"
-    for model in (TurnDrawingReaction, TurnDrawingShare, ProfileDrawingPin):
+    for model in (TurnDrawingReaction, TurnDrawingShare, ProfileFavorite):
         assert await _count(factory, model, turn) == 0, model.__name__
 
     # The players who were there read why it went; the Gallery and the
@@ -538,7 +538,7 @@ async def test_a_saved_turn_without_a_drawing_row_is_erased_through_its_copies(e
     turn = UUID(game.turn_id)
     async with factory() as session:
         async with session.begin():
-            for model in (TurnDrawingReaction, TurnDrawingShare, ProfileDrawingPin):
+            for model in (TurnDrawingReaction, TurnDrawingShare, ProfileFavorite):
                 await session.execute(delete(model).where(model.turn_id == turn))
             await session.execute(delete(TurnDrawing).where(TurnDrawing.turn_id == turn))
     admin = await _staff(users, factory, "Admin", UserRole.ADMIN)

@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Al momento non ci sono più disegni da giocare. Riprova più tardi.",
   solo_date_out_of_range: "La sfida del giorno di quella data non è aperta.",
   no_such_daily: "Oggi non c’è la sfida del giorno. Prova una partita libera.",
-  pinned_drawings_full: "I tuoi disegni fissati sono al completo. Prima rimuovine uno dal tuo profilo.",
+  favorites_full: "I tuoi preferiti sono al completo. Prima rimuovine uno dal tuo profilo.",
 
   // Prompt lists
   prompt_list_not_found: "Lista di parole non trovata.",
@@ -952,10 +952,10 @@ export const IT: Catalogue = {
       `${p.label}, la tua reazione. Premi per toglierla`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Fissa questo disegno sul tuo profilo e condividilo nella galleria",
-    unpinThisDrawing: "Rimuovi questo disegno dal tuo profilo",
-    thatDrawingCouldNotBePinned: "Non è stato possibile fissare questo disegno.",
+  favoriteControl: {
+    favoriteThisDrawing: "Aggiungi questo disegno ai tuoi preferiti e condividilo nella galleria",
+    unfavoriteThisDrawing: "Rimuovi questo disegno dai tuoi preferiti",
+    thatDrawingCouldNotBeFavorited: "Non è stato possibile aggiungere questo disegno ai tuoi preferiti.",
   },
 
   shareControl: {
@@ -973,7 +973,7 @@ export const IT: Catalogue = {
     thatDrawingCouldNotBeShared: "Non è stato possibile condividere questo disegno.",
     thatCouldNotBeTakenBack: "Non è stato possibile annullarlo. Riprova.",
     takeOutTitle: "Togliere questo disegno dalla galleria?",
-    takeOutDescription: "Sparisce dalla galleria per tutti e da ogni profilo su cui è fissato. Solo tu puoi rimettercelo.",
+    takeOutDescription: "Sparisce dalla galleria per tutti e dai preferiti di ogni profilo. Solo tu puoi rimettercelo.",
     takeOutConfirm: "Toglilo",
   },
 
@@ -1579,13 +1579,13 @@ export const IT: Catalogue = {
     notKept: "non conservato",
     erased: "cancellato",
     removedByModeration: "rimosso dalla moderazione",
-    pinnedDrawings: "Disegni fissati",
-    nothingPinnedYet: "Ancora niente di fissato. Fissa un disegno dal riepilogo di una partita, o da una partita nella tua cronologia qui sotto.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `Apri ${p.prompt} di ${p.drawer}`,
+    favorites: "Preferiti",
+    noFavoritesYet: "Ancora nessun preferito. Aggiungi un disegno dal riepilogo di una partita, o da una partita nella tua cronologia qui sotto.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `Apri ${p.prompt} di ${p.drawer}`,
     moveLeft: "Sposta a sinistra",
     moveRight: "Sposta a destra",
-    unpin: "Rimuovi",
-    couldNotUpdatePinnedDrawings: "Non è stato possibile aggiornare i tuoi disegni fissati. Riprova.",
+    unfavorite: "Rimuovi",
+    couldNotUpdateFavorites: "Non è stato possibile aggiornare i tuoi preferiti. Riprova.",
     couldNotLoadThisDrawing: "Non è stato possibile caricare questo disegno.",
     nothingDrawn: "niente disegnato",
     onlyThePlayersInThis: "Solo i giocatori di questa partita possono vederne i turni.",

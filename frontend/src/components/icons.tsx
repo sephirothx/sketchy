@@ -186,7 +186,6 @@ export function ChevronUpIcon(p: IconProps) { return <IconBase {...p}><path d="m
 /** Six dots: "hold here to move this". Filled, so it reads at 16px. */
 export function GripIcon(p: IconProps) { return <IconBase {...p}>{[6, 12, 18].map((y) => [9, 15].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" fill="currentColor" stroke="none" />))}</IconBase>; }
 export function ChevronRightIcon(p: IconProps) { return <IconBase {...p}><path d="m9 6 6 6-6 6" /></IconBase>; }
-export function PinIcon(p: IconProps) { return <IconBase {...p}><path d="M12 15v6" /><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4-1-6Z" /></IconBase>; }
 export function ChevronLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m15 6-6 6 6 6" /></IconBase>; }
 /** Two chevrons: a whole set of thumbnails back or on, not one drawing. */
 export function ChevronsLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m11 17-5-5 5-5" /><path d="m18 17-5-5 5-5" /></IconBase>; }

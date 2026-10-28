@@ -1,6 +1,6 @@
 /** What the browser's Back does to a layer opened over a page that is not a
 room (R-UX-15): the drawing viewer opened from the profile's game history or
-its pinned shelf.
+its favorites shelf.
 
 A room keeps entries of its own on the history stack (`roomHistory.ts`), so
 Back closes whatever is open over it. Outside a room nothing did: Back from

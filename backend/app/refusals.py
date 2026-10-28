@@ -246,8 +246,8 @@ class ErrorCode(StrEnum):
     # The Daily: a date that is nobody's today, and a day too thin for one.
     SOLO_DATE_OUT_OF_RANGE = "solo_date_out_of_range"
     NO_SUCH_DAILY = "no_such_daily"
-    # A seventh pin (R-PIN-02); carries `slots`. Nothing was changed.
-    PINNED_DRAWINGS_FULL = "pinned_drawings_full"
+    # A seventh favorite (R-PIN-02); carries `slots`. Nothing was changed.
+    FAVORITES_FULL = "favorites_full"
 
     # Prompt lists
     PROMPT_LIST_NOT_FOUND = "prompt_list_not_found"

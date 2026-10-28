@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Il n’y a plus de dessin à jouer pour le moment. Réessaie plus tard.",
   solo_date_out_of_range: "Le défi du jour de cette date n’est pas ouvert.",
   no_such_daily: "Il n’y a pas de défi du jour aujourd’hui. Essaie une partie libre.",
-  pinned_drawings_full: "Tes dessins épinglés sont au complet. Retire-en un de ton profil d’abord.",
+  favorites_full: "Tes favoris sont au complet. Retire-en un de ton profil d’abord.",
 
   // Prompt lists
   prompt_list_not_found: "Liste de mots introuvable.",
@@ -952,10 +952,10 @@ export const FR: Catalogue = {
       `${p.label}, ta réaction. Appuie pour la retirer`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Épingler ce dessin sur ton profil et le partager dans la galerie",
-    unpinThisDrawing: "Retirer ce dessin de ton profil",
-    thatDrawingCouldNotBePinned: "Ce dessin n’a pas pu être épinglé.",
+  favoriteControl: {
+    favoriteThisDrawing: "Ajouter ce dessin à tes favoris et le partager dans la galerie",
+    unfavoriteThisDrawing: "Retirer ce dessin de tes favoris",
+    thatDrawingCouldNotBeFavorited: "Ce dessin n’a pas pu être ajouté à tes favoris.",
   },
 
   shareControl: {
@@ -973,7 +973,7 @@ export const FR: Catalogue = {
     thatDrawingCouldNotBeShared: "Ce dessin n’a pas pu être partagé.",
     thatCouldNotBeTakenBack: "Impossible d’annuler. Réessaie.",
     takeOutTitle: "Retirer ce dessin de la galerie ?",
-    takeOutDescription: "Il disparaît de la galerie pour tout le monde et de tous les profils où il est épinglé. Tu es la seule personne à pouvoir l’y remettre.",
+    takeOutDescription: "Il disparaît de la galerie pour tout le monde et des favoris de chaque profil. Tu es la seule personne à pouvoir l’y remettre.",
     takeOutConfirm: "Le retirer",
   },
 
@@ -1579,13 +1579,13 @@ export const FR: Catalogue = {
     notKept: "non conservé",
     erased: "effacé",
     removedByModeration: "retiré par la modération",
-    pinnedDrawings: "Dessins épinglés",
-    nothingPinnedYet: "Rien d’épinglé pour l’instant. Épingle un dessin depuis le récap d’une partie, ou depuis une partie de ton historique ci-dessous.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `Ouvrir ${p.prompt} par ${p.drawer}`,
+    favorites: "Favoris",
+    noFavoritesYet: "Pas encore de favoris. Ajoute un dessin depuis le récap d’une partie, ou depuis une partie de ton historique ci-dessous.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `Ouvrir ${p.prompt} par ${p.drawer}`,
     moveLeft: "Déplacer à gauche",
     moveRight: "Déplacer à droite",
-    unpin: "Retirer",
-    couldNotUpdatePinnedDrawings: "Impossible de mettre à jour tes dessins épinglés. Réessaie.",
+    unfavorite: "Retirer",
+    couldNotUpdateFavorites: "Impossible de mettre à jour tes favoris. Réessaie.",
     couldNotLoadThisDrawing: "Impossible de charger ce dessin.",
     nothingDrawn: "rien dessiné",
     onlyThePlayersInThis: "Seuls les joueurs de cette partie peuvent voir ses tours.",

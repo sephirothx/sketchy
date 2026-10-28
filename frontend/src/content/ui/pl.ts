@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "W tej chwili nie ma już rysunków do zagrania. Spróbuj później.",
   solo_date_out_of_range: "Wyzwanie dnia z tego dnia nie jest otwarte.",
   no_such_daily: "Dziś nie ma wyzwania dnia. Spróbuj wolnej gry.",
-  pinned_drawings_full: "Nie możesz przypiąć więcej rysunków. Najpierw odepnij któryś w swoim profilu.",
+  favorites_full: "Masz już komplet ulubionych. Najpierw usuń któryś w swoim profilu.",
 
   // Prompt lists
   prompt_list_not_found: "Nie znaleziono listy haseł.",
@@ -960,10 +960,10 @@ export const PL: Catalogue = {
       (p: { label: string }) => `${p.label} – twoja reakcja. Naciśnij, aby ją usunąć`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Przypnij ten rysunek do profilu i udostępnij go w galerii",
-    unpinThisDrawing: "Odepnij ten rysunek od profilu",
-    thatDrawingCouldNotBePinned: "Nie udało się przypiąć tego rysunku.",
+  favoriteControl: {
+    favoriteThisDrawing: "Dodaj ten rysunek do ulubionych i udostępnij go w galerii",
+    unfavoriteThisDrawing: "Usuń ten rysunek z ulubionych",
+    thatDrawingCouldNotBeFavorited: "Nie udało się dodać tego rysunku do ulubionych.",
   },
 
   shareControl: {
@@ -981,7 +981,7 @@ export const PL: Catalogue = {
     thatDrawingCouldNotBeShared: "Nie udało się udostępnić tego rysunku.",
     thatCouldNotBeTakenBack: "Nie udało się tego cofnąć. Spróbuj ponownie.",
     takeOutTitle: "Zdjąć ten rysunek z galerii?",
-    takeOutDescription: "Zniknie z galerii dla wszystkich i ze wszystkich profili, do których jest przypięty. Tylko ty możesz go przywrócić.",
+    takeOutDescription: "Zniknie z galerii dla wszystkich i z ulubionych w każdym profilu. Tylko ty możesz go przywrócić.",
     takeOutConfirm: "Zdejmij",
   },
 
@@ -1591,13 +1591,13 @@ export const PL: Catalogue = {
     notKept: "nie zachowano",
     erased: "wymazany",
     removedByModeration: "usunięty przez moderację",
-    pinnedDrawings: "Przypięte rysunki",
-    nothingPinnedYet: "Nic jeszcze nie przypięto. Przypnij rysunek z podsumowania gry albo z gry w historii poniżej.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `Otwórz ${p.prompt} (autor: ${p.drawer})`,
+    favorites: "Ulubione",
+    noFavoritesYet: "Nie masz jeszcze ulubionych. Dodaj rysunek z podsumowania gry albo z gry w historii poniżej.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `Otwórz ${p.prompt} (autor: ${p.drawer})`,
     moveLeft: "Przesuń w lewo",
     moveRight: "Przesuń w prawo",
-    unpin: "Odepnij",
-    couldNotUpdatePinnedDrawings: "Nie udało się zaktualizować przypiętych rysunków. Spróbuj ponownie.",
+    unfavorite: "Usuń",
+    couldNotUpdateFavorites: "Nie udało się zaktualizować ulubionych. Spróbuj ponownie.",
     couldNotLoadThisDrawing: "Nie udało się wczytać tego rysunku.",
     nothingDrawn: "nic nie narysowano",
     onlyThePlayersInThis: "Tury tej gry widzą tylko jej gracze.",

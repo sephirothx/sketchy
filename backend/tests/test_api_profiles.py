@@ -600,7 +600,7 @@ async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnam
     """Any registered account may react to a public-game drawing at
     `/api/gallery/{turn}/reaction` (R-GAL-06): the answer carries no seat, the
     counts include it, the named list does not (R-REACT-05), a participant's
-    detail shows the count, and the pinned shelf shows the outsider their own
+    detail shows the count, and the favorites shelf shows the outsider their own
     pick without naming them to anyone."""
     http, users, history, factory = env
     ann = await _registered(users, "Ann")
@@ -611,7 +611,7 @@ async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnam
     path = f"/api/gallery/{turn_id}/reaction"
 
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 200
     seated = await http.put(f"/api/games/{game_id}/turns/{turn_id}/reaction", json={"emoji": "heart"})
     bob_seat = seated.json()["seatId"]
 
@@ -626,7 +626,7 @@ async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnam
         "reactions": [{"seatId": bob_seat, "emoji": "heart"}],
         "reactionCounts": {"heart": 1, "wow": 1},
     }
-    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    [entry] = (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"]
     assert entry["reactions"] == [{"seatId": bob_seat, "emoji": "heart"}]
     assert entry["reactionCounts"] == {"heart": 1, "wow": 1}
     assert entry["myReaction"] == "wow" and entry["drawnByMe"] is False
@@ -637,7 +637,7 @@ async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnam
     turn = (await http.get(f"/api/games/{game_id}")).json()["turns"][0]
     assert turn["reactions"] == [{"seatId": bob_seat, "emoji": "heart"}]
     assert turn["reactionCounts"] == {"heart": 1, "wow": 1}
-    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    [entry] = (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"]
     assert entry["myReaction"] is None and entry["drawnByMe"] is True
 
     await sign_in_as(http, factory, cid.id)
@@ -685,27 +685,27 @@ async def test_every_gallery_reaction_refusal_is_a_404(env):
     assert (await http.put(f"/api/gallery/{public_turn}/reaction", json={"emoji": 1})).status_code == 422
 
 
-# ---- pinned drawings (#440)
+# ---- favorites (#440)
 
 
 async def _pins_in_store(factory, user_id: str) -> list[tuple[str, int]]:
     from sqlalchemy import select
 
-    from app.db.models import ProfileDrawingPin
+    from app.db.models import ProfileFavorite
 
     async with factory() as session:
         rows = (
             await session.scalars(
-                select(ProfileDrawingPin)
-                .where(ProfileDrawingPin.user_id == UUID(user_id))
-                .order_by(ProfileDrawingPin.position)
+                select(ProfileFavorite)
+                .where(ProfileFavorite.user_id == UUID(user_id))
+                .order_by(ProfileFavorite.position)
             )
         ).all()
     return [(str(row.turn_id), row.position) for row in rows]
 
 
-async def test_a_participant_pins_reorders_and_unpins_with_one_write(env):
-    """The list is the shelf: pinning another player's drawing, one's own,
+async def test_a_participant_favorites_reorders_and_unfavorites_with_one_write(env):
+    """The list is the shelf: favoriting another player's drawing, one's own,
     changing the order and taking one down are all the same request."""
     http, users, history, factory = env
     ann = await _registered(users, "Ann")
@@ -716,23 +716,23 @@ async def test_a_participant_pins_reorders_and_unpins_with_one_write(env):
     bobs_drawing = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
 
-    put = await http.put("/api/me/pins", json={"turnIds": [anns_drawing, bobs_drawing]})
+    put = await http.put("/api/me/favorites", json={"turnIds": [anns_drawing, bobs_drawing]})
     assert put.status_code == 200
-    assert put.json() == {"pins": [{"turnId": anns_drawing}, {"turnId": bobs_drawing}]}
+    assert put.json() == {"favorites": [{"turnId": anns_drawing}, {"turnId": bobs_drawing}]}
     assert await _pins_in_store(factory, bob.id) == [(anns_drawing, 0), (bobs_drawing, 1)]
 
-    reordered = await http.put("/api/me/pins", json={"turnIds": [bobs_drawing, anns_drawing]})
-    assert reordered.json()["pins"] == [{"turnId": bobs_drawing}, {"turnId": anns_drawing}]
+    reordered = await http.put("/api/me/favorites", json={"turnIds": [bobs_drawing, anns_drawing]})
+    assert reordered.json()["favorites"] == [{"turnId": bobs_drawing}, {"turnId": anns_drawing}]
     assert await _pins_in_store(factory, bob.id) == [(bobs_drawing, 0), (anns_drawing, 1)]
 
-    unpinned = await http.put("/api/me/pins", json={"turnIds": [anns_drawing]})
-    assert unpinned.json() == {"pins": [{"turnId": anns_drawing}]}
-    cleared = await http.put("/api/me/pins", json={"turnIds": []})
-    assert cleared.json() == {"pins": []}
+    unfavorited = await http.put("/api/me/favorites", json={"turnIds": [anns_drawing]})
+    assert unfavorited.json() == {"favorites": [{"turnId": anns_drawing}]}
+    cleared = await http.put("/api/me/favorites", json={"turnIds": []})
+    assert cleared.json() == {"favorites": []}
     assert await _pins_in_store(factory, bob.id) == []
 
 
-async def test_every_pin_refusal_is_a_404_and_leaves_the_shelf_as_it_was(env):
+async def test_every_favorite_refusal_is_a_404_and_leaves_the_shelf_as_it_was(env):
     """Signed out, a guest, a stranger to the game, a private room's game, a
     drawing that was never kept, a turn that does not exist: none of them
     learns which applied (R-HIST-16), and a refused list writes nothing."""
@@ -750,28 +750,28 @@ async def test_every_pin_refusal_is_a_404_and_leaves_the_shelf_as_it_was(env):
     await record_game(history, users, winner=ann.id, loser=bob.id, index=2, drawing=None)
     unkept_turn = record_game.last_turn_id
 
-    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "signed out"
+    assert (await http.put("/api/me/favorites", json={"turnIds": [public_turn]})).status_code == 404, "signed out"
     await sign_in_as(http, factory, guest.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "a guest"
-    assert (await http.put("/api/me/pins", json={"turnIds": []})).status_code == 404, "a guest, even clearing"
+    assert (await http.put("/api/me/favorites", json={"turnIds": [public_turn]})).status_code == 404, "a guest"
+    assert (await http.put("/api/me/favorites", json={"turnIds": []})).status_code == 404, "a guest, even clearing"
     await sign_in_as(http, factory, cid.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "a stranger"
-    assert (await http.put("/api/me/pins", json={"turnIds": []})).status_code == 200, "their own empty shelf"
+    assert (await http.put("/api/me/favorites", json={"turnIds": [public_turn]})).status_code == 404, "a stranger"
+    assert (await http.put("/api/me/favorites", json={"turnIds": []})).status_code == 200, "their own empty shelf"
 
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [public_turn]})).status_code == 200
     for turn_id, why in (
         (private_turn, "a private room's game"),
         (unkept_turn, "a drawing the recap did not keep"),
         (str(generate_uuid()), "a turn that does not exist"),
         ("not-a-turn-id", "not an id at all"),
     ):
-        response = await http.put("/api/me/pins", json={"turnIds": [public_turn, turn_id]})
+        response = await http.put("/api/me/favorites", json={"turnIds": [public_turn, turn_id]})
         assert response.status_code == 404, why
         assert await _pins_in_store(factory, bob.id) == [(public_turn, 0)], why
 
 
-async def test_a_seventh_pin_is_refused_as_full_and_a_repeat_as_malformed(env):
+async def test_a_seventh_favorite_is_refused_as_full_and_a_repeat_as_malformed(env):
     http, users, history, factory = env
     ann = await _registered(users, "Ann")
     bob = await _registered(users, "Bob")
@@ -781,22 +781,22 @@ async def test_a_seventh_pin_is_refused_as_full_and_a_repeat_as_malformed(env):
         turns.append(record_game.last_turn_id)
     await sign_in_as(http, factory, bob.id)
 
-    assert (await http.put("/api/me/pins", json={"turnIds": turns[:6]})).status_code == 200
-    full = await http.put("/api/me/pins", json={"turnIds": turns})
+    assert (await http.put("/api/me/favorites", json={"turnIds": turns[:6]})).status_code == 200
+    full = await http.put("/api/me/favorites", json={"turnIds": turns})
     assert full.status_code == 409
-    assert full.json()["errorCode"] == "pinned_drawings_full"
+    assert full.json()["errorCode"] == "favorites_full"
     assert full.json()["params"] == {"slots": 6}
     assert await _pins_in_store(factory, bob.id) == [(turn, i) for i, turn in enumerate(turns[:6])]
 
-    assert (await http.put("/api/me/pins", json={"turnIds": [turns[0], turns[0]]})).status_code == 422
-    assert (await http.put("/api/me/pins", json={"turnIds": turns * 2})).status_code == 422
-    assert (await http.put("/api/me/pins", json={"turnIds": turns[0]})).status_code == 422
-    assert (await http.put("/api/me/pins", json={})).status_code == 422
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turns[0], turns[0]]})).status_code == 422
+    assert (await http.put("/api/me/favorites", json={"turnIds": turns * 2})).status_code == 422
+    assert (await http.put("/api/me/favorites", json={"turnIds": turns[0]})).status_code == 422
+    assert (await http.put("/api/me/favorites", json={})).status_code == 422
 
 
-async def test_an_erased_drawing_keeps_its_pin_row_only_until_the_erasure_path_runs(env):
+async def test_an_erased_drawing_keeps_its_favorite_row_only_until_the_erasure_path_runs(env):
     """Erasure is a status change on the drawing, not a row deletion, so no
-    cascade reaches the pin: the write path refuses the turn from then on,
+    cascade reaches the favorite: the write path refuses the turn from then on,
     and the account-erasure path deletes the row (tests/test_account_data.py)."""
     from sqlalchemy import select
 
@@ -808,7 +808,7 @@ async def test_an_erased_drawing_keeps_its_pin_row_only_until_the_erasure_path_r
     await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
     turn_id = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 200
 
     async with factory() as session:
         async with session.begin():
@@ -823,15 +823,15 @@ async def test_an_erased_drawing_keeps_its_pin_row_only_until_the_erasure_path_r
             drawing.format_version = None
             drawing.deleted_at = datetime.now(timezone.utc)
     assert await _pins_in_store(factory, bob.id) == [(turn_id, 0)]
-    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 404
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 404
 
 
-# ---- the shelf and the pinned-drawing door (#808)
+# ---- the shelf and the favorite-drawing door (#808)
 
 
-async def test_a_signed_in_non_participant_can_fetch_a_pinned_drawing_and_not_an_unpinned_one(env):
-    """The required proof from #440: the pin is the only door, it opens the
-    pinned turn to any session, and it leaves the participant route alone."""
+async def test_a_signed_in_non_participant_can_fetch_a_favorite_and_not_another_drawing(env):
+    """The required proof from #440: the favorite is the only door, it opens the
+    favorited turn to any session, and it leaves the participant route alone."""
     http, users, history, factory = env
     ann = await _registered(users, "Ann")
     bob = await _registered(users, "Bob")
@@ -840,38 +840,38 @@ async def test_a_signed_in_non_participant_can_fetch_a_pinned_drawing_and_not_an
     game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
     pinned_turn = record_game.last_turn_id
     other_game = await record_game(history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch())
-    unpinned_turn = record_game.last_turn_id
+    unfavorited_turn = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [pinned_turn]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [pinned_turn]})).status_code == 200
     expected = (await http.get(f"/api/games/{game_id}/turns/{pinned_turn}/drawing")).content
 
-    shelf = f"/api/users/{bob.id}/pins"
+    shelf = f"/api/users/{bob.id}/favorites"
     for viewer, why in ((cid, "a stranger to the game"), (guest, "a guest")):
         await sign_in_as(http, factory, viewer.id)
         listed = await http.get(shelf)
         assert listed.status_code == 200, why
-        [entry] = listed.json()["pins"]
+        [entry] = listed.json()["favorites"]
         assert entry["turnId"] == pinned_turn and entry["prompt"] == "jackpot", why
         assert entry["drawerDisplayName"] == "Ann" and "gameId" not in entry, why
         served = await http.get(f"{shelf}/{pinned_turn}/drawing")
         assert served.status_code == 200 and served.content == expected, why
         assert served.headers["cache-control"] == "private, no-cache"
-        assert (await http.get(f"{shelf}/{unpinned_turn}/drawing")).status_code == 404, why
-        # The participant route is not widened by the pin.
+        assert (await http.get(f"{shelf}/{unfavorited_turn}/drawing")).status_code == 404, why
+        # The participant route is not widened by the favorite.
         assert (await http.get(f"/api/games/{game_id}/turns/{pinned_turn}/drawing")).status_code == 404, why
-        assert (await http.get(f"/api/games/{other_game}/turns/{unpinned_turn}/drawing")).status_code == 404, why
-        # Nor can the pinned turn be reached through somebody else's shelf.
-        assert (await http.get(f"/api/users/{ann.id}/pins/{pinned_turn}/drawing")).status_code == 404, why
+        assert (await http.get(f"/api/games/{other_game}/turns/{unfavorited_turn}/drawing")).status_code == 404, why
+        # Nor can the favorited turn be reached through somebody else's shelf.
+        assert (await http.get(f"/api/users/{ann.id}/favorites/{pinned_turn}/drawing")).status_code == 404, why
 
     http.cookies.clear()
     assert (await http.get(shelf)).status_code == 404, "signed out: no shelf"
     assert (await http.get(f"{shelf}/{pinned_turn}/drawing")).status_code == 404, "signed out: no bytes"
     await sign_in_as(http, factory, cid.id)
-    assert (await http.get(f"/api/users/{generate_uuid()}/pins")).status_code == 404, "no such player"
-    assert (await http.get(f"/api/users/{generate_uuid()}/pins/{pinned_turn}/drawing")).status_code == 404
+    assert (await http.get(f"/api/users/{generate_uuid()}/favorites")).status_code == 404, "no such player"
+    assert (await http.get(f"/api/users/{generate_uuid()}/favorites/{pinned_turn}/drawing")).status_code == 404
 
 
-async def test_unpinning_and_erasure_close_the_door_at_once_even_for_a_remembered_validator(env):
+async def test_unfavoriting_and_erasure_close_the_door_at_once_even_for_a_remembered_validator(env):
     from sqlalchemy import select
 
     from app.db.models import TurnDrawing
@@ -885,22 +885,22 @@ async def test_unpinning_and_erasure_close_the_door_at_once_even_for_a_remembere
     await record_game(history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch())
     second = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [first, second]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [first, second]})).status_code == 200
 
     await sign_in_as(http, factory, cid.id)
-    served = await http.get(f"/api/users/{bob.id}/pins/{first}/drawing")
+    served = await http.get(f"/api/users/{bob.id}/favorites/{first}/drawing")
     tag = served.headers["etag"]
     assert (
-        await http.get(f"/api/users/{bob.id}/pins/{first}/drawing", headers={"If-None-Match": tag})
+        await http.get(f"/api/users/{bob.id}/favorites/{first}/drawing", headers={"If-None-Match": tag})
     ).status_code == 304
 
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [second]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [second]})).status_code == 200
     await sign_in_as(http, factory, cid.id)
     assert (
-        await http.get(f"/api/users/{bob.id}/pins/{first}/drawing", headers={"If-None-Match": tag})
-    ).status_code == 404, "a remembered tag cannot see past an unpin"
-    assert [p["turnId"] for p in (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]] == [second]
+        await http.get(f"/api/users/{bob.id}/favorites/{first}/drawing", headers={"If-None-Match": tag})
+    ).status_code == 404, "a remembered tag cannot see past an unfavorite"
+    assert [p["turnId"] for p in (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"]] == [second]
 
     async with factory() as session:
         async with session.begin():
@@ -912,8 +912,8 @@ async def test_unpinning_and_erasure_close_the_door_at_once_even_for_a_remembere
             drawing.format_magic = None
             drawing.format_version = None
             drawing.deleted_at = datetime.now(timezone.utc)
-    assert (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"] == [], "an erased drawing is not a hole"
-    assert (await http.get(f"/api/users/{bob.id}/pins/{second}/drawing")).status_code == 404
+    assert (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"] == [], "an erased drawing is not a hole"
+    assert (await http.get(f"/api/users/{bob.id}/favorites/{second}/drawing")).status_code == 404
 
 
 async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(env):
@@ -925,12 +925,12 @@ async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(e
     game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
     turn_id = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 200
     reacted = await http.put(f"/api/games/{game_id}/turns/{turn_id}/reaction", json={"emoji": "fire"})
     assert reacted.status_code == 200
     await users.update_profile(ann.id, display_name="Annabel")
 
-    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    [entry] = (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"]
     assert entry == {
         "turnId": turn_id,
         "roundNumber": 1,
@@ -1341,7 +1341,7 @@ async def test_a_waiter_going_away_leaves_the_others_their_decode(env):
 
 async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch):
     """The cache is keyed by the drawing's checksum, not by the route that
-    asked: the participant page, a pinned shelf and the Gallery all serve the
+    asked: the participant page, a favorites shelf and the Gallery all serve the
     bytes the first of them decoded (#979 third review - no test outside the
     participant route touched the cache)."""
     import app.api.profiles as profiles
@@ -1353,7 +1353,7 @@ async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch
     game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
     turn_id = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [turn_id]})).status_code == 200
 
     decodes: list[int] = []
     real_decode = profiles.stored_drawing_wire_payload
@@ -1364,11 +1364,11 @@ async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch
     )
 
     participant = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
-    pinned = await http.get(f"/api/users/{bob.id}/pins/{turn_id}/drawing")
+    favorited = await http.get(f"/api/users/{bob.id}/favorites/{turn_id}/drawing")
     gallery = await http.get(f"/api/gallery/{turn_id}/drawing")
 
-    assert [participant.status_code, pinned.status_code, gallery.status_code] == [200, 200, 200]
-    assert participant.content == pinned.content == gallery.content == blob
+    assert [participant.status_code, favorited.status_code, gallery.status_code] == [200, 200, 200]
+    assert participant.content == favorited.content == gallery.content == blob
     assert decodes == [1], "decoded once, served through three doors"
 
 

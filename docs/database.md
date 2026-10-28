@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b6c7d8e9f0a3_solo_gallery_shares.py` (#1434). Both this line and the table
+`c8d9e0f1a2b5_pins_become_favorites.py` (#1501). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -119,8 +119,8 @@ erDiagram
     game_participants ||--o{ turn_participant_outcomes : "seat"
     turn_records ||--o{ turn_drawing_reactions : "reactions"
     game_participants ||--o{ turn_drawing_reactions : "reactor seat"
-    users ||--o{ profile_drawing_pins : "shelf"
-    turn_records ||--o{ profile_drawing_pins : "pinned"
+    users ||--o{ profile_favorites : "shelf"
+    turn_records ||--o{ profile_favorites : "favorited"
     turn_records ||--o{ turn_drawing_shares : "shared"
     game_participants ||--o{ turn_drawing_shares : "sharer seat"
     turn_records ||--o| solo_pool : "servable in Solo"
@@ -157,7 +157,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges`, `inbox_entries` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `gallery_shelf_reviews`, `profile_favorites`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
@@ -684,7 +684,7 @@ the rebuild read its facts, or waits and increments the rows the rebuild wrote �
 the lost increment a read-then-replace allowed (#609; the reaction writer took no
 account lock until a +1 landing between the rebuild's read and its replacement was
 reproduced on PostgreSQL). Shared, so reactions to one drawer's drawings do not wait on
-each other; before the drawing row, because erasure and the pin write take the account
+each other; before the drawing row, because erasure and the favorite write take the account
 first too, and one order is what keeps them out of a cycle.
 The incremental upsert lists its rows in ascending account id for the same reason: two
 games sharing accounts in opposite seat order take the projection rows in one order.
@@ -926,8 +926,8 @@ told about and no entry about a fact that rolled back; the account's sockets are
   removal (`services/avatars.py`), its subject the `user_warnings` row. Answering the
   warning marks it read.
 - `drawing_shared` — the first share of a drawing by somebody other than its drawer, in
-  the share's write; a live share's in the finished-game write (`save_game`); a pin, since
-  a pin is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
+  the share's write; a live share's in the finished-game write (`save_game`); a favorite, since
+  a favorite is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
 (R-SHARE-09). The drawer's withdrawal
   marks it read — they have just acted on it — and the entry stays, naming nobody once no
   share stands.
@@ -1735,7 +1735,7 @@ row.
 
 **Erased by an administrator** (#1419, R-MOD-22). `erase_drawing_for_moderation` writes
 the tombstone an account erasure writes — `status` `deleted`, the bytes and their
-identity nulled, the projections zeroed, the turn's reactions, shares (Solo's included), pins and Solo pool row deleted,
+identity nulled, the projections zeroed, the turn's reactions, shares (Solo's included), favorites and Solo pool row deleted,
 the drawer's `drawing_shared` inbox entries forgotten — and stamps
 `moderation_erased_at`, and moves the drawer's `user_stats_daily.reactions_received` down
 by the reactions it deleted (counted under the drawing's lock). A row whose bytes had
@@ -1773,7 +1773,7 @@ it (R-SHARE-05): taking the last share back and sharing again is not a new entry
 drawing could be bumped to the top of New by pressing twice. It is a fact rather than
 a projection — the rebuild fills it from the share rows only where it is missing, and
 moves it only earlier — and only erasure clears it. `gallery_withdrawn_at` is the
-drawer's taking it out of the Gallery (R-SHARE-04): every share and pin went with it,
+drawer's taking it out of the Gallery (R-SHARE-04): every share and favorite went with it,
 and nobody else may share it again until the drawer does, which clears it. Every reaction write sets both from the rows **under the row's lock**
 (`SELECT … FOR UPDATE`, taken after the drawer's account lock — *Synchronization* under
 `user_stats_daily`), and so does every share write, so two writes landing together
@@ -1796,8 +1796,8 @@ cd backend
 
 `gallery_hidden_at` is a moderator's judgement about the lobby (R-GAL-09), not an
 erasure: set, the drawing is out of the Gallery, This week, the gallery bytes route,
-the gallery reaction door and every pinned shelf in one act — all of them read the flag —
-and it cannot be newly pinned or shared, while its
+the gallery reaction door and every favorites shelf in one act — all of them read the flag —
+and it cannot be newly favorited or shared, while its
 bytes stay and the players who were there keep seeing it in their history. Released
 clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
 `target_type = 'drawing'` and the drawer as the target account, in the same transaction as
@@ -1916,7 +1916,7 @@ code was chosen from.
 - The seat rides beside the account when the reactor sat in the game — it carries the
   frozen presentation that names the reaction in the room and in history, and becomes
   the **Deleted player** tombstone with everything else — and is null for a reaction
-  given from the Gallery or a pinned shelf, which only counts (R-REACT-05). A deleted
+  given from the Gallery or a favorites shelf, which only counts (R-REACT-05). A deleted
   account is a tombstoned `users` row, never a removed one, so the account key holds and
   the reaction keeps counting (R-REACT-10). The `game_id` denormalization is what lets the
   composite foreign keys say the turn and the seat belong to the same game.
@@ -1957,11 +1957,11 @@ being written like the reactions — a share by somebody other than the drawer o
 private game's drawing, or of one its drawer took out, is a `ValueError`; a blank or
 unkept drawing's is dropped. They are part of the payload digest and of the handoff
 envelope (version 4). Later writes — the recap, history, the Gallery's door, and the
-pin write, since a pin is a share (R-PIN-03) — go through `set_drawing_share` (or the pin
+favorite write, since a favorite is a share (R-PIN-03) — go through `set_drawing_share` (or the favorite
 write's own copy of its rules), one transaction that locks the sharer's and the drawer's
 accounts in one ascending statement and then the drawing row, checks who may share,
 inserts or deletes, and sets the projections. The drawer's withdrawal deletes every
-share and every pin of the drawing and sets `gallery_withdrawn_at`.
+share and every favorite of the drawing and sets `gallery_withdrawn_at`.
 
 Deleting an account deletes the shares of the drawings it erases and every share it
 made, and sets the projections again on the drawings that lose one (§11).
@@ -1980,43 +1980,43 @@ pre-approval, and the shelf is held because it is the one place a drawing is put
 of everyone who opens the app, chosen by nobody. A hidden decision also sets
 `turn_drawings.gallery_hidden_at`, so it holds whatever the switch says.
 
-### `profile_drawing_pins`
+### `profile_favorites`
 `user_id` (CASCADE) · `turn_id` — together the **PK** · `game_id` (denormalized) ·
-`position` · `created_at`, with `uq_profile_drawing_pins_user_position` on
-`(user_id, position)`, `ck_profile_drawing_pins_position` holding `position` to `0..5`, and
-`fk_profile_drawing_pins_turn_same_game` on `(game_id, turn_id)` → `turn_records`, CASCADE.
+`position` · `created_at`, with `uq_profile_favorites_user_position` on
+`(user_id, position)`, `ck_profile_favorites_position` holding `position` to `0..5`, and
+`fk_profile_favorites_turn_same_game` on `(game_id, turn_id)` → `turn_records`, CASCADE.
 
 The drawings an account chose to show on its profile (#440): up to six, in the owner's
-order. A pin is the **pinner's act**, not a fact about the drawing, which is why it hangs
+order. A favorite is the **owner's act**, not a fact about the drawing, which is why it hangs
 off the account where a reaction hangs off a seat — it lasts as long as the account wants
 it there, and a deleted account has no profile left to show a shelf on. The cap and the
-order are in the schema, not only in the write path: a seventh pin has no slot to sit in,
+order are in the schema, not only in the write path: a seventh favorite has no slot to sit in,
 whatever writes it. The `game_id` denormalization is the same-game edge the rest of the
 history graph uses (#512), so a turn from another game can never be named by mistake.
 
-What may be pinned is checked by the write, since neither rule is expressible here: a turn
-with a `ready`, unhidden, non-blank drawing the pinner sat in the game of and may share
+What may be favorited is checked by the write, since neither rule is expressible here: a turn
+with a `ready`, unhidden, non-blank drawing the owner sat in the game of and may share
 (R-SHARE-02) — their own from any game, another player's from a public one its drawer has
-not taken out — credited through the turn's frozen drawer snapshot. A pin **is** a share
-(R-PIN-03): the write shares every pinned drawing the pinner has not shared yet, in the
-same transaction, with its inbox entry for the drawer. Only a `registered` account may pin, so a guest merge
+not taken out — credited through the turn's frozen drawer snapshot. A favorite **is** a share
+(R-PIN-03): the write shares every favorite the owner has not shared yet, in the
+same transaction, with its inbox entry for the drawer. Only a `registered` account may favorite, so a guest merge
 never brings a shelf with it.
 
-**Reads.** `get_profile_pins` lists the shelf, joined to the turn and the drawing so a pin
+**Reads.** `get_profile_favorites` lists the shelf, joined to the turn and the drawing so a favorite
 whose drawing has left the Gallery or is no longer ready is left out rather than shown as
-a hole. `get_pinned_drawing` and its checksum twin are the
+a hole. `get_favorite_drawing` and its checksum twin are the
 one other door beside `get_turn_drawing`'s participant check (R-HIST-16): a separate
 query whose authorization is the join to this table, so the two can never loosen each
 other by accident (R-PIN-06).
 
-**Flow.** One write, `set_profile_pins`, replaces the whole shelf with the ordered list
-given: pinning, unpinning and reordering are the same transaction, every turn is checked
+**Flow.** One write, `set_profile_favorites`, replaces the whole shelf with the ordered list
+given: favoriting, unfavoriting and reordering are the same transaction, every turn is checked
 before anything is deleted, and a refused list leaves the shelf as it was. Deleting the
-game or the turn takes the pin through the cascade. Erasing a drawing does not — erasure
+game or the turn takes the favorite through the cascade. Erasing a drawing does not — erasure
 is a status on `turn_drawings`, and no cascade reaches a status — so the account-erasure
-path deletes the pins on the drawings it erases, the way it deletes their reactions, and
-the pins the erased account itself made. A drawer's withdrawal deletes every pin of the
-drawing, and taking one's own share back deletes one's own pin of it (R-SHARE-04).
+path deletes the favorites on the drawings it erases, the way it deletes their reactions, and
+the favorites the erased account itself made. A drawer's withdrawal deletes every favorite of the
+drawing, and taking one's own share back deletes one's own favorite of it (R-SHARE-04).
 
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
@@ -3001,7 +3001,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, favorites, shares, usage facts, the Solo pool | Indefinite | — | Permanently kept (R-PRIV-05); a share is the account's to take back, and goes with an erased account (R-SHARE-08) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Solo runs, the drawings they served, Daily results and bests | As long as the account (R-SOLO-10); deleted with it | — | — | Deleted by account deletion | — |
 | The Daily's sets and the concepts each held | Permanent: the archive plays past days (#1470), and the 60-day rule reads the concepts | — | Permanently kept | — | — |
 | Solo shares held for an open Daily | Until the date has ended everywhere (`release_at`), then released into the Gallery — not deleted | 6 h | — | Hourly retention sweep releases them | `solo_held_shares` |
@@ -3127,13 +3127,13 @@ Deletion:
   or not — and other players' Solo shares of its erased drawings (`solo_pool`,
   `solo_runs`, `solo_serves`, `solo_daily_results`, `solo_bests`,
   `solo_gallery_shares` in §6);
-- deletes the pins on those erased drawings, and every pin the account itself made — a
-  tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
+- deletes the favorites on those erased drawings, and every favorite the account itself made — a
+  tombstoned account has no profile to show a shelf on (`profile_favorites` in §6);
 - deletes the shares of those erased drawings and every share the account made, setting
   the Gallery's projections again on the other players' drawings that lose one
-  (`turn_drawing_shares` in §6). Every drawing row it writes - its own, and the others' it shared or pinned - is
+  (`turn_drawing_shares` in §6). Every drawing row it writes - its own, and the others' it shared or favorited - is
   locked first, in one ascending statement, before any row that hangs off one is touched:
-  a drawer's withdrawal holds its drawing and then deletes the shares and pins on it;
+  a drawer's withdrawal holds its drawing and then deletes the shares and favorites on it;
 - deletes the account's inbox entries and its warnings, and the entries in other
   accounts' inboxes about it as a friend or an inviter, which would name an account that
   is gone; an entry about a drawing it shared names nobody now, since who a share entry
@@ -3171,10 +3171,10 @@ account it was merged into; a row retention has already purged counts as erased.
 reads the accounts its guests were merged into first, unlocked, and locks guests and
 accounts in one ordered statement; a target found only under the lock (a merge that landed
 in between) is locked in a second statement by a *shared* holder, the one case left — and
-never by an exclusive one: the pin write abandons that transaction (`LockSetChangedError`)
+never by an exclusive one: the favorite write abandons that transaction (`LockSetChangedError`)
 and starts again from before the alias read, up to three times, so its set is always
 taken whole. Locking the guests first
-and reaching for their accounts gave two pin writes whose sets crossed a cycle (#811
+and reaching for their accounts gave two favorite writes whose sets crossed a cycle (#811
 review). A seat may still carry
 a guest identity merged into an account mid-game. The finished-game write resolves such
 seats to their accounts first and takes one `FOR UPDATE` over seats and accounts
@@ -3199,7 +3199,7 @@ What each writer then does with an erased identity:
 | Avatar upload, owned-list create/update, bug, player and content reports | Refused (`AccountErasedError`, 401 over HTTP): authentication before the deletion is not authorization after it |
 | Export request | Already locks the account row `FOR UPDATE` and refuses a deleted account |
 | Reaction (`set_drawing_reaction`) | Locks the **drawer's** identity, shared, before the drawing row (for the stats rebuild, §`user_stats_daily` *Synchronization*). The turn and drawing are read before that lock, so a reaction that waited behind the drawer's deletion refuses on the erased identity the lock reports rather than on the drawing it loaded — the deletion took the drawing and its reactions (R-REACT-10) |
-| Pin write (`set_profile_pins`) | Locks the pinner **and every drawer** named by the list, ascending, **`FOR UPDATE`** rather than shared — the one writer that must also serialize with its own kind, since two whole-shelf replacements for one account under shared locks both pass the barrier and collide on the shelf's unique positions. An erased pinner is refused (the uniform 404); an erased drawer's drawing reads `deleted` under the lock and refuses the list, so a pin can neither put a shelf back on a tombstoned profile nor outlive the drawing it names (#811 review) |
+| Favorite write (`set_profile_favorites`) | Locks the owner **and every drawer** named by the list, ascending, **`FOR UPDATE`** rather than shared — the one writer that must also serialize with its own kind, since two whole-shelf replacements for one account under shared locks both pass the barrier and collide on the shelf's unique positions. An erased owner is refused (the uniform 404); an erased drawer's drawing reads `deleted` under the lock and refuses the list, so a favorite can neither put a shelf back on a tombstoned profile nor outlive the drawing it names (#811 review) |
 
 SQLite renders neither lock and has one writer at a time, so there the re-read alone
 is the barrier; both lock orders are proven on PostgreSQL in

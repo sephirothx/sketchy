@@ -1,7 +1,7 @@
 /** The drawing viewer's rules, free of React and the DOM (#1497).
 
 `components/DrawingViewer.tsx` is the one viewer the Recap, game history and the
-pinned shelf open. What a gesture means, where the thumbnail strip stands and
+favorites shelf open. What a gesture means, where the thumbnail strip stands and
 when the overview is offered are decided here, so `tests/drawingViewer.test.mjs`
 can hold them without a browser. */
 
