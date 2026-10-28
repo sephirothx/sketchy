@@ -564,7 +564,7 @@
 .hidden-prompt-word {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   /* A word never breaks across lines - a continuation would read as a second
      word - so in a narrow column its tiles narrow instead. */
   min-width: 0;
@@ -573,7 +573,8 @@
 
 .hidden-prompt-tile {
   flex: 0 1 11px;
-  min-width: 4px;
+  /* 32 letters, the cap, still fit a phone's column at this width. */
+  min-width: 2px;
   height: 15px;
   border-radius: 3px;
   background: var(--track);

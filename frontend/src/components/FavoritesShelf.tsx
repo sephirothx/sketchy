@@ -125,7 +125,6 @@ export function FavoritesShelf({
   const dragRef = useRef<Drag | null>(null);
   const suppressClick = useRef(false);
   const drawnAt = useRef(new Map<string, DOMRect>());
-  const arrangeButton = useRef<HTMLButtonElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   // Where the keyboard goes once a removal has re-rendered the shelf.
   const refocus = useRef<string | null>(null);
@@ -135,7 +134,7 @@ export function FavoritesShelf({
   // The order while something is lifted or written, with any favorite that
   // arrived meanwhile after it rather than left out of the next write.
   const order = draft
-    ? [...draft.ids.filter((id) => byId.has(id)), ...turnIds.filter((id) => !draft.base.includes(id))]
+    ? [...draft.ids.filter((id) => byId.has(id)), ...turnIds.filter((id) => !draft.base.includes(id) && !draft.ids.includes(id))]
     : turnIds;
   const setDraft = (ids: string[] | null) =>
     setDraftState(ids === null ? null : { ids, base: draft?.base ?? turnIds });
@@ -190,11 +189,9 @@ export function FavoritesShelf({
     const next = refocus.current;
     if (next && !lifted) {
       // Consumed whether or not its target is there, so it never takes the
-      // keyboard later from somewhere else; an emptied shelf's heading
-      // stands in for the button that went with the last drawing.
+      // keyboard later from somewhere else.
       refocus.current = null;
-      const target =
-        next === "arrange" ? arrangeButton.current ?? headingRef.current : handleRefs.current.get(next);
+      const target = next === "heading" ? headingRef.current : handleRefs.current.get(next);
       target?.focus();
     }
   }, [lifted, orderKey]);
@@ -290,9 +287,9 @@ export function FavoritesShelf({
     if (order.length === 1) setArranging(false);
     setAnnouncement(ui.profilePage.favoriteRemoved({ prompt: promptOf(turnId) }));
     // The keyboard stays on the shelf: the next drawing's handle, or the one
-    // before, or the heading's button once nothing is left.
+    // before, or the heading once nothing is left.
     const at = order.indexOf(turnId);
-    refocus.current = order[at + 1] ?? order[at - 1] ?? "arrange";
+    refocus.current = order[at + 1] ?? order[at - 1] ?? "heading";
     void change(withoutFavorite(order, turnId));
   };
 
@@ -445,7 +442,6 @@ export function FavoritesShelf({
         {canArrange && favorites.length > 0 && (
           arranging ? (
             <button
-              ref={arrangeButton}
               type="button"
               className="btn btn-primary btn-compact profile-shelf-arrange"
               onClick={finishArranging}
@@ -455,7 +451,6 @@ export function FavoritesShelf({
             </button>
           ) : (
             <button
-              ref={arrangeButton}
               type="button"
               className="btn btn-secondary btn-compact profile-shelf-arrange"
               disabled={disabled}
