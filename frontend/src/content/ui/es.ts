@@ -512,7 +512,7 @@ export const ES: Catalogue = {
       `${p.summary}. Abrir jugadores y puntos.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Pedida ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -521,11 +521,6 @@ export const ES: Catalogue = {
         : "Una exportación por semana; las listas caducan a los siete días.",
     couldNotLoadYourDataExports: "No se pudieron cargar tus exportaciones de datos.",
     couldNotRequestYourDataExport: "No se pudo pedir tu exportación de datos.",
-    yourData: "Tus datos",
-    downloadPrivateJsonCopyYourAccount: "Descarga una copia privada en JSON de tu cuenta y tus datos de juego. No incluye perfiles ni mensajes de otros jugadores.",
-    dataExports: "Exportaciones de datos",
-    loadingExports: "Cargando exportaciones…",
-    youHaveNotRequestedExportYet: "Todavía no has pedido ninguna exportación.",
     download: "Descargar",
     requesting: "Solicitando…",
     requestExport: "Solicitar exportación",
@@ -2048,7 +2043,7 @@ export const ES: Catalogue = {
     history: "historial",
   },
 
-  sessionManagerDialog: {
+  signedInDevices: {
     lastUsed: (p: { when: string }) => `Usado por última vez ${p.when}`,
     signsOutOn: (p: { when: string }) => `Se cierra sola ${p.when}`,
     usedElsewhere: (p: { when: string }) =>
@@ -2056,7 +2051,6 @@ export const ES: Catalogue = {
     couldNotLoadSignedDevices: "No se pudieron cargar los dispositivos con sesión iniciada.",
     couldNotRevokeDevice: "No se pudo cerrar el dispositivo.",
     couldNotSignOutEverywhere: "No se pudo cerrar sesión en todas partes.",
-    signedDevices: "Dispositivos con sesión iniciada",
     revokeAnyDeviceYouNoLonger: "Cierra cualquier dispositivo que ya no reconozcas. Los nombres son aproximados y no guardan versiones de navegador.\n          Un dispositivo que dejas de usar cierra su sesión a los noventa días.",
     loadingDevices: "Cargando dispositivos…",
     currentDevice: "Dispositivo actual",
@@ -2178,7 +2172,6 @@ export const ES: Catalogue = {
     changePassword: "Cambiar contraseña",
     manage: "Gestionar",
     yourData: "Tus datos",
-    requestExport: "Pedir exportación",
     delete: "Borrar…",
     display: "Pantalla",
     theme: "Tema",
@@ -2233,7 +2226,6 @@ export const ES: Catalogue = {
     anAuthenticatorAppSCode: "Un código de una aplicación de autenticación, además de tu contraseña. Los moderadores y administradores deben tenerlo.",
     setUp: "Configurar",
     guestKeptInThisBrowser: "Tu nombre de invitado, tus puntos y tu historial solo se guardan en este navegador.",
-    everyBrowserStillHoldingA: "Cada navegador que aún tiene una sesión, y una forma de cerrar cualquiera.",
     worksForAGuestToo: "También sirve para invitados: las partidas que jugaste son tuyas.",
     everyGameListAndSetting: "Cada partida, lista y ajuste que Sketchy guarda sobre ti, en un solo archivo JSON.",
     deleteThisGuest: "Eliminar este invitado",

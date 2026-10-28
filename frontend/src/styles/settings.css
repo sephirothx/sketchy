@@ -214,6 +214,21 @@
   min-width: 0;
 }
 
+/* A row's own list - the signed-in devices, the data exports - sits under
+   it inside the group rather than in a dialog of its own (#864), with the
+   row's note after it. */
+.settings-group .session-list,
+.settings-group .account-export-list {
+  margin: 0 0 10px;
+}
+
+.settings-row-note {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+
 .settings-row-control input[type="search"],
 .settings-row-control input[type="text"] {
   width: 200px;

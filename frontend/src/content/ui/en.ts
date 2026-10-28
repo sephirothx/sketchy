@@ -523,7 +523,7 @@ export const EN = {
       (p: { summary: string }) => `${p.summary}. Open players and scores.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Requested ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -532,11 +532,6 @@ export const EN = {
         : "One export a week; ready exports expire after seven days.",
     couldNotLoadYourDataExports: "Could not load your data exports.",
     couldNotRequestYourDataExport: "Could not request your data export.",
-    yourData: "Your data",
-    downloadPrivateJsonCopyYourAccount: "Download a private JSON copy of your account and gameplay data. Other players' profiles and messages are not included.",
-    dataExports: "Data exports",
-    loadingExports: "Loading exports…",
-    youHaveNotRequestedExportYet: "You have not requested an export yet.",
     download: "Download",
     requesting: "Requesting…",
     requestExport: "Request export",
@@ -2067,7 +2062,7 @@ export const EN = {
     history: "history",
   },
 
-  sessionManagerDialog: {
+  signedInDevices: {
     lastUsed: (p: { when: string }) => `Last used ${p.when}`,
     signsOutOn: (p: { when: string }) => `Signs out on its own ${p.when}`,
     usedElsewhere: (p: { when: string }) =>
@@ -2075,7 +2070,6 @@ export const EN = {
     couldNotLoadSignedDevices: "Could not load signed-in devices.",
     couldNotRevokeDevice: "Could not revoke device.",
     couldNotSignOutEverywhere: "Could not sign out everywhere.",
-    signedDevices: "Signed-in devices",
     revokeAnyDeviceYouNoLonger: "Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.\n          A device you stop using signs itself out after ninety days.",
     loadingDevices: "Loading devices…",
     currentDevice: "Current device",
@@ -2197,7 +2191,6 @@ export const EN = {
     changePassword: "Change password",
     manage: "Manage",
     yourData: "Your data",
-    requestExport: "Request export",
     delete: "Delete…",
     display: "Display",
     theme: "Theme",
@@ -2254,8 +2247,6 @@ export const EN = {
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
     guestKeptInThisBrowser: "Your guest name, points and history are kept in this browser only.",
-    everyBrowserStillHoldingA:
-      "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",
     everyGameListAndSetting:
       "Every game, list and setting Sketchy holds about you, as one JSON file.",

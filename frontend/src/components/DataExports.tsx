@@ -1,6 +1,6 @@
+import { useEffect, useState } from "react";
 import { useClock } from "../hooks/useClock";
-import { useEffect, useId, useState } from "react";
-import { ModalShell } from "./ui/ModalShell";
+import { SettingsRow } from "./SettingsRow";
 import {
   exportFailureNote,
   exportLabel,
@@ -11,21 +11,20 @@ import {
 } from "../lib/accountData";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
-
-function dateLabel(value: string, dateTime: (date: Date) => string): string {
-  return dateTime(new Date(value));
-}
+import { DownloadIcon } from "./icons";
 
 /**
- * Requesting and downloading a copy of everything Sketchy holds about you
- * (R-PRIV-01). One a week (R-PRIV-12): building one walks every game the
- * account played, so the button says when the next is allowed rather than
- * offering a request the server will refuse. Deleting the account used to
- * live at the bottom of this dialog, which is where an irreversible act is
- * least expected; it has a row and a dialog of its own in Settings now.
+ * Settings → Account → Your data → Download everything: requesting a copy of
+ * everything Sketchy holds about you (R-PRIV-01), and the copies already made.
+ *
+ * One a week (R-PRIV-12): building one walks every game the account played,
+ * so the button is off until the next is allowed rather than offering a
+ * request the server will refuse, and the note under the list says when.
+ * In the page rather than a dialog of its own (#864): the request and the
+ * download are the same row, and a ready export is worth seeing without
+ * opening anything.
  */
-export function AccountDataDialog({ onClose }: { onClose: () => void }) {
-  const sectionId = useId();
+export function DataExports({ isGuest }: { isGuest: boolean }) {
   const { dateTime, date } = useClock();
   const [exports, setExports] = useState<DataExportJob[]>([]);
   const [nextRequestAt, setNextRequestAt] = useState<string | null>(null);
@@ -43,9 +42,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       })
       .catch((failure) => {
         if (active) {
-          setError(
-            refusalText(failure, ui.accountDataDialog.couldNotLoadYourDataExports),
-          );
+          setError(refusalText(failure, ui.dataExports.couldNotLoadYourDataExports));
         }
       })
       .finally(() => {
@@ -90,9 +87,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       const refreshed = await fetchDataExports().catch(() => null);
       if (refreshed) setNextRequestAt(refreshed.nextRequestAt);
     } catch (failure) {
-      setError(
-        refusalText(failure, ui.accountDataDialog.couldNotRequestYourDataExport),
-      );
+      setError(refusalText(failure, ui.dataExports.couldNotRequestYourDataExport));
     } finally {
       setRequesting(false);
     }
@@ -103,65 +98,48 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const waitUntil = nextRequestAt ? new Date(nextRequestAt) : null;
   const canRequest = !loading && !requesting && !hasWork && !waitUntil;
 
-  // Only information and one action of its own, which sits beside the list
-  // it adds to: the ✕ is the way out, so the footer has nothing to hold.
   return (
-    <ModalShell
-      title={ui.accountDataDialog.yourData}
-      cardClassName="account-data-dialog"
-      onDismiss={onClose}
-    >
-      <p className="modal-body">
-        {ui.accountDataDialog.downloadPrivateJsonCopyYourAccount}
-      </p>
+    <>
+      <SettingsRow
+        label={ui.settingsOverlay.downloadEverything}
+        hint={isGuest ? ui.settingsOverlay.worksForAGuestToo : ui.settingsOverlay.everyGameListAndSetting}
+      >
+        <button
+          type="button"
+          className="btn btn-secondary btn-compact"
+          onClick={() => void startExport()}
+          disabled={!canRequest}
+        >
+          <DownloadIcon size={15} />
+          {requesting ? ui.dataExports.requesting : ui.dataExports.requestExport}
+        </button>
+      </SettingsRow>
       {error && <p className="auth-error" role="alert">{error}</p>}
-
-      <section className="account-data-section" aria-labelledby={`${sectionId}-exports`}>
-        <div className="account-data-heading-row">
-          <h3 id={`${sectionId}-exports`}>{ui.accountDataDialog.dataExports}</h3>
-          <button
-            type="button"
-            className="btn btn-secondary btn-compact"
-            onClick={() => void startExport()}
-            disabled={!canRequest}
-          >
-            {requesting ? ui.accountDataDialog.requesting : ui.accountDataDialog.requestExport}
-          </button>
-        </div>
-        {loading && <p role="status">{ui.accountDataDialog.loadingExports}</p>}
-        {!loading && exports.length === 0 && (
-          <p className="account-data-empty">{ui.accountDataDialog.youHaveNotRequestedExportYet}</p>
-        )}
-        {exports.length > 0 && (
-          <ul className="account-export-list">
+      {exports.length > 0 && (
+        <>
+          <ul className="account-export-list" aria-label={ui.settingsOverlay.downloadEverything}>
             {exports.map((job) => (
               <li key={job.id}>
                 <span>
                   <strong>{exportLabel(job)}</strong>
-                  <small>
-                    {ui.accountDataDialog.requestedOn({
-                      when: dateLabel(job.createdAt, dateTime),
-                    })}
-                  </small>
+                  <small>{ui.dataExports.requestedOn({ when: dateTime(new Date(job.createdAt)) })}</small>
                   {exportFailureNote(job) && (
                     <small className="account-export-note">{exportFailureNote(job)}</small>
                   )}
                 </span>
                 {job.downloadUrl && (
                   <a className="btn btn-primary btn-compact" href={job.downloadUrl} download>
-                    {ui.accountDataDialog.download}
+                    {ui.dataExports.download}
                   </a>
                 )}
               </li>
             ))}
           </ul>
-        )}
-        <p className="account-data-note">
-          {ui.accountDataDialog.exportAllowance({
-            nextAllowed: waitUntil ? date(waitUntil) : null,
-          })}
-        </p>
-      </section>
-    </ModalShell>
+          <p className="settings-row-note">
+            {ui.dataExports.exportAllowance({ nextAllowed: waitUntil ? date(waitUntil) : null })}
+          </p>
+        </>
+      )}
+    </>
   );
 }

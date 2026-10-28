@@ -305,11 +305,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.session-manager {
-  max-width: 560px;
-  text-align: left;
-}
-
 .session-list {
   display: grid;
   gap: 8px;
@@ -520,15 +515,11 @@
 .step-up-passkey { margin: 0 0 14px; width: 100%; }
 .step-up-swap { display: block; margin-top: 12px; padding-left: 0; }
 
-.account-data-dialog { max-width: 620px; }
-.account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }
-.account-data-section h3 { font-size: 15px; margin: 0; }
-.account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
 .account-export-list a { flex: none; text-decoration: none; }
 .account-export-list { display: grid; gap: 8px; list-style: none; margin: 12px 0; padding: 0; }
 .account-export-list li { align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
-.account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
+.account-export-list small { color: var(--muted); font-size: 13px; }
 .account-export-note { color: var(--ink); line-height: 1.4; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }

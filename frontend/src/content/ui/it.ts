@@ -512,7 +512,7 @@ export const IT: Catalogue = {
       `${p.summary}. Apri giocatori e punteggi.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Richiesta ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -521,11 +521,6 @@ export const IT: Catalogue = {
         : "Un’esportazione a settimana; quelle pronte scadono dopo sette giorni.",
     couldNotLoadYourDataExports: "Non è stato possibile caricare le tue esportazioni.",
     couldNotRequestYourDataExport: "Non è stato possibile richiedere la tua esportazione.",
-    yourData: "I tuoi dati",
-    downloadPrivateJsonCopyYourAccount: "Scarica una copia privata in JSON del tuo account e dei tuoi dati di gioco. I profili e i messaggi degli altri giocatori non sono inclusi.",
-    dataExports: "Esportazioni dei dati",
-    loadingExports: "Caricamento esportazioni…",
-    youHaveNotRequestedExportYet: "Non hai ancora chiesto nessuna esportazione.",
     download: "Scarica",
     requesting: "Richiesta in corso…",
     requestExport: "Richiedi l’esportazione",
@@ -2051,7 +2046,7 @@ export const IT: Catalogue = {
     history: "cronologia",
   },
 
-  sessionManagerDialog: {
+  signedInDevices: {
     lastUsed: (p: { when: string }) => `Usato l’ultima volta ${p.when}`,
     signsOutOn: (p: { when: string }) => `Si disconnette da solo ${p.when}`,
     usedElsewhere: (p: { when: string }) =>
@@ -2059,7 +2054,6 @@ export const IT: Catalogue = {
     couldNotLoadSignedDevices: "Non è stato possibile caricare i dispositivi connessi.",
     couldNotRevokeDevice: "Non è stato possibile revocare il dispositivo.",
     couldNotSignOutEverywhere: "Non è stato possibile disconnettersi ovunque.",
-    signedDevices: "Dispositivi connessi",
     revokeAnyDeviceYouNoLonger: "Revoca ogni dispositivo che non riconosci più. I nomi dei dispositivi sono approssimativi e non conservano le versioni del browser.\n          Un dispositivo che smetti di usare si disconnette da solo dopo novanta giorni.",
     loadingDevices: "Caricamento dei dispositivi…",
     currentDevice: "Dispositivo attuale",
@@ -2181,7 +2175,6 @@ export const IT: Catalogue = {
     changePassword: "Cambia password",
     manage: "Gestisci",
     yourData: "I tuoi dati",
-    requestExport: "Richiedi esportazione",
     delete: "Elimina…",
     display: "Schermo",
     theme: "Tema",
@@ -2236,7 +2229,6 @@ export const IT: Catalogue = {
     anAuthenticatorAppSCode: "Il codice di un’app di autenticazione, oltre alla password. Moderatori e amministratori devono averla.",
     setUp: "Configura",
     guestKeptInThisBrowser: "Il tuo nome da ospite, i punti e la cronologia sono salvati solo in questo browser.",
-    everyBrowserStillHoldingA: "Ogni browser che ha ancora una sessione, e un modo per chiuderne una qualsiasi.",
     worksForAGuestToo: "Funziona anche per gli ospiti: le partite che hai giocato sono tue.",
     everyGameListAndSetting: "Ogni partita, lista e impostazione che Sketchy conserva su di te, in un unico file JSON.",
     deleteThisGuest: "Elimina questo ospite",

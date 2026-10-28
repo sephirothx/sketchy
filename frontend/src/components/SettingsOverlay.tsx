@@ -32,8 +32,9 @@ import { AuthDialog } from "./AccountMenu";
 import { IdentityAgreement } from "./IdentityAgreement";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AddEmailDialog } from "./AddEmailDialog";
-import { SessionManagerDialog } from "./SessionManagerDialog";
-import { AccountDataDialog } from "./AccountDataDialog";
+import { SignedInDevices } from "./SignedInDevices";
+import { DataExports } from "./DataExports";
+import { SettingsRow as Row } from "./SettingsRow";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { AvatarDoodleDialog } from "./AvatarDoodleDialog";
 import { doodleNameOf } from "../lib/avatarDoodles";
@@ -67,8 +68,6 @@ import {
   ChevronUpIcon,
   CircleIcon,
   ClockIcon,
-  DevicesIcon,
-  DownloadIcon,
   EraserIcon,
   EyeIcon,
   EyeOffIcon,
@@ -171,37 +170,6 @@ const BRUSH_SIZE_OPTIONS = BRUSH_SIZES.map((size) => ({
 }));
 
 /* ------------------------------------------------------------- primitives */
-
-/**
- * One preference: what it is and why on the left, the control on the right.
- * `stacked` gives a wide control - a palette, theme cards - the whole width.
- */
-function Row({
-  label,
-  hint,
-  children,
-  stacked = false,
-  tone,
-}: {
-  label: string;
-  hint?: ReactNode;
-  children?: ReactNode;
-  stacked?: boolean;
-  tone?: "danger";
-}) {
-  const classes = ["settings-row"];
-  if (stacked) classes.push("is-stacked");
-  if (tone) classes.push(`is-${tone}`);
-  return (
-    <div className={classes.join(" ")}>
-      <span className="settings-row-label">
-        <b>{label}</b>
-        {hint && <small>{hint}</small>}
-      </span>
-      <span className="settings-row-control">{children}</span>
-    </div>
-  );
-}
 
 /**
  * An on/off row. The room form's switch draws the track; this row keeps
@@ -628,8 +596,6 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [dataOpen, setDataOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   // Only so the row can say "Set up" or "Manage"; the dialog reads its own
@@ -983,42 +949,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               </button>
             </Row>
           )}
-          <Row
-            label={ui.settingsOverlay.signedDevices}
-            hint={ui.settingsOverlay.everyBrowserStillHoldingA}
-          >
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              onClick={() => setSessionsOpen(true)}
-            >
-              <DevicesIcon size={15} />
-              {ui.settingsOverlay.manage}
-            </button>
-          </Row>
+          <SignedInDevices />
         </Group>
       )}
 
       {!isGuest && <SoloOptOutGroup />}
 
       <Group title={ui.settingsOverlay.yourData}>
-        <Row
-          label={ui.settingsOverlay.downloadEverything}
-          hint={
-            isGuest
-              ? ui.settingsOverlay.worksForAGuestToo
-              : ui.settingsOverlay.everyGameListAndSetting
-          }
-        >
-          <button
-            type="button"
-            className="btn btn-secondary btn-compact"
-            onClick={() => setDataOpen(true)}
-          >
-            <DownloadIcon size={15} />
-            {ui.settingsOverlay.requestExport}
-          </button>
-        </Row>
+        <DataExports isGuest={isGuest} />
         <Row
           label={isGuest ? ui.settingsOverlay.deleteThisGuest : ui.settingsOverlay.deleteYourAccount}
           tone="danger"
@@ -1041,11 +979,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       {emailOpen && (
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}
-      {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
       {twoFactorOpen && (
         <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
       )}
-      {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
       {doodlesOpen && (
         <AvatarDoodleDialog
           name={user?.displayName ?? ""}
