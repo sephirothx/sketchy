@@ -20,7 +20,7 @@ import { FavoritesShelf } from "../components/FavoritesShelf";
 import { ReactionTally } from "../components/ReactionTally";
 import type { DrawingRecapMetadata, DrawingReaction } from "../types";
 import { reactionEligibility } from "../lib/reactions";
-import { isFavorite, favoriteEligibility, shelfPresence, withFavorite, withoutFavorite } from "../lib/favorites";
+import { isFavorite, favoriteEligibility, favoriteSetTo, rebaseFavorites, shelfPresence } from "../lib/favorites";
 import { useToast } from "../lib/toast";
 import { refusalSentence, refusalText } from "../lib/refusals.ts";
 import { useMyFavorites, useFavoritesStore } from "../store/favoritesStore";
@@ -264,9 +264,7 @@ function GameRow({
   // the turn's share state back to this table.
   const toggleFavorite = async (turnId: string) => {
     const favoriting = !isFavorite(myFavorites.turnIds, turnId);
-    const done = await myFavorites.mutate((current) =>
-      isFavorite(current, turnId) ? withoutFavorite(current, turnId) : withFavorite(current, turnId),
-    );
+    const done = await myFavorites.mutate((current) => favoriteSetTo(current, turnId, favoriting));
     if (!done) {
       notify(refusalSentence("favorites_full"), "error");
       return;
@@ -942,11 +940,16 @@ function ProfileView({ userId }: { userId: string }) {
                 onReorder={async (turnIds) => {
                   // Through the same queue as every Favorite control, so a move
                   // and a favorite pressed together cannot overwrite each other.
+                  // Laid over the list as the queue finds it, not sent as
+                  // drawn: a favorite added since, or one the server dropped,
+                  // would otherwise be erased or refused on every retry.
                   // The server answers with ids only; the entries are the
                   // ones already here, in the order just confirmed.
-                  await useFavoritesStore.getState().mutate(() => turnIds);
+                  const base = favorites.map((favorite) => favorite.turnId);
+                  const store = useFavoritesStore.getState();
+                  await store.mutate((current) => rebaseFavorites(turnIds, base, current));
                   const byId = new Map(favorites.map((favorite) => [favorite.turnId, favorite]));
-                  setFavorites(turnIds.flatMap((id) => byId.get(id) ?? []));
+                  setFavorites(useFavoritesStore.getState().turnIds.flatMap((id) => byId.get(id) ?? []));
                 }}
               />
             </section>

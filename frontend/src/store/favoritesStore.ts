@@ -5,7 +5,12 @@ import { ApiError } from "../lib/api";
 import { fetchProfileFavorites, setMyFavorites } from "../lib/profile";
 import { useAuthStore } from "./authStore";
 
-/** What a mutation computes: the next whole shelf, or `null` to refuse without a request. */
+/** What a mutation computes: the next whole shelf, or `null` to refuse without a request.
+
+It may run on a list the press never saw - later in the queue, or again on a
+reread after a 404 - so it states what the press asked ("B on", "this order")
+rather than flipping what it finds: a toggle run on a fresher list can undo
+the very thing it was pressed for. */
 export type ShelfMutation = (current: readonly string[]) => string[] | null;
 
 interface FavoritesStore {
@@ -67,6 +72,10 @@ let generation = 0;
 export const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000] as const;
 let inFlight: { accountId: string; token: object; promise: Promise<void> } | null = null;
 
+function sameShelf(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
   ownerId: null,
   turnIds: [],
@@ -119,6 +128,7 @@ export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
       }
       const next = change(turnIds);
       if (next === null) return false;
+      if (sameShelf(next, turnIds)) return true;
       // The write is for this identity and this generation: an answer that
       // arrives after a sign-out, a sign-in or a newer read belongs to a
       // shelf nobody is looking at any more, and is dropped rather than
@@ -142,7 +152,7 @@ export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
           set({ turnIds: fresh });
           const retried = change(fresh);
           if (retried === null) return false;
-          if (retried.join(",") === fresh.join(",")) return true;
+          if (sameShelf(retried, fresh)) return true;
           answer = await setMyFavorites(retried);
         }
         if (mine !== generation || get().ownerId !== ownerId) return true;
