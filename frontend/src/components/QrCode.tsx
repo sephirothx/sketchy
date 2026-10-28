@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import qrcode from "qrcode-generator";
 
 /**
- * The enrolment key as something a phone camera can read.
+ * A link or key as something a phone camera can read: the authenticator
+ * enrolment key (TwoFactorDialog) and a room's invite link (InviteQrDialog).
  *
  * Drawn as an inline SVG from the module grid rather than through the
  * library's own `createSvgTag`, for two reasons: the colours come from the
@@ -11,17 +12,25 @@ import qrcode from "qrcode-generator";
  * table or an element per module.
  *
  * Loaded on demand: the encoder is ~24 kB and the overwhelming majority of
- * page loads never open this dialog, so it stays out of the bundle everyone
- * else downloads.
+ * page loads never draw a code, so it stays out of the bundle everyone else
+ * downloads. Both callers import it lazily, behind a press.
  *
  * Error correction level M, which tolerates about 15% of the code being
  * obscured — enough for a camera at an angle, without making the grid so
  * dense that a small screen renders it unscannable.
  */
-export default function AuthenticatorQrCode({ uri, label }: { uri: string; label: string }) {
+export default function QrCode({
+  value,
+  label,
+  className,
+}: {
+  value: string;
+  label: string;
+  className: string;
+}) {
   const { path, size } = useMemo(() => {
     const code = qrcode(0, "M");
-    code.addData(uri);
+    code.addData(value);
     code.make();
     const count = code.getModuleCount();
     const parts: string[] = [];
@@ -31,7 +40,7 @@ export default function AuthenticatorQrCode({ uri, label }: { uri: string; label
       }
     }
     return { path: parts.join(""), size: count };
-  }, [uri]);
+  }, [value]);
 
   // One module of quiet zone on each side. The spec asks for four; the white
   // card the code sits on supplies the rest visually, and the extra padding
@@ -39,7 +48,7 @@ export default function AuthenticatorQrCode({ uri, label }: { uri: string; label
   const bounds = size + 2;
   return (
     <svg
-      className="two-factor-qr"
+      className={className}
       viewBox={`-1 -1 ${bounds} ${bounds}`}
       role="img"
       aria-label={label}

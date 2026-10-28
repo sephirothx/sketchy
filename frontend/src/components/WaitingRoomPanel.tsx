@@ -3,7 +3,8 @@ import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, TrophyIcon } from "./icons";
+import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, QrIcon, TrophyIcon } from "./icons";
+import { InviteQrDialog } from "./InviteQrDialog";
 import { RoomFacts } from "./RoomFacts";
 import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
@@ -207,6 +208,19 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // Edge): the link is going to be pasted into a chat window beside this
   // one, so the button there just copies it (#580). A phone without a share
   // sheet copies too.
+  const [qrOpen, setQrOpen] = useState(false);
+  // For the person in the same room as the screen: a laptop on the table, or
+  // a phone held up to the next seat (#864).
+  const qrButton = code && (
+    <Button
+      variant="icon"
+      className="waiting-invite-qr"
+      iconLeft={<QrIcon size={20} />}
+      aria-label={ui.waitingRoomPanel.showQrCode}
+      title={ui.waitingRoomPanel.showQrCode}
+      onClick={() => setQrOpen(true)}
+    />
+  );
   const offersShare = isNarrow && typeof navigator !== "undefined" && typeof navigator.share === "function";
   async function shareInvite() {
     const url = window.location.href;
@@ -343,9 +357,16 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           Six bordered cells and two buttons spent 237px on that. */}
       <section className="surface-card waiting-card waiting-invite-card">
         <p className="section-label waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
-        {code && (
+        {code && (isNarrow ? (
+          // Beside the code on a phone: a third button in the row left the
+          // two labelled ones too narrow for "Code kopieren" at 360px.
+          <div className="waiting-code-row">
+            <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
+            {qrButton}
+          </div>
+        ) : (
           <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
-        )}
+        ))}
         <div className="waiting-invite-actions">
           {offersShare ? (
             <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
@@ -372,7 +393,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           >
             {ui.waitingRoomPanel.copyCode}
           </Button>
+          {!isNarrow && qrButton}
         </div>
+        {qrOpen && code && <InviteQrDialog code={code} onClose={() => setQrOpen(false)} />}
         {/* The same job as Share, for the people you already play with: no
             clipboard, no other app, and no code leaving this room. */}
         <InviteFriendsList />

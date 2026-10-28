@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useId, useState } from "react";
 
 // Split out so the QR encoder is fetched when somebody actually enrols.
-const AuthenticatorQrCode = lazy(() => import("./AuthenticatorQrCode"));
+const QrCode = lazy(() => import("./QrCode"));
 
 import { ModalShell } from "./ui/ModalShell";
 import { downloadRecoveryCodes } from "../lib/recoveryCodeFile";
@@ -428,9 +428,10 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           <div className="two-factor-scan">
             <div className="two-factor-frame">
               <Suspense fallback={<p className="modal-hint">{ui.twoFactorDialog.drawingCode}</p>}>
-                <AuthenticatorQrCode
-                  uri={offer.uri}
+                <QrCode
+                  value={offer.uri}
                   label={ui.twoFactorDialog.scanThisWithYourAuthenticatorApp}
+                  className="two-factor-qr"
                 />
               </Suspense>
             </div>

@@ -2406,6 +2406,12 @@ export const PT: Catalogue = {
     privateRoom: "Sala privada",
   },
 
+  inviteQrDialog: {
+    title: "Entra com a câmara do telemóvel",
+    qrLabel: (p: { code: string }) => `Código QR da ligação de convite para a sala ${p.code}`,
+    opensInvitePage: "Abre a página de convite desta sala.",
+    drawingCode: "A desenhar o código…",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2425,6 +2431,7 @@ export const PT: Catalogue = {
     inviteYourFriends: "Convida os teus amigos",
     shareLink: "Partilha a ligação",
     copyCode: "Copiar o código",
+    showQrCode: "Mostrar o código QR",
     copyLink: "Copiar ligação",
     inTheRoom: "Na sala",
     you: "(tu)",
