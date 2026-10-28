@@ -311,8 +311,9 @@ them:
   problem, and being `overflow: hidden` it clipped the buttons rather than
   scrolling to them.
 - **Turn results** keeps its existing content; only its placement changed.
-- **The waiting room is the artboard**, minus the ⋯ status band and the chat
-  dock tab: invite hero, the roster grid, one settings line, docked start.
+- **The waiting room is the artboard**, minus the chat dock tab: invite hero
+  (with the QR code button beside the code, #864), the roster grid, the six
+  room facts (#861), and Edit rules and Doodle docked over an orange Start.
   Chat stays a card below rather than a tab.
 - **The host's editor is the creation form.** Both render one
   `RoomSetupForm` — the same four sections in the same order — where the

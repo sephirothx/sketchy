@@ -606,6 +606,7 @@ const keyboard = (goLabel="guess") => `<div class="keyboard">
 </div>`;
 
 const ic = {
+  x:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
   qr:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/><path d="M14 21h7"/><path d="M21 17v4"/></svg>`,
   bell:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>`,
   share:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`,
@@ -1113,8 +1114,8 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
     good:[
       '<b>Invite is the hero</b>: the code at a size you can read across a room, a QR code button beside it for the friend across the table (#864), and the two ways to send it. <b>Share the link</b> goes through the OS share sheet where there is one, which is how a code actually reaches a group chat. 138 px, against the 237 the six bordered cells and a subtitle took.',
       '<b>Everyone in the room is on screen</b> as an avatar grid with the ready ring on the tile. It replaces the players column outright below 900 px — rendering both would put every nickname on the page twice.',
-      'Settings collapse to <b>one summary line that opens the editor</b>, carrying only the facts the host has moved off their defaults.',
-      '<b>Start game</b> is docked and permanent — <code>position: fixed</code>, not sticky, which pins to the bottom of its own column and let the chat card end up underneath it. It carries its own blocking reason (<code>Need 1 more player</code>) instead of a heading and a paragraph.',
+      'The rules read as <b>the six room facts</b> (#861), three to a row: the same cells the invite page shows, so they read the same before joining as after.',
+      '<b>Start game</b> is docked and permanent, orange like the other game moments, with <b>Edit rules</b> and the scratch pad’s <b>Doodle</b> above it — <code>position: fixed</code>, not sticky, which pins to the bottom of its own column and let the chat card end up underneath it. It carries its own blocking reason (<code>Need 1 more player</code>) instead of a heading and a paragraph.',
       'Every gap on the screen is the same 14 px, and an empty room comes to exactly <span class="m">844 px</span> on an 844 px viewport — against 1 432 before.',
       'Chat stays a card in the column rather than becoming a dock tab; leaving moves into the ⋯ sheet behind a confirm.'
     ],
@@ -1124,7 +1125,6 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
       <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
         <div style="flex:0 0 auto;text-align:center">
           <div class="disp" style="font-size:20px">Coffee break doodles</div>
-          <div class="kick" style="margin-top:3px">Public room · waiting for players</div>
         </div>
 
         <div class="card" style="flex:0 0 auto;text-align:center;padding:14px;background:var(--primary-soft);border-color:var(--primary-edge-soft)">
@@ -1157,10 +1157,13 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
           </div>
         </div>
 
-        <button class="row card" style="flex:0 0 auto;display:flex;gap:11px;align-items:center;min-height:58px;border-radius:16px;width:100%;text-align:left">
-          <span class="lbl" style="flex:1;min-width:0;font-size:14px">2 rounds · 60s · Timed hints</span>
-          <span class="val faint">Edit ${ic.chev}</span>
-        </button>
+        <div class="card" style="flex:0 0 auto;padding:12px">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1.5px solid var(--line);border-radius:12px;overflow:hidden">
+            ${[['8','Seats'],['2','Rounds'],['60s','Drawing time'],['Default','Scoring'],['Timed hints','Hints'],['English','Prompts']].map(([v,l],i)=>
+              `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;text-align:center;${i%3?'border-left:1.5px solid var(--line);':''}${i>2?'border-top:1.5px solid var(--line);':''}">
+                 <b style="font-size:15px">${v}</b><span class="faint" style="font-size:11.5px;font-weight:700">${l}</span></div>`).join('')}
+          </div>
+        </div>
 
         <div class="card" style="flex:0 0 auto;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
           <div class="kick" style="margin-bottom:4px">Room chat</div>
@@ -1170,7 +1173,11 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
         </div>
       </div>
       <div class="dock">
-        <button class="btn go">Start game</button>
+        <div style="display:flex;gap:9px;margin-bottom:9px">
+          <button class="btn ghost sm" style="flex:1">Edit rules</button>
+          <button class="btn ghost sm" style="flex:1">${ic.brushsm} Doodle</button>
+        </div>
+        <button class="btn" style="background:var(--warm);box-shadow:0 3px 0 var(--warm-edge)">Start game</button>
       </div>
     </div>` }]});
 
@@ -1771,9 +1778,10 @@ S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
       'Field labels, help “?” buttons and controls all sit at the same level, so nothing scans.'
     ],
     good:[
-      'A <b>full-screen sheet with grouped rows</b> — the idiom both platforms already teach. <code>Done</code> sits bottom-right where the thumb is, and swipe-down dismisses.',
-      '<b>Shortcuts is hidden when the pointer is coarse.</b> Nothing on a phone should offer keyboard bindings.',
-      'Values live on the right of each row and open their own sheet, so the list stays one screen tall instead of nine hundred pixels.',
+      'A <b>full-screen sheet</b> below 1000 px, with the same sections as a desktop’s rail, in the same order, as a strip of chips that scrolls sideways (R-SET-06).',
+      '<b>Every row applies as it changes</b>, so there is no Done (R-SET-05). ✕ closes it, and so does Back.',
+      '<b>Shortcuts is left out on a touch screen</b>, and its URL opens Account (#864). Nothing on a phone should offer keyboard bindings.',
+      'The <b>signed-in devices and data exports are listed in the page</b>, under their rows, not behind dialogs (#864).',
       'Help text is a row subtitle, not a “?” that needs a second tap.'
     ],
     html:`
@@ -1781,44 +1789,33 @@ S({ id:'settings', n:'15', group:'Overlays', title:'Settings',
       <div class="sband band">
         <div class="disp" style="font-size:19px">Settings</div>
         <span class="sb-sp"></span>
-        <span class="chip">Playing as guest</span>
+        <button class="iconbtn" aria-label="Close settings">${ic.x}</button>
+      </div>
+      <div style="display:flex;gap:6px;padding:10px 14px;overflow:hidden;white-space:nowrap;border-bottom:1.5px solid var(--line);flex:0 0 auto">
+        <span class="chip on">Account</span><span class="chip">Appearance</span><span class="chip">Sound &amp; effects</span>
       </div>
       <div class="stagearea" style="padding:14px;gap:16px;overflow-y:auto">
+        <div class="card" style="flex:0 0 auto;display:flex;align-items:center;gap:14px">
+          <span class="av lg p">M</span>
+          <span style="min-width:0"><span class="disp" style="font-size:20px;color:var(--primary)">Marta</span>
+            <span style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px">${['#e11d48','#f97316','#eab308','#84cc16','#16a34a','#0d9488','#38bdf8','#2563eb','#6366f1','#a855f7'].map(c=>`<i style="width:18px;height:18px;border-radius:50%;background:${c}"></i>`).join('')}</span></span>
+        </div>
         <div style="flex:0 0 auto">
-          <div class="kick" style="margin:0 4px 8px">You</div>
+          <div class="kick" style="margin:0 4px 8px">Signing in</div>
           <div class="rows">
-            <div class="row"><span class="lbl">Display name</span><span class="val">Marta ${ic.chev}</span></div>
-            <div class="row" style="min-height:66px"><span><span class="lbl">Account</span><br><span class="faint" style="font-size:12px;font-weight:700">Guests lose their name when the tab closes</span></span><span class="val"><span class="chip on" style="min-height:36px">Create</span></span></div>
-            <div class="row"><span class="lbl">Name colour</span><span class="val"><span class="av sm">M</span> Guest grey ${ic.chev}</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Email</span><br><span class="faint" style="font-size:12px;font-weight:700">m•••••a@e•••••e.com · ✓ Confirmed</span></span><span class="chip" style="min-height:36px">Change</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Password</span><br><span class="faint" style="font-size:12px;font-weight:700">Changing it signs every other device out.</span></span><span class="chip" style="min-height:36px">Change</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Signed-in devices</span><br><span class="faint" style="font-size:12px;font-weight:700">3 devices</span></span><span style="color:var(--danger);font-weight:800;font-size:13px">Sign out everywhere</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Chrome on macOS</span><br><span class="faint" style="font-size:12px;font-weight:700"><span style="color:var(--success-ink)">Current device</span> · today, 14:02</span></span><span class="chip" style="min-height:36px">Revoke</span></div><div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Safari on iOS</span><br><span class="faint" style="font-size:12px;font-weight:700">Last used 26 Oct, 21:40</span></span><span class="chip" style="min-height:36px">Revoke</span></div><div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Firefox on Windows</span><br><span class="faint" style="font-size:12px;font-weight:700"><span style="color:var(--warning)">Used from a different browser on 20 Oct</span></span></span><span class="chip" style="min-height:36px">Revoke</span></div>
           </div>
         </div>
         <div style="flex:0 0 auto">
-          <div class="kick" style="margin:0 4px 8px">Look and feel</div>
+          <div class="kick" style="margin:0 4px 8px">Your data</div>
           <div class="rows">
-            <div class="row"><span class="lbl">Theme</span><span class="val">System · dark ${ic.chev}</span></div>
-            <div class="row" style="min-height:64px"><span><span class="lbl">Colourblind-safe palette</span><br><span class="faint" style="font-size:12px;font-weight:700">Limits drawing colours to a safe set</span></span><span class="val"><span class="sw-toggle"><i></i></span></span></div>
-            <div class="row" style="min-height:64px"><span><span class="lbl">Confetti</span><br><span class="faint" style="font-size:12px;font-weight:700">Bursts on a correct guess and at the finish</span></span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Download everything</span><br><span class="faint" style="font-size:12px;font-weight:700">One export a week</span></span><span class="chip" style="min-height:36px;opacity:.5">Request export</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl">Ready</span><br><span class="faint" style="font-size:12px;font-weight:700">Requested 21 Oct, 09:15</span></span><span class="chip on" style="min-height:36px">Download</span></div>
+            <div class="row" style="min-height:64px"><span style="flex:1;min-width:0"><span class="lbl"><span style="color:var(--danger)">Delete your account</span></span></span><span style="color:var(--danger);font-weight:800;font-size:13px">Delete…</span></div>
           </div>
-        </div>
-        <div style="flex:0 0 auto">
-          <div class="kick" style="margin:0 4px 8px">Sound</div>
-          <div class="rows">
-            <div class="row"><span class="lbl">Sound effects</span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
-            <div class="row" style="min-height:62px"><span class="lbl" style="flex:0 0 auto">Volume</span><span class="val" style="flex:1"><span class="bar-t" style="flex:1;margin-left:14px"><i style="width:70%;background:var(--primary)"></i></span></span></div>
-          </div>
-        </div>
-        <div style="flex:0 0 auto">
-          <div class="kick" style="margin:0 4px 8px">While playing</div>
-          <div class="rows">
-            <div class="row" style="min-height:64px"><span><span class="lbl">Clear the box after a guess</span><br><span class="faint" style="font-size:12px;font-weight:700">Keeps the keyboard up between tries</span></span><span class="val"><span class="sw-toggle on"><i></i></span></span></div>
-            <div class="row"><span class="lbl">Report a problem</span><span class="val">${ic.chev}</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="dock">
-        <div style="display:flex;gap:9px">
-          <button class="btn ghost sm" style="flex:1">Cancel</button>
-          <button class="btn" style="flex:1.6">Done</button>
         </div>
       </div>
     </div>` }]});

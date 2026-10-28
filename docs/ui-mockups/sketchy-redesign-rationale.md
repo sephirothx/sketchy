@@ -437,12 +437,11 @@ them shipped with the redesign implementation:
 
 ### Frontend-only degradations (backend follow-ups)
 
-The implementation is frontend-only, so four mockup elements that need data
-the client does not receive were deliberately degraded. Each becomes a small
-backend follow-up:
+The implementation is frontend-only, so mockup elements that need data the
+client does not receive were deliberately degraded. Each becomes a small
+backend follow-up. (A third, the header's "Turn 1 of 4", left the artboards
+with the room bar of #580, which shows only the round.)
 
-- **"Turn 1 of 4"** — the header shows only "Round 2 of 3"; the turn index
-  within a round is not in any payload.
 - **Lobby round-progress chip** — public room cards say "In progress" rather
   than "Round 2 of 3" for the same reason.
 - **"Next free letter in 9s"** — the timed-hints countdown chip needs the
