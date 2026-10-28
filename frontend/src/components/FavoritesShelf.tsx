@@ -3,6 +3,7 @@ import { EmptyState } from "./ui/EmptyState";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingViewer } from "./DrawingViewer";
+import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
@@ -163,6 +164,13 @@ export function FavoritesShelf({
           initialIndex={openIndex}
           onClose={() => setOpenIndex(null)}
           loadEntry={(entry) => fetchFavoriteDrawing(userId, favorites[entry.index].turnId)}
+          renderActions={(entry) => {
+            // Somebody's favorite is a Gallery drawing, so any registered
+            // viewer may make it one of theirs too (#1501); the owner sees
+            // theirs filled in, and pressing it takes it off this shelf.
+            const favorite = favorites[entry.index];
+            return favorite && viewerIsRegistered ? <GalleryFavoriteControl turnId={favorite.turnId} /> : null;
+          }}
           renderReactions={(entry) => {
             const favorite = favorites[entry.index];
             if (!favorite) return null;

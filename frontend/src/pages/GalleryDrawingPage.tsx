@@ -17,6 +17,7 @@ import {
   withdrawFromGallery,
   type GalleryEntry,
 } from "../lib/gallery";
+import { GalleryFavoriteControl } from "../components/GalleryFavoriteControl";
 import { GallerySharedBy } from "../components/GalleryDrawings";
 import { ShareControl } from "../components/ShareControl";
 import { setGalleryReaction } from "../lib/profile";
@@ -256,6 +257,7 @@ export function GalleryDrawingPage() {
                     onRequestAccount={() => setAuthMode("claim")}
                     placement="panel"
                   />
+                  <GalleryFavoriteControl turnId={shown.turnId} look="labelled" />
                   {user && !shown.drawnByMe && (
                     <button
                       type="button"

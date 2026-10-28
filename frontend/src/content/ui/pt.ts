@@ -956,6 +956,11 @@ export const PT: Catalogue = {
     favoriteThisDrawing: "Adicionar este desenho aos teus favoritos e partilhá-lo na galeria",
     unfavoriteThisDrawing: "Remover este desenho dos teus favoritos",
     thatDrawingCouldNotBeFavorited: "Não foi possível adicionar esse desenho aos teus favoritos.",
+    addThisDrawingToYourFavorites: "Adicionar este desenho aos teus favoritos",
+    favorite: "Favorito",
+    inYourFavorites: "Nos teus favoritos",
+    addedToYourFavorites: "Adicionado aos teus favoritos.",
+    seeThem: "Ver",
   },
 
   shareControl: {

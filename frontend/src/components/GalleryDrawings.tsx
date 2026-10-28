@@ -1,4 +1,5 @@
 import { DrawingThumbnail } from "./DrawingThumbnail";
+import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { FlagIcon } from "./icons";
 import { fetchGalleryDrawing, galleryAge, type GalleryEntry } from "../lib/gallery";
@@ -126,6 +127,7 @@ export function GalleryPost({
         </div>
         <div className="gallery-post-actions">
           <ReactionTally reactions={[]} counts={entry.reactionCounts} />
+          <GalleryFavoriteControl turnId={entry.turnId} />
           {onReport && (
             <button
               type="button"
