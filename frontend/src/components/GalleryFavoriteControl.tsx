@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { FavoriteControl } from "./FavoriteControl";
-import { isFavorite, withFavorite, withoutFavorite } from "../lib/favorites";
+import { favoriteSetTo, isFavorite, withFavorite } from "../lib/favorites";
 import { refusalSentence } from "../lib/refusals.ts";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
@@ -44,9 +44,7 @@ export function GalleryFavoriteControl({
           notify(refusalSentence("favorites_full"), "error");
           return;
         }
-        const done = await favorites.mutate((current) =>
-          isFavorite(current, turnId) ? withoutFavorite(current, turnId) : withFavorite(current, turnId),
-        );
+        const done = await favorites.mutate((current) => favoriteSetTo(current, turnId, adding));
         if (!done) {
           notify(refusalSentence("favorites_full"), "error");
           return;

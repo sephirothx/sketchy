@@ -7,6 +7,8 @@ import {
   moveFavorite,
   favoriteEligibility,
   favoritesAsRecapEntries,
+  favoriteSetTo,
+  rebaseFavorites,
   shelfIsFull,
   shelfPresence,
   withFavorite,
@@ -109,4 +111,27 @@ test("recap entries follow shelf order and carry no seat", () => {
       available: true,
     },
   ]);
+});
+
+test("a press says what it wants, so a list it never saw cannot reverse it", () => {
+  assert.deepEqual(favoriteSetTo(["b"], "b", true), ["b"]);
+  assert.deepEqual(favoriteSetTo(["a"], "b", true), ["a", "b"]);
+  assert.deepEqual(favoriteSetTo(["a"], "b", false), ["a"]);
+  assert.deepEqual(favoriteSetTo(["a", "b"], "b", false), ["a"]);
+  assert.equal(favoriteSetTo(six, "g", true), null);
+  // Already on a full shelf is not a refusal: nothing is left to do.
+  assert.deepEqual(favoriteSetTo(six, "a", true), six);
+  // The store runs a mutation again on a reread after a 404 (#1523 review):
+  // this tab held [a], a left the Gallery, another tab added b. The add sent
+  // [a, b]; on the reread [b] it must leave b in, not take it out.
+  const add = (current) => favoriteSetTo(current, "b", true);
+  assert.deepEqual(add(["a"]), ["a", "b"]);
+  assert.deepEqual(add(["b"]), ["b"]);
+});
+
+test("an arranged shelf keeps its removals and order over a list that moved on", () => {
+  // Arranged from [a, b, c]: c taken off, b moved first. Since then the
+  // server dropped a and another control added d.
+  assert.deepEqual(rebaseFavorites(["b", "a"], ["a", "b", "c"], ["b", "c", "d"]), ["b", "d"]);
+  assert.deepEqual(rebaseFavorites(["b", "a"], ["a", "b"], ["a", "b"]), ["b", "a"]);
 });
