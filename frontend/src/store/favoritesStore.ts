@@ -34,7 +34,10 @@ interface FavoritesStore {
    * forgets the other's favorite. Refused with `ShelfNotReadyError` until the
    * shelf for the signed-in account has been read - a whole-list write from
    * an unread shelf would erase it. Resolves `false` when the mutation
-   * itself declined (`null`), `true` once the server has the new list.
+   * itself declined (`null`), `true` once the server has the new list - or
+   * once nothing is left to send, or the answer belongs to a shelf nobody is
+   * looking at any more. A 404 rereads the shelf and runs the mutation once
+   * more on it, since it is most often a favorite the server already dropped.
    */
   mutate: (change: ShelfMutation) => Promise<boolean>;
   /**

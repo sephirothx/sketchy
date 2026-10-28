@@ -7,6 +7,7 @@ import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ApiError } from "../lib/api";
 import { fetchGalleryDrawing } from "../lib/gallery";
 import { fetchFavoriteDrawing, setGalleryReaction } from "../lib/profile";
 import { moveFavorite, favoritesAsRecapEntries, withoutFavorite } from "../lib/favorites";
@@ -100,9 +101,12 @@ export function FavoritesShelf({
       // A drawing taken off this shelf while the viewer is open is still in
       // the Gallery, and read from there.
       loadEntry={(entry) =>
-        fetchFavoriteDrawing(userId, snapshot[entry.index].turnId).catch(() =>
-          fetchGalleryDrawing(snapshot[entry.index].turnId),
-        )
+        fetchFavoriteDrawing(userId, snapshot[entry.index].turnId).catch((failure: unknown) => {
+          if (failure instanceof ApiError && failure.status === 404) {
+            return fetchGalleryDrawing(snapshot[entry.index].turnId);
+          }
+          throw failure;
+        })
       }
       renderActions={(entry) => {
         // Somebody's favorite is a Gallery drawing, so any registered
@@ -140,8 +144,11 @@ export function FavoritesShelf({
   // The profile's one empty-state recipe, as the history and the statistics
   // use it: three empty panels on a new profile wore two looks (#1280).
   if (favorites.length === 0) {
+    // The viewer keeps the slot it has on a full shelf, so emptying the
+    // shelf from inside it does not remount it.
     return (
       <>
+        {null}
         <EmptyState compact title={ui.profilePage.noFavoritesYet} />
         {viewer}
       </>
