@@ -102,22 +102,6 @@ export function withoutFavorite(turnIds: readonly string[], turnId: string): str
 }
 
 /**
- * The list with the entry at `index` moved by `delta` places. Out of range
- * on either side returns the list unchanged, so a button at an edge is safe
- * to press and simply does nothing; the component disables it besides.
- */
-export function moveFavorite(turnIds: readonly string[], index: number, delta: number): string[] {
-  const target = index + delta;
-  if (index < 0 || index >= turnIds.length || target < 0 || target >= turnIds.length) {
-    return [...turnIds];
-  }
-  const next = [...turnIds];
-  const [moved] = next.splice(index, 1);
-  next.splice(target, 0, moved);
-  return next;
-}
-
-/**
  * The list with `turnId` put at `index`, the others closing up around it: what
  * a drag, or the arrow keys on a lifted drawing, leaves the shelf as. Unknown
  * ids and an out-of-range index return the list unchanged.

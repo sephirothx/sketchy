@@ -430,6 +430,7 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   cursor: grab;
 }
 
@@ -495,7 +496,7 @@
   cursor: pointer;
 }
 
-.profile-shelf-handle:disabled,
+.profile-shelf-handle[aria-disabled="true"],
 .profile-shelf-remove:disabled {
   opacity: var(--opacity-disabled);
   cursor: default;
@@ -548,6 +549,7 @@
 .hidden-prompt {
   display: inline-flex;
   flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: 4px 9px;
   min-height: 30px;
@@ -561,6 +563,7 @@
 
 .hidden-prompt-word {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 3px;
 }
@@ -570,7 +573,9 @@
   height: 15px;
   border-radius: 3px;
   background: var(--track);
-  border-bottom: 2px solid var(--line-strong);
+  /* The tiles are the button's only face, so their underline holds 3:1
+     against the card (WCAG 1.4.11) where the track alone would not. */
+  border-bottom: 2px solid var(--faint);
 }
 
 .hidden-prompt-glyph {

@@ -123,13 +123,27 @@ export function FavoritesShelf({
   const dragRef = useRef<Drag | null>(null);
   const suppressClick = useRef(false);
   const drawnAt = useRef(new Map<string, DOMRect>());
+  const arrangeButton = useRef<HTMLButtonElement | null>(null);
+  // Where the keyboard goes once a removal has re-rendered the shelf.
+  const refocus = useRef<string | null>(null);
 
   const byId = new Map(favorites.map((favorite) => [favorite.turnId, favorite]));
   const turnIds = favorites.map((favorite) => favorite.turnId);
-  const order = (draft ?? turnIds).filter((id) => byId.has(id));
+  // The order while something is lifted or written, with any favorite that
+  // arrived meanwhile after it rather than left out of the next write.
+  const order = draft
+    ? [...draft.filter((id) => byId.has(id)), ...turnIds.filter((id) => !draft.includes(id))]
+    : turnIds;
   const preview = drag?.moving ? moveFavoriteTo(order, drag.turnId, drag.to) : order;
   const canArrange = isOwner && Boolean(onReorder);
-  // An emptied shelf has nothing to arrange.
+  // An emptied shelf ends the mode, however it was emptied - the last
+  // removal here, a star elsewhere, a drawing leaving the Gallery - so it
+  // does not come back on its own when the shelf fills again.
+  const [shelfWasEmpty, setShelfWasEmpty] = useState(favorites.length === 0);
+  if ((favorites.length === 0) !== shelfWasEmpty) {
+    setShelfWasEmpty(favorites.length === 0);
+    if (favorites.length === 0) setArranging(false);
+  }
   const arranging = arrangeOn && canArrange && favorites.length > 0;
   const held = busy || disabled;
   const shown = (favorite: ProfileFavorite): ProfileFavorite =>
@@ -161,9 +175,18 @@ export function FavoritesShelf({
     }
   }, [orderKey]);
 
-  // A lifted drawing keeps the keyboard's focus as it moves.
+  // A lifted drawing keeps the keyboard's focus as it moves, and a removal
+  // hands it to a neighbour.
   useEffect(() => {
     if (lifted) handleRefs.current.get(lifted)?.focus();
+    const next = refocus.current;
+    if (next && !lifted) {
+      const target = next === "arrange" ? arrangeButton.current : handleRefs.current.get(next);
+      if (target) {
+        refocus.current = null;
+        target.focus();
+      }
+    }
   }, [lifted, orderKey]);
 
   const react = async (turnId: string, emoji: string | null) => {
@@ -197,6 +220,8 @@ export function FavoritesShelf({
 
   /** Put down what is lifted, writing the order it is in if that moved anything. */
   const drop = (turnId: string, list: string[]) => {
+    // While a write is out the drawing stays lifted, to be dropped again.
+    if (held) return;
     setLifted(null);
     announcePlace(turnId, list, ui.profilePage.favoriteDropped);
     if (list.join(",") === turnIds.join(",")) {
@@ -207,9 +232,14 @@ export function FavoritesShelf({
   };
 
   const toggleLift = (turnId: string) => {
-    if (held) return;
+    if (held || suppressClick.current) return;
     if (lifted === turnId) {
       drop(turnId, order);
+      return;
+    }
+    // Another drawing's handle is a place, as the drawing itself is.
+    if (lifted) {
+      drop(lifted, moveFavoriteTo(order, lifted, order.indexOf(turnId)));
       return;
     }
     setLifted(turnId);
@@ -217,7 +247,7 @@ export function FavoritesShelf({
   };
 
   const onHandleKey = (event: ReactKeyboardEvent<HTMLButtonElement>, turnId: string) => {
-    if (lifted !== turnId) return;
+    if (lifted !== turnId || held) return;
     const at = order.indexOf(turnId);
     const delta =
       event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1
@@ -245,8 +275,19 @@ export function FavoritesShelf({
     // on its own the next time the shelf has something on it.
     if (order.length === 1) setArranging(false);
     setAnnouncement(ui.profilePage.favoriteRemoved({ prompt: promptOf(turnId) }));
+    // The keyboard stays on the shelf: the next drawing's handle, or the one
+    // before, or the heading's button once nothing is left.
+    const at = order.indexOf(turnId);
+    refocus.current = order[at + 1] ?? order[at - 1] ?? "arrange";
     void change(withoutFavorite(order, turnId));
   };
+
+  // What a drag that ends later reads: the shelf and the hold as they are
+  // then, not as they were at the press.
+  const latest = useRef({ drop, order });
+  useLayoutEffect(() => {
+    latest.current = { drop, order };
+  });
 
   /** The place nearest the dragged drawing's centre, among where they stood. */
   const placeFor = (current: Drag): number => {
@@ -302,7 +343,6 @@ export function FavoritesShelf({
       dy: 0,
       slots,
     });
-    const startOrder = order;
     const move = (moved: PointerEvent) => {
       const current = dragRef.current;
       if (!current || moved.pointerId !== pointerId) return;
@@ -325,7 +365,7 @@ export function FavoritesShelf({
       window.setTimeout(() => {
         suppressClick.current = false;
       }, 0);
-      drop(current.turnId, moveFavoriteTo(startOrder, current.turnId, current.to));
+      latest.current.drop(current.turnId, moveFavoriteTo(latest.current.order, current.turnId, current.to));
     };
     const cancel = (cancelled: PointerEvent) => {
       if (cancelled.pointerId !== pointerId) return;
@@ -385,6 +425,7 @@ export function FavoritesShelf({
         {canArrange && favorites.length > 0 && (
           arranging ? (
             <button
+              ref={arrangeButton}
               type="button"
               className="btn btn-primary btn-compact profile-shelf-arrange"
               onClick={finishArranging}
@@ -394,6 +435,7 @@ export function FavoritesShelf({
             </button>
           ) : (
             <button
+              ref={arrangeButton}
               type="button"
               className="btn btn-secondary btn-compact profile-shelf-arrange"
               disabled={disabled}
@@ -444,7 +486,12 @@ export function FavoritesShelf({
                   style={style}
                   data-turn-id={turnId}
                 >
-                  <div className="profile-shelf-frame" onPointerDown={(event) => startDrag(event, turnId)}>
+                  <div
+                    className="profile-shelf-frame"
+                    onPointerDown={(event) => startDrag(event, turnId)}
+                    // A long press would open the picture's own menu and cancel the drag.
+                    onContextMenu={arranging ? (event) => event.preventDefault() : undefined}
+                  >
                     <button
                       type="button"
                       className="profile-shelf-open"
@@ -472,7 +519,9 @@ export function FavoritesShelf({
                             total: preview.length,
                           })}
                           aria-pressed={lifted === turnId}
-                          disabled={held}
+                          // Not disabled while a write is out: a disabled
+                          // button drops the keyboard's focus.
+                          aria-disabled={held}
                           onClick={() => toggleLift(turnId)}
                           onKeyDown={(event) => onHandleKey(event, turnId)}
                         >

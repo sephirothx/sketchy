@@ -685,7 +685,10 @@ export function DrawingViewer({
             )}
             <section
               className="drawing-viewer-card"
-              aria-labelledby="drawing-viewer-title"
+              // A title standing in for a hidden prompt is a button; the
+              // dialog is named by the drawing instead.
+              aria-labelledby={renderPrompt ? undefined : "drawing-viewer-title"}
+              aria-label={renderPrompt ? entryLabel(entry) : undefined}
               style={dismissing ? {
                 transform: `translateY(${dismissing}px) scale(${(1 - dismissing / 1500).toFixed(3)})`,
                 transition: dragging ? "none" : undefined,

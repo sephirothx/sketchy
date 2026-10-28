@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   FAVORITE_SLOTS,
   isFavorite,
-  moveFavorite,
   moveFavoriteTo,
   hiddenPromptShape,
   favoriteEligibility,
@@ -42,14 +41,6 @@ test("unfavoriting keeps the order of what remains", () => {
   assert.deepEqual(withoutFavorite(six, "zz"), six);
 });
 
-test("moving swaps a neighbour and stops at the edges", () => {
-  assert.deepEqual(moveFavorite(six, 0, 1), ["b", "a", "c", "d", "e", "f"]);
-  assert.deepEqual(moveFavorite(six, 5, -1), ["a", "b", "c", "d", "f", "e"]);
-  assert.deepEqual(moveFavorite(six, 0, -1), six, "left edge");
-  assert.deepEqual(moveFavorite(six, 5, 1), six, "right edge");
-  assert.deepEqual(moveFavorite(six, 9, 1), six, "no such index");
-  assert.notEqual(moveFavorite(six, 0, 0), six, "always a copy");
-});
 
 test("a Favorite control is offered only where the write can succeed", () => {
   const base = { isRegistered: true, isSpectator: false, isPublicGame: true, open: true };

@@ -121,6 +121,13 @@
   -webkit-line-clamp: 2;
 }
 
+/* A prompt still hidden on somebody's favorites (#1501): the two-line clamp
+   would cut a long word's last tiles, and its length is the one thing the
+   tiles say. A block box is not clamped. */
+.drawing-viewer-title h2:has(> .hidden-prompt) {
+  display: block;
+}
+
 .drawing-viewer-byline {
   margin: 0;
   color: var(--muted);
