@@ -41,7 +41,6 @@ test("unfavoriting keeps the order of what remains", () => {
   assert.deepEqual(withoutFavorite(six, "zz"), six);
 });
 
-
 test("a Favorite control is offered only where the write can succeed", () => {
   const base = { isRegistered: true, isSpectator: false, isPublicGame: true, open: true };
   assert.equal(favoriteEligibility(base), "offered");

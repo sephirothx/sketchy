@@ -126,6 +126,8 @@
    tiles say. A block box is not clamped. */
 .drawing-viewer-title h2:has(> .hidden-prompt) {
   display: block;
+  /* The title clips to its clamp; the tiles' button needs its focus ring. */
+  overflow: visible;
 }
 
 .drawing-viewer-byline {

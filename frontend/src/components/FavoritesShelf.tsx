@@ -108,7 +108,9 @@ export function FavoritesShelf({
   const [error, setError] = useState<string | null>(null);
   const [arrangeOn, setArranging] = useState(false);
   // The order while a drawing is lifted or a write is out; null is the shelf's own.
-  const [draft, setDraft] = useState<string[] | null>(null);
+  // `base` is the shelf the draft was made from, so a favorite that arrives
+  // meanwhile can be told from one the draft itself leaves out.
+  const [draft, setDraftState] = useState<{ ids: string[]; base: string[] } | null>(null);
   const [lifted, setLifted] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set());
@@ -124,6 +126,7 @@ export function FavoritesShelf({
   const suppressClick = useRef(false);
   const drawnAt = useRef(new Map<string, DOMRect>());
   const arrangeButton = useRef<HTMLButtonElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
   // Where the keyboard goes once a removal has re-rendered the shelf.
   const refocus = useRef<string | null>(null);
 
@@ -132,8 +135,10 @@ export function FavoritesShelf({
   // The order while something is lifted or written, with any favorite that
   // arrived meanwhile after it rather than left out of the next write.
   const order = draft
-    ? [...draft.filter((id) => byId.has(id)), ...turnIds.filter((id) => !draft.includes(id))]
+    ? [...draft.ids.filter((id) => byId.has(id)), ...turnIds.filter((id) => !draft.base.includes(id))]
     : turnIds;
+  const setDraft = (ids: string[] | null) =>
+    setDraftState(ids === null ? null : { ids, base: draft?.base ?? turnIds });
   const preview = drag?.moving ? moveFavoriteTo(order, drag.turnId, drag.to) : order;
   const canArrange = isOwner && Boolean(onReorder);
   // An emptied shelf ends the mode, however it was emptied - the last
@@ -142,7 +147,10 @@ export function FavoritesShelf({
   const [shelfWasEmpty, setShelfWasEmpty] = useState(favorites.length === 0);
   if ((favorites.length === 0) !== shelfWasEmpty) {
     setShelfWasEmpty(favorites.length === 0);
-    if (favorites.length === 0) setArranging(false);
+    if (favorites.length === 0) {
+      setArranging(false);
+      setLifted(null);
+    }
   }
   const arranging = arrangeOn && canArrange && favorites.length > 0;
   const held = busy || disabled;
@@ -181,11 +189,13 @@ export function FavoritesShelf({
     if (lifted) handleRefs.current.get(lifted)?.focus();
     const next = refocus.current;
     if (next && !lifted) {
-      const target = next === "arrange" ? arrangeButton.current : handleRefs.current.get(next);
-      if (target) {
-        refocus.current = null;
-        target.focus();
-      }
+      // Consumed whether or not its target is there, so it never takes the
+      // keyboard later from somewhere else; an emptied shelf's heading
+      // stands in for the button that went with the last drawing.
+      refocus.current = null;
+      const target =
+        next === "arrange" ? arrangeButton.current ?? headingRef.current : handleRefs.current.get(next);
+      target?.focus();
     }
   }, [lifted, orderKey]);
 
@@ -237,8 +247,10 @@ export function FavoritesShelf({
       drop(turnId, order);
       return;
     }
-    // Another drawing's handle is a place, as the drawing itself is.
+    // Another drawing's handle is a place, as the drawing itself is; the
+    // keyboard follows the drawing it put there.
     if (lifted) {
+      refocus.current = lifted;
       drop(lifted, moveFavoriteTo(order, lifted, order.indexOf(turnId)));
       return;
     }
@@ -247,20 +259,22 @@ export function FavoritesShelf({
   };
 
   const onHandleKey = (event: ReactKeyboardEvent<HTMLButtonElement>, turnId: string) => {
-    if (lifted !== turnId || held) return;
+    if (lifted !== turnId) return;
+    // Escape writes nothing, so it cancels even while a write is out.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setLifted(null);
+      if (!busy) setDraft(null);
+      announcePlace(turnId, turnIds, ui.profilePage.favoriteDropped);
+      return;
+    }
+    if (held) return;
     const at = order.indexOf(turnId);
     const delta =
       event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1
         : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
           : 0;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      setLifted(null);
-      setDraft(null);
-      announcePlace(turnId, turnIds, ui.profilePage.favoriteDropped);
-      return;
-    }
     if (!delta) return;
     event.preventDefault();
     const next = moveFavoriteTo(order, turnId, at + delta);
@@ -400,7 +414,13 @@ export function FavoritesShelf({
   };
 
   const finishArranging = () => {
-    if (lifted) drop(lifted, order);
+    if (lifted && !held) drop(lifted, order);
+    // Held by a write elsewhere, the lifted drawing goes back where it was
+    // rather than staying lifted, or its unsaved moves shown, after Done.
+    if (held) {
+      setLifted(null);
+      if (!busy) setDraft(null);
+    }
     setArranging(false);
   };
 
@@ -413,7 +433,7 @@ export function FavoritesShelf({
   return (
     <>
       <div className="profile-shelf-head">
-        <h2 className="profile-shelf-title">
+        <h2 className="profile-shelf-title" ref={headingRef} tabIndex={-1}>
           <span className="profile-shelf-star" aria-hidden="true"><StarIcon size={20} /></span>
           {ui.profilePage.favorites}
         </h2>

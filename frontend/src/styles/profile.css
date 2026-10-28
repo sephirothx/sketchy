@@ -563,13 +563,17 @@
 
 .hidden-prompt-word {
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 3px;
+  /* A word never breaks across lines - a continuation would read as a second
+     word - so in a narrow column its tiles narrow instead. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .hidden-prompt-tile {
-  width: 11px;
+  flex: 0 1 11px;
+  min-width: 4px;
   height: 15px;
   border-radius: 3px;
   background: var(--track);
@@ -604,7 +608,7 @@
 }
 
 .hidden-prompt.is-large .hidden-prompt-tile {
-  width: 16px;
+  flex-basis: 16px;
   height: 22px;
   border-radius: 4px;
 }
