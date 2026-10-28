@@ -91,6 +91,11 @@ interface DrawingViewerProps {
   /** The controls beside Save image - Share and Favorite (#440, #1430). A prop for
       the same reason `renderReactions` is. */
   renderActions?: (entry: DrawingRecapMetadata) => ReactNode;
+  /** What stands in the title's place, when it is not the prompt: somebody
+      else's favorites keep each prompt hidden until it is asked for (#1501).
+      The entry's `prompt` is what every label reads, so a hidden one is
+      given a stand-in there too. */
+  renderPrompt?: (entry: DrawingRecapMetadata) => ReactNode;
   /** Told the drawing on screen when the viewer goes, so one the room
       closed itself - its connection dropped - reopens where it was left.
       Once, at the end, rather than on every move: the room re-rendering under
@@ -159,6 +164,7 @@ export function DrawingViewer({
   initialIndex = 0,
   renderReactions,
   renderActions,
+  renderPrompt,
   onLeave,
 }: DrawingViewerProps) {
   const total = entries.length;
@@ -688,7 +694,7 @@ export function DrawingViewer({
               <header className="drawing-viewer-header">
                 <span aria-hidden="true" />
                 <div className="drawing-viewer-title">
-                  <h2 id="drawing-viewer-title">{entry.prompt}</h2>
+                  <h2 id="drawing-viewer-title">{renderPrompt ? renderPrompt(entry) : entry.prompt}</h2>
                   <p className="drawing-viewer-byline">
                     {fill(ui.drawingRecapGallery.drawnBy, {
                       drawer: (

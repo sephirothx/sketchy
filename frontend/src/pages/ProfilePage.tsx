@@ -931,8 +931,7 @@ function ProfileView({ userId }: { userId: string }) {
               isOwner: isOwnProfile,
               count: favorites.length,
             }) !== "absent" && (
-            <section className="surface-card panel" data-testid="favorites-panel">
-              <h2>{ui.profilePage.favorites}</h2>
+            <section className="surface-card panel profile-favorites" data-testid="favorites-panel">
               <FavoritesShelf
                 userId={userId}
                 favorites={favorites}

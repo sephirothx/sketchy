@@ -106,7 +106,11 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await visitor.goto(f"{BASE_URL}/profile/{host_id}")
             await visitor.locator('[data-testid="favorites"]').wait_for()
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
-            await expect(visitor.locator('[data-testid="favorites"]').get_by_role("button", name="Remove", exact=True)).to_have_count(0)
+            await expect(visitor.get_by_role("button", name="Arrange")).to_have_count(0)
+            # ...and guesses first (#1501): the prompt is letter tiles until asked for.
+            await expect(visitor.locator(".profile-shelf-prompt")).to_have_count(0)
+            await visitor.locator('[data-testid="favorites"] .hidden-prompt').click()
+            await expect(visitor.locator(".profile-shelf-prompt")).to_have_text(first_prompt)
 
             # A stranger - registered, never in the game - reacts to the favorited
             # drawing from the shelf through the gallery door (R-PIN-08,
@@ -149,8 +153,10 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(anonymous.locator('[data-testid="favorites-panel"]')).to_have_count(0)
             await anonymous_context.close()
 
-            # Remove it from the shelf: the owner's own empty shelf stays, with its hint.
-            await shelf.locator(".profile-shelf-item").first.get_by_role("button", name="Remove").click()
+            # Remove it from the shelf in Arrange mode: the owner's own empty
+            # shelf stays, with its hint.
+            await lobby.get_by_role("button", name="Arrange").click()
+            await shelf.get_by_role("button", name=f"Remove {first_prompt} from your favorites").click()
             await expect(shelf.locator(".profile-shelf-item")).to_have_count(0)
             await lobby.get_by_text("No favorites yet", exact=False).wait_for()
 
@@ -167,6 +173,33 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await table_toggles.nth(1).click()
             await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(2)
+
+            # Arrange (#1501): a handle and the arrow keys move a drawing, and
+            # so does dragging it; each landing is one write of the shelf.
+            prompts = lobby.locator('[data-testid="favorites"] .profile-shelf-prompt')
+            first, second = await prompts.nth(0).inner_text(), await prompts.nth(1).inner_text()
+            await lobby.get_by_role("button", name="Arrange").click()
+            handle = lobby.locator(".profile-shelf-handle").first
+            await handle.focus()
+            await lobby.keyboard.press("Space")
+            await expect(handle).to_have_attribute("aria-pressed", "true")
+            await lobby.keyboard.press("ArrowRight")
+            await lobby.keyboard.press("Space")
+            await expect(prompts).to_have_text([second, first])
+            await expect(lobby.locator(".profile-shelf-handle").first).to_be_enabled()
+            frames = lobby.locator(".profile-shelf-frame")
+            start = await frames.nth(0).bounding_box()
+            end = await frames.nth(1).bounding_box()
+            assert start is not None and end is not None
+            await lobby.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+            await lobby.mouse.down()
+            await lobby.mouse.move(end["x"] + end["width"] / 2, end["y"] + end["height"] / 2, steps=12)
+            await lobby.mouse.up()
+            await expect(prompts).to_have_text([first, second])
+            await expect(lobby.locator(".profile-shelf-handle").first).to_be_enabled()
+            await lobby.get_by_role("button", name="Done").click()
+            stored = await (await host_context.request.get(f"{BASE_URL}/api/users/{host_id}/favorites")).json()
+            assert [item["prompt"] for item in stored["favorites"]] == [first, second]
 
             # Take out of Solo is on the drawer's own row, one of the two
             # (R-SOLO-17), and works from there; the viewer, whose buttons are

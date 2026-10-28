@@ -85,10 +85,15 @@
   </div>
 
   <section style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); margin-bottom: 22px">
-    <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 20px; color: var(--ink); margin-bottom: 14px">Favorites</h2>
-    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 20px; color: var(--ink); display: flex; align-items: center; gap: 8px"><span style="color: var(--warm); display: inline-flex"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z" fill="currentColor"/></svg></span>Favorites</h2>
+      <span style="font-size: 13px; font-weight: 700; color: var(--faint)">3 of 6</span>
+      <span style="margin-left: auto"><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="9" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.6" fill="currentColor" stroke="none"/></svg>Arrange</button></span>
+    </div>
+    <p style="margin: 4px 0 14px; font-size: 14px; color: var(--muted)">Visitors see each prompt hidden until they tap it.</p>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 16px">
       
-      <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+      <li style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
         <div style="aspect-ratio: 4 / 3; background: var(--well); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; width: 100%"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
   <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
   <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
@@ -110,8 +115,8 @@
   <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
   <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
 </svg></div>
-        <span style="font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">lighthouse</span>
-        <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted)"><span style="color: var(--pcMarta); font-weight: 800">Marta</span><span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700"><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">lighthouse</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)">by <span style="color: var(--pcMarta); font-weight: 800">Marta</span><span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700"><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M26 19.3399C26 25.4393 20.9491 30.3451 14.8501 29.981C8.58145 29.6067 4.2892 23.5781 5.09774 17.2765C5.58685 13.4429 7.38361 10.1555 9.34008 7.6065C9.67947 7.16144 10.0288 10.7422 10.3782 10.3477C10.7276 9.94307 13.9717 4.32923 15.0997 2.35679C15.3093 1.99265 15.7884 1.88139 16.1278 2.14438C18.3937 3.85382 26 10.2769 26 19.3399Z" fill="#FF6723"/>
 <path d="M23 21.8512C23 25.893 19.4812 29.142 15.2011 28.9952C10.5815 28.8386 7.41254 24.6109 8.09159 20.256C9.06903 14.0124 15.4789 10 15.4789 10C15.4789 10 23 14.7072 23 21.8512Z" fill="#FFB02E"/>
 </svg>
@@ -122,13 +127,8 @@
 <ellipse cx="23.4771" cy="12.5937" rx="2.83554" ry="4.78125" transform="rotate(30 23.4771 12.5937)" fill="#F37366"/>
 </svg>
 <span style="font-variant-numeric: tabular-nums; line-height: 1">1</span></span></span></span>
-        <div style="display: flex; align-items: center; gap: 2px">
-          <button type="button" aria-label="Move left" title="Move left" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m15 6-6 6 6 6"/></svg></button>
-          <button type="button" aria-label="Move right" title="Move right" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></button>
-          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Remove</button>
-        </div>
       </li>
-      <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+      <li style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
         <div style="aspect-ratio: 4 / 3; background: var(--well); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; width: 100%"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
   <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
   <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
@@ -150,8 +150,8 @@
   <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
   <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
 </svg></div>
-        <span style="font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">roller coaster</span>
-        <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted)"><span style="color: var(--pcBruno); font-weight: 800">Bruno</span><span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700"><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">roller coaster</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)">by <span style="color: var(--pcBruno); font-weight: 800">Bruno</span><span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700"><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M15.9989 29.9978C25.3333 29.9978 29.9978 23.7303 29.9978 15.9989C29.9978 8.26751 25.3333 2 15.9989 2C6.66443 2 2 8.26751 2 15.9989C2 23.7303 6.66443 29.9978 15.9989 29.9978Z" fill="#FFB02E"/>
 <path d="M8.98156 11.1909C9.02964 10.9436 9.13971 10.6405 9.34896 10.4125C9.52829 10.2171 9.84698 10 10.4999 10C11.1417 10 11.4685 10.2216 11.6572 10.4288C11.8753 10.6683 11.9804 10.9737 12.0147 11.1711C12.1092 11.7152 12.6269 12.0797 13.171 11.9853C13.7152 11.8908 14.0797 11.373 13.9852 10.8289C13.9062 10.374 13.6799 9.6794 13.1357 9.08196C12.562 8.45218 11.6955 8 10.4999 8C9.31564 8 8.45269 8.4313 7.87551 9.06013C7.32826 9.65637 7.10696 10.3533 7.01833 10.8091C6.91291 11.3513 7.26694 11.8762 7.80907 11.9816C8.3512 12.087 8.87614 11.733 8.98156 11.1909Z" fill="#402A32"/>
 <path d="M19.9818 11.1909C20.0299 10.9436 20.14 10.6405 20.3492 10.4125C20.5285 10.2171 20.8472 10 21.5002 10C22.1419 10 22.4687 10.2216 22.6574 10.4288C22.8756 10.6683 22.9807 10.9737 23.0149 11.1711C23.1094 11.7152 23.6271 12.0797 24.1713 11.9853C24.7154 11.8908 25.0799 11.373 24.9854 10.8289C24.9064 10.374 24.6802 9.6794 24.1359 9.08196C23.5623 8.45218 22.6957 8 21.5002 8C20.3159 8 19.4529 8.4313 18.8758 9.06013C18.3285 9.65637 18.1072 10.3533 18.0186 10.8091C17.9132 11.3513 18.2672 11.8762 18.8093 11.9816C19.3514 12.087 19.8764 11.733 19.9818 11.1909Z" fill="#402A32"/>
@@ -161,13 +161,8 @@
 <path d="M27.6198 20.3698L24.25 17C23.4216 16.1716 23.4216 14.8284 24.25 14C25.0784 13.1716 26.4216 13.1716 27.25 14L30.6198 17.3698C31.3999 18.1499 31.4518 19.3978 30.7392 20.24C29.9375 21.1874 28.4973 21.2473 27.6198 20.3698Z" fill="#3F5FFF"/>
 </svg>
 <span style="font-variant-numeric: tabular-nums; line-height: 1">1</span></span></span></span>
-        <div style="display: flex; align-items: center; gap: 2px">
-          <button type="button" aria-label="Move left" title="Move left" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m15 6-6 6 6 6"/></svg></button>
-          <button type="button" aria-label="Move right" title="Move right" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></button>
-          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Remove</button>
-        </div>
       </li>
-      <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+      <li style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
         <div style="aspect-ratio: 4 / 3; background: var(--well); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; width: 100%"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
   <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
   <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
@@ -189,13 +184,8 @@
   <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
   <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
 </svg></div>
-        <span style="font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">bow and arrow</span>
-        <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted)"><span style="color: var(--pcYuki); font-weight: 800">Yuki</span></span>
-        <div style="display: flex; align-items: center; gap: 2px">
-          <button type="button" aria-label="Move left" title="Move left" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m15 6-6 6 6 6"/></svg></button>
-          <button type="button" aria-label="Move right" title="Move right" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></button>
-          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Remove</button>
-        </div>
+        <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 18px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">bow and arrow</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)">by <span style="color: var(--pcYuki); font-weight: 800">Yuki</span></span>
       </li>
     </ul>
   </section>

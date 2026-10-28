@@ -1,30 +1,40 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { EmptyState } from "./ui/EmptyState";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingViewer } from "./DrawingViewer";
 import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
+import { CheckIcon, GripIcon, StarIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { fetchGalleryDrawing } from "../lib/gallery";
 import { fetchFavoriteDrawing, setGalleryReaction } from "../lib/profile";
-import { moveFavorite, favoritesAsRecapEntries, withoutFavorite } from "../lib/favorites";
+import {
+  FAVORITE_SLOTS,
+  favoritesAsRecapEntries,
+  hiddenPromptShape,
+  moveFavoriteTo,
+  withoutFavorite,
+} from "../lib/favorites";
 import type { ProfileFavorite } from "../lib/favorites";
 import { reactionEligibility } from "../lib/reactions";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/profile.css";
 
+/** How far a press travels before it becomes a drag, so a tap never moves anything. */
+const DRAG_THRESHOLD_PX = 6;
+
 interface FavoritesShelfProps {
   /** Whose shelf: the bytes are fetched through this profile's favorite route. */
   userId: string;
   favorites: ProfileFavorite[];
-  /** The owner sees the controls; everyone else a gallery. */
+  /** The owner sees the prompts and arranges; everyone else guesses first. */
   isOwner: boolean;
   /**
    * Replace the shelf with a new ordered list. The server takes the whole
-   * list (R-PIN-02), so move and unfavorite both come through here. Resolves once
-   * the parent has the server's answer; a rejection is shown by its code.
+   * list (R-PIN-02), so a move and a removal both come through here. Resolves
+   * once the parent has the server's answer; a rejection is shown by its code.
    */
   onReorder?: (turnIds: string[]) => Promise<void>;
   /** The owner's controls held while the shelf is read or another write is out. */
@@ -35,14 +45,50 @@ interface FavoritesShelfProps {
   onRequestAccount?: () => void;
 }
 
+interface Drag {
+  turnId: string;
+  pointerId: number;
+  from: number;
+  to: number;
+  moving: boolean;
+  startX: number;
+  startY: number;
+  dx: number;
+  dy: number;
+  /** Where each place on the shelf stood when the drag began. */
+  slots: DOMRect[];
+}
+
+/** A `translate` value of x and y pixels. */
+function cssOffset(x: number, y: number): string {
+  return [x, y].map((value) => `${value}px`).join(" ");
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * The drawings a profile chose to show (#440), up to six, in the owner's
- * order. Each is the stored frame replayed small (R-HIST-15 rules out a
- * server-side picture); opening one reuses the recap gallery with the shelf
- * as its entries. A registered viewer reacts from there through the gallery
- * door (R-PIN-08, R-GAL-06) - every favorite is a Gallery drawing, so
- * reacting to it publishes nothing more - and the tally counts every reaction while
- * naming only the room's own.
+ * A profile's **Favorites** (#440, #1501): up to six drawings in the owner's
+ * order, framed three across (two on a phone).
+ *
+ * A visitor sees each prompt as blank letter tiles, the game's own mask, and
+ * taps them to see it - a favorite is somebody's best drawing, and guessing
+ * it first is the point of looking. Nothing is remembered: the next visit
+ * guesses again. The owner sees the prompts, since they arrange by them.
+ *
+ * The owner arranges in a mode of its own (*Arrange*), so a swipe across the
+ * shelf on a phone never moves a drawing by accident. In it a drawing is
+ * dragged by any part of it with a mouse, a pen or a finger - the others make
+ * room as it passes and slide into place when it lands - and every drawing
+ * has a handle for everyone else: Space (or a tap) lifts it, the arrow keys
+ * or a tap on another place move it there, Space drops it (WCAG 2.5.7's
+ * single-pointer alternative, and a keyboard's way). Each landing is one
+ * write of the whole list (R-PIN-02), and is announced.
  */
 export function FavoritesShelf({
   userId,
@@ -59,14 +105,65 @@ export function FavoritesShelf({
   const [viewing, setViewing] = useState<{ favorites: ProfileFavorite[]; index: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [arrangeOn, setArranging] = useState(false);
+  // The order while a drawing is lifted or a write is out; null is the shelf's own.
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const [lifted, setLifted] = useState<string | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set());
+  const [announcement, setAnnouncement] = useState("");
   // What the viewer's own reactions from here left behind, by turn: the
   // shelf's entries come from the parent, and a reaction changes only these.
   const [reacted, setReacted] = useState<
     Record<string, { reactionCounts: Record<string, number>; myReaction: string | null }>
   >({});
+  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  const handleRefs = useRef(new Map<string, HTMLButtonElement>());
+  const dragRef = useRef<Drag | null>(null);
+  const suppressClick = useRef(false);
+  const drawnAt = useRef(new Map<string, DOMRect>());
+
+  const byId = new Map(favorites.map((favorite) => [favorite.turnId, favorite]));
   const turnIds = favorites.map((favorite) => favorite.turnId);
+  const order = (draft ?? turnIds).filter((id) => byId.has(id));
+  const preview = drag?.moving ? moveFavoriteTo(order, drag.turnId, drag.to) : order;
+  const canArrange = isOwner && Boolean(onReorder);
+  // An emptied shelf has nothing left to arrange, so the mode ends with it.
+  const arranging = arrangeOn && canArrange && favorites.length > 0;
+  const held = busy || disabled;
   const shown = (favorite: ProfileFavorite): ProfileFavorite =>
     reacted[favorite.turnId] ? { ...favorite, ...reacted[favorite.turnId] } : favorite;
+  const promptShown = (turnId: string) => isOwner || revealed.has(turnId);
+  const reveal = (turnId: string) => setRevealed((current) => new Set(current).add(turnId));
+
+  // Every drawing slides from where it was drawn to its new place (FLIP),
+  // except the one under the pointer, which stays with it.
+  const orderKey = preview.join(",");
+  useLayoutEffect(() => {
+    const before = drawnAt.current;
+    const now = new Map<string, DOMRect>();
+    for (const [turnId, item] of itemRefs.current) now.set(turnId, item.getBoundingClientRect());
+    drawnAt.current = now;
+    if (prefersReducedMotion()) return;
+    for (const [turnId, item] of itemRefs.current) {
+      const from = before.get(turnId);
+      const to = now.get(turnId);
+      if (!from || !to || turnId === dragRef.current?.turnId) continue;
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+      item.style.transition = "none";
+      item.style.translate = cssOffset(dx, dy);
+      void item.offsetHeight;
+      item.style.transition = "";
+      item.style.translate = "";
+    }
+  }, [orderKey]);
+
+  // A lifted drawing keeps the keyboard's focus as it moves.
+  useEffect(() => {
+    if (lifted) handleRefs.current.get(lifted)?.focus();
+  }, [lifted, orderKey]);
 
   const react = async (turnId: string, emoji: string | null) => {
     const result = await setGalleryReaction(turnId, emoji);
@@ -77,9 +174,10 @@ export function FavoritesShelf({
   };
 
   const change = async (next: string[]) => {
-    if (!onReorder || busy || disabled) return;
+    if (!onReorder || held) return;
     setBusy(true);
     setError(null);
+    setDraft(next);
     try {
       await onReorder(next);
     } catch (changeError) {
@@ -87,134 +185,426 @@ export function FavoritesShelf({
       // catalogue by code, or is the generic one (R-I18N-01).
       setError(refusalText(changeError, ui.profilePage.couldNotUpdateFavorites));
     } finally {
+      setDraft(null);
       setBusy(false);
     }
   };
 
-  const snapshot = viewing?.favorites ?? [];
-  const viewer = viewing && (
-    <DrawingViewer
-      entries={favoritesAsRecapEntries(snapshot)}
-      initialIndex={viewing.index}
-      onClose={() => setViewing(null)}
-      // A drawing taken off this shelf while the viewer is open is still in
-      // the Gallery, and read from there.
-      loadEntry={(entry) =>
-        fetchFavoriteDrawing(userId, snapshot[entry.index].turnId).catch(() =>
-          fetchGalleryDrawing(snapshot[entry.index].turnId),
-        )
-      }
-      renderActions={(entry) => {
-        // Somebody's favorite is a Gallery drawing, so any registered
-        // viewer may make it one of theirs too (#1501); the owner sees
-        // theirs filled in, and pressing it takes it off this shelf.
-        const favorite = snapshot[entry.index];
-        return favorite && viewerIsRegistered ? <GalleryFavoriteControl turnId={favorite.turnId} /> : null;
-      }}
-      renderReactions={(entry) => {
-        const favorite = snapshot[entry.index];
-        if (!favorite) return null;
-        const current = shown(favorite);
-        return (
-          <DrawingReactionControl
-            reactions={favorite.reactions.map((reaction) => ({
-              playerId: reaction.seatId,
-              emoji: reaction.emoji,
-            }))}
-            myReactorId={null}
-            counts={current.reactionCounts}
-            mine={current.myReaction}
-            eligibility={reactionEligibility({
-              isRegistered: viewerIsRegistered,
-              isDrawer: favorite.drawnByMe,
-            })}
-            onReact={(emoji) => react(favorite.turnId, emoji)}
-            onRequestAccount={onRequestAccount}
-            placement="panel"
-          />
-        );
-      }}
-    />
-  );
+  const promptOf = (turnId: string) => byId.get(turnId)?.prompt ?? "";
+  const announcePlace = (turnId: string, list: string[], say: typeof ui.profilePage.favoriteMoved) =>
+    setAnnouncement(say({ prompt: promptOf(turnId), position: list.indexOf(turnId) + 1, total: list.length }));
 
-  // The profile's one empty-state recipe, as the history and the statistics
-  // use it: three empty panels on a new profile wore two looks (#1280).
-  if (favorites.length === 0) {
-    return (
-      <>
-        <EmptyState compact title={ui.profilePage.noFavoritesYet} />
-        {viewer}
-      </>
-    );
-  }
+  /** Put down what is lifted, writing the order it is in if that moved anything. */
+  const drop = (turnId: string, list: string[]) => {
+    setLifted(null);
+    announcePlace(turnId, list, ui.profilePage.favoriteDropped);
+    if (list.join(",") === turnIds.join(",")) {
+      setDraft(null);
+      return;
+    }
+    void change(list);
+  };
+
+  const toggleLift = (turnId: string) => {
+    if (held) return;
+    if (lifted === turnId) {
+      drop(turnId, order);
+      return;
+    }
+    setLifted(turnId);
+    announcePlace(turnId, order, ui.profilePage.favoritePickedUp);
+  };
+
+  const onHandleKey = (event: ReactKeyboardEvent<HTMLButtonElement>, turnId: string) => {
+    if (lifted !== turnId) return;
+    const at = order.indexOf(turnId);
+    const delta =
+      event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1
+        : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+          : 0;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setLifted(null);
+      setDraft(null);
+      announcePlace(turnId, turnIds, ui.profilePage.favoriteDropped);
+      return;
+    }
+    if (!delta) return;
+    event.preventDefault();
+    const next = moveFavoriteTo(order, turnId, at + delta);
+    setDraft(next);
+    announcePlace(turnId, next, ui.profilePage.favoriteMoved);
+  };
+
+  const remove = (turnId: string) => {
+    if (held) return;
+    setLifted(null);
+    setAnnouncement(ui.profilePage.favoriteRemoved({ prompt: promptOf(turnId) }));
+    void change(withoutFavorite(order, turnId));
+  };
+
+  /** The place nearest the dragged drawing's centre, among where they stood. */
+  const placeFor = (current: Drag): number => {
+    const own = current.slots[current.from];
+    const x = own.left + own.width / 2 + current.dx;
+    const y = own.top + own.height / 2 + current.dy;
+    let best = current.from;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    current.slots.forEach((slot, index) => {
+      const distance = Math.hypot(slot.left + slot.width / 2 - x, slot.top + slot.height / 2 - y);
+      if (distance < bestDistance) {
+        best = index;
+        bestDistance = distance;
+      }
+    });
+    return best;
+  };
+
+  const updateDrag = (next: Drag | null) => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+
+  const startDrag = (event: ReactPointerEvent<HTMLDivElement>, turnId: string) => {
+    if (!arranging || held || !event.isPrimary || event.button !== 0 || dragRef.current) return;
+    // The remove button and the handle are buttons of their own.
+    if ((event.target as HTMLElement).closest(".profile-shelf-remove")) return;
+    const slots = order.map((id) => itemRefs.current.get(id)?.getBoundingClientRect() ?? new DOMRect());
+    const from = order.indexOf(turnId);
+    updateDrag({
+      turnId,
+      pointerId: event.pointerId,
+      from,
+      to: from,
+      moving: false,
+      startX: event.clientX,
+      startY: event.clientY,
+      dx: 0,
+      dy: 0,
+      slots,
+    });
+  };
+
+  // The pointer is followed on the window, not captured: a capture would send
+  // the click a tap ends in to the frame rather than the button under it.
+  useEffect(() => {
+    if (!drag) return;
+    const move = (event: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      const dx = event.clientX - current.startX;
+      const dy = event.clientY - current.startY;
+      if (!current.moving && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      event.preventDefault();
+      const next = { ...current, moving: true, dx, dy };
+      next.to = placeFor(next);
+      updateDrag(next);
+    };
+    const end = (event: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      updateDrag(null);
+      if (!current.moving) return;
+      // The click this pointer-up makes is the drop, not a tap on the drawing.
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+      drop(current.turnId, moveFavoriteTo(order, current.turnId, current.to));
+    };
+    const cancel = (event: PointerEvent) => {
+      if (dragRef.current?.pointerId === event.pointerId) updateDrag(null);
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    // Bound once per drag: the handlers read the drag through its ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag === null]);
+
+  const pressDrawing = (turnId: string, index: number) => {
+    if (suppressClick.current) return;
+    if (!arranging) {
+      setViewing({ favorites, index: favorites.findIndex((favorite) => favorite.turnId === turnId) });
+      return;
+    }
+    // A tap on a place puts the lifted drawing there: the single-pointer way.
+    if (lifted && lifted !== turnId) {
+      drop(lifted, moveFavoriteTo(order, lifted, index));
+    } else if (lifted === turnId) {
+      drop(turnId, order);
+    }
+  };
+
+  const finishArranging = () => {
+    if (lifted) drop(lifted, order);
+    setArranging(false);
+  };
+
+  const hint = !isOwner
+    ? ui.profilePage.favoritesHintVisitor
+    : arranging
+      ? ui.profilePage.favoritesHintArranging
+      : ui.profilePage.favoritesHintOwner;
 
   return (
     <>
-      {error && <p className="lobby-action-error" role="alert">{error}</p>}
-      <ul className="profile-shelf" data-testid="favorites">
-        {favorites.map((favorite, index) => (
-          <li key={favorite.turnId} className="profile-shelf-item">
+      <div className="profile-shelf-head">
+        <h2 className="profile-shelf-title">
+          <span className="profile-shelf-star" aria-hidden="true"><StarIcon size={20} /></span>
+          {ui.profilePage.favorites}
+        </h2>
+        {isOwner && favorites.length > 0 && (
+          <span className="profile-shelf-count">
+            {ui.profilePage.favoritesCount({ count: favorites.length, slots: FAVORITE_SLOTS })}
+          </span>
+        )}
+        {canArrange && favorites.length > 0 && (
+          arranging ? (
             <button
               type="button"
-              className="profile-shelf-open"
-              onClick={() => setViewing({ favorites, index })}
-              aria-label={ui.profilePage.openFavorite({
-                prompt: favorite.prompt,
-                drawer: favorite.drawerDisplayName,
-              })}
+              className="btn btn-primary btn-compact profile-shelf-arrange"
+              onClick={finishArranging}
             >
-              <FavoriteThumbnail key={favorite.turnId} userId={userId} favorite={favorite} />
+              <CheckIcon size={16} />
+              {ui.profilePage.doneArranging}
             </button>
-            <div className="profile-shelf-caption">
-              <span className="profile-shelf-prompt">{favorite.prompt}</span>
-              <span className="profile-shelf-byline">
-                <strong
-                  className="colored-player-name"
-                  style={favorite.drawerNameColor ? { color: favorite.drawerNameColor } : undefined}
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact profile-shelf-arrange"
+              disabled={disabled}
+              onClick={() => setArranging(true)}
+            >
+              <GripIcon size={16} />
+              {ui.profilePage.arrangeFavorites}
+            </button>
+          )
+        )}
+      </div>
+      {favorites.length === 0 ? (
+        // The profile's one empty-state recipe, as the history and the
+        // statistics use it: three empty panels on a new profile wore two
+        // looks (#1280).
+        <EmptyState compact title={ui.profilePage.noFavoritesYet} />
+      ) : (
+        <>
+          <p className="profile-shelf-hint">{hint}</p>
+          {error && <p className="lobby-action-error" role="alert">{error}</p>}
+          <ul
+            className={`profile-shelf${arranging ? " is-arranging" : ""}${drag?.moving ? " is-dragging" : ""}`}
+            data-testid="favorites"
+          >
+            {preview.map((turnId, index) => {
+              const favorite = byId.get(turnId);
+              if (!favorite) return null;
+              const visible = promptShown(turnId);
+              const dragging = drag?.moving && drag.turnId === turnId ? drag : null;
+              // The dragged drawing is laid out in the place it would land and
+              // drawn under the pointer: its own place, moved by the pointer.
+              const style = dragging
+                ? {
+                    translate: cssOffset(
+                      dragging.slots[dragging.from].left - dragging.slots[dragging.to].left + dragging.dx,
+                      dragging.slots[dragging.from].top - dragging.slots[dragging.to].top + dragging.dy,
+                    ),
+                  }
+                : undefined;
+              return (
+                <li
+                  key={turnId}
+                  ref={(element) => {
+                    if (element) itemRefs.current.set(turnId, element);
+                    else itemRefs.current.delete(turnId);
+                  }}
+                  className={`profile-shelf-item${lifted === turnId ? " is-lifted" : ""}${dragging ? " is-dragging" : ""}`}
+                  style={style}
+                  data-turn-id={turnId}
                 >
-                  {favorite.drawerDisplayName}
-                </strong>
-                <ReactionTally reactions={favorite.reactions} counts={shown(favorite).reactionCounts} />
-              </span>
-            </div>
-            {isOwner && onReorder && (
-              <div className="profile-shelf-controls" role="group" aria-label={favorite.prompt}>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-icon btn-compact"
-                  disabled={busy || disabled || index === 0}
-                  aria-label={ui.profilePage.moveLeft}
-                  title={ui.profilePage.moveLeft}
-                  onClick={() => void change(moveFavorite(turnIds, index, -1))}
-                >
-                  <ChevronLeftIcon size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-icon btn-compact"
-                  disabled={busy || disabled || index === favorites.length - 1}
-                  aria-label={ui.profilePage.moveRight}
-                  title={ui.profilePage.moveRight}
-                  onClick={() => void change(moveFavorite(turnIds, index, 1))}
-                >
-                  <ChevronRightIcon size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-compact profile-shelf-unfavorite"
-                  disabled={busy || disabled}
-                  onClick={() => void change(withoutFavorite(turnIds, favorite.turnId))}
-                >
-                  <XIcon size={14} />
-                  {ui.profilePage.unfavorite}
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {viewer}
+                  <div className="profile-shelf-frame" onPointerDown={(event) => startDrag(event, turnId)}>
+                    <button
+                      type="button"
+                      className="profile-shelf-open"
+                      onClick={() => pressDrawing(turnId, index)}
+                      aria-label={
+                        visible
+                          ? ui.profilePage.openFavorite({ prompt: favorite.prompt, drawer: favorite.drawerDisplayName })
+                          : ui.profilePage.aDrawingBy({ drawer: favorite.drawerDisplayName })
+                      }
+                    >
+                      <FavoriteThumbnail userId={userId} favorite={favorite} labelled={visible} />
+                    </button>
+                    {arranging && (
+                      <>
+                        <button
+                          type="button"
+                          ref={(element) => {
+                            if (element) handleRefs.current.set(turnId, element);
+                            else handleRefs.current.delete(turnId);
+                          }}
+                          className="profile-shelf-handle"
+                          aria-label={ui.profilePage.moveFavorite({
+                            prompt: favorite.prompt,
+                            position: index + 1,
+                            total: preview.length,
+                          })}
+                          aria-pressed={lifted === turnId}
+                          disabled={held}
+                          onClick={() => toggleLift(turnId)}
+                          onKeyDown={(event) => onHandleKey(event, turnId)}
+                        >
+                          <GripIcon size={16} />
+                          <span aria-hidden="true">{index + 1}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="profile-shelf-remove"
+                          aria-label={ui.profilePage.removeFavorite({ prompt: favorite.prompt })}
+                          title={ui.profilePage.removeFavorite({ prompt: favorite.prompt })}
+                          disabled={held}
+                          onClick={() => remove(turnId)}
+                        >
+                          <XIcon size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="profile-shelf-caption">
+                    {visible ? (
+                      <span className="profile-shelf-prompt">{favorite.prompt}</span>
+                    ) : (
+                      <HiddenPrompt prompt={favorite.prompt} onReveal={() => reveal(turnId)} />
+                    )}
+                    <span className="profile-shelf-byline">
+                      <span className="profile-shelf-drawer">
+                        {ui.galleryPage.byDrawerPrefix}{" "}
+                        <strong
+                          className="colored-player-name"
+                          style={favorite.drawerNameColor ? { color: favorite.drawerNameColor } : undefined}
+                        >
+                          {favorite.drawerDisplayName}
+                        </strong>
+                      </span>
+                      <ReactionTally reactions={favorite.reactions} counts={shown(favorite).reactionCounts} />
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <span className="visually-hidden" role="status" aria-live="polite">
+            {announcement}
+          </span>
+        </>
+      )}
+      {viewing && (
+        <DrawingViewer
+          entries={favoritesAsRecapEntries(viewing.favorites).map((entry, at) =>
+            promptShown(viewing.favorites[at].turnId)
+              ? entry
+              : {
+                  ...entry,
+                  // Every label the viewer reads names the prompt; a hidden
+                  // one names the mask instead, and so does a saved image.
+                  prompt: ui.promptDisplay.maskedPrompt({
+                    shape: hiddenPromptShape(entry.prompt).counts.join(", "),
+                  }),
+                },
+          )}
+          initialIndex={viewing.index}
+          onClose={() => setViewing(null)}
+          // A drawing taken off this shelf while the viewer is open is still
+          // in the Gallery, and read from there.
+          loadEntry={(entry) =>
+            fetchFavoriteDrawing(userId, viewing.favorites[entry.index].turnId).catch(() =>
+              fetchGalleryDrawing(viewing.favorites[entry.index].turnId),
+            )
+          }
+          renderPrompt={(entry) => {
+            const favorite = viewing.favorites[entry.index];
+            if (!favorite || promptShown(favorite.turnId)) return favorite?.prompt ?? entry.prompt;
+            return <HiddenPrompt prompt={favorite.prompt} onReveal={() => reveal(favorite.turnId)} large />;
+          }}
+          renderActions={(entry) => {
+            // Somebody's favorite is a Gallery drawing, so any registered
+            // viewer may make it one of theirs too (#1501); the owner sees
+            // theirs filled in, and pressing it takes it off this shelf.
+            const favorite = viewing.favorites[entry.index];
+            return favorite && viewerIsRegistered ? <GalleryFavoriteControl turnId={favorite.turnId} /> : null;
+          }}
+          renderReactions={(entry) => {
+            const favorite = viewing.favorites[entry.index];
+            if (!favorite) return null;
+            const current = shown(favorite);
+            return (
+              <DrawingReactionControl
+                reactions={favorite.reactions.map((reaction) => ({
+                  playerId: reaction.seatId,
+                  emoji: reaction.emoji,
+                }))}
+                myReactorId={null}
+                counts={current.reactionCounts}
+                mine={current.myReaction}
+                eligibility={reactionEligibility({
+                  isRegistered: viewerIsRegistered,
+                  isDrawer: favorite.drawnByMe,
+                })}
+                onReact={(emoji) => react(favorite.turnId, emoji)}
+                onRequestAccount={onRequestAccount}
+                placement="panel"
+              />
+            );
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * A prompt not yet seen: a blank tile per letter, words and punctuation kept
+ * (`hiddenPromptShape`), as one button that shows it. Its name says how many
+ * letters, which is what the tiles say to anyone looking.
+ */
+export function HiddenPrompt({
+  prompt,
+  onReveal,
+  large = false,
+}: {
+  prompt: string;
+  onReveal: () => void;
+  large?: boolean;
+}) {
+  const { words, counts } = hiddenPromptShape(prompt);
+  const label = ui.profilePage.showThePrompt({ shape: counts.join(", ") });
+  return (
+    <button
+      type="button"
+      className={`hidden-prompt${large ? " is-large" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={onReveal}
+    >
+      {words.map((segments, wordIndex) => (
+        <span key={wordIndex} className="hidden-prompt-word" aria-hidden="true">
+          {segments.map((segment, segmentIndex) =>
+            segment.kind === "glyph" ? (
+              <span key={segmentIndex} className="hidden-prompt-glyph">{segment.text}</span>
+            ) : (
+              segment.chars.map((_, charIndex) => (
+                <span key={`${segmentIndex}-${charIndex}`} className="hidden-prompt-tile" />
+              ))
+            ),
+          )}
+        </span>
+      ))}
+    </button>
   );
 }
 
@@ -222,15 +612,24 @@ export function FavoritesShelf({
     viewport (`DrawingThumbnail`). Fetched directly rather than through the
     gallery's cache because the shelf shows all six at once, and the gallery
     opens on one. */
-function FavoriteThumbnail({ userId, favorite }: { userId: string; favorite: ProfileFavorite }) {
+function FavoriteThumbnail({
+  userId,
+  favorite,
+  labelled,
+}: {
+  userId: string;
+  favorite: ProfileFavorite;
+  labelled: boolean;
+}) {
   return (
     <DrawingThumbnail
       drawingKey={`${userId}:${favorite.turnId}`}
       load={() => fetchFavoriteDrawing(userId, favorite.turnId)}
-      label={ui.drawingRecapGallery.drawingLabel({
-        prompt: favorite.prompt,
-        drawer: favorite.drawerDisplayName,
-      })}
+      label={
+        labelled
+          ? ui.drawingRecapGallery.drawingLabel({ prompt: favorite.prompt, drawer: favorite.drawerDisplayName })
+          : ui.profilePage.aDrawingBy({ drawer: favorite.drawerDisplayName })
+      }
       className="profile-shelf-canvas"
       noteClassName="profile-note"
       failedText={ui.profilePage.couldNotLoadThisDrawing}

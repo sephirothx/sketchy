@@ -5,6 +5,8 @@ import {
   FAVORITE_SLOTS,
   isFavorite,
   moveFavorite,
+  moveFavoriteTo,
+  hiddenPromptShape,
   favoriteEligibility,
   favoritesAsRecapEntries,
   shelfIsFull,
@@ -109,4 +111,24 @@ test("recap entries follow shelf order and carry no seat", () => {
       available: true,
     },
   ]);
+});
+
+test("a drawing moved to a place takes it, and the others close up around it", () => {
+  const shelf = ["a", "b", "c", "d"];
+  assert.deepEqual(moveFavoriteTo(shelf, "a", 2), ["b", "c", "a", "d"]);
+  assert.deepEqual(moveFavoriteTo(shelf, "d", 0), ["d", "a", "b", "c"]);
+  assert.deepEqual(moveFavoriteTo(shelf, "b", 1), shelf);
+  assert.deepEqual(moveFavoriteTo(shelf, "x", 0), shelf, "an unknown drawing changes nothing");
+  assert.deepEqual(moveFavoriteTo(shelf, "a", 4), shelf, "nor does a place past the end");
+});
+
+test("a hidden prompt keeps its word breaks and punctuation, and counts letters per run", () => {
+  const sleepy = hiddenPromptShape("sleepy cat");
+  assert.deepEqual(sleepy.counts, [6, 3]);
+  assert.equal(sleepy.words.length, 2);
+  const banded = hiddenPromptShape("band-aid");
+  assert.deepEqual(banded.counts, [4, 3]);
+  assert.deepEqual(banded.words[0].map((segment) => segment.kind), ["tiles", "glyph", "tiles"]);
+  assert.equal(JSON.stringify(banded).includes("b"), false, "no letter of the prompt survives");
+  assert.deepEqual(hiddenPromptShape("città").counts, [5], "an accented letter is a tile");
 });

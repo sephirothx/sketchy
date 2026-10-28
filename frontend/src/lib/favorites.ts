@@ -8,6 +8,7 @@
  * list. Pure, so the node suite can hold them to their edges without a DOM.
  */
 import type { DrawingRecapMetadata } from "../types";
+import { isSlotChar, maskedWords, type MaskedSegment } from "./maskedPrompt.ts";
 
 /** The cap, mirrored from `PROFILE_FAVORITE_SLOTS`: the whole shelf, never a page of it. */
 export const FAVORITE_SLOTS = 6;
@@ -114,6 +115,35 @@ export function moveFavorite(turnIds: readonly string[], index: number, delta: n
   const [moved] = next.splice(index, 1);
   next.splice(target, 0, moved);
   return next;
+}
+
+/**
+ * The list with `turnId` put at `index`, the others closing up around it: what
+ * a drag, or the arrow keys on a lifted drawing, leaves the shelf as. Unknown
+ * ids and an out-of-range index return the list unchanged.
+ */
+export function moveFavoriteTo(turnIds: readonly string[], turnId: string, index: number): string[] {
+  const from = turnIds.indexOf(turnId);
+  if (from < 0 || index < 0 || index >= turnIds.length || index === from) return [...turnIds];
+  const next = [...turnIds];
+  next.splice(from, 1);
+  next.splice(index, 0, turnId);
+  return next;
+}
+
+/**
+ * A prompt as a visitor first sees it on somebody's favorites (#1501): one
+ * blank tile per letter, word breaks and punctuation kept, the way the game
+ * masks it (`maskedPrompt.ts`), and the letters per run for the label. The
+ * tiles say how long the word is - a hint, like the game's - and nothing else.
+ */
+export function hiddenPromptShape(prompt: string): { words: MaskedSegment[][]; counts: number[] } {
+  const mask = Array.from(prompt, (ch) => (isSlotChar(ch) ? "_" : ch)).join("");
+  const words = maskedWords(mask);
+  const counts = words.flatMap((segments) =>
+    segments.flatMap((segment) => (segment.kind === "tiles" ? [segment.chars.length] : [])),
+  );
+  return { words, counts };
 }
 
 /** Shelf entries as the recap gallery reads them, in shelf order. */
