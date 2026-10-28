@@ -116,30 +116,30 @@ export function DataExports({ isGuest }: { isGuest: boolean }) {
       </SettingsRow>
       {error && <p className="auth-error" role="alert">{error}</p>}
       {exports.length > 0 && (
-        <>
-          <ul className="account-export-list" aria-label={ui.settingsOverlay.downloadEverything}>
-            {exports.map((job) => (
-              <li key={job.id}>
-                <span>
-                  <strong>{exportLabel(job)}</strong>
-                  <small>{ui.dataExports.requestedOn({ when: dateTime(new Date(job.createdAt)) })}</small>
-                  {exportFailureNote(job) && (
-                    <small className="account-export-note">{exportFailureNote(job)}</small>
-                  )}
-                </span>
-                {job.downloadUrl && (
-                  <a className="btn btn-primary btn-compact" href={job.downloadUrl} download>
-                    {ui.dataExports.download}
-                  </a>
+        <ul className="account-export-list" aria-label={ui.settingsOverlay.downloadEverything}>
+          {exports.map((job) => (
+            <li key={job.id}>
+              <span>
+                <strong>{exportLabel(job)}</strong>
+                <small>{ui.dataExports.requestedOn({ when: dateTime(new Date(job.createdAt)) })}</small>
+                {exportFailureNote(job) && (
+                  <small className="account-export-note">{exportFailureNote(job)}</small>
                 )}
-              </li>
-            ))}
-          </ul>
-          <p className="settings-row-note">
-            {ui.dataExports.exportAllowance({ nextAllowed: waitUntil ? date(waitUntil) : null })}
-          </p>
-        </>
+              </span>
+              {job.downloadUrl && (
+                <a className="btn btn-primary btn-compact" href={job.downloadUrl} download>
+                  {ui.dataExports.download}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
+      {/* Said before the first request too: the limit and the expiry are
+          worth knowing before the button is pressed, not only after. */}
+      <p className="settings-row-note">
+        {ui.dataExports.exportAllowance({ nextAllowed: waitUntil ? date(waitUntil) : null })}
+      </p>
     </>
   );
 }

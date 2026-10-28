@@ -956,7 +956,10 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       {!isGuest && <SoloOptOutGroup />}
 
       <Group title={ui.settingsOverlay.yourData}>
-        <DataExports isGuest={isGuest} />
+        {/* Keyed by the account: signing in from the guest card swaps the
+            user without unmounting the pane, and the guest's exports are not
+            the account's to download. */}
+        <DataExports key={user.id} isGuest={isGuest} />
         <Row
           label={isGuest ? ui.settingsOverlay.deleteThisGuest : ui.settingsOverlay.deleteYourAccount}
           tone="danger"
