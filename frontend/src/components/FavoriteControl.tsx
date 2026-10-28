@@ -63,7 +63,9 @@ export function FavoriteControl({
     <button
       type="button"
       className={`btn btn-secondary btn-compact favorite-control${favorited ? " is-favorited" : ""}`}
-      aria-pressed={favorited}
+      // The icon alone is a toggle; with its word beside it, the word says
+      // the state, and saying it twice would be noise.
+      aria-pressed={look === "icon" ? favorited : undefined}
       // The star alone is named by its label; with its word beside it, by
       // that word, so what is said is what is seen (WCAG 2.5.3).
       aria-label={look === "icon" ? label : undefined}

@@ -265,7 +265,13 @@ export function GalleryDrawingPage() {
                     // can be taken back from here.
                     onChanged={() => {
                       void fetchGalleryEntry(shown.turnId)
-                        .then((fetched) => setEntry({ reader, entry: fetched }))
+                        .then((fetched) =>
+                          setEntry((current) =>
+                            current?.reader === reader && current.entry.turnId === fetched.turnId
+                              ? { reader, entry: { ...current.entry, sharedBy: fetched.sharedBy, sharedByMe: fetched.sharedByMe } }
+                              : current,
+                          ),
+                        )
                         .catch(() => undefined);
                     }}
                   />

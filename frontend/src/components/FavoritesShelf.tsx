@@ -8,6 +8,7 @@ import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { CheckIcon, GripIcon, StarIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ApiError } from "../lib/api";
 import { fetchGalleryDrawing } from "../lib/gallery";
 import { fetchFavoriteDrawing, setGalleryReaction } from "../lib/profile";
 import {
@@ -538,9 +539,12 @@ export function FavoritesShelf({
           // A drawing taken off this shelf while the viewer is open is still
           // in the Gallery, and read from there.
           loadEntry={(entry) =>
-            fetchFavoriteDrawing(userId, viewing.favorites[entry.index].turnId).catch(() =>
-              fetchGalleryDrawing(viewing.favorites[entry.index].turnId),
-            )
+            fetchFavoriteDrawing(userId, viewing.favorites[entry.index].turnId).catch((failure: unknown) => {
+              if (failure instanceof ApiError && failure.status === 404) {
+                return fetchGalleryDrawing(viewing.favorites[entry.index].turnId);
+              }
+              throw failure;
+            })
           }
           renderPrompt={(entry) => {
             const favorite = viewing.favorites[entry.index];
