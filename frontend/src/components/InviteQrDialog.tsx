@@ -28,7 +28,7 @@ export function InviteQrDialog({ code, onClose }: { code: string; onClose: () =>
           <QrCode value={url} label={ui.inviteQrDialog.qrLabel({ code })} className="invite-qr" />
         </Suspense>
       </div>
-      <p className="waiting-code invite-qr-code" aria-hidden="true">{code}</p>
+      <p className="invite-qr-code" aria-hidden="true">{code}</p>
       <p className="modal-hint invite-qr-hint">{ui.inviteQrDialog.opensInvitePage}</p>
     </ModalShell>
   );

@@ -395,7 +395,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           </Button>
           {!isNarrow && qrButton}
         </div>
-        {qrOpen && code && <InviteQrDialog code={code} onClose={() => setQrOpen(false)} />}
         {/* The same job as Share, for the people you already play with: no
             clipboard, no other app, and no code leaving this room. */}
         <InviteFriendsList />
@@ -526,6 +525,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           onCancel={() => setSettingsOpen(false)}
         />
       )}
+      {/* Outside the invite card, as the editor is: inside it the card's
+          heading and code rules reached the dialog's own. */}
+      {qrOpen && code && <InviteQrDialog code={code} onClose={() => setQrOpen(false)} />}
     </main>
   );
 }
