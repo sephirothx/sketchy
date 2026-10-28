@@ -184,6 +184,9 @@ async def test_a_touch_screen_is_not_offered_shortcuts():
             ) == "true"
             assert await dialog.get_by_role("tab", name="Shortcuts").count() == 0
             assert await dialog.get_by_text("Drawing tools").count() == 0
+            # The URL follows what is shown, so a trackpad attached later
+            # cannot swap the pane out from under the player.
+            await page.wait_for_url("**/settings/account")
 
             page = await desktop.new_page()
             await page.goto(BASE_URL)

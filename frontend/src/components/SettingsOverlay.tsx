@@ -1399,13 +1399,20 @@ export function SettingsOverlay() {
   // bindings nobody there could change, and a phone's rail scrolled sideways
   // to reach it. Keyed on the pointer, since no browser reports a keyboard:
   // a tablet with a keyboard and no trackpad loses the section, and keeps its
-  // bindings. Its URL opens Account there, as an unknown section does.
+  // bindings. Its URL is replaced by Account's there, so a trackpad attached
+  // later does not swap the pane - and a half-typed name - out from under
+  // the player.
   const hasFinePointer = useMediaQuery("(pointer: fine)");
   const sections: readonly SettingsSection[] = hasFinePointer
     ? SETTINGS_SECTIONS
     : SETTINGS_SECTIONS.filter((id) => id !== "shortcuts");
   const requested = sectionFromPath(location.pathname);
   const section = sections.includes(requested) ? requested : DEFAULT_SETTINGS_SECTION;
+  useEffect(() => {
+    if (requested === "shortcuts" && section !== requested) {
+      navigate(settingsPath(section), { replace: true, state: location.state });
+    }
+  }, [requested, section, navigate, location.state]);
   const closeOverlay = useCloseOverlay();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
