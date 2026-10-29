@@ -20,7 +20,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon, UserIcon } from "../components/icons";
+import { AlertCircleIcon, BoltIcon, PlusIcon, QrIcon, SearchIcon, UserIcon } from "../components/icons";
 import {
   rankedPromptLanguages,
   MIXED_PROMPT_LANGUAGE,
@@ -69,6 +69,10 @@ const PlayLanguagesQuestion = lazy(
 );
 
 const ROOM_CODE_LENGTH = 6;
+
+// Fetched on the first press of Scan, with the decoder it may load: most visits
+// to the lobby never open the camera (#1530).
+const QrScanner = lazy(() => import("../components/QrScanner"));
 
 
 function normalizeRoomCodeInput(value: string): string {
@@ -234,6 +238,13 @@ export function LobbyBrowserPage() {
     codeFieldRef.current?.focus();
   }
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
+  // Scanning a room's QR code from Join by code (#1530): on a touch screen,
+  // where the camera is the one in the player's hand, and only where the
+  // browser offers one at all (a page served without HTTPS gets none).
+  const hasFinePointer = useMediaQuery("(pointer: fine)");
+  const canScan =
+    !hasFinePointer && typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
+  const [scanning, setScanning] = useState(false);
   // Only the lobby watches the presence channel: a player inside a room is
   // not reading this list and should not be paying for it mid-game.
   useLobbyChannel();
@@ -436,12 +447,25 @@ export function LobbyBrowserPage() {
     }
   }
 
-  async function handleJoinByCode(asSpectator = false) {
-    if (!joinCode.trim()) {
+  async function handleJoinByCode(asSpectator = false, code = joinCode) {
+    if (!code.trim()) {
       setError(ui.lobbyBrowserPage.enterRoomCode);
       return;
     }
-    await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
+    await joinRoom({ code: code.trim().toUpperCase() }, asSpectator, "private-code");
+  }
+
+  // A read code joins at once, as Join would with it typed: the scan is the
+  // whole of the player's part. The cells show it while the join is on its way.
+  function joinScannedCode(code: string) {
+    setScanning(false);
+    setJoinCode(code);
+    void handleJoinByCode(false, code);
+  }
+
+  function closeCodeSheet() {
+    setCodeSheetOpen(false);
+    setScanning(false);
   }
 
   async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
@@ -844,19 +868,41 @@ export function LobbyBrowserPage() {
           title={ui.lobbyBrowserPage.joinByCode}
           testId="lobby-code-sheet"
           closeLabel={ui.lobbyBrowserPage.close}
-          onDismiss={() => setCodeSheetOpen(false)}
+          onDismiss={closeCodeSheet}
           initialFocusRef={codeFieldRef}
           headerAction={
-            <button
-              type="button"
-              className="chip chip-neutral room-code-paste"
-              onClick={() => void pasteCode()}
-            >
-              {ui.lobbyBrowserPage.paste}
-            </button>
+            scanning ? (
+              <button type="button" className="chip chip-neutral room-code-scan" onClick={() => setScanning(false)}>
+                {ui.qrScanner.typeIt}
+              </button>
+            ) : (
+              <>
+                {canScan && (
+                  <button
+                    type="button"
+                    className="chip chip-primary room-code-scan"
+                    disabled={Boolean(pendingJoin)}
+                    onClick={() => {
+                      setError(null);
+                      setScanning(true);
+                    }}
+                  >
+                    <QrIcon size={15} />
+                    {ui.qrScanner.scan}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="chip chip-neutral room-code-paste"
+                  onClick={() => void pasteCode()}
+                >
+                  {ui.lobbyBrowserPage.paste}
+                </button>
+              </>
+            )
           }
           footer={
-            <>
+            scanning ? undefined : <>
               {error && <p className="lobby-action-error" role="alert">{error}</p>}
               <Button
                 variant="primary"
@@ -878,13 +924,19 @@ export function LobbyBrowserPage() {
             </>
           }
         >
-          <RoomCodeInput
-            value={joinCode}
-            onChange={setJoinCode}
-            onSubmit={() => void handleJoinByCode(false)}
-            inputRef={codeFieldRef}
-            hideLabel
-          />
+          {scanning ? (
+            <Suspense fallback={<div className="qr-scanner-view" />}>
+              <QrScanner onCode={joinScannedCode} onTypeInstead={() => setScanning(false)} />
+            </Suspense>
+          ) : (
+            <RoomCodeInput
+              value={joinCode}
+              onChange={setJoinCode}
+              onSubmit={() => void handleJoinByCode(false)}
+              inputRef={codeFieldRef}
+              hideLabel
+            />
+          )}
         </BottomSheet>
       )}
 

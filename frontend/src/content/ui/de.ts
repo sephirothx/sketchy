@@ -2413,6 +2413,19 @@ export const DE: Catalogue = {
     opensInvitePage: "Öffnet die Einladungsseite dieses Raums.",
     drawingCode: "Code wird gezeichnet …",
   },
+  qrScanner: {
+    scan: "Scannen",
+    typeIt: "Eintippen",
+    pointTheCamera: "Richte die Kamera auf den QR-Code auf dem Bildschirm des Gastgebers. Du trittst bei, sobald er gelesen ist.",
+    cameraView: "Kamera",
+    cameraBlocked: "Die Kamera ist blockiert",
+    allowTheCamera: "Erlaube Sketchy in den Website-Einstellungen deines Browsers die Kamera und versuche es erneut. Oder tippe den Code ein.",
+    noCamera: "Keine Kamera zum Scannen",
+    noCameraOffered: "Dieses Gerät bietet keine Kamera an. Tippe den Code stattdessen ein.",
+    tryAgain: "Erneut versuchen",
+    typeTheCode: "Code eintippen",
+    notARoom: "Dieser Code ist kein Sketchy-Raum. Richte die Kamera auf den QR-Code in der Einladung des Gastgebers.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>

@@ -2428,6 +2428,19 @@ export const PL: Catalogue = {
     opensInvitePage: "Otwiera stronę zaproszenia do tego pokoju.",
     drawingCode: "Rysowanie kodu…",
   },
+  qrScanner: {
+    scan: "Skanuj",
+    typeIt: "Wpisz",
+    pointTheCamera: "Skieruj aparat na kod QR na ekranie gospodarza. Dołączysz, gdy tylko zostanie odczytany.",
+    cameraView: "Aparat",
+    cameraBlocked: "Aparat jest zablokowany",
+    allowTheCamera: "Zezwól Sketchy na używanie aparatu w ustawieniach przeglądarki dla tej witryny i spróbuj ponownie. Albo wpisz kod.",
+    noCamera: "Brak aparatu do skanowania",
+    noCameraOffered: "To urządzenie nie udostępnia aparatu. Wpisz kod.",
+    tryAgain: "Spróbuj ponownie",
+    typeTheCode: "Wpisz kod",
+    notARoom: "Ten kod nie jest pokojem Sketchy. Skieruj aparat na kod QR z zaproszenia gospodarza.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>

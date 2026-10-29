@@ -2436,6 +2436,19 @@ export const EN = {
     opensInvitePage: "Opens this room's invite page.",
     drawingCode: "Drawing the code…",
   },
+  qrScanner: {
+    scan: "Scan",
+    typeIt: "Type it",
+    pointTheCamera: "Point the camera at the QR code on the host's screen. You join as soon as it is read.",
+    cameraView: "Camera",
+    cameraBlocked: "The camera is blocked",
+    allowTheCamera: "Allow Sketchy to use the camera in your browser's settings for this site, then try again. Or type the code.",
+    noCamera: "No camera to scan with",
+    noCameraOffered: "This device did not offer a camera. Type the code instead.",
+    tryAgain: "Try again",
+    typeTheCode: "Type the code",
+    notARoom: "That code isn't a Sketchy room. Point the camera at the QR code on the host's invite.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>

@@ -2413,6 +2413,19 @@ export const NL: Catalogue = {
     opensInvitePage: "Opent de uitnodigingspagina van deze kamer.",
     drawingCode: "Code tekenen…",
   },
+  qrScanner: {
+    scan: "Scannen",
+    typeIt: "Intypen",
+    pointTheCamera: "Richt de camera op de QR-code op het scherm van de gastheer. Je doet mee zodra hij gelezen is.",
+    cameraView: "Camera",
+    cameraBlocked: "De camera is geblokkeerd",
+    allowTheCamera: "Sta Sketchy toe de camera te gebruiken in de browserinstellingen voor deze site en probeer het opnieuw. Of typ de code.",
+    noCamera: "Geen camera om mee te scannen",
+    noCameraOffered: "Dit apparaat biedt geen camera aan. Typ de code in.",
+    tryAgain: "Opnieuw proberen",
+    typeTheCode: "Code typen",
+    notARoom: "Die code is geen Sketchy-kamer. Richt de camera op de QR-code in de uitnodiging van de gastheer.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>

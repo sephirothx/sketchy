@@ -2415,6 +2415,19 @@ export const FR: Catalogue = {
     opensInvitePage: "Ouvre la page d’invitation de ce salon.",
     drawingCode: "Dessin du code…",
   },
+  qrScanner: {
+    scan: "Scanner",
+    typeIt: "Le saisir",
+    pointTheCamera: "Pointe l’appareil photo vers le QR code sur l’écran de l’hôte. Tu rejoins dès qu’il est lu.",
+    cameraView: "Appareil photo",
+    cameraBlocked: "L’appareil photo est bloqué",
+    allowTheCamera: "Autorise Sketchy à utiliser l’appareil photo dans les réglages du navigateur pour ce site, puis réessaie. Ou saisis le code.",
+    noCamera: "Aucun appareil photo pour scanner",
+    noCameraOffered: "Cet appareil ne propose aucun appareil photo. Saisis plutôt le code.",
+    tryAgain: "Réessayer",
+    typeTheCode: "Saisir le code",
+    notARoom: "Ce code n’est pas un salon Sketchy. Pointe l’appareil photo vers le QR code de l’invitation de l’hôte.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
