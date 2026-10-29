@@ -2423,7 +2423,7 @@ export const FR: Catalogue = {
     cameraBlocked: "L’appareil photo est bloqué",
     allowTheCamera: "Autorise Sketchy à utiliser l’appareil photo dans les réglages du navigateur pour ce site, puis réessaie. Ou saisis le code.",
     cameraFailed: "L’appareil photo n’a pas pu démarrer",
-    cameraFailedBody: "Une autre application l’utilise peut-être. Réessaie, ou saisis le code.",
+    cameraFailedBody: "Une autre application l’utilise peut-être, ou la connexion a été coupée. Réessaie, ou saisis le code.",
     noCamera: "Aucun appareil photo pour scanner",
     noCameraOffered: "Cet appareil ne propose aucun appareil photo. Saisis plutôt le code.",
     tryAgain: "Réessayer",

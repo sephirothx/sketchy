@@ -2421,7 +2421,7 @@ export const NL: Catalogue = {
     cameraBlocked: "De camera is geblokkeerd",
     allowTheCamera: "Sta Sketchy toe de camera te gebruiken in de browserinstellingen voor deze site en probeer het opnieuw. Of typ de code.",
     cameraFailed: "De camera kon niet starten",
-    cameraFailedBody: "Misschien gebruikt een andere app hem. Probeer het opnieuw of typ de code.",
+    cameraFailedBody: "Misschien gebruikt een andere app hem, of is de verbinding weggevallen. Probeer het opnieuw of typ de code.",
     noCamera: "Geen camera om mee te scannen",
     noCameraOffered: "Dit apparaat biedt geen camera aan. Typ de code in.",
     tryAgain: "Opnieuw proberen",

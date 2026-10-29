@@ -2444,7 +2444,7 @@ export const EN = {
     cameraBlocked: "The camera is blocked",
     allowTheCamera: "Allow Sketchy to use the camera in your browser's settings for this site, then try again. Or type the code.",
     cameraFailed: "The camera could not start",
-    cameraFailedBody: "Another app may be using it. Try again, or type the code.",
+    cameraFailedBody: "Another app may be using it, or the connection dropped. Try again, or type the code.",
     noCamera: "No camera to scan with",
     noCameraOffered: "This device did not offer a camera. Type the code instead.",
     tryAgain: "Try again",

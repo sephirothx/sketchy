@@ -2423,7 +2423,7 @@ export const IT: Catalogue = {
     cameraBlocked: "La fotocamera è bloccata",
     allowTheCamera: "Consenti a Sketchy di usare la fotocamera nelle impostazioni del browser per questo sito, poi riprova. Oppure scrivi il codice.",
     cameraFailed: "Non è stato possibile avviare la fotocamera",
-    cameraFailedBody: "Forse la sta usando un’altra app. Riprova, oppure scrivi il codice.",
+    cameraFailedBody: "Forse la sta usando un’altra app, o la connessione si è interrotta. Riprova, oppure scrivi il codice.",
     noCamera: "Nessuna fotocamera per scansionare",
     noCameraOffered: "Questo dispositivo non offre una fotocamera. Scrivi il codice.",
     tryAgain: "Riprova",

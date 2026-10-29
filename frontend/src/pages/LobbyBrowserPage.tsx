@@ -468,6 +468,9 @@ export function LobbyBrowserPage() {
   // A read code joins at once, as Join would with it typed: the scan is the
   // whole of the player's part. The cells show it while the join is on its way.
   function joinScannedCode(code: string) {
+    // Not the field: the page is about to become the room, and focusing it
+    // would raise a phone's keyboard on the way out.
+    wasScanning.current = false;
     setScanning(false);
     setJoinCode(code);
     void handleJoinByCode(false, code);

@@ -2420,7 +2420,7 @@ export const PT: Catalogue = {
     cameraBlocked: "A câmara está bloqueada",
     allowTheCamera: "Permite que o Sketchy use a câmara nas definições do navegador para este site e tenta outra vez. Ou escreve o código.",
     cameraFailed: "Não foi possível iniciar a câmara",
-    cameraFailedBody: "Talvez outra aplicação a esteja a usar. Tenta outra vez ou escreve o código.",
+    cameraFailedBody: "Talvez outra aplicação a esteja a usar, ou a ligação caiu. Tenta outra vez ou escreve o código.",
     noCamera: "Não há câmara para digitalizar",
     noCameraOffered: "Este dispositivo não oferece nenhuma câmara. Escreve o código.",
     tryAgain: "Tentar outra vez",

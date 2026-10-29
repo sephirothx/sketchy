@@ -2421,7 +2421,7 @@ export const DE: Catalogue = {
     cameraBlocked: "Die Kamera ist blockiert",
     allowTheCamera: "Erlaube Sketchy in den Website-Einstellungen deines Browsers die Kamera und versuche es erneut. Oder tippe den Code ein.",
     cameraFailed: "Die Kamera konnte nicht starten",
-    cameraFailedBody: "Vielleicht nutzt eine andere App sie gerade. Versuche es erneut oder tippe den Code ein.",
+    cameraFailedBody: "Vielleicht nutzt eine andere App sie gerade, oder die Verbindung ist abgebrochen. Versuche es erneut oder tippe den Code ein.",
     noCamera: "Keine Kamera zum Scannen",
     noCameraOffered: "Dieses Gerät bietet keine Kamera an. Tippe den Code stattdessen ein.",
     tryAgain: "Erneut versuchen",
