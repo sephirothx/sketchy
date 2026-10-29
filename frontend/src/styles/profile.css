@@ -549,7 +549,10 @@
 .hidden-prompt {
   display: inline-flex;
   flex-wrap: wrap;
-  max-width: 100%;
+  /* The negative margins below give the focus ring room without moving the
+     tiles; the cap counts them, or the button is 4px narrower than its own
+     tiles - two words wrap, and one word's tiles shrink. */
+  max-width: calc(100% + 4px);
   align-items: center;
   gap: 4px 9px;
   min-height: 30px;
