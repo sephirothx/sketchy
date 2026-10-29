@@ -29,6 +29,16 @@ async def scribble(drawer: Page) -> None:
     await drawer.mouse.up()
 
 
+async def narrowest_tile(page: Page, scope: str) -> float:
+    """The narrowest hidden-prompt tile in `scope`, in CSS pixels.
+
+    A shrink-to-fit title once crushed every tile to its 2px floor, which no
+    click notices: the tiles were still there, only unreadable."""
+    tiles = page.locator(f"{scope} .hidden-prompt-tile")
+    await tiles.first.wait_for()
+    return await tiles.evaluate_all("(ts) => Math.min(...ts.map((t) => t.getBoundingClientRect().width))")
+
+
 async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -109,6 +119,7 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(visitor.get_by_role("button", name="Arrange")).to_have_count(0)
             # ...and guesses first (#1501): the prompt is letter tiles until asked for.
             await expect(visitor.locator(".profile-shelf-prompt")).to_have_count(0)
+            assert await narrowest_tile(visitor, '[data-testid="favorites"]') > 8
             await visitor.locator('[data-testid="favorites"] .hidden-prompt').click()
             await expect(visitor.locator(".profile-shelf-prompt")).to_have_text(first_prompt)
 
@@ -123,6 +134,8 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await stranger.goto(f"{BASE_URL}/profile/{host_id}")
             await stranger.locator('[data-testid="favorites"] .profile-shelf-open').first.click()
             await stranger.get_by_test_id("drawing-viewer").wait_for()
+            # The viewer's title sizes itself to its tiles; they keep their size.
+            assert await narrowest_tile(stranger, '[data-testid="drawing-viewer"]') > 8
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
             await expect(
