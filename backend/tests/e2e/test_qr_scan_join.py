@@ -76,6 +76,16 @@ async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room(reader):
             await phone_context.add_init_script(NO_DETECTOR)
         host, phone = await host_context.new_page(), await phone_context.new_page()
         try:
+            if reader == "native":
+                # A detector that exists but reads no QR codes would leave the
+                # app on jsQR under this name: ask what it reads.
+                await phone.goto(BASE_URL)
+                native = await phone.evaluate(
+                    "async () => 'BarcodeDetector' in window"
+                    " && (await BarcodeDetector.getSupportedFormats()).includes('qr_code')"
+                )
+                if not native:
+                    pytest.skip("this Chromium has no BarcodeDetector that reads QR codes")
             await host.goto(BASE_URL)
             await use_guest_name(host, f"QrHost{uuid4().hex[:6]}")
             # A desktop is not offered the scanner: a laptop is the screen
@@ -94,8 +104,6 @@ async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room(reader):
             picture = base64.b64encode(await qr.screenshot()).decode()
 
             await phone.goto(BASE_URL)
-            if reader == "native" and not await phone.evaluate("() => 'BarcodeDetector' in window"):
-                pytest.skip("this Chromium has no BarcodeDetector")
             await use_guest_name(phone, f"QrGuest{uuid4().hex[:6]}")
             await phone.evaluate(f"() => {{ window.__fakeCamera = 'data:image/png;base64,{picture}'; }}")
             await _open_scanner(phone)

@@ -84,15 +84,18 @@ function QrScannerLoader(props: ScannerProps) {
   useEffect(() => {
     if (loadedScanner) return;
     let current = true;
-    import("../components/QrScanner").then(
-      (module) => {
+    // A try around the whole import, not a `.then` failure handler: Vite's
+    // preload helper throws past that when a stylesheet the chunk needs is
+    // what failed (the reason loadQuestion gives above).
+    void (async () => {
+      try {
+        const module = await import("../components/QrScanner");
         loadedScanner = module.default;
         if (current) setScanner(() => module.default);
-      },
-      () => {
+      } catch {
         if (current) setFailed(true);
-      },
-    );
+      }
+    })();
     return () => {
       current = false;
     };

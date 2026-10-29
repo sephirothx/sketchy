@@ -311,7 +311,10 @@ frame and caption show while the chunk arrives, and say it could not be loaded i
 cannot - the notice's words still stand. Together they took 10.6 KB of gzip out of the first
 load (213.6 → 203.0 KB). CI holds the first-load set - with the largest language, which every reader downloads
 before the first paint (#1426) - to a gzip budget (`npm run bundle:check`,
-[`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
+[`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)). Join by code's QR scanner and its
+decoder are not in that set either: they are fetched on the first press of Scan (#1530), and
+a chunk that does not arrive is a notice inside the sheet with a reload, beside typing the
+code, never the crash page.
 
 Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
 
