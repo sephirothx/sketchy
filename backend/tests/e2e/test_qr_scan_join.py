@@ -3,8 +3,11 @@
 The camera is a stand-in: `getUserMedia` answers with a canvas stream that
 paints whatever image the test hands it - the QR code the host's own waiting
 room draws, screenshotted - so the code read is the real one, end to end.
-Headless Chromium has no BarcodeDetector, so this goes through the bundled
-decoder, the path an iPhone takes.
+
+Which reader runs is chosen, not left to the platform: Chromium has a
+BarcodeDetector on macOS and none on Linux. NO_DETECTOR removes it, for the
+bundled decoder an iPhone uses; the join test also runs with the browser's
+own wherever there is one.
 """
 import base64
 from uuid import uuid4
@@ -23,6 +26,7 @@ PHONE = {"viewport": {"width": 390, "height": 844}, "has_touch": True, "is_mobil
 FAKE_CAMERA = """
 (() => {
   const getUserMedia = async () => {
+    window.__cameraAsked = (window.__cameraAsked || 0) + 1;
     if (window.__cameraError) throw new DOMException("refused", window.__cameraError);
     const image = new Image();
     image.src = window.__fakeCamera;
@@ -49,6 +53,10 @@ FAKE_CAMERA = """
 """
 
 
+# The bundled decoder's path, whatever the platform's Chromium offers.
+NO_DETECTOR = "Object.defineProperty(window, 'BarcodeDetector', { value: undefined, configurable: true });"
+
+
 async def _open_scanner(page):
     await page.locator(".lobby-dock-code").click()
     sheet = page.get_by_test_id("lobby-code-sheet")
@@ -57,12 +65,15 @@ async def _open_scanner(page):
     return sheet
 
 
-async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room():
+@pytest.mark.parametrize("reader", ["bundled", "native"])
+async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room(reader):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context(viewport={"width": 1280, "height": 860})
         phone_context = await browser.new_context(**PHONE)
         await phone_context.add_init_script(FAKE_CAMERA)
+        if reader == "bundled":
+            await phone_context.add_init_script(NO_DETECTOR)
         host, phone = await host_context.new_page(), await phone_context.new_page()
         try:
             await host.goto(BASE_URL)
@@ -83,6 +94,8 @@ async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room():
             picture = base64.b64encode(await qr.screenshot()).decode()
 
             await phone.goto(BASE_URL)
+            if reader == "native" and not await phone.evaluate("() => 'BarcodeDetector' in window"):
+                pytest.skip("this Chromium has no BarcodeDetector")
             await use_guest_name(phone, f"QrGuest{uuid4().hex[:6]}")
             await phone.evaluate(f"() => {{ window.__fakeCamera = 'data:image/png;base64,{picture}'; }}")
             await _open_scanner(phone)
@@ -125,4 +138,71 @@ async def test_a_camera_that_will_not_start_says_why_and_goes_back_to_typing(err
             await expect(sheet.get_by_role("button", name="Scan")).to_be_visible()
         finally:
             await context.close()
+            await browser.close()
+
+
+async def test_a_scanner_that_cannot_download_leaves_the_code_sheet_working():
+    """The scanner's own chunk failing must not take the lobby to the crash
+    page: the sheet says so, offers a reload, and typing still works."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(**PHONE)
+        await context.add_init_script(FAKE_CAMERA)
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"QrNoChunk{uuid4().hex[:6]}")
+            await page.route("**/QrScanner-*.js", lambda route: route.abort())
+            sheet = await _open_scanner(page)
+            await expect(sheet.get_by_role("alert")).to_contain_text("The scanner could not load")
+            await expect(sheet.get_by_role("button", name="Reload")).to_be_visible()
+            assert await page.locator(".crash-page").count() == 0
+            await sheet.get_by_role("button", name="Type the code").click()
+            await expect(sheet.locator("input").first).to_be_focused()
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_decoder_that_failed_to_download_recovers_with_a_reload():
+    """A browser keeps a failed dynamic import for the life of the page, so
+    Try again could never fetch the decoder again: the scanner offers a
+    reload instead, asks for no camera before it has a decoder, and scans
+    once the reload has one."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context(viewport={"width": 1280, "height": 860})
+        phone_context = await browser.new_context(**PHONE)
+        await phone_context.add_init_script(FAKE_CAMERA)
+        await phone_context.add_init_script(NO_DETECTOR)
+        host, phone = await host_context.new_page(), await phone_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"QrHost{uuid4().hex[:6]}")
+            await open_new_room(host)
+            code = await room_code(host)
+            await host.get_by_role("button", name="Show a QR code").click()
+            qr = host.get_by_role("img", name=f"QR code for the invite link to room {code}")
+            await qr.wait_for()
+            picture = base64.b64encode(await qr.screenshot()).decode()
+            camera = f"() => {{ window.__fakeCamera = 'data:image/png;base64,{picture}'; }}"
+
+            await phone.goto(BASE_URL)
+            await use_guest_name(phone, f"QrGuest{uuid4().hex[:6]}")
+            await phone.route("**/jsQR-*.js", lambda route: route.abort())
+            await phone.evaluate(camera)
+            sheet = await _open_scanner(phone)
+            await expect(sheet.get_by_role("alert")).to_contain_text("The scanner could not load")
+            assert await phone.evaluate("() => window.__cameraAsked || 0") == 0
+
+            # The connection is back: Reload, then Scan again, reads and joins.
+            await phone.unroute("**/jsQR-*.js")
+            await sheet.get_by_role("button", name="Reload").click()
+            await phone.wait_for_selector(".lobby-dock-code")
+            await phone.evaluate(camera)
+            await _open_scanner(phone)
+            await phone.wait_for_url(f"**/room/{code}", timeout=20_000)
+        finally:
+            await host_context.close()
+            await phone_context.close()
             await browser.close()

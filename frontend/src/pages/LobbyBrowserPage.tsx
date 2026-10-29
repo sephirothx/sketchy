@@ -21,6 +21,7 @@ import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, BoltIcon, PlusIcon, QrIcon, SearchIcon, UserIcon } from "../components/icons";
+import { ScannerNotLoaded } from "../components/QrScannerProblem";
 import {
   rankedPromptLanguages,
   MIXED_PROMPT_LANGUAGE,
@@ -71,8 +72,35 @@ const PlayLanguagesQuestion = lazy(
 const ROOM_CODE_LENGTH = 6;
 
 // Fetched on the first press of Scan, with the decoder it may load: most visits
-// to the lobby never open the camera (#1530).
-const QrScanner = lazy(() => import("../components/QrScanner"));
+// to the lobby never open the camera (#1530). Loaded by hand rather than with
+// `lazy`, whose failed import goes to the crash boundary and takes the lobby -
+// and typing the code - with it; here it is a notice inside the sheet.
+type ScannerProps = { onCode: (code: string) => void; onTypeInstead: () => void };
+let loadedScanner: ComponentType<ScannerProps> | null = null;
+
+function QrScannerLoader(props: ScannerProps) {
+  const [Scanner, setScanner] = useState<ComponentType<ScannerProps> | null>(() => loadedScanner);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (loadedScanner) return;
+    let current = true;
+    import("../components/QrScanner").then(
+      (module) => {
+        loadedScanner = module.default;
+        if (current) setScanner(() => module.default);
+      },
+      () => {
+        if (current) setFailed(true);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (Scanner) return <Scanner {...props} />;
+  if (failed) return <ScannerNotLoaded onTypeInstead={props.onTypeInstead} />;
+  return <div className="qr-scanner-view" />;
+}
 
 
 function normalizeRoomCodeInput(value: string): string {
@@ -943,9 +971,7 @@ export function LobbyBrowserPage() {
           }
         >
           {scanning ? (
-            <Suspense fallback={<div className="qr-scanner-view" />}>
-              <QrScanner onCode={joinScannedCode} onTypeInstead={() => setScanning(false)} />
-            </Suspense>
+            <QrScannerLoader onCode={joinScannedCode} onTypeInstead={() => setScanning(false)} />
           ) : (
             <RoomCodeInput
               value={joinCode}

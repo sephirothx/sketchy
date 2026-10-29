@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { roomCodeFromScan } from "../lib/scannedRoomCode";
+import { QrScannerProblem, ScannerNotLoaded } from "./QrScannerProblem";
 import { ui } from "../content/ui/index.ts";
 
 /** The part of the Barcode Detection API used here; not in TypeScript's DOM
@@ -49,9 +50,9 @@ async function makeReader(): Promise<Read> {
 }
 
 /** Why there is no camera view: refused by the player or the browser, none
-    on the device, or one that would not start - held by another app, or the
-    decoder that could not be fetched. */
-type Problem = "blocked" | "none" | "failed";
+    on the device, one that would not start (another app holding it), or a
+    decoder that could not be fetched - which only a reload can fetch again. */
+type Problem = "blocked" | "none" | "failed" | "unloaded";
 
 /**
  * Join by code's camera view (#1530): reads a room's QR code and hands the
@@ -102,6 +103,16 @@ export default function QrScanner({
     };
 
     void (async () => {
+      // The decoder before the camera: a chunk that does not arrive should
+      // not have lit the camera for nothing.
+      let read: Read;
+      try {
+        read = await makeReader();
+      } catch {
+        if (!stopped) setProblem("unloaded");
+        return;
+      }
+      if (stopped) return;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" } },
@@ -130,17 +141,6 @@ export default function QrScanner({
       }
       video.srcObject = stream;
       await video.play().catch(() => {});
-      let read: Read;
-      try {
-        read = await makeReader();
-      } catch {
-        // The decoder's chunk did not arrive: offline, or a tab older than
-        // the deploy. A live view that never reads would be worse than this.
-        if (stopped) return;
-        stop();
-        setProblem("failed");
-        return;
-      }
       if (stopped) return;
       const tick = async () => {
         if (stopped) return;
@@ -171,35 +171,29 @@ export default function QrScanner({
     return stop;
   }, [attempt, hidden, problem]);
 
+  if (problem === "unloaded") return <ScannerNotLoaded onTypeInstead={onTypeInstead} />;
   if (problem) {
-    const copy = {
+    const [title, body] = {
       blocked: [ui.qrScanner.cameraBlocked, ui.qrScanner.allowTheCamera],
       none: [ui.qrScanner.noCamera, ui.qrScanner.noCameraOffered],
       failed: [ui.qrScanner.cameraFailed, ui.qrScanner.cameraFailedBody],
     }[problem];
     return (
-      <div className="qr-scanner-problem" role="alert">
-        <strong>{copy[0]}</strong>
-        <p>{copy[1]}</p>
-        <div className="qr-scanner-actions">
-          {problem !== "none" && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
+      <QrScannerProblem
+        title={title}
+        body={body}
+        retryLabel={ui.qrScanner.tryAgain}
+        onRetry={
+          problem === "none"
+            ? undefined
+            : () => {
                 // The view first, so the video is there when the stream is.
                 setProblem(null);
                 setAttempt((n) => n + 1);
-              }}
-            >
-              {ui.qrScanner.tryAgain}
-            </button>
-          )}
-          <button type="button" className="btn btn-primary" onClick={onTypeInstead}>
-            {ui.qrScanner.typeTheCode}
-          </button>
-        </div>
-      </div>
+              }
+        }
+        onTypeInstead={onTypeInstead}
+      />
     );
   }
 
