@@ -592,6 +592,12 @@
   border-bottom: 2px solid var(--faint);
 }
 
+/* The dark track darkens what is under it, so on the near-black card the
+   tiles read as holes; a step lighter, they read as filled tiles. */
+[data-theme="dark"] .hidden-prompt-tile {
+  background: var(--line-strong);
+}
+
 .hidden-prompt-glyph {
   color: var(--muted);
   font-family: var(--font-display);
