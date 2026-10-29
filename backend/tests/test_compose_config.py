@@ -75,11 +75,14 @@ def test_no_other_container_can_be_handed_the_tunnels_address():
 def test_the_app_waits_for_its_migration_and_outlasts_its_drain():
     app = services()["app"]
     assert app["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
-    # The drain's ceiling (300 s) is an operator's choice; the default 30 s,
-    # plus the 10 s history write and the 20 s teardown after a second signal,
-    # must fit inside the grace before the supervisor kills the process.
+    # Any drain the operator may set (R-SHUT-03), not only the default, plus
+    # the 10 s history write, uvicorn's 15 s graceful shutdown and the forced
+    # teardown's ceiling, must fit inside the grace before Docker kills it.
+    from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
+    from app.server import FORCED_EXIT_TEARDOWN_SECONDS
+
     grace = int(re.fullmatch(r"(\d+)s", app["stop_grace_period"]).group(1))
-    assert grace >= 30 + 10 + 20
+    assert grace >= MAX_SHUTDOWN_DRAIN_SECONDS + 10 + 15 + FORCED_EXIT_TEARDOWN_SECONDS
 
 
 def test_the_application_containers_run_unprivileged_and_read_only():

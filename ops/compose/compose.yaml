@@ -144,11 +144,14 @@ services:
     cpus: ${SKETCHY_APP_CPUS:-2}
     mem_limit: ${SKETCHY_APP_MEMORY:-2g}
     pids_limit: 512
-    # The drain (SHUTDOWN_DRAIN_SECONDS, 30 by default) plus the 10 s history
-    # write bound plus the 20 s teardown ceiling, with room to spare: SIGTERM
-    # to exit measured 30.4 s under load (#1418). Docker's default is 10 s,
-    # which would cut every planned restart short.
-    stop_grace_period: 90s
+    # Long enough for the longest drain an operator may configure, not only the
+    # default: SHUTDOWN_DRAIN_SECONDS may be up to 300 (R-SHUT-03), then the
+    # 10 s history write bound, uvicorn's 15 s graceful shutdown and the 20 s
+    # teardown ceiling. Docker waits only until the process exits, so a long
+    # grace costs nothing on an ordinary restart (SIGTERM to exit measured
+    # 30.4 s under load, #1418); Docker's default of 10 s would cut every
+    # planned restart short, and 90 s cut any drain set above about a minute.
+    stop_grace_period: 360s
     depends_on:
       db:
         condition: service_healthy

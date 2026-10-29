@@ -2729,7 +2729,7 @@ no published port.
 | --- | --- |
 | `db` | PostgreSQL 17, created once with the tracked `initdb` flags and config (`ops/postgres/`), its three roles given passwords from `.env` by [`initdb/10-sketchy.sh`](ops/compose/initdb/10-sketchy.sh). On a network with no route out |
 | `migrate` | The app's image, run once per `up`: a snapshot (`migrate-with-snapshot.sh`), then `python -m app.db.migrate` as the schema owner. The app does not start unless it exits 0 |
-| `app` | The single worker, from the [`Dockerfile`](Dockerfile): non-root, read-only root filesystem, no capabilities, 90 s to drain |
+| `app` | The single worker, from the [`Dockerfile`](Dockerfile): non-root, read-only root filesystem, no capabilities, 360 s to stop, enough for the longest drain `SHUTDOWN_DRAIN_SECONDS` allows |
 | `cloudflared` | Runs when `COMPOSE_PROFILES` includes `tunnel`. Cloudflare terminates HTTPS; the tunnel forwards to `http://app:8000` |
 
 Three rules the file holds, and `tests/test_compose_config.py` holds it to. **Nothing is

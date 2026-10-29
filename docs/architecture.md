@@ -703,9 +703,11 @@ database must answer over TCP (the image's first-start server listens on its soc
 a socket check would call it ready mid-setup); then a one-shot `migrate` takes a snapshot and
 upgrades as the schema owner; only its exit 0 starts the worker. A failed migration
 therefore leaves the old schema and no new process, and the snapshot it took is the restore
-point (#458). **Stop:** the worker's grace is 90 s, which covers the default drain, the
-history write bound and the forced-exit teardown above; Docker's default of 10 s would cut
-every planned restart short of its drain. **Trust:** no port is published, the database's
+point (#458). **Stop:** the worker's grace is 360 s, which covers the longest drain
+`SHUTDOWN_DRAIN_SECONDS` allows (300 s), the history write bound, uvicorn's own graceful
+shutdown and the forced-exit teardown above. Docker waits only until the process exits, so
+an ordinary restart is no slower for it; its default of 10 s would cut every planned
+restart short of its drain. **Trust:** no port is published, the database's
 network has no route out, and the worker believes forwarded headers only from the tunnel's
 fixed address (R-PLAT-10), which no other container can be handed — its subnet would also
 cover every other container on the network and the gateway a published port can arrive
