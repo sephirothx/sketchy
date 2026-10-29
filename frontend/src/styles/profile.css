@@ -572,8 +572,13 @@
 }
 
 .hidden-prompt-tile {
-  flex: 0 1 11px;
-  /* 32 letters, the cap, still fit a phone's column at this width. */
+  /* A width, not a flex-basis: a shrink-to-fit box (the viewer's title, the
+     shelf's caption) sizes the word from its tiles' widths, and an empty
+     span with only a basis counts as nothing - every tile fell to its
+     floor. The tiles may still narrow, so 32 letters, the cap, fit a
+     phone's column. */
+  flex: 0 1 auto;
+  width: 11px;
   min-width: 2px;
   height: 15px;
   border-radius: 3px;
@@ -609,7 +614,7 @@
 }
 
 .hidden-prompt.is-large .hidden-prompt-tile {
-  flex-basis: 16px;
+  width: 16px;
   height: 22px;
   border-radius: 4px;
 }
