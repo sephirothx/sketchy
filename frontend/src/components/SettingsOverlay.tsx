@@ -597,6 +597,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  // The device list stays mounted under the dialogs (#864), and two of them
+  // can sign every session out: a password change, and a second factor set up
+  // to take an offered role (auth/pending_role.py). Bumped when either may
+  // have, so the list is read again rather than showing devices already gone.
+  const [devicesEpoch, setDevicesEpoch] = useState(0);
+  const rereadDevices = () => setDevicesEpoch((epoch) => epoch + 1);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   // Only so the row can say "Set up" or "Manage"; the dialog reads its own
   // state when it opens. Read when the pane appears rather than only after
@@ -949,7 +955,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               </button>
             </Row>
           )}
-          <SignedInDevices />
+          <SignedInDevices key={devicesEpoch} />
         </Group>
       )}
 
@@ -983,7 +989,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}
       {twoFactorOpen && (
-        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
+        <TwoFactorDialog
+          onClose={() => {
+            setTwoFactorOpen(false);
+            rereadDevices();
+          }}
+        />
       )}
       {doodlesOpen && (
         <AvatarDoodleDialog
@@ -1004,6 +1015,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <ChangePasswordDialog
           username={user?.username ?? ""}
           canEmailLink={Boolean(email?.verified)}
+          onChanged={rereadDevices}
           onClose={() => setPasswordOpen(false)}
         />
       )}

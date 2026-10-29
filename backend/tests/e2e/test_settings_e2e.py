@@ -1,5 +1,5 @@
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     register_account,
     use_guest_name,
@@ -344,6 +344,8 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
 
             await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
+            devices = page.get_by_role("list", name="Signed-in devices")
+            await expect(devices.locator("li")).to_have_count(2)
             await page.get_by_role("button", name="Change password").click()
             change = page.get_by_role("dialog", name="Change your password")
             await change.wait_for(state="visible")
@@ -355,6 +357,12 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await change.get_by_label("New password again").fill("a-better-password")
             await change.get_by_role("button", name="Change password").click()
             await change.wait_for(state="hidden")
+
+            # The device list sits in the page under the dialog (#864), so it
+            # has to follow the change: only this browser's new session, not
+            # two that were revoked while it stayed mounted.
+            await expect(devices.locator("li")).to_have_count(1)
+            await expect(devices.get_by_text("Current device")).to_be_visible()
 
             # This device keeps its session; the other one is out.
             assert await page.evaluate(
