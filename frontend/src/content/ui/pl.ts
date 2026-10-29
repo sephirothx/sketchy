@@ -2435,6 +2435,8 @@ export const PL: Catalogue = {
     cameraView: "Aparat",
     cameraBlocked: "Aparat jest zablokowany",
     allowTheCamera: "Zezwól Sketchy na używanie aparatu w ustawieniach przeglądarki dla tej witryny i spróbuj ponownie. Albo wpisz kod.",
+    cameraFailed: "Nie udało się uruchomić aparatu",
+    cameraFailedBody: "Może używa go inna aplikacja. Spróbuj ponownie albo wpisz kod.",
     noCamera: "Brak aparatu do skanowania",
     noCameraOffered: "To urządzenie nie udostępnia aparatu. Wpisz kod.",
     tryAgain: "Spróbuj ponownie",

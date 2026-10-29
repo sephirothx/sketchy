@@ -48,7 +48,10 @@ async function makeReader(): Promise<Read> {
   };
 }
 
-type Problem = "blocked" | "none";
+/** Why there is no camera view: refused by the player or the browser, none
+    on the device, or one that would not start - held by another app, or the
+    decoder that could not be fetched. */
+type Problem = "blocked" | "none" | "failed";
 
 /**
  * Join by code's camera view (#1530): reads a room's QR code and hands the
@@ -84,7 +87,10 @@ export default function QrScanner({
   }, []);
 
   useEffect(() => {
-    if (hidden) return;
+    // Not while a problem is up: a tab coming back from the browser's
+    // settings would otherwise ask for the camera again behind the message,
+    // with no view to show it in. Try again is what asks.
+    if (hidden || problem) return;
     let stopped = false;
     let stream: MediaStream | null = null;
     let timer = 0;
@@ -104,7 +110,13 @@ export default function QrScanner({
       } catch (error) {
         if (stopped) return;
         const name = (error as DOMException)?.name;
-        setProblem(name === "NotAllowedError" || name === "SecurityError" ? "blocked" : "none");
+        setProblem(
+          name === "NotAllowedError" || name === "SecurityError"
+            ? "blocked"
+            : name === "NotFoundError" || name === "OverconstrainedError"
+              ? "none"
+              : "failed",
+        );
         return;
       }
       if (stopped) {
@@ -118,7 +130,18 @@ export default function QrScanner({
       }
       video.srcObject = stream;
       await video.play().catch(() => {});
-      const read = await makeReader();
+      let read: Read;
+      try {
+        read = await makeReader();
+      } catch {
+        // The decoder's chunk did not arrive: offline, or a tab older than
+        // the deploy. A live view that never reads would be worse than this.
+        if (stopped) return;
+        stop();
+        setProblem("failed");
+        return;
+      }
+      if (stopped) return;
       const tick = async () => {
         if (stopped) return;
         let codes: string[] = [];
@@ -146,16 +169,20 @@ export default function QrScanner({
     })();
 
     return stop;
-  }, [attempt, hidden]);
+  }, [attempt, hidden, problem]);
 
   if (problem) {
-    const blocked = problem === "blocked";
+    const copy = {
+      blocked: [ui.qrScanner.cameraBlocked, ui.qrScanner.allowTheCamera],
+      none: [ui.qrScanner.noCamera, ui.qrScanner.noCameraOffered],
+      failed: [ui.qrScanner.cameraFailed, ui.qrScanner.cameraFailedBody],
+    }[problem];
     return (
       <div className="qr-scanner-problem" role="alert">
-        <strong>{blocked ? ui.qrScanner.cameraBlocked : ui.qrScanner.noCamera}</strong>
-        <p>{blocked ? ui.qrScanner.allowTheCamera : ui.qrScanner.noCameraOffered}</p>
+        <strong>{copy[0]}</strong>
+        <p>{copy[1]}</p>
         <div className="qr-scanner-actions">
-          {blocked && (
+          {problem !== "none" && (
             <button
               type="button"
               className="btn btn-secondary"
@@ -182,11 +209,11 @@ export default function QrScanner({
         <video ref={videoRef} playsInline muted aria-label={ui.qrScanner.cameraView} />
         <span className="qr-scanner-frame" aria-hidden="true" />
       </div>
-      {notARoom ? (
-        <p className="qr-scanner-warning" role="status">{ui.qrScanner.notARoom}</p>
-      ) : (
-        <p className="qr-scanner-hint">{ui.qrScanner.pointTheCamera}</p>
-      )}
+      {/* One live region, mounted with the view, whose words change: one
+          that arrives already holding its text is often not read out. */}
+      <p className={notARoom ? "qr-scanner-warning" : "qr-scanner-hint"} role="status">
+        {notARoom ? ui.qrScanner.notARoom : ui.qrScanner.pointTheCamera}
+      </p>
     </div>
   );
 }

@@ -245,6 +245,16 @@ export function LobbyBrowserPage() {
   const canScan =
     !hasFinePointer && typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
   const [scanning, setScanning] = useState(false);
+  // The chip pressed goes away with the view it opened, so focus follows to
+  // what replaced it - Type it, or the code field - rather than falling to the
+  // page: the people this is for are on phones, screen readers included.
+  const typeItRef = useRef<HTMLButtonElement | null>(null);
+  const wasScanning = useRef(false);
+  useEffect(() => {
+    if (scanning) typeItRef.current?.focus();
+    else if (wasScanning.current) codeFieldRef.current?.focus();
+    wasScanning.current = scanning;
+  }, [scanning]);
   // Only the lobby watches the presence channel: a player inside a room is
   // not reading this list and should not be paying for it mid-game.
   useLobbyChannel();
@@ -872,7 +882,12 @@ export function LobbyBrowserPage() {
           initialFocusRef={codeFieldRef}
           headerAction={
             scanning ? (
-              <button type="button" className="chip chip-neutral room-code-scan" onClick={() => setScanning(false)}>
+              <button
+                ref={typeItRef}
+                type="button"
+                className="chip chip-neutral room-code-scan"
+                onClick={() => setScanning(false)}
+              >
                 {ui.qrScanner.typeIt}
               </button>
             ) : (

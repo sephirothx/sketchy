@@ -9,6 +9,7 @@ decoder, the path an iPhone takes.
 import base64
 from uuid import uuid4
 
+import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import open_new_room, room_code, use_guest_name
 
@@ -18,11 +19,11 @@ PHONE = {"viewport": {"width": 390, "height": 844}, "has_touch": True, "is_mobil
 
 # Answers getUserMedia with a canvas painting `window.__fakeCamera` (a data
 # URL set by the test) in the middle of a grey frame, ten times a second; or
-# refuses as a blocked camera does when `window.__cameraBlocked` is set.
+# refuses with the DOMException named by `window.__cameraError`.
 FAKE_CAMERA = """
 (() => {
   const getUserMedia = async () => {
-    if (window.__cameraBlocked) throw new DOMException("blocked", "NotAllowedError");
+    if (window.__cameraError) throw new DOMException("refused", window.__cameraError);
     const image = new Image();
     image.src = window.__fakeCamera;
     await image.decode();
@@ -96,7 +97,16 @@ async def test_a_phone_scans_the_hosts_qr_code_and_lands_in_the_room():
             await browser.close()
 
 
-async def test_a_blocked_camera_says_so_and_goes_back_to_typing():
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        ("NotAllowedError", "The camera is blocked"),
+        # Another app holding the camera, as Android often has it: not "no
+        # camera", and worth a second try.
+        ("NotReadableError", "The camera could not start"),
+    ],
+)
+async def test_a_camera_that_will_not_start_says_why_and_goes_back_to_typing(error, message):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         context = await browser.new_context(**PHONE)
@@ -105,11 +115,13 @@ async def test_a_blocked_camera_says_so_and_goes_back_to_typing():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, f"QrBlocked{uuid4().hex[:6]}")
-            await page.evaluate("() => { window.__cameraBlocked = true; }")
+            await page.evaluate(f"() => {{ window.__cameraError = '{error}'; }}")
             sheet = await _open_scanner(page)
-            await expect(sheet.get_by_role("alert")).to_contain_text("The camera is blocked")
+            await expect(sheet.get_by_role("alert")).to_contain_text(message)
+            await expect(sheet.get_by_role("button", name="Try again")).to_be_visible()
             await sheet.get_by_role("button", name="Type the code").click()
-            await expect(sheet.locator("input").first).to_be_visible()
+            # Focus follows to the field the view gave way to.
+            await expect(sheet.locator("input").first).to_be_focused()
             await expect(sheet.get_by_role("button", name="Scan")).to_be_visible()
         finally:
             await context.close()
