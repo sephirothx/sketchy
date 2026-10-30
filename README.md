@@ -81,9 +81,11 @@ keyboard that takes half the screen, and one thumb.
   is in the gallery too; favoriting a stranger's gallery drawing shares nothing and tells
   nobody. A drawing leaving the gallery takes itself off every shelf. Favorites go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
-  a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
-  owner moves a drawing left or right and unfavorites it there, and anyone opens one in
-  the drawing viewer. **Favorite**, a star filled in orange once it is one, sits beside a
+  a signed-out visitor sees no shelf. The shelf sits at the top of the profile, three
+  across: a visitor sees each prompt as blank letter tiles and taps them to see it, and
+  the owner, in **Arrange** mode, drags drawings into order (or lifts one by its handle
+  and moves it with the arrow keys) and removes them. Anyone opens one in the drawing
+  viewer. **Favorite**, a star filled in orange once it is one, sits beside a
   kept drawing on the game-over recap and in the profile's game history for a registered
   player who may share it, and beside every gallery drawing: on a post, on its own page,
   and in the viewer opened from somebody's favorites.

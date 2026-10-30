@@ -312,23 +312,79 @@
   stroke: var(--warm-edge);
 }
 
-/* Favorites (#440): up to six frames replayed small, the owner's
-   order, with the owner's move and unfavorite controls under each. auto-fill so a
-   phone gets two per row and a desktop the whole six. */
+/* Favorites (#440, #1501): up to six drawings framed three across - two on a
+   phone - in the owner's order, each with its prompt (or, for a visitor, its
+   letter tiles) and its drawer under it. The heading row carries the owner's
+   count and the Arrange / Done switch. */
+.profile-shelf-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-height: 40px;
+}
+
+.profile-shelf-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 22px;
+}
+
+.profile-shelf-star {
+  display: inline-flex;
+}
+
+.profile-shelf-star svg {
+  fill: var(--warm);
+  stroke: var(--warm-edge);
+}
+
+.profile-shelf-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-shelf-arrange {
+  margin-left: auto;
+  gap: 6px;
+}
+
+.profile-shelf-hint {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .profile-shelf {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 16px;
 }
 
 .profile-shelf-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  /* Neighbours slide to the places a drag leaves them (FLIP). */
+  transition: translate var(--dur) ease-out;
+}
+
+.profile-shelf-item.is-dragging {
+  position: relative;
+  z-index: 2;
+  transition: none;
+}
+
+.profile-shelf-frame {
+  position: relative;
 }
 
 .profile-shelf-open {
@@ -368,15 +424,98 @@
   border-color: var(--primary-ink);
 }
 
+/* Arranging: the frames are what is dragged, so the page does not scroll
+   from them and a long press does not select them. */
+.profile-shelf.is-arranging .profile-shelf-frame {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+}
+
+.profile-shelf.is-arranging .profile-shelf-open {
+  cursor: inherit;
+}
+
+.profile-shelf.is-arranging .profile-shelf-canvas {
+  border-style: dashed;
+  border-color: var(--primary-edge-soft);
+}
+
+.profile-shelf.is-dragging .profile-shelf-frame {
+  cursor: grabbing;
+}
+
+.profile-shelf-item.is-dragging .profile-shelf-canvas {
+  box-shadow: var(--shadow-raised);
+  border-style: solid;
+  border-color: var(--primary);
+}
+
+.profile-shelf-item.is-lifted .profile-shelf-canvas {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.profile-shelf-handle,
+.profile-shelf-remove {
+  position: absolute;
+  top: 8px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+}
+
+.profile-shelf-handle {
+  left: 8px;
+  gap: 4px;
+  padding: 0 10px 0 7px;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: grab;
+}
+
+.profile-shelf-handle[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary-edge);
+  color: var(--on-primary);
+}
+
+.profile-shelf-remove {
+  right: 8px;
+  width: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.profile-shelf-handle[aria-disabled="true"],
+.profile-shelf-remove:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
 .profile-shelf-caption {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
 }
 
 .profile-shelf-prompt {
-  font-weight: 700;
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.2;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -389,12 +528,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  max-width: 100%;
+  font-size: 13.5px;
   color: var(--muted);
   min-width: 0;
 }
 
-.profile-shelf-byline strong {
+.profile-shelf-drawer {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -402,14 +543,120 @@
   margin-inline: calc(-1 * var(--ink-overhang));
 }
 
-.profile-shelf-controls {
-  display: flex;
+/* A prompt not yet seen (#1501): a blank tile per letter, the game's mask in
+   miniature, as one button. The tiles light up indigo under the pointer to
+   say they can be pressed. */
+.hidden-prompt {
+  display: inline-flex;
+  flex-wrap: wrap;
+  /* The padding below gives the focus ring room, and the negative margins
+     cancel it so the tiles do not move; the cap counts those 4px, or the
+     button is narrower than its own tiles - two words wrap, and one word's
+     tiles shrink. */
+  max-width: calc(100% + 4px);
   align-items: center;
-  gap: 2px;
+  gap: 4px 9px;
+  min-height: 30px;
+  padding: 4px 2px;
+  margin-inline: -2px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  cursor: pointer;
 }
 
-.profile-shelf-unfavorite {
-  margin-left: auto;
+.hidden-prompt-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* A word never breaks across lines - a continuation would read as a second
+     word - so in a narrow column its tiles narrow instead. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hidden-prompt-tile {
+  /* A width, not a flex-basis: a shrink-to-fit box (the viewer's title, the
+     shelf's caption) sizes the word from its tiles' widths, and an empty
+     span with only a basis counts as nothing - every tile fell to its
+     floor. The tiles may still narrow, so 32 letters, the cap, fit a
+     phone's column. */
+  flex: 0 1 auto;
+  width: 11px;
+  min-width: 2px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--track);
+  /* The tiles are the button's only face, so their underline holds 3:1
+     against the card (WCAG 1.4.11) where the track alone would not. */
+  border-bottom: 2px solid var(--faint);
+}
+
+/* The dark track darkens what is under it, so on the near-black card the
+   tiles read as holes; a step lighter, they read as filled tiles. */
+[data-theme="dark"] .hidden-prompt-tile {
+  background: var(--line-strong);
+}
+
+.hidden-prompt-glyph {
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.hidden-prompt:hover .hidden-prompt-tile,
+.hidden-prompt:focus-visible .hidden-prompt-tile {
+  background: var(--primary-soft);
+  border-bottom-color: var(--primary);
+}
+
+/* In the viewer's title, where the prompt would stand. */
+.hidden-prompt.is-large {
+  justify-content: center;
+  gap: 6px 14px;
+  min-height: 40px;
+}
+
+.hidden-prompt.is-large .hidden-prompt-word {
+  gap: 4px;
+}
+
+.hidden-prompt.is-large .hidden-prompt-tile {
+  width: 16px;
+  height: 22px;
+  border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+  .profile-shelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+  }
+
+  .profile-shelf-prompt {
+    font-size: 16px;
+  }
+
+  .profile-shelf-byline {
+    font-size: 12.5px;
+  }
+
+  .profile-shelf-handle,
+  .profile-shelf-remove {
+    height: 40px;
+    top: 6px;
+  }
+
+  .profile-shelf-handle {
+    left: 6px;
+  }
+
+  .profile-shelf-remove {
+    right: 6px;
+    width: 40px;
+  }
 }
 
 /* Prompt stats: how a list's prompts have actually played. */
