@@ -157,9 +157,12 @@ class HeaderPolicy:
             # Same-origin requests keep theirs, which the origin policy's
             # Referer fallback relies on.
             (b"referrer-policy", b"same-origin"),
+            # The camera for this origin alone: Join by code reads a room's
+            # QR code with it (#1530). No frame can be granted it - there are
+            # none (frame-ancestors, frame-src) - and the rest stay off.
             (
                 b"permissions-policy",
-                b"accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+                b"accelerometer=(), camera=(self), geolocation=(), gyroscope=(), "
                 b"magnetometer=(), microphone=(), payment=(), usb=()",
             ),
             (b"cross-origin-opener-policy", b"same-origin"),

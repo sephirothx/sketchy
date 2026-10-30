@@ -99,7 +99,10 @@ async def test_every_response_carries_the_headers_and_a_route_may_override_one()
         assert response.headers["x-frame-options"] == "DENY"
         assert response.headers["referrer-policy"] == "same-origin"
         assert response.headers["cross-origin-opener-policy"] == "same-origin"
-        assert "camera=()" in response.headers["permissions-policy"]
+        # This origin's own pages may use the camera, to scan a room's QR code
+        # (#1530); nothing else may, and the other device APIs stay off.
+        assert "camera=(self)" in response.headers["permissions-policy"]
+        assert "microphone=()" in response.headers["permissions-policy"]
         assert "strict-transport-security" not in response.headers
         directives = _directives(response.headers["content-security-policy"])
         assert directives["script-src"] == "'self' 'sha256-abc'"

@@ -512,7 +512,7 @@ export const ES: Catalogue = {
       `${p.summary}. Abrir jugadores y puntos.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Pedida ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -521,11 +521,6 @@ export const ES: Catalogue = {
         : "Una exportación por semana; las listas caducan a los siete días.",
     couldNotLoadYourDataExports: "No se pudieron cargar tus exportaciones de datos.",
     couldNotRequestYourDataExport: "No se pudo pedir tu exportación de datos.",
-    yourData: "Tus datos",
-    downloadPrivateJsonCopyYourAccount: "Descarga una copia privada en JSON de tu cuenta y tus datos de juego. No incluye perfiles ni mensajes de otros jugadores.",
-    dataExports: "Exportaciones de datos",
-    loadingExports: "Cargando exportaciones…",
-    youHaveNotRequestedExportYet: "Todavía no has pedido ninguna exportación.",
     download: "Descargar",
     requesting: "Solicitando…",
     requestExport: "Solicitar exportación",
@@ -2053,18 +2048,18 @@ export const ES: Catalogue = {
     history: "historial",
   },
 
-  sessionManagerDialog: {
-    lastUsed: (p: { when: string }) => `Usado por última vez ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Se cierra sola ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Usado desde otro navegador el ${p.when}. Cierra este dispositivo si no eras tú.`,
+  signedInDevices: {
+    lastUsed: "Último uso",
+    signsOut: "Caduca",
+    now: "Ahora",
+    usedElsewhere: (p: { when: string }) => `Usado desde otro navegador el ${p.when}.`,
+    usedElsewhereAdvice: "Si no eras tú, revoca este dispositivo y cambia tu contraseña.",
     couldNotLoadSignedDevices: "No se pudieron cargar los dispositivos con sesión iniciada.",
     couldNotRevokeDevice: "No se pudo cerrar el dispositivo.",
     couldNotSignOutEverywhere: "No se pudo cerrar sesión en todas partes.",
-    signedDevices: "Dispositivos con sesión iniciada",
-    revokeAnyDeviceYouNoLonger: "Cierra cualquier dispositivo que ya no reconozcas. Los nombres son aproximados y no guardan versiones de navegador.\n          Un dispositivo que dejas de usar cierra su sesión a los noventa días.",
+    hint: "Revoca cualquier dispositivo que no reconozcas.",
     loadingDevices: "Cargando dispositivos…",
-    currentDevice: "Dispositivo actual",
+    thisDevice: "Este dispositivo",
     revoking: "Revocando…",
     revoke: "Revocar",
     signingOut: "Cerrando sesión…",
@@ -2183,7 +2178,6 @@ export const ES: Catalogue = {
     changePassword: "Cambiar contraseña",
     manage: "Gestionar",
     yourData: "Tus datos",
-    requestExport: "Pedir exportación",
     delete: "Borrar…",
     display: "Pantalla",
     theme: "Tema",
@@ -2192,8 +2186,6 @@ export const ES: Catalogue = {
     sound: "Sonido",
     volume: "Volumen",
     effects: "Efectos",
-    noKeyboardThisDevice: "No hay teclado en este dispositivo",
-    yourBindingsAreStillSavedStill: "Tus atajos siguen guardados y funcionando. Abre Sketchy con un teclado\n            conectado para cambiarlos.",
     drawingTools: "Herramientas de dibujo",
     resetDefaults: "Restablecer valores",
     settings: "Ajustes",
@@ -2238,7 +2230,6 @@ export const ES: Catalogue = {
     anAuthenticatorAppSCode: "Un código de una aplicación de autenticación, además de tu contraseña. Los moderadores y administradores deben tenerlo.",
     setUp: "Configurar",
     guestKeptInThisBrowser: "Tu nombre de invitado, tus puntos y tu historial solo se guardan en este navegador.",
-    everyBrowserStillHoldingA: "Cada navegador que aún tiene una sesión, y una forma de cerrar cualquiera.",
     worksForAGuestToo: "También sirve para invitados: las partidas que jugaste son tuyas.",
     everyGameListAndSetting: "Cada partida, lista y ajuste que Sketchy guarda sobre ti, en un solo archivo JSON.",
     deleteThisGuest: "Eliminar este invitado",
@@ -2420,6 +2411,29 @@ export const ES: Catalogue = {
     privateRoom: "Sala privada",
   },
 
+  inviteQrDialog: {
+    title: "Únete con la cámara del móvil",
+    qrLabel: (p: { code: string }) => `Código QR del enlace de invitación a la sala ${p.code}`,
+    drawingCode: "Dibujando el código…",
+  },
+  qrScanner: {
+    scan: "Escanear",
+    typeIt: "Escribirlo",
+    pointTheCamera: "Apunta la cámara al código QR de la pantalla del anfitrión. Te unes en cuanto se lee.",
+    cameraView: "Cámara",
+    cameraBlocked: "La cámara está bloqueada",
+    allowTheCamera: "Permite que Sketchy use la cámara en los ajustes del navegador para este sitio y vuelve a intentarlo. O escribe el código.",
+    cameraFailed: "No se pudo iniciar la cámara",
+    cameraFailedBody: "Puede que otra aplicación la esté usando. Vuelve a intentarlo o escribe el código.",
+    scannerNotLoaded: "No se pudo cargar el escáner",
+    scannerNotLoadedBody: "Comprueba la conexión y recarga la página para volver a intentarlo. O escribe el código.",
+    reload: "Recargar",
+    noCamera: "No hay cámara para escanear",
+    noCameraOffered: "Este dispositivo no ofrece ninguna cámara. Escribe el código.",
+    tryAgain: "Reintentar",
+    typeTheCode: "Escribir el código",
+    notARoom: "Ese código no es una sala de Sketchy. Apunta la cámara al código QR de la invitación del anfitrión.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2439,6 +2453,7 @@ export const ES: Catalogue = {
     inviteYourFriends: "Invita a tus amigos",
     shareLink: "Comparte el enlace",
     copyCode: "Copiar código",
+    showQrCode: "Mostrar código QR",
     copyLink: "Copiar enlace",
     inTheRoom: "En la sala",
     you: "(tú)",

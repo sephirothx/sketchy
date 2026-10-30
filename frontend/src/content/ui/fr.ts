@@ -512,7 +512,7 @@ export const FR: Catalogue = {
       `${p.summary}. Ouvrir les joueurs et les scores.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Demandé ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -521,11 +521,6 @@ export const FR: Catalogue = {
         : "Un export par semaine ; les exports prêts expirent au bout de sept jours.",
     couldNotLoadYourDataExports: "Tes exports de données n’ont pas pu être chargés.",
     couldNotRequestYourDataExport: "Ton export de données n’a pas pu être demandé.",
-    yourData: "Tes données",
-    downloadPrivateJsonCopyYourAccount: "Télécharge une copie privée en JSON de ton compte et de tes données de jeu. Les profils et messages des autres joueurs n’y sont pas.",
-    dataExports: "Exports de données",
-    loadingExports: "Chargement des exports…",
-    youHaveNotRequestedExportYet: "Tu n’as pas encore demandé d’export.",
     download: "Télécharger",
     requesting: "Demande en cours…",
     requestExport: "Demander un export",
@@ -2056,18 +2051,18 @@ export const FR: Catalogue = {
     history: "historique",
   },
 
-  sessionManagerDialog: {
-    lastUsed: (p: { when: string }) => `Dernière utilisation ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Se déconnecte tout seul ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Utilisé depuis un autre navigateur le ${p.when}. Révoque cet appareil si ce n’était pas toi.`,
+  signedInDevices: {
+    lastUsed: "Dernière utilisation",
+    signsOut: "Expire",
+    now: "Maintenant",
+    usedElsewhere: (p: { when: string }) => `Utilisé depuis un autre navigateur le ${p.when}.`,
+    usedElsewhereAdvice: "Si ce n’était pas toi, révoque cet appareil et change ton mot de passe.",
     couldNotLoadSignedDevices: "Les appareils connectés n’ont pas pu être chargés.",
     couldNotRevokeDevice: "L’appareil n’a pas pu être révoqué.",
     couldNotSignOutEverywhere: "Impossible de se déconnecter partout.",
-    signedDevices: "Appareils connectés",
-    revokeAnyDeviceYouNoLonger: "Révoque tout appareil que tu ne reconnais plus. Les noms d’appareils sont approximatifs et ne stockent pas les versions de navigateur.\n          Un appareil que tu cesses d’utiliser se déconnecte seul au bout de quatre-vingt-dix jours.",
+    hint: "Révoque tout appareil que tu ne reconnais pas.",
     loadingDevices: "Chargement des appareils…",
-    currentDevice: "Appareil actuel",
+    thisDevice: "Cet appareil",
     revoking: "Révocation…",
     revoke: "Révoquer",
     signingOut: "Déconnexion…",
@@ -2186,7 +2181,6 @@ export const FR: Catalogue = {
     changePassword: "Changer de mot de passe",
     manage: "Gérer",
     yourData: "Tes données",
-    requestExport: "Demander un export",
     delete: "Supprimer…",
     display: "Affichage",
     theme: "Thème",
@@ -2195,8 +2189,6 @@ export const FR: Catalogue = {
     sound: "Son",
     volume: "Volume",
     effects: "Effets",
-    noKeyboardThisDevice: "Pas de clavier sur cet appareil",
-    yourBindingsAreStillSavedStill: "Tes raccourcis restent enregistrés et fonctionnent. Ouvre Sketchy avec un clavier\n            branché pour les changer.",
     drawingTools: "Outils de dessin",
     resetDefaults: "Rétablir les valeurs par défaut",
     settings: "Paramètres",
@@ -2241,7 +2233,6 @@ export const FR: Catalogue = {
     anAuthenticatorAppSCode: "Un code d’application d’authentification, en plus de ton mot de passe. Les modérateurs et les administrateurs doivent en avoir une.",
     setUp: "Configurer",
     guestKeptInThisBrowser: "Ton nom d’invité, tes points et ton historique ne sont gardés que dans ce navigateur.",
-    everyBrowserStillHoldingA: "Chaque navigateur qui a encore une session, et un moyen de fermer n’importe laquelle.",
     worksForAGuestToo: "Marche aussi pour un invité : les parties que tu as jouées t’appartiennent.",
     everyGameListAndSetting: "Chaque partie, liste et réglage que Sketchy conserve sur toi, dans un seul fichier JSON.",
     deleteThisGuest: "Supprimer cet invité",
@@ -2423,6 +2414,29 @@ export const FR: Catalogue = {
     privateRoom: "Salon privé",
   },
 
+  inviteQrDialog: {
+    title: "Rejoindre avec l’appareil photo du téléphone",
+    qrLabel: (p: { code: string }) => `QR code du lien d’invitation au salon ${p.code}`,
+    drawingCode: "Dessin du code…",
+  },
+  qrScanner: {
+    scan: "Scanner",
+    typeIt: "Le saisir",
+    pointTheCamera: "Pointe l’appareil photo vers le QR code sur l’écran de l’hôte. Tu rejoins dès qu’il est lu.",
+    cameraView: "Appareil photo",
+    cameraBlocked: "L’appareil photo est bloqué",
+    allowTheCamera: "Autorise Sketchy à utiliser l’appareil photo dans les réglages du navigateur pour ce site, puis réessaie. Ou saisis le code.",
+    cameraFailed: "L’appareil photo n’a pas pu démarrer",
+    cameraFailedBody: "Une autre application l’utilise peut-être. Réessaie, ou saisis le code.",
+    scannerNotLoaded: "Le scanner n’a pas pu se charger",
+    scannerNotLoadedBody: "Vérifie ta connexion, puis recharge la page pour réessayer. Ou saisis le code.",
+    reload: "Recharger",
+    noCamera: "Aucun appareil photo pour scanner",
+    noCameraOffered: "Cet appareil ne propose aucun appareil photo. Saisis plutôt le code.",
+    tryAgain: "Réessayer",
+    typeTheCode: "Saisir le code",
+    notARoom: "Ce code n’est pas un salon Sketchy. Pointe l’appareil photo vers le QR code de l’invitation de l’hôte.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2442,6 +2456,7 @@ export const FR: Catalogue = {
     inviteYourFriends: "Invite tes amis",
     shareLink: "Partage le lien",
     copyCode: "Copier le code",
+    showQrCode: "Afficher un QR code",
     copyLink: "Copier le lien",
     inTheRoom: "Dans le salon",
     you: "(toi)",

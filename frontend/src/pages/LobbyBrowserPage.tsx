@@ -20,7 +20,8 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon, UserIcon } from "../components/icons";
+import { AlertCircleIcon, BoltIcon, PlusIcon, QrIcon, SearchIcon, UserIcon } from "../components/icons";
+import { ScannerNotLoaded } from "../components/QrScannerProblem";
 import {
   rankedPromptLanguages,
   MIXED_PROMPT_LANGUAGE,
@@ -69,6 +70,40 @@ const PlayLanguagesQuestion = lazy(
 );
 
 const ROOM_CODE_LENGTH = 6;
+
+// Fetched on the first press of Scan, with the decoder it may load: most visits
+// to the lobby never open the camera (#1530). Loaded by hand rather than with
+// `lazy`, whose failed import goes to the crash boundary and takes the lobby -
+// and typing the code - with it; here it is a notice inside the sheet.
+type ScannerProps = { onCode: (code: string) => void; onTypeInstead: () => void };
+let loadedScanner: ComponentType<ScannerProps> | null = null;
+
+function QrScannerLoader(props: ScannerProps) {
+  const [Scanner, setScanner] = useState<ComponentType<ScannerProps> | null>(() => loadedScanner);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (loadedScanner) return;
+    let current = true;
+    // A try around the whole import, not a `.then` failure handler: Vite's
+    // preload helper throws past that when a stylesheet the chunk needs is
+    // what failed (the reason loadQuestion gives above).
+    void (async () => {
+      try {
+        const module = await import("../components/QrScanner");
+        loadedScanner = module.default;
+        if (current) setScanner(() => module.default);
+      } catch {
+        if (current) setFailed(true);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (Scanner) return <Scanner {...props} />;
+  if (failed) return <ScannerNotLoaded onTypeInstead={props.onTypeInstead} />;
+  return <div className="qr-scanner-view" />;
+}
 
 
 function normalizeRoomCodeInput(value: string): string {
@@ -234,6 +269,23 @@ export function LobbyBrowserPage() {
     codeFieldRef.current?.focus();
   }
   const codeFieldRef = useRef<HTMLInputElement | null>(null);
+  // Scanning a room's QR code from Join by code (#1530): on a touch screen,
+  // where the camera is the one in the player's hand, and only where the
+  // browser offers one at all (a page served without HTTPS gets none).
+  const hasFinePointer = useMediaQuery("(pointer: fine)");
+  const canScan =
+    !hasFinePointer && typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
+  const [scanning, setScanning] = useState(false);
+  // The chip pressed goes away with the view it opened, so focus follows to
+  // what replaced it - Type it, or the code field - rather than falling to the
+  // page: the people this is for are on phones, screen readers included.
+  const typeItRef = useRef<HTMLButtonElement | null>(null);
+  const wasScanning = useRef(false);
+  useEffect(() => {
+    if (scanning) typeItRef.current?.focus();
+    else if (wasScanning.current) codeFieldRef.current?.focus();
+    wasScanning.current = scanning;
+  }, [scanning]);
   // Only the lobby watches the presence channel: a player inside a room is
   // not reading this list and should not be paying for it mid-game.
   useLobbyChannel();
@@ -436,12 +488,28 @@ export function LobbyBrowserPage() {
     }
   }
 
-  async function handleJoinByCode(asSpectator = false) {
-    if (!joinCode.trim()) {
+  async function handleJoinByCode(asSpectator = false, code = joinCode) {
+    if (!code.trim()) {
       setError(ui.lobbyBrowserPage.enterRoomCode);
       return;
     }
-    await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
+    await joinRoom({ code: code.trim().toUpperCase() }, asSpectator, "private-code");
+  }
+
+  // A read code joins at once, as Join would with it typed: the scan is the
+  // whole of the player's part. The cells show it while the join is on its way.
+  function joinScannedCode(code: string) {
+    // Not the field: the page is about to become the room, and focusing it
+    // would raise a phone's keyboard on the way out.
+    wasScanning.current = false;
+    setScanning(false);
+    setJoinCode(code);
+    void handleJoinByCode(false, code);
+  }
+
+  function closeCodeSheet() {
+    setCodeSheetOpen(false);
+    setScanning(false);
   }
 
   async function handleJoinRoom(room: RoomSummary, asSpectator = false) {
@@ -844,19 +912,46 @@ export function LobbyBrowserPage() {
           title={ui.lobbyBrowserPage.joinByCode}
           testId="lobby-code-sheet"
           closeLabel={ui.lobbyBrowserPage.close}
-          onDismiss={() => setCodeSheetOpen(false)}
+          onDismiss={closeCodeSheet}
           initialFocusRef={codeFieldRef}
           headerAction={
-            <button
-              type="button"
-              className="chip chip-neutral room-code-paste"
-              onClick={() => void pasteCode()}
-            >
-              {ui.lobbyBrowserPage.paste}
-            </button>
+            scanning ? (
+              <button
+                ref={typeItRef}
+                type="button"
+                className="chip chip-neutral room-code-scan"
+                onClick={() => setScanning(false)}
+              >
+                {ui.qrScanner.typeIt}
+              </button>
+            ) : (
+              <>
+                {canScan && (
+                  <button
+                    type="button"
+                    className="chip chip-primary room-code-scan"
+                    disabled={Boolean(pendingJoin)}
+                    onClick={() => {
+                      setError(null);
+                      setScanning(true);
+                    }}
+                  >
+                    <QrIcon size={15} />
+                    {ui.qrScanner.scan}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="chip chip-neutral room-code-paste"
+                  onClick={() => void pasteCode()}
+                >
+                  {ui.lobbyBrowserPage.paste}
+                </button>
+              </>
+            )
           }
           footer={
-            <>
+            scanning ? undefined : <>
               {error && <p className="lobby-action-error" role="alert">{error}</p>}
               <Button
                 variant="primary"
@@ -878,13 +973,17 @@ export function LobbyBrowserPage() {
             </>
           }
         >
-          <RoomCodeInput
-            value={joinCode}
-            onChange={setJoinCode}
-            onSubmit={() => void handleJoinByCode(false)}
-            inputRef={codeFieldRef}
-            hideLabel
-          />
+          {scanning ? (
+            <QrScannerLoader onCode={joinScannedCode} onTypeInstead={() => setScanning(false)} />
+          ) : (
+            <RoomCodeInput
+              value={joinCode}
+              onChange={setJoinCode}
+              onSubmit={() => void handleJoinByCode(false)}
+              inputRef={codeFieldRef}
+              hideLabel
+            />
+          )}
         </BottomSheet>
       )}
 

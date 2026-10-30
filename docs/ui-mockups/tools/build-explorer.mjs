@@ -18,19 +18,19 @@ const ROUTES = {
     ['Join in progress', 'Guessing'], ['Join', 'WaitingRoom'], ['Spectate', 'WaitingRoom'],
     ['Prompt stats', 'PromptStats'], ['My prompt lists', 'MyPromptLists'], ['Profile', 'Profile'], ['Settings', 'Settings'], ['Marta', 'Profile'],
   ],
-  Settings: [['Done', 'Main'], ['Back to lobby', 'Main'], ['Manage account', 'Profile']],
+  Settings: [['Close settings', 'Main']],
   CreateRoom: [['Back to lobby', 'Main'], ['Create room', 'WaitingRoom'], ['Marta', 'Profile']],
   AccountRecovery: [['Back to the lobby', 'Main'], ['Send a reset link', 'Main']],
   NotFound: [['Back to lobby', 'Main']],
   Crash: [['Back to lobby', 'Main']],
-  WaitingRoom: [['Start game', 'PromptChoice'], ['Edit settings', 'CreateRoom'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  PromptChoice: [['lighthouse', 'Drawing'], ['roller coaster', 'Drawing'], ['windmill', 'Drawing'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  Drawing: [['Settings', 'Settings'], ['Leave', 'Main']],
-  Guessing: [['Send', 'TurnResults'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  TurnResults: [['Settings', 'Settings'], ['Leave', 'Main']],
-  GameOver: [['Highlights', 'Highlights'], ['Drawings', 'Recap'], ['Continue', 'WaitingRoom'], ['Stay here', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  Highlights: [['See it', 'Recap'], ['Back to results', 'GameOver'], ['Close highlights', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  Recap: [['Close', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
+  WaitingRoom: [['Start game', 'PromptChoice'], ['Edit room rules', 'CreateRoom'], ['Marta', 'Settings']],
+  PromptChoice: [['lighthouse', 'Drawing'], ['roller coaster', 'Drawing'], ['windmill', 'Drawing'], ['Marta', 'Settings']],
+  Drawing: [['Marta', 'Settings']],
+  Guessing: [['Send', 'TurnResults'], ['Marta', 'Settings']],
+  TurnResults: [['Marta', 'Settings']],
+  GameOver: [['Highlights', 'Highlights'], ['Drawings', 'Recap'], ['Continue', 'WaitingRoom'], ['Stay here', 'GameOver'], ['Marta', 'Settings']],
+  Highlights: [['See it', 'Recap'], ['Back to results', 'GameOver'], ['Close highlights', 'GameOver'], ['Marta', 'Settings']],
+  Recap: [['Close', 'GameOver'], ['Marta', 'Settings']],
   PromptStats: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   MyPromptLists: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   Profile: [['Back to lobby', 'Main']],
@@ -199,7 +199,7 @@ ${SCREENS.map((s) => `<template id="tpl-${s.name}">${s.page}</template>`).join('
     root.innerHTML = '';
     root.appendChild(document.getElementById('tpl-' + name).content.cloneNode(true));
     const tw = root.querySelector('[data-tab]');
-    if (tw) tw.setAttribute('data-tab', 'general');
+    if (tw) tw.setAttribute('data-tab', 'account');
     crumb.textContent = META[name].title;
     for (const b of rail.querySelectorAll('button')) b.setAttribute('aria-current', String(b.dataset.screen === name));
     const i = FLOW.indexOf(name);

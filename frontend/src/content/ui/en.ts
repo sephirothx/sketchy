@@ -523,7 +523,7 @@ export const EN = {
       (p: { summary: string }) => `${p.summary}. Open players and scores.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Requested ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -532,11 +532,6 @@ export const EN = {
         : "One export a week; ready exports expire after seven days.",
     couldNotLoadYourDataExports: "Could not load your data exports.",
     couldNotRequestYourDataExport: "Could not request your data export.",
-    yourData: "Your data",
-    downloadPrivateJsonCopyYourAccount: "Download a private JSON copy of your account and gameplay data. Other players' profiles and messages are not included.",
-    dataExports: "Data exports",
-    loadingExports: "Loading exports…",
-    youHaveNotRequestedExportYet: "You have not requested an export yet.",
     download: "Download",
     requesting: "Requesting…",
     requestExport: "Request export",
@@ -2072,18 +2067,18 @@ export const EN = {
     history: "history",
   },
 
-  sessionManagerDialog: {
-    lastUsed: (p: { when: string }) => `Last used ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Signs out on its own ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Used from a different browser on ${p.when}. Revoke this device if that was not you.`,
+  signedInDevices: {
+    lastUsed: "Last used",
+    signsOut: "Signs out",
+    now: "Now",
+    usedElsewhere: (p: { when: string }) => `Used from a different browser on ${p.when}.`,
+    usedElsewhereAdvice: "If that was not you, revoke this device and change your password.",
     couldNotLoadSignedDevices: "Could not load signed-in devices.",
     couldNotRevokeDevice: "Could not revoke device.",
     couldNotSignOutEverywhere: "Could not sign out everywhere.",
-    signedDevices: "Signed-in devices",
-    revokeAnyDeviceYouNoLonger: "Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.\n          A device you stop using signs itself out after ninety days.",
+    hint: "Revoke any device you don't recognize.",
     loadingDevices: "Loading devices…",
-    currentDevice: "Current device",
+    thisDevice: "This device",
     revoking: "Revoking…",
     revoke: "Revoke",
     signingOut: "Signing out…",
@@ -2202,7 +2197,6 @@ export const EN = {
     changePassword: "Change password",
     manage: "Manage",
     yourData: "Your data",
-    requestExport: "Request export",
     delete: "Delete…",
     display: "Display",
     theme: "Theme",
@@ -2211,8 +2205,6 @@ export const EN = {
     sound: "Sound",
     volume: "Volume",
     effects: "Effects",
-    noKeyboardThisDevice: "No keyboard on this device",
-    yourBindingsAreStillSavedStill: "Your bindings are still saved and still work. Open Sketchy with a keyboard\n            attached to change them.",
     drawingTools: "Drawing tools",
     resetDefaults: "Reset to defaults",
     settings: "Settings",
@@ -2259,8 +2251,6 @@ export const EN = {
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
     guestKeptInThisBrowser: "Your guest name, points and history are kept in this browser only.",
-    everyBrowserStillHoldingA:
-      "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",
     everyGameListAndSetting:
       "Every game, list and setting Sketchy holds about you, as one JSON file.",
@@ -2445,6 +2435,29 @@ export const EN = {
     privateRoom: "Private room",
   },
 
+  inviteQrDialog: {
+    title: "Join with a phone camera",
+    qrLabel: (p: { code: string }) => `QR code for the invite link to room ${p.code}`,
+    drawingCode: "Drawing the code…",
+  },
+  qrScanner: {
+    scan: "Scan",
+    typeIt: "Type it",
+    pointTheCamera: "Point the camera at the QR code on the host's screen. You join as soon as it is read.",
+    cameraView: "Camera",
+    cameraBlocked: "The camera is blocked",
+    allowTheCamera: "Allow Sketchy to use the camera in your browser's settings for this site, then try again. Or type the code.",
+    cameraFailed: "The camera could not start",
+    cameraFailedBody: "Another app may be using it. Try again, or type the code.",
+    scannerNotLoaded: "The scanner could not load",
+    scannerNotLoadedBody: "Check your connection, then reload the page to try again. Or type the code.",
+    reload: "Reload",
+    noCamera: "No camera to scan with",
+    noCameraOffered: "This device did not offer a camera. Type the code instead.",
+    tryAgain: "Try again",
+    typeTheCode: "Type the code",
+    notARoom: "That code isn't a Sketchy room. Point the camera at the QR code on the host's invite.",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2464,6 +2477,7 @@ export const EN = {
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    showQrCode: "Show a QR code",
     copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",
