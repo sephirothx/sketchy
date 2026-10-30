@@ -62,3 +62,19 @@ test("the cached formatters write exactly what toLocale*String did (#991)", () =
   }
   setClockLocale(undefined);
 });
+
+test("a near date drops the year only when it is this year's", async () => {
+  const { formatNearDate, formatNearDateTime } = await import("../src/lib/clock.ts");
+  setClockLocale("en");
+  const now = new Date();
+  const thisYear = new Date(now.getFullYear(), 0, 26, 19, 12);
+  const nextYear = new Date(now.getFullYear() + 1, 0, 26, 19, 12);
+  assert.doesNotMatch(formatNearDate(thisYear), new RegExp(String(now.getFullYear())));
+  assert.match(formatNearDate(thisYear), /Jan 26/);
+  assert.match(formatNearDate(nextYear), new RegExp(String(now.getFullYear() + 1)), "another year keeps it");
+  assert.doesNotMatch(formatNearDateTime(thisYear, "24h"), new RegExp(String(now.getFullYear())));
+  assert.match(formatNearDateTime(thisYear, "24h"), /19:12/);
+  assert.match(formatNearDateTime(nextYear, "24h"), new RegExp(String(now.getFullYear() + 1)));
+  assert.equal(formatNearDate(new Date("not a date")), "Unknown");
+  setClockLocale(undefined);
+});
