@@ -2412,7 +2412,6 @@ export const FR: Catalogue = {
   inviteQrDialog: {
     title: "Rejoindre avec l’appareil photo du téléphone",
     qrLabel: (p: { code: string }) => `QR code du lien d’invitation au salon ${p.code}`,
-    opensInvitePage: "Ouvre la page d’invitation de ce salon.",
     drawingCode: "Dessin du code…",
   },
   qrScanner: {

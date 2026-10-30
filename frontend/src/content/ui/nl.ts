@@ -2410,7 +2410,6 @@ export const NL: Catalogue = {
   inviteQrDialog: {
     title: "Doe mee met je telefooncamera",
     qrLabel: (p: { code: string }) => `QR-code voor de uitnodigingslink naar kamer ${p.code}`,
-    opensInvitePage: "Opent de uitnodigingspagina van deze kamer.",
     drawingCode: "Code tekenen…",
   },
   qrScanner: {

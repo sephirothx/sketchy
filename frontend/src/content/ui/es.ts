@@ -2409,7 +2409,6 @@ export const ES: Catalogue = {
   inviteQrDialog: {
     title: "Únete con la cámara del móvil",
     qrLabel: (p: { code: string }) => `Código QR del enlace de invitación a la sala ${p.code}`,
-    opensInvitePage: "Abre la página de invitación de esta sala.",
     drawingCode: "Dibujando el código…",
   },
   qrScanner: {

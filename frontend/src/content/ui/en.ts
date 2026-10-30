@@ -2433,7 +2433,6 @@ export const EN = {
   inviteQrDialog: {
     title: "Join with a phone camera",
     qrLabel: (p: { code: string }) => `QR code for the invite link to room ${p.code}`,
-    opensInvitePage: "Opens this room's invite page.",
     drawingCode: "Drawing the code…",
   },
   qrScanner: {

@@ -29,7 +29,6 @@ export function InviteQrDialog({ code, onClose }: { code: string; onClose: () =>
         </Suspense>
       </div>
       <p className="invite-qr-code" aria-hidden="true">{code}</p>
-      <p className="modal-hint invite-qr-hint">{ui.inviteQrDialog.opensInvitePage}</p>
     </ModalShell>
   );
 }
