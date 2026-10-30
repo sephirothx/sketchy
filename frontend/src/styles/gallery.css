@@ -283,6 +283,21 @@
 
 .gallery-post-report.btn-icon.btn-compact { width: 34px; height: 34px; }
 
+/* The Favorite star on a post (#1501): its icon alone and the report flag's
+   size, so the row of actions under a drawing stays one height. On the
+   drawing's own page it keeps its word beside it. */
+.gallery-post .gallery-post-actions .favorite-control {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.gallery-drawing .favorite-control {
+  gap: 6px;
+}
+
 /* The picture's frame: the stored frame replayed at the card's width. */
 .gallery-card-canvas {
   align-items: center;

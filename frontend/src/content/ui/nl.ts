@@ -951,6 +951,11 @@ export const NL: Catalogue = {
     favoriteThisDrawing: "Deze tekening aan je favorieten toevoegen en in de galerij delen",
     unfavoriteThisDrawing: "Deze tekening uit je favorieten halen",
     thatDrawingCouldNotBeFavorited: "Deze tekening kon niet aan je favorieten worden toegevoegd.",
+    addThisDrawingToYourFavorites: "Deze tekening aan je favorieten toevoegen",
+    favorite: "Favoriet",
+    inYourFavorites: "In je favorieten",
+    addedToYourFavorites: "Toegevoegd aan je favorieten.",
+    seeThem: "Bekijken",
   },
 
   shareControl: {

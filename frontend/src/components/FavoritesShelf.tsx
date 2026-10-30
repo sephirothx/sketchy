@@ -3,9 +3,12 @@ import { EmptyState } from "./ui/EmptyState";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingViewer } from "./DrawingViewer";
+import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ApiError } from "../lib/api";
+import { fetchGalleryDrawing } from "../lib/gallery";
 import { fetchFavoriteDrawing, setGalleryReaction } from "../lib/profile";
 import { moveFavorite, favoritesAsRecapEntries, withoutFavorite } from "../lib/favorites";
 import type { ProfileFavorite } from "../lib/favorites";
@@ -38,8 +41,8 @@ interface FavoritesShelfProps {
  * order. Each is the stored frame replayed small (R-HIST-15 rules out a
  * server-side picture); opening one reuses the recap gallery with the shelf
  * as its entries. A registered viewer reacts from there through the gallery
- * door (R-PIN-08, R-GAL-06) - a favorite is a public-game drawing, so
- * the Gallery shows it already - and the tally counts every reaction while
+ * door (R-PIN-08, R-GAL-06) - every favorite is a Gallery drawing, so
+ * reacting to it publishes nothing more - and the tally counts every reaction while
  * naming only the room's own.
  */
 export function FavoritesShelf({
@@ -51,7 +54,10 @@ export function FavoritesShelf({
   viewerIsRegistered = false,
   onRequestAccount,
 }: FavoritesShelfProps) {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // The shelf as it was when the viewer opened: removing the drawing on
+  // screen from one's own favorites must not slide the viewer onto the next
+  // one, whose star a second press would then take off too.
+  const [viewing, setViewing] = useState<{ favorites: ProfileFavorite[]; index: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // What the viewer's own reactions from here left behind, by turn: the
@@ -86,10 +92,67 @@ export function FavoritesShelf({
     }
   };
 
+  const snapshot = viewing?.favorites ?? [];
+  const viewer = viewing && (
+    <DrawingViewer
+      entries={favoritesAsRecapEntries(snapshot)}
+      initialIndex={viewing.index}
+      onClose={() => setViewing(null)}
+      // A drawing taken off this shelf while the viewer is open is still in
+      // the Gallery, and read from there.
+      loadEntry={(entry) =>
+        fetchFavoriteDrawing(userId, snapshot[entry.index].turnId).catch((failure: unknown) => {
+          if (failure instanceof ApiError && failure.status === 404) {
+            return fetchGalleryDrawing(snapshot[entry.index].turnId);
+          }
+          throw failure;
+        })
+      }
+      renderActions={(entry) => {
+        // Somebody's favorite is a Gallery drawing, so any registered
+        // viewer may make it one of theirs too (#1501); the owner sees
+        // theirs filled in, and pressing it takes it off this shelf.
+        const favorite = snapshot[entry.index];
+        return favorite && viewerIsRegistered ? <GalleryFavoriteControl turnId={favorite.turnId} /> : null;
+      }}
+      renderReactions={(entry) => {
+        const favorite = snapshot[entry.index];
+        if (!favorite) return null;
+        const current = shown(favorite);
+        return (
+          <DrawingReactionControl
+            reactions={favorite.reactions.map((reaction) => ({
+              playerId: reaction.seatId,
+              emoji: reaction.emoji,
+            }))}
+            myReactorId={null}
+            counts={current.reactionCounts}
+            mine={current.myReaction}
+            eligibility={reactionEligibility({
+              isRegistered: viewerIsRegistered,
+              isDrawer: favorite.drawnByMe,
+            })}
+            onReact={(emoji) => react(favorite.turnId, emoji)}
+            onRequestAccount={onRequestAccount}
+            placement="panel"
+          />
+        );
+      }}
+    />
+  );
+
   // The profile's one empty-state recipe, as the history and the statistics
   // use it: three empty panels on a new profile wore two looks (#1280).
   if (favorites.length === 0) {
-    return <EmptyState compact title={ui.profilePage.noFavoritesYet} />;
+    // The viewer keeps the slot it has on a full shelf, so emptying the
+    // shelf from inside it does not remount it.
+    return (
+      <>
+        {null}
+        <EmptyState compact title={ui.profilePage.noFavoritesYet} />
+        {viewer}
+      </>
+    );
   }
 
   return (
@@ -101,7 +164,7 @@ export function FavoritesShelf({
             <button
               type="button"
               className="profile-shelf-open"
-              onClick={() => setOpenIndex(index)}
+              onClick={() => setViewing({ favorites, index })}
               aria-label={ui.profilePage.openFavorite({
                 prompt: favorite.prompt,
                 drawer: favorite.drawerDisplayName,
@@ -157,37 +220,7 @@ export function FavoritesShelf({
           </li>
         ))}
       </ul>
-      {openIndex !== null && (
-        <DrawingViewer
-          entries={favoritesAsRecapEntries(favorites)}
-          initialIndex={openIndex}
-          onClose={() => setOpenIndex(null)}
-          loadEntry={(entry) => fetchFavoriteDrawing(userId, favorites[entry.index].turnId)}
-          renderReactions={(entry) => {
-            const favorite = favorites[entry.index];
-            if (!favorite) return null;
-            const current = shown(favorite);
-            return (
-              <DrawingReactionControl
-                reactions={favorite.reactions.map((reaction) => ({
-                  playerId: reaction.seatId,
-                  emoji: reaction.emoji,
-                }))}
-                myReactorId={null}
-                counts={current.reactionCounts}
-                mine={current.myReaction}
-                eligibility={reactionEligibility({
-                  isRegistered: viewerIsRegistered,
-                  isDrawer: favorite.drawnByMe,
-                })}
-                onReact={(emoji) => react(favorite.turnId, emoji)}
-                onRequestAccount={onRequestAccount}
-                placement="panel"
-              />
-            );
-          }}
-        />
-      )}
+      {viewer}
     </>
   );
 }

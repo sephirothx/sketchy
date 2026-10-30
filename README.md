@@ -75,15 +75,18 @@ keyboard that takes half the screen, and one thumb.
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
 - Favorites — a registered player keeps up to six drawings at the top of their
-  profile, in their own order, chosen from games they played: their own drawings or
-  another player's, always credited to the drawer's name as it was that day. A favorite is a
-  share: only a drawing the player may share can be favorited, favoriting it puts it in the
-  gallery, and its drawer taking it out of the gallery takes it off every shelf. Favorites go with the game, the turn, or an erased drawing, and with the account that
+  profile, in their own order: any drawing in the gallery, or one from a game they played
+  that they may share — their own or another player's — always credited to the drawer's
+  name as it was that day. Favoriting a drawing from a game they played shares it, so it
+  is in the gallery too; favoriting a stranger's gallery drawing shares nothing and tells
+  nobody. A drawing leaving the gallery takes itself off every shelf. Favorites go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
   owner moves a drawing left or right and unfavorites it there, and anyone opens one in
-  the drawing viewer. **Favorite** sits beside a kept drawing on the game-over recap and in the
-  profile's game history, for a registered player who may share it.
+  the drawing viewer. **Favorite**, a star filled in orange once it is one, sits beside a
+  kept drawing on the game-over recap and in the profile's game history for a registered
+  player who may share it, and beside every gallery drawing: on a post, on its own page,
+  and in the viewer opened from somebody's favorites.
 - **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, in all eight interface
   languages: what is kept, why and for how long, who
   else handles it, what the Gallery publishes, every right and how to use it, and the

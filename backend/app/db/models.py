@@ -4133,9 +4133,10 @@ class ProfileFavorite(Base):
 
     The cap and the ordering are both in the schema: `position` is `0..5`
     (`PROFILE_FAVORITE_SLOTS`) and unique per account, so a seventh favorite has no slot
-    to sit in whatever writes it. Only a turn from a **public** game may be
-    favorited, and only by somebody who sat in it - checked in the write path,
-    since neither is expressible as a constraint here.
+    to sit in whatever writes it. What may be favorited - a drawing its owner
+    sat in the game of and may share, or any drawing in the Gallery (#1501) -
+    is checked in the write path, since neither is expressible as a
+    constraint here.
 
     Erasure is a status on `turn_drawings`, not a row deletion, so the
     cascade does not cover it: the account-erasure path deletes the favorites on

@@ -2,7 +2,7 @@ import { FavoriteControl } from "./FavoriteControl";
 import { ApiError } from "../lib/api";
 import { useToast } from "../lib/toast";
 import { refusalSentence } from "../lib/refusals.ts";
-import { isFavorite, favoriteEligibility, withFavorite, withoutFavorite } from "../lib/favorites";
+import { isFavorite, favoriteEligibility, favoriteSetTo, withFavorite } from "../lib/favorites";
 import { sendDrawingShare } from "../lib/shareRequests";
 import { satIn } from "../lib/shares";
 import { selectMe, useGameStore } from "../store/gameStore";
@@ -74,13 +74,14 @@ export function ConnectedFavoriteControl({
       eligibility={eligibility}
       disabled={!favorites.ready || favorites.pending}
       onToggle={async () => {
+        const adding = !favorited;
         try {
           // A favorite is a share (R-PIN-03). Shared first, the way the Share
           // control does it, so the room hears it and the drawer - who may be
           // right here, looking at the same recap - is not sent a notice about
           // something they watched happen (R-SHARE-09); the favorite write then
           // finds the share already made.
-          if (!isFavorite(favorites.turnIds, turnId)) {
+          if (adding) {
             // Refused before anything is shared: a seventh favorite that shared
             // the drawing anyway would publish what the press was told no to.
             if (withFavorite(favorites.turnIds, turnId) === null) {
@@ -98,9 +99,9 @@ export function ConnectedFavoriteControl({
           }
           // Computed when the queue reaches it, from the list as it stands
           // then: a press that lands beside another cannot forget its favorite.
-          const done = await favorites.mutate((current) =>
-            isFavorite(current, turnId) ? withoutFavorite(current, turnId) : withFavorite(current, turnId),
-          );
+          // What the press asked is fixed here, so a list it never saw cannot
+          // turn an add into a removal.
+          const done = await favorites.mutate((current) => favoriteSetTo(current, turnId, adding));
           if (!done) notify(refusalSentence("favorites_full"), "error");
         } catch (failure) {
           if (failure instanceof ApiError && failure.status === 404) {
