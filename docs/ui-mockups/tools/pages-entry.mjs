@@ -465,49 +465,72 @@ export const CrashPage = `
 </div>`;
 
 // ------------------------------------------------------------------ Settings
-// A full settings page: category rail on the left, two-column preference
-// groups on the right. Everything shown is the R-SET-01 synced set.
+// Player settings as shipped: a sheet over the page it was opened from, one
+// rail of four sections (R-SET-06) - Shortcuts only where there is a mouse or
+// trackpad - and every row applying as it changes. The tab tweak switches the
+// section. Account lists the signed-in devices and the data exports in the
+// page rather than behind dialogs (#864).
 const bareSwitch = (on) => `
 <span role="switch" aria-checked="${on}" style="display: inline-flex; align-items: center; width: 42px; height: 24px; border-radius: 999px; padding: 3px; background: ${on ? T.primary : T.lineStrong}; flex: none; cursor: pointer">
   <span style="width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25); transform: translateX(${on ? '18px' : '0'})"></span>
 </span>`;
 
-const prefCategory = (tab, svg, title, sub, current = false) => `
+const railTab = (tab, svg, title, current = false) => `
 <button type="button" role="tab" data-pref-tab="${tab}" aria-current="${current}" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 1.5px solid transparent; border-radius: ${T.radiusSm}; padding: 11px 12px; font-family: ${T.body}">
   <span style="display: inline-flex; color: ${T.faint}">${svg}</span>
-  <span style="display: grid; gap: 1px; min-width: 0">
-    <strong style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">${title}</strong>
-    <small style="font-size: 11.5px; color: ${T.faint}; font-weight: 700">${sub}</small>
-  </span>
-  <span style="margin-left: auto; display: inline-flex; color: ${T.faint}">${icon.chevR(14)}</span>
+  <strong style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">${title}</strong>
 </button>`;
 
-const prefGroup = (title, desc, rows) => `
-<section style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 20px 0; border-bottom: 1.5px solid ${T.line}">
-  <div>
-    <h3 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}">${title}</h3>
-    <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 4px; line-height: 1.45">${desc}</p>
-  </div>
-  <div style="display: grid; gap: 4px">${rows}</div>
+const sGroup = (title, rows) => `
+<section style="border: 1.5px solid ${T.line}; border-radius: ${T.radius}; background: ${T.card}; padding: 0 16px 2px; margin-bottom: 8px">
+  <h4 style="font-family: ${T.display}; font-weight: 600; font-size: 15px; color: ${T.ink}; margin: 0; padding-top: 9px">${title}</h4>
+  ${rows}
 </section>`;
 
-const prefRow = (label, hint, control) => `
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 52px; padding: 6px 0">
-  <div style="display: grid; gap: 2px">
-    <strong style="font-size: 14px; font-weight: 800; color: ${T.ink}">${label}</strong>
-    ${hint ? `<p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700">${hint}</p>` : ''}
-  </div>
-  ${control}
+const sRow = (label, hint, control, { first = false, danger = false } = {}) => `
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 20px; padding: 9px 0; ${first ? '' : `border-top: 1px solid ${T.line}`}">
+  <span style="display: grid; gap: 3px; min-width: 0">
+    <b style="font-size: 14px; font-weight: 800; color: ${danger ? T.danger : T.ink}">${label}</b>
+    ${hint ? `<small style="font-size: 12.5px; color: ${T.muted}; line-height: 1.45">${hint}</small>` : ''}
+  </span>
+  <span style="display: inline-flex; align-items: center; gap: 8px">${control}</span>
 </div>`;
 
-const themeCard = (name, sub, selected, sky, ground) => `
-<button type="button" aria-pressed="${selected}" style="display: grid; gap: 7px; justify-items: center; background: ${selected ? T.primarySoft : T.card}; border: 1.5px solid ${selected ? T.primary : T.line}; border-radius: ${T.radiusSm}; padding: 10px 14px 9px; font-family: ${T.body}; min-width: 92px">
-  <span aria-hidden="true" style="width: 62px; height: 38px; border-radius: 7px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; border: 1px solid ${T.lineStrong}">${sky}${ground}</span>
-  <strong style="font-size: 12.5px; font-weight: 800; color: ${selected ? T.primaryInk : T.ink}">${name}${sub ? `<small style="display: block; font-weight: 700; color: ${T.faint}">${sub}</small>` : ''}</strong>
-</button>`;
+const compactBtn = (label, svg = '', { tone = 'secondary', disabled = false } = {}) => {
+  const look = {
+    secondary: `background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}`,
+    primary: `background: ${T.primary}; color: #fff; border: 1.5px solid ${T.primary}; box-shadow: 0 2px 0 ${T.primaryEdge}`,
+    danger: `background: transparent; color: ${T.danger}; border: 1.5px solid transparent`,
+    // A secondary button whose act is destructive but asks first (Sign out everywhere).
+    dangerOutline: `background: ${T.card}; color: ${T.danger}; border: 1.5px solid ${T.lineStrong}`,
+    dangerFilled: `background: ${T.dangerButton}; color: #fff; border: 1.5px solid ${T.dangerButton}; box-shadow: 0 2px 0 ${T.dangerButtonEdge}`,
+  }[tone];
+  return `<button type="button"${disabled ? ' disabled' : ''} style="display: inline-flex; align-items: center; gap: 6px; ${look}; border-radius: ${T.radiusSm}; padding: 6px 12px; min-height: 36px; font-family: ${T.body}; font-size: 13px; font-weight: 800; white-space: nowrap${disabled ? '; opacity: 0.5' : ''}">${svg}${label}</button>`;
+};
 
-const colorDot = (c, selected = false) =>
-  `<button type="button" aria-label="${c}" style="width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: ${c}${selected ? `; box-shadow: 0 0 0 2.5px ${T.card}, 0 0 0 5px ${T.primary}` : ''}"></button>`;
+// A row's own list - devices, exports - under it, inside the group.
+const listItem = (title, lines, action) => `
+<li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid ${T.lineStrong}; border-radius: ${T.radiusSm}">
+  <span style="display: grid; gap: 3px; min-width: 0"><strong style="font-size: 14px; font-weight: 800; color: ${T.ink}">${title}</strong>${lines}</span>
+  ${action}
+</li>`;
+const listNote = (text, color = T.muted, weight = 600) => `<small style="font-size: 12.5px; color: ${color}; font-weight: ${weight}">${text}</small>`;
+const rowList = (items, gap = 8) => `<ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: ${gap}px">${items.join('')}</ul>`;
+
+// A signed-in device: its name, then two labelled dates. A session used from
+// another browser (R-AUTH-22) is the red card with the filled Revoke.
+const deviceItem = (name, { tag = '', lastUsed, signsOut, flagged = '' }) => `
+<li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 4px; padding: ${flagged ? '9px 8px 10px 12px' : '7px 8px 7px 12px'}; border: ${flagged ? `1.5px solid ${T.danger}` : `1px solid ${T.lineStrong}`}; border-radius: ${T.radiusSm}${flagged ? `; background: ${T.dangerSoft}` : ''}">
+  <span style="display: grid; gap: 1px; min-width: 0">
+    <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">${flagged ? `<span style="display: inline-flex; color: ${T.danger}">${icon.alertCircle(18)}</span>` : ''}<strong style="font-size: 14px; font-weight: 700; color: ${T.ink}">${name}</strong>${tag}</span>
+    <span style="display: flex; flex-wrap: wrap; column-gap: 16px; font-size: 13px; color: ${T.muted}"><span><b style="font-weight: 800">Last used</b> ${lastUsed}</span><span><b style="font-weight: 800">Signs out</b> ${signsOut}</span></span>
+  </span>
+  ${compactBtn('Revoke', '', { tone: flagged ? 'dangerFilled' : 'secondary' })}
+  ${flagged ? `<p style="grid-column: 1 / -1; margin: 0; color: ${T.danger}; font-size: 13px; line-height: 1.4"><b style="font-weight: 800">${flagged}</b> If that was not you, revoke this device and change your password.</p>` : ''}
+</li>`;
+
+// NAME_COLOR_PALETTE in frontend/src/store/settingsStore.ts, in its order.
+const nameSwatches = ['#e11d48', '#f97316', '#eab308', '#84cc16', '#16a34a', '#0d9488', '#38bdf8', '#2563eb', '#6366f1', '#a855f7', '#d946ef', '#f472b6', '#a0522d'];
 
 const keyChip = (key) =>
   `<button type="button" title="Change shortcut" style="display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 8px; border: 1.5px solid ${T.lineStrong}; border-bottom-width: 3px; background: ${T.card}; color: ${T.ink}; font-family: ${T.body}; font-size: 12.5px; font-weight: 800">${key}</button>`;
@@ -523,11 +546,6 @@ const shortcutRow = (svg, label, key, alt = '') => `
   <span style="margin-left: auto; display: inline-flex; gap: 5px">${keyChip(key)}${alt ? keyChipAlt(alt) : ''}</span>
 </div>`;
 
-const brushPreset = (color, sizeLabel, dot) => `
-<button type="button" style="display: inline-flex; align-items: center; gap: 8px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 8px 14px; font-family: ${T.body}; font-size: 12.5px; font-weight: 800; color: ${T.muted}; min-height: 40px">
-  <span style="width: ${dot}px; height: ${dot}px; border-radius: 50%; background: ${color}; border: 1px solid rgba(0, 0, 0, 0.15); flex: none"></span>${sizeLabel}
-</button>`;
-
 const volumeSlider = `
 <span style="display: inline-flex; align-items: center; gap: 10px; width: 200px">
   <span aria-label="Volume, 70%" role="slider" aria-valuenow="70" style="position: relative; flex: 1; height: 8px; border-radius: 999px; background: ${T.track}; cursor: pointer">
@@ -538,78 +556,86 @@ const volumeSlider = `
 </span>`;
 
 export const SettingsPage = `
-<div style="width: 1080px; min-height: 900px; margin: 0 auto; padding: 24px 24px 40px">
-  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 18px">
-    <div>
-      ${sectionLabel('Personal preferences')}
-      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 27px; color: ${T.ink}; margin-top: 4px">Settings</h1>
-    </div>
-    ${chip(`${icon.check(11)} Synced to your account`, 'success')}
-  </header>
+<div style="width: 1080px; min-height: 900px; margin: 0 auto; padding: 24px 70px 40px">
+  <div role="dialog" aria-label="Settings" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadowRaised}; padding: 14px 22px 18px">
+    <header style="display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1.5px solid ${T.line}; margin-bottom: 14px">
+      <h2 style="display: flex; align-items: center; gap: 8px; flex: 1; font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; margin: 0"><span style="display: inline-flex; color: ${T.primary}">${icon.gear(20)}</span>Settings</h2>
+      ${btn.iconOnly(icon.x(17), 'Close settings', 38)}
+    </header>
 
-  <div style="display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start">
-    <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 12px; box-shadow: ${T.shadow}; display: grid; gap: 4px; position: sticky; top: 0">
-      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 12px">
-        ${avatar(P.marta, 34)}
-        <span style="display: grid; gap: 0"><strong style="font-size: 14px; font-weight: 800; color: ${T.ink}">Marta</strong><small style="font-size: 11.5px; color: ${T.faint}; font-weight: 700">Signed in</small></span>
+    <div data-tab="{{tab}}" style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start">
+      <nav role="tablist" aria-label="Settings sections" style="display: grid; gap: 4px">
+        ${railTab('account', icon.user(16), 'Account')}
+        ${railTab('appearance', icon.sun(16), 'Appearance')}
+        ${railTab('sound', icon.volume(16), 'Sound &amp; effects')}
+        ${railTab('shortcuts', icon.keyboard(16), 'Shortcuts')}
+      </nav>
+
+      <div>
+      <div data-pref-panel="account">
+        ${sGroup('You', `
+          <div style="display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 22px; padding: 8px 0 12px">
+            ${avatar(P.marta, 88)}
+            <div style="display: grid; gap: 10px">
+              ${pname(P.marta, '; font-family: ' + T.display + '; font-size: 24px; font-weight: 600')}
+              <span style="display: flex; flex-wrap: wrap; gap: 7px">${nameSwatches.map((c, i) => `<span style="width: 24px; height: 24px; border-radius: 50%; background: ${c}${i === 5 ? `; box-shadow: 0 0 0 2.5px ${T.card}, 0 0 0 4.5px ${T.ink}` : ''}"></span>`).join('')}</span>
+            </div>
+          </div>`)}
+        ${sGroup('Signing in', `
+          ${sRow('Email', `m•••••a@e•••••e.com · <span style="color: ${T.successInk}; font-weight: 800">${icon.check(11)} Confirmed</span>`, compactBtn('Change'), { first: true })}
+          ${sRow('Password', 'Changing it signs every other device out.', compactBtn('Change password'))}
+          ${sRow('Signed-in devices', 'Revoke any device you don&rsquo;t recognize.', compactBtn('Sign out everywhere', icon.leave(14), { tone: 'dangerOutline' }))}
+          ${rowList([
+            deviceItem('Firefox on Windows', { lastUsed: '27 Oct, 08:12', signsOut: '25 Jan 2027', flagged: 'Used from a different browser on 20 Oct, 23:05.' }),
+            deviceItem('Safari on iOS', { lastUsed: '26 Oct, 21:40', signsOut: '24 Jan 2027' }),
+            deviceItem('Chrome on macOS', { tag: `<span style="background: ${T.successSoft}; color: ${T.successInk}; font-size: 11.5px; font-weight: 800; padding: 1px 8px; border-radius: 999px">This device</span>`, lastUsed: 'Now', signsOut: '26 Jan 2027' }),
+          ], 6)}`)}
+        ${sGroup('Solo', sRow('Let Solo players guess my public drawings', 'Solo never shows who drew a drawing. Turn this off and none of yours is served to anybody.', bareSwitch(true), { first: true }))}
+        ${sGroup('Your data', `
+          ${sRow('Download everything', 'Every game, list and setting Sketchy holds about you, as one JSON file.', compactBtn('Request export', icon.download(14), { disabled: true }), { first: true })}
+          ${rowList([listItem('Ready', listNote('Requested 21 Oct, 09:15'), compactBtn('Download', '', { tone: 'primary' }))])}
+          <p style="margin: 0 0 10px; font-size: 12.5px; color: ${T.muted}">One export a week; ready exports expire after seven days. You can request another on 4 Nov.</p>
+          ${sRow('Delete your account', 'Games you played stay in other players&rsquo; histories, without your name on them.', compactBtn('Delete…', '', { tone: 'danger' }), { danger: true })}`)}
       </div>
-      <div style="border-top: 1.5px solid ${T.line}; margin: 0 6px 4px"></div>
-      ${prefCategory('general', icon.gear(16), 'General', 'Account, appearance & sound', true)}
-      ${prefCategory('game', icon.brush(16), 'Game', 'Drawing & celebrations')}
-      ${prefCategory('shortcuts', icon.keyboard(16), 'Shortcuts', 'Drawing tool key bindings')}
-      <div style="border-top: 1.5px solid ${T.line}; margin: 6px 6px 2px"></div>
-      ${btn.ghost('Back to lobby', { iconL: icon.back(14), style: 'justify-content: flex-start' })}
-    </aside>
 
-    <section data-tab="{{tab}}" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 6px 24px 18px; box-shadow: ${T.shadow}">
-      <div data-pref-panel="general">
-      ${prefGroup('You', 'How you appear to other players.', `
-        ${prefRow('Username', 'Your account login and in-game name.', `<span style="display: inline-flex; align-items: center; gap: 10px">${avatar(P.marta, 26)}<strong style="font-size: 14px; font-weight: 800; color: ${T.ink}">Marta</strong>${btn.secondary('Manage account', { style: 'min-height: 38px; padding: 7px 13px; font-size: 13px' })}</span>`)}
-        ${prefRow('Name color', 'How your name reads in every room. Guests stay grey.', `<span style="display: inline-flex; align-items: center; gap: 14px">${pname(P.marta, '; font-size: 15px')}<span style="display: inline-flex; gap: 8px">${colorDot('#0F766E', true)}${colorDot('#C2410C')}${colorDot('#7E22CE')}${colorDot('#0369A1')}</span></span>`)}`)}
-
-      ${prefGroup('Appearance', 'Theme and accessible color behavior.', `
-        ${prefRow('Theme', 'Follow your device, or lock an appearance.', `<span style="display: inline-flex; gap: 8px">
-          ${themeCard('Light', '', false, '<i style="background: #FAF6EF"></i>', '<i style="background: #FFFFFF"></i>')}
-          ${themeCard('Dark', '', false, '<i style="background: #0F172A"></i>', '<i style="background: #1E293B"></i>')}
-          ${themeCard('System', 'Current: Light', true, '<i style="background: linear-gradient(100deg, #FAF6EF 50%, #0F172A 50%)"></i>', '<i style="background: linear-gradient(100deg, #FFFFFF 50%, #1E293B 50%)"></i>')}
-        </span>`)}
-        ${prefRow('Colorblind-safe colors', 'Hosts of rooms you join get a quiet suggestion to switch the palette. Never shown with your name.', bareSwitch(false))}`)}
-
-      ${prefGroup('Audio', 'Feedback for guesses, rounds, and timers.', `
-        ${prefRow('Sound', '', bareSwitch(true))}
-        ${prefRow('Volume', '', volumeSlider)}`)}
+      <div data-pref-panel="appearance">
+        ${sGroup('Display', `
+          ${sRow('Color scheme', 'Applies the moment you pick it.', segmented(['Light', 'Dark', 'System'], 2), { first: true })}
+          ${sRow('Language you read in', 'Every word of Sketchy itself. Separate from the language you play in: reading in one and playing in another is perfectly ordinary.', selectBox('English'))}
+          ${sRow('Your language', 'Rooms in this language come first in the lobby, and in a mixed room it is the language you play the prompts in. It is separate from the language you read Sketchy in.', selectBox('English'))}
+          ${sRow('Also comfortable in', 'Rooms in these languages come after mixed rooms in the lobby, in this order. Drag a language, or use its arrows, to move it.', `<span style="display: inline-flex; gap: 6px">${chip('Italiano')}${chip('Deutsch')}</span>`)}
+          ${sRow('Time format', 'How every clock reads: chat timestamps, sign-in dates, notices. System follows your device.', segmented(['System', '12-hour', '24-hour'], 0))}`)}
+        ${sGroup('Accessibility', sRow('I have trouble telling colors apart', 'Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own.', bareSwitch(false), { first: true }))}
+        ${sGroup('The canvas', `
+          ${sRow('Brush cursor', 'A crosshair is precise at the point; an outline shows how wide the stroke will be.', segmented(['Crosshair', 'Outline'], 0), { first: true })}
+          ${sRow('Default brush size', 'The size the brush starts every turn at. Marked on the size slider.', segmented(['2', '4', '6', '8', '12', '16', '24', '32'], 2))}
+          ${sRow('Pen pressure', 'With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke. Brush size is the widest it gets.', bareSwitch(true))}`)}
       </div>
 
-      <div data-pref-panel="game">
-      ${prefGroup('Drawing', 'Your drawing experience only — rooms set the rules.', `
-        ${prefRow('Brush cursor', 'A precise crosshair, or the full brush outline.', segmented(['Crosshair', 'Outline'], 1, { w: 92 }))}
-        ${prefRow('Brush presets', '3 of 20 saved.', `<span style="display: inline-flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end">${brushPreset('#000000', 'Ink · 4px', 8)}${brushPreset('#ED1C24', 'Marker · 12px', 13)}${brushPreset('#7AC9E8', 'Sky wash · 24px', 17)}</span>`)}`)}
-
-      ${prefGroup('Celebrations', 'Keep the energy without covering the canvas.', `
-        ${prefRow('Confetti', 'On correct guesses and podiums.', bareSwitch(true))}
-        ${prefRow('Clear the guess box after each guess', 'Off keeps your last guess for quick edits.', bareSwitch(true))}`)}
+      <div data-pref-panel="sound">
+        ${sGroup('Sound', `
+          ${sRow('Sound effects', 'Chimes for a correct guess, the start of a turn, the last ten seconds, and players coming and going.', bareSwitch(true), { first: true })}
+          ${sRow('Volume', '', volumeSlider)}`)}
+        ${sGroup('Effects', sRow('Confetti', 'A burst when you guess right, and again for the winner at the end of a game.', bareSwitch(true), { first: true }))}
       </div>
 
       <div data-pref-panel="shortcuts">
-      ${prefGroup('Keyboard shortcuts', 'Select a key to rebind it. Each action can carry a main and a secondary key.', `
-        <div style="display: grid; grid-template-columns: 1fr; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px">
-          ${shortcutRow(icon.brush(15), 'Brush', 'P', '1')}
-          ${shortcutRow(icon.fill(15), 'Fill', 'F', '2')}
-          ${shortcutRow(icon.eraser(15), 'Eraser', 'E', '3')}
-          ${shortcutRow(icon.rect(15), 'Rectangle', 'R', '4')}
-          ${shortcutRow(icon.triangle(15), 'Triangle', 'T', '5')}
-          ${shortcutRow(icon.circle(15), 'Ellipse', 'C', '6')}
-          ${shortcutRow(icon.chevD(15), 'Decrease brush size', '[')}
-          ${shortcutRow(icon.chevU(15), 'Increase brush size', ']')}
-          ${shortcutRow(icon.undo(15), 'Undo stroke', 'Z')}
-        </div>
-        <div style="display: flex; justify-content: flex-end; margin-top: 8px">${btn.ghost('Reset to defaults', { style: 'min-height: 34px; padding: 4px 8px; font-size: 12.5px' })}</div>`)}
+        ${sGroup('Drawing tools', `
+          <div style="display: flex; justify-content: flex-end; margin-top: -26px">${btn.ghost('Reset to defaults', { style: 'min-height: 32px; padding: 4px 8px; font-size: 12.5px' })}</div>
+          <p style="margin: 2px 0 8px; font-size: 12.5px; color: ${T.muted}">Click a key to rebind it. Each action can hold two. Press Esc to cancel.</p>
+          <div style="display: grid; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 8px 16px; margin-bottom: 12px">
+            ${shortcutRow(icon.brush(15), 'Brush tool', 'P', '1')}
+            ${shortcutRow(icon.fill(15), 'Fill tool', 'F', '2')}
+            ${shortcutRow(icon.eraser(15), 'Eraser tool', 'E', '3')}
+            ${shortcutRow(icon.rect(15), 'Rectangle tool', 'R', '4')}
+            ${shortcutRow(icon.triangle(15), 'Triangle tool', 'T', '5')}
+            ${shortcutRow(icon.circle(15), 'Ellipse tool', 'C', '6')}
+            ${shortcutRow(icon.chevD(15), 'Decrease brush size', '[')}
+            ${shortcutRow(icon.chevU(15), 'Increase brush size', ']')}
+            ${shortcutRow(icon.undo(15), 'Undo stroke', 'Z')}
+          </div>`)}
       </div>
-
-      <footer style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px">
-        <span style="font-size: 12.5px; font-weight: 700; color: ${T.faint}">Changes apply immediately, on every device you're signed in on.</span>
-        ${btn.primary('Done')}
-      </footer>
-    </section>
+      </div>
+    </div>
   </div>
 </div>`;
