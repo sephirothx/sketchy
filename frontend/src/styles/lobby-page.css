@@ -1060,7 +1060,8 @@
    somewhere else, and the grab handle above it is what closes the sheet.
    `.chip` is only the shape — the paint comes from `.chip-neutral`, without
    which this rendered as a transparent border in the UA's own font. */
-.room-code-paste {
+.room-code-paste,
+.room-code-scan {
   cursor: pointer;
   flex: 0 0 auto;
   font-family: var(--font-body);
@@ -2107,4 +2108,94 @@ a.online-player-name:focus-visible {
 
 .legal-items li:last-child {
   margin-bottom: 0;
+}
+
+/* Join by code's camera view (#1530). Square, so a code held anywhere in a
+   phone's portrait frame is in it; the frame marks the middle, which is all
+   the decoder needs, and dims the rest. Dark behind the video in both themes:
+   it is a camera, not a surface. */
+.qr-scanner {
+  display: grid;
+  gap: 12px;
+}
+
+.qr-scanner-view {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 52vh;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--qr-dark);
+}
+
+.qr-scanner-view video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-scanner-frame {
+  position: absolute;
+  inset: 16%;
+  border: 3px solid var(--qr-light);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.qr-scanner-hint,
+.qr-scanner-warning {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.qr-scanner-hint {
+  color: var(--muted);
+  text-align: center;
+}
+
+.qr-scanner-warning {
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-edge);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
+.qr-scanner-problem {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 16px;
+  text-align: center;
+  background: var(--well);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.qr-scanner-problem p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.qr-scanner-actions {
+  display: flex;
+  gap: 9px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.qr-scanner-actions .btn {
+  flex: 1;
+}
+
+/* Scan, and Type it in its place, sized as Paste beside it. */
+.room-code-scan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
