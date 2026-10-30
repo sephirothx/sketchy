@@ -3335,8 +3335,14 @@ duration and application name, `pg_stat_statements` readable by the monitor role
 - `default_toast_compression = lz4` does not touch the two `STORAGE EXTERNAL` drawing
   payloads, which are never compressed by the server.
 
-The Compose file of #405/#408 consumes these files; until it exists, a cluster built by
-hand should be built with them.
+The Compose deployment ([`ops/compose/compose.yaml`](../ops/compose/compose.yaml), #405)
+consumes these files rather than copying them: `sketchy.conf` and `init.sql` are mounted
+read-only, and a first-start script ([`10-sketchy.sh`](../ops/compose/initdb/10-sketchy.sh))
+adds the `include` to the new cluster's `postgresql.conf`, so editing the tracked file and
+restarting is enough. The script also runs `init.sql` and gives the three roles their
+passwords from `.env`. The one copy is the `initdb` flags, because the image takes them as an
+environment variable; `tests/test_compose_config.py` fails if the two disagree. A cluster built
+by hand should be built from the same files.
 
 ### Reading the database from the inside
 
