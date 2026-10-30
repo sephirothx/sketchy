@@ -2430,6 +2430,11 @@ export const EN = {
     privateRoom: "Private room",
   },
 
+  inviteQrDialog: {
+    title: "Join with a phone camera",
+    qrLabel: (p: { code: string }) => `QR code for the invite link to room ${p.code}`,
+    drawingCode: "Drawing the code…",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2449,6 +2454,7 @@ export const EN = {
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    showQrCode: "Show a QR code",
     copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",

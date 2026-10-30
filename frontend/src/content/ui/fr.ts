@@ -2409,6 +2409,11 @@ export const FR: Catalogue = {
     privateRoom: "Salon privé",
   },
 
+  inviteQrDialog: {
+    title: "Rejoindre avec l’appareil photo du téléphone",
+    qrLabel: (p: { code: string }) => `QR code du lien d’invitation au salon ${p.code}`,
+    drawingCode: "Dessin du code…",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2428,6 +2433,7 @@ export const FR: Catalogue = {
     inviteYourFriends: "Invite tes amis",
     shareLink: "Partage le lien",
     copyCode: "Copier le code",
+    showQrCode: "Afficher un QR code",
     copyLink: "Copier le lien",
     inTheRoom: "Dans le salon",
     you: "(toi)",

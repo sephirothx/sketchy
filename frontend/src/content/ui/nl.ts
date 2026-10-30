@@ -2407,6 +2407,11 @@ export const NL: Catalogue = {
     privateRoom: "Privékamer",
   },
 
+  inviteQrDialog: {
+    title: "Doe mee met je telefooncamera",
+    qrLabel: (p: { code: string }) => `QR-code voor de uitnodigingslink naar kamer ${p.code}`,
+    drawingCode: "Code tekenen…",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2426,6 +2431,7 @@ export const NL: Catalogue = {
     inviteYourFriends: "Nodig je vrienden uit",
     shareLink: "Deel de link",
     copyCode: "Code kopiëren",
+    showQrCode: "QR-code tonen",
     copyLink: "Link kopiëren",
     inTheRoom: "In de kamer",
     you: "(jij)",

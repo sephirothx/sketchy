@@ -3151,7 +3151,9 @@ A seated client checks with the server every five seconds that it still holds th
   fits the round's word), and so does everything as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - with no status line under it: Start itself says
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
-  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
+  On a desktop its invite copies the link; a phone shares it. A QR code button - beside Copy code on
+  a desktop, beside the room code on a phone - shows the room's link as a code a phone camera
+  reads, for the friend across the table; the encoder is fetched only when it is pressed. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card - on one line where the words fit, otherwise with
   every row filled: Edit and the pad's button over a full-width Start. An invite link shows the room the same six

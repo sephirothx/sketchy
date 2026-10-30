@@ -2409,6 +2409,11 @@ export const IT: Catalogue = {
     privateRoom: "Stanza privata",
   },
 
+  inviteQrDialog: {
+    title: "Entra con la fotocamera del telefono",
+    qrLabel: (p: { code: string }) => `Codice QR del link d’invito alla stanza ${p.code}`,
+    drawingCode: "Disegno del codice…",
+  },
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     finalStandingSpoken: (p: { place: number; score: number }) =>
@@ -2428,6 +2433,7 @@ export const IT: Catalogue = {
     inviteYourFriends: "Invita i tuoi amici",
     shareLink: "Condividi il link",
     copyCode: "Copia il codice",
+    showQrCode: "Mostra il codice QR",
     copyLink: "Copia il link",
     inTheRoom: "Nella stanza",
     you: "(tu)",
