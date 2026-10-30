@@ -501,6 +501,9 @@ const compactBtn = (label, svg = '', { tone = 'secondary', disabled = false } = 
     secondary: `background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}`,
     primary: `background: ${T.primary}; color: #fff; border: 1.5px solid ${T.primary}; box-shadow: 0 2px 0 ${T.primaryEdge}`,
     danger: `background: transparent; color: ${T.danger}; border: 1.5px solid transparent`,
+    // A secondary button whose act is destructive but asks first (Sign out everywhere).
+    dangerOutline: `background: ${T.card}; color: ${T.danger}; border: 1.5px solid ${T.lineStrong}`,
+    dangerFilled: `background: ${T.dangerButton}; color: #fff; border: 1.5px solid ${T.dangerButton}; box-shadow: 0 2px 0 ${T.dangerButtonEdge}`,
   }[tone];
   return `<button type="button"${disabled ? ' disabled' : ''} style="display: inline-flex; align-items: center; gap: 6px; ${look}; border-radius: ${T.radiusSm}; padding: 6px 12px; min-height: 36px; font-family: ${T.body}; font-size: 13px; font-weight: 800; white-space: nowrap${disabled ? '; opacity: 0.5' : ''}">${svg}${label}</button>`;
 };
@@ -512,7 +515,19 @@ const listItem = (title, lines, action) => `
   ${action}
 </li>`;
 const listNote = (text, color = T.muted, weight = 600) => `<small style="font-size: 12.5px; color: ${color}; font-weight: ${weight}">${text}</small>`;
-const rowList = (items) => `<ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px">${items.join('')}</ul>`;
+const rowList = (items, gap = 8) => `<ul style="list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: ${gap}px">${items.join('')}</ul>`;
+
+// A signed-in device: its name, then two labelled dates. A session used from
+// another browser (R-AUTH-22) is the red card with the filled Revoke.
+const deviceItem = (name, { tag = '', lastUsed, signsOut, flagged = '' }) => `
+<li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 4px; padding: ${flagged ? '9px 8px 10px 12px' : '7px 8px 7px 12px'}; border: ${flagged ? `1.5px solid ${T.danger}` : `1px solid ${T.lineStrong}`}; border-radius: ${T.radiusSm}${flagged ? `; background: ${T.dangerSoft}` : ''}">
+  <span style="display: grid; gap: 1px; min-width: 0">
+    <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">${flagged ? `<span style="display: inline-flex; color: ${T.danger}">${icon.alertCircle(18)}</span>` : ''}<strong style="font-size: 14px; font-weight: 700; color: ${T.ink}">${name}</strong>${tag}</span>
+    <span style="display: flex; flex-wrap: wrap; column-gap: 16px; font-size: 13px; color: ${T.muted}"><span><b style="font-weight: 800">Last used</b> ${lastUsed}</span><span><b style="font-weight: 800">Signs out</b> ${signsOut}</span></span>
+  </span>
+  ${compactBtn('Revoke', '', { tone: flagged ? 'dangerFilled' : 'secondary' })}
+  ${flagged ? `<p style="grid-column: 1 / -1; margin: 0; color: ${T.danger}; font-size: 13px; line-height: 1.4"><b style="font-weight: 800">${flagged}</b> If that was not you, revoke this device and change your password.</p>` : ''}
+</li>`;
 
 // NAME_COLOR_PALETTE in frontend/src/store/settingsStore.ts, in its order.
 const nameSwatches = ['#e11d48', '#f97316', '#eab308', '#84cc16', '#16a34a', '#0d9488', '#38bdf8', '#2563eb', '#6366f1', '#a855f7', '#d946ef', '#f472b6', '#a0522d'];
@@ -569,12 +584,12 @@ export const SettingsPage = `
         ${sGroup('Signing in', `
           ${sRow('Email', `m•••••a@e•••••e.com · <span style="color: ${T.successInk}; font-weight: 800">${icon.check(11)} Confirmed</span>`, compactBtn('Change'), { first: true })}
           ${sRow('Password', 'Changing it signs every other device out.', compactBtn('Change password'))}
-          ${sRow('Signed-in devices', 'Revoke any device you no longer recognize. Device names are coarse and do not store browser versions. A device you stop using signs itself out after ninety days.', compactBtn('Sign out everywhere', '', { tone: 'danger' }))}
+          ${sRow('Signed-in devices', 'Revoke any device you don&rsquo;t recognize.', compactBtn('Sign out everywhere', icon.leave(14), { tone: 'dangerOutline' }))}
           ${rowList([
-            listItem('Chrome on macOS', `<span style="color: ${T.successInk}; font-size: 12px; font-weight: 700">Current device</span>${listNote('Last used today, 14:02')}`, compactBtn('Revoke')),
-            listItem('Safari on iOS', listNote('Last used 26 Oct, 21:40'), compactBtn('Revoke')),
-            listItem('Firefox on Windows', listNote('Used from a different browser on 20 Oct. Revoke this device if that was not you.', T.warning, 700), compactBtn('Revoke')),
-          ])}`)}
+            deviceItem('Firefox on Windows', { lastUsed: '27 Oct, 08:12', signsOut: '25 Jan 2027', flagged: 'Used from a different browser on 20 Oct, 23:05.' }),
+            deviceItem('Safari on iOS', { lastUsed: '26 Oct, 21:40', signsOut: '24 Jan 2027' }),
+            deviceItem('Chrome on macOS', { tag: `<span style="background: ${T.successSoft}; color: ${T.successInk}; font-size: 11.5px; font-weight: 800; padding: 1px 8px; border-radius: 999px">This device</span>`, lastUsed: 'Now', signsOut: '26 Jan 2027' }),
+          ], 6)}`)}
         ${sGroup('Solo', sRow('Let Solo players guess my public drawings', 'Solo never shows who drew a drawing. Turn this off and none of yours is served to anybody.', bareSwitch(true), { first: true }))}
         ${sGroup('Your data', `
           ${sRow('Download everything', 'Every game, list and setting Sketchy holds about you, as one JSON file.', compactBtn('Request export', icon.download(14), { disabled: true }), { first: true })}
