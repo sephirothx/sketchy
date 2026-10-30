@@ -147,7 +147,8 @@ Sorted by how much it cost a player.
     including a **Shortcuts tab** offering keyboard bindings on a touch device.
     → Full-screen sheet below 900 px, and the Shortcuts tab is hidden when
     `(pointer: fine)` does not match — keyed on the pointer rather than the
-    width, so a tablet with a keyboard keeps it.
+    width, so a tablet with a trackpad keeps it. One with only a keyboard does
+    not: no browser reports a keyboard (#864).
 12. **Arriving from an invite put Join below the fold.** Cold at 390 × 844 the
     actions sat at **y 839–937** on an 844 px screen, under 380 px of room
     configuration (a 2×2 table of Players / Rounds / Draw time / Scoring, then

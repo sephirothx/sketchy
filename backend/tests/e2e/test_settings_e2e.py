@@ -159,6 +159,51 @@ async def test_settings_url_opens_over_the_lobby_for_a_direct_visit():
             await browser.close()
 
 
+async def test_a_touch_screen_is_not_offered_shortcuts():
+    """Shortcuts only where there is a mouse or trackpad (R-SET-06, #864).
+
+    A phone is a coarse pointer: its rail has no Shortcuts tab and the
+    section's URL opens Account. The same visit with a mouse keeps it.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
+        phone = await browser.new_context(
+            viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True
+        )
+        desktop = await browser.new_context()
+        try:
+            page = await phone.new_page()
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "TouchOnly")
+            await page.goto(f"{BASE_URL}/settings/shortcuts")
+            dialog = page.locator('.settings-modal-card')
+            await dialog.wait_for(state="visible")
+            assert await page.evaluate("() => matchMedia('(pointer: fine)').matches") is False
+            assert await dialog.get_by_role("tab", name="Account").get_attribute(
+                "aria-selected"
+            ) == "true"
+            assert await dialog.get_by_role("tab", name="Shortcuts").count() == 0
+            assert await dialog.get_by_text("Drawing tools").count() == 0
+            # The URL follows what is shown, so a trackpad attached later
+            # cannot swap the pane out from under the player.
+            await page.wait_for_url("**/settings/account")
+
+            page = await desktop.new_page()
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "MouseAndKeys")
+            await page.goto(f"{BASE_URL}/settings/shortcuts")
+            dialog = page.locator('.settings-modal-card')
+            await dialog.wait_for(state="visible")
+            assert await dialog.get_by_role("tab", name="Shortcuts").get_attribute(
+                "aria-selected"
+            ) == "true"
+            assert await dialog.get_by_text("Drawing tools").is_visible()
+        finally:
+            await phone.close()
+            await desktop.close()
+            await browser.close()
+
+
 async def test_registered_player_settings_follow_login_to_a_fresh_device():
     """Account settings override a fresh browser's local defaults after login."""
     username = "CrossDeviceSettings"

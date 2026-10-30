@@ -2181,8 +2181,6 @@ export const ES: Catalogue = {
     sound: "Sonido",
     volume: "Volumen",
     effects: "Efectos",
-    noKeyboardThisDevice: "No hay teclado en este dispositivo",
-    yourBindingsAreStillSavedStill: "Tus atajos siguen guardados y funcionando. Abre Sketchy con un teclado\n            conectado para cambiarlos.",
     drawingTools: "Herramientas de dibujo",
     resetDefaults: "Restablecer valores",
     settings: "Ajustes",

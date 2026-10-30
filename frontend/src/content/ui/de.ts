@@ -2182,8 +2182,6 @@ export const DE: Catalogue = {
     sound: "Ton",
     volume: "Lautstärke",
     effects: "Effekte",
-    noKeyboardThisDevice: "Keine Tastatur auf diesem Gerät",
-    yourBindingsAreStillSavedStill: "Deine Kürzel sind weiterhin gespeichert und funktionieren. Öffne Sketchy mit\n            angeschlossener Tastatur, um sie zu ändern.",
     drawingTools: "Zeichenwerkzeuge",
     resetDefaults: "Auf Standard zurücksetzen",
     settings: "Einstellungen",

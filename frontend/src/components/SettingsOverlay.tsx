@@ -22,6 +22,7 @@ import { fetchSecondFactor, type SecondFactorState } from "../lib/secondFactor";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
+  DEFAULT_SETTINGS_SECTION,
   SETTINGS_SECTIONS,
   sectionFromPath,
   settingsPath,
@@ -1299,10 +1300,6 @@ function ShortcutsPane() {
     action: keyof KeyBindings;
     slotIndex: number;
   } | null>(null);
-  // Keyed on the pointer rather than the width: a tablet with a keyboard is a
-  // narrow screen that can still use these. The section stays in the rail on
-  // touch and explains itself, rather than vanishing.
-  const hasKeyboard = useMediaQuery("(pointer: fine)");
   const actions = Object.keys(ACTION_LABELS) as (keyof KeyBindings)[];
 
   useEffect(() => {
@@ -1329,15 +1326,6 @@ function ShortcutsPane() {
 
   return (
     <>
-      {!hasKeyboard && (
-        <div className="settings-empty">
-          <KeyboardIcon size={28} />
-          <b>{ui.settingsOverlay.noKeyboardThisDevice}</b>
-          <span>
-            {ui.settingsOverlay.yourBindingsAreStillSavedStill}
-          </span>
-        </div>
-      )}
       <Group
         title={ui.settingsOverlay.drawingTools}
         hint={ui.settingsOverlay.clickKeyRebindEachActionCan}
@@ -1406,7 +1394,25 @@ function ShortcutsPane() {
 export function SettingsOverlay() {
   const navigate = useNavigate();
   const location = useLocation();
-  const section = sectionFromPath(location.pathname);
+  // Shortcuts only where there is a mouse or a trackpad (R-SET-06, #864). On
+  // a touch screen the section was a card saying "no keyboard" over ten
+  // bindings nobody there could change, and a phone's rail scrolled sideways
+  // to reach it. Keyed on the pointer, since no browser reports a keyboard:
+  // a tablet with a keyboard and no trackpad loses the section, and keeps its
+  // bindings. Its URL is replaced by Account's there, so a trackpad attached
+  // later does not swap the pane - and a half-typed name - out from under
+  // the player.
+  const hasFinePointer = useMediaQuery("(pointer: fine)");
+  const sections: readonly SettingsSection[] = hasFinePointer
+    ? SETTINGS_SECTIONS
+    : SETTINGS_SECTIONS.filter((id) => id !== "shortcuts");
+  const requested = sectionFromPath(location.pathname);
+  const section = sections.includes(requested) ? requested : DEFAULT_SETTINGS_SECTION;
+  useEffect(() => {
+    if (requested === "shortcuts" && section !== requested) {
+      navigate(settingsPath(section), { replace: true, state: location.state });
+    }
+  }, [requested, section, navigate, location.state]);
   const closeOverlay = useCloseOverlay();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1483,7 +1489,7 @@ export function SettingsOverlay() {
 
         <div className="settings-modal-body">
           <div className="settings-tabs" role="tablist" aria-label={ui.settingsOverlay.settingsSections}>
-            {SETTINGS_SECTIONS.map((id) => (
+            {sections.map((id) => (
               <button
                 key={id}
                 type="button"

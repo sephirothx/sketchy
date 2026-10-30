@@ -2184,8 +2184,6 @@ export const IT: Catalogue = {
     sound: "Audio",
     volume: "Volume",
     effects: "Effetti",
-    noKeyboardThisDevice: "Nessuna tastiera su questo dispositivo",
-    yourBindingsAreStillSavedStill: "Le tue scorciatoie restano salvate e funzionano. Apri Sketchy con una tastiera\n            collegata per cambiarle.",
     drawingTools: "Strumenti di disegno",
     resetDefaults: "Ripristina i valori predefiniti",
     settings: "Impostazioni",

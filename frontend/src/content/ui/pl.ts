@@ -2190,8 +2190,6 @@ export const PL: Catalogue = {
     sound: "Dźwięk",
     volume: "Głośność",
     effects: "Efekty",
-    noKeyboardThisDevice: "Brak klawiatury na tym urządzeniu",
-    yourBindingsAreStillSavedStill: "Twoje przypisania klawiszy są nadal zapisane i działają. Otwórz Sketchy z podłączoną\n            klawiaturą, żeby je zmienić.",
     drawingTools: "Narzędzia rysowania",
     resetDefaults: "Przywróć domyślne",
     settings: "Ustawienia",

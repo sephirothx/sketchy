@@ -2200,8 +2200,6 @@ export const EN = {
     sound: "Sound",
     volume: "Volume",
     effects: "Effects",
-    noKeyboardThisDevice: "No keyboard on this device",
-    yourBindingsAreStillSavedStill: "Your bindings are still saved and still work. Open Sketchy with a keyboard\n            attached to change them.",
     drawingTools: "Drawing tools",
     resetDefaults: "Reset to defaults",
     settings: "Settings",
