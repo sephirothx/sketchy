@@ -608,14 +608,10 @@
   border-radius: var(--radius-sm);
 }
 
-.invite-qr-code,
-.invite-qr-hint {
-  text-align: center;
-}
-
 /* The waiting card's code, in its own class so the phone layout's rules for
    that one do not reach this. */
 .invite-qr-code {
+  text-align: center;
   color: var(--primary-ink);
   font-family: var(--font-display);
   font-size: 30px;

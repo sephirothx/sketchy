@@ -2412,7 +2412,6 @@ export const IT: Catalogue = {
   inviteQrDialog: {
     title: "Entra con la fotocamera del telefono",
     qrLabel: (p: { code: string }) => `Codice QR del link d’invito alla stanza ${p.code}`,
-    opensInvitePage: "Apre la pagina d’invito di questa stanza.",
     drawingCode: "Disegno del codice…",
   },
   waitingRoomPanel: {
