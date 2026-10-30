@@ -11,7 +11,7 @@ export const SCREENS = [
   { name: 'Main', page: MainPage, w: 960, h: 1240, x: 0, y: 0, title: 'Lobby', group: 'Getting in' },
   { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1100, x: 1050, y: 0, title: 'Create a room', group: 'Getting in' },
   { name: 'AccountRecovery', page: AccountRecoveryPage, w: 880, h: 560, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
-  { name: 'Settings', page: SettingsPage, w: 1080, h: 900, x: 2900, y: 0, title: 'Settings (new)', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['general', 'game', 'shortcuts'], default: 'general' } } },
+  { name: 'Settings', page: SettingsPage, w: 1080, h: 1180, x: 2900, y: 0, title: 'Player settings', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['account', 'appearance', 'sound', 'shortcuts'], default: 'account' } } },
   { name: 'NotFound', page: NotFoundPage, w: 720, h: 700, x: 4070, y: 0, title: 'Page not found', group: 'Getting in' },
   { name: 'Crash', page: CrashPage, w: 720, h: 1300, x: 4880, y: 0, title: 'Crash page', group: 'Getting in' },
   // Row 2 — in the room

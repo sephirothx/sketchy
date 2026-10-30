@@ -572,6 +572,55 @@
   gap: 10px;
 }
 
+/* On a phone the QR code's button sits beside the code rather than in the
+   row of labelled buttons, which has no width left for a third (#864). */
+.waiting-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.waiting-code-row .waiting-code {
+  margin-inline: 0;
+}
+
+/* The invite link as a code, large enough to read from across a table.
+   White behind it in both themes: a camera needs contrast, and the padding
+   is the quiet zone the code's own one-module margin leaves short. */
+.invite-qr-dialog {
+  max-width: 420px;
+}
+
+.invite-qr-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.invite-qr {
+  display: block;
+  width: min(320px, 100%);
+  height: auto;
+  padding: 10px;
+  background: var(--qr-light);
+  border-radius: var(--radius-sm);
+}
+
+/* The waiting card's code, in its own class so the phone layout's rules for
+   that one do not reach this. */
+.invite-qr-code {
+  text-align: center;
+  color: var(--primary-ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  margin: 12px 0 2px;
+}
+
 /* ── Who is here ─────────────────────────────────────────────────────────
    Faces, not a list in another column: this is the thing you watch while
    waiting, and it used to be the last block on the page.

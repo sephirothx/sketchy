@@ -231,7 +231,8 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             assert await guest.is_visible(".settings-guest-card")
             assert await guest.locator('.settings-row button:has-text("Change password")').count() == 0
             assert await guest.locator('.settings-row button:has-text("Add an email")').count() == 0
-            assert await guest.locator('.settings-row button:has-text("Manage")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Sign out everywhere")').count() == 0
+            assert await guest.get_by_role("list", name="Signed-in devices").count() == 0
             assert await guest.locator('.settings-row button:has-text("Request export")').is_visible()
 
             # Only a guest can change the name (a registered player always
@@ -438,21 +439,21 @@ async def test_player_can_download_then_delete_account_from_settings():
             # navigation, and deleting an account is not navigation.
             await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
+            # The request and the download are the same row, with the
+            # exports listed under it rather than in a dialog (#864).
             await page.locator('.settings-row button:has-text("Request export")').click()
-            dialog = page.locator(".account-data-dialog")
-            await dialog.wait_for(state="visible")
-
-            await dialog.get_by_role("button", name="Request export").click()
-            download_link = dialog.get_by_role("link", name="Download")
+            exports = page.get_by_role("list", name="Download everything")
+            download_link = exports.get_by_role("link", name="Download")
             await download_link.wait_for(state="visible")
             async with page.expect_download() as pending_download:
                 await download_link.click()
             download = await pending_download.value
             assert download.suggested_filename.startswith("sketchy-data-export-")
             assert download.suggested_filename.endswith(".json")
-
-            await dialog.get_by_role("button", name="Close").click()
-            await dialog.wait_for(state="hidden")
+            # One a week (R-PRIV-12): the button is off once one is made.
+            await expect(
+                page.locator('.settings-row button:has-text("Request export")')
+            ).to_be_disabled()
 
             # Deletion has a row and a dialog of its own now: it is not the
             # bottom of a panel called "Your data".
@@ -496,13 +497,14 @@ async def test_log_out_everywhere_asks_before_signing_this_device_out():
             await register_account(page, "EverywhereE2E")
             await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
-            await page.locator(".settings-row", has_text="Signed-in devices").get_by_role(
-                "button", name="Manage"
-            ).click()
-            devices = page.get_by_role("dialog", name="Signed-in devices")
-            await devices.locator(".session-list li").first.wait_for()
+            # Listed in the page, not behind a Manage dialog (#864).
+            devices = page.get_by_role("list", name="Signed-in devices")
+            await devices.locator("li").first.wait_for()
+            sign_out_everywhere = page.locator(
+                ".settings-row", has_text="Signed-in devices"
+            ).get_by_role("button", name="Sign out everywhere")
 
-            await devices.get_by_role("button", name="Sign out everywhere").click()
+            await sign_out_everywhere.click()
             confirm = page.get_by_role("alertdialog", name="Sign out everywhere?")
             await expect(confirm).to_be_visible()
             # Asking is the whole change: nothing has happened yet.
@@ -514,7 +516,7 @@ async def test_log_out_everywhere_asks_before_signing_this_device_out():
             )
             assert me == "EverywhereE2E"
 
-            await devices.get_by_role("button", name="Sign out everywhere").click()
+            await sign_out_everywhere.click()
             await confirm.get_by_role("button", name="Sign out everywhere").click()
             await expect(devices).to_have_count(0)
             # Signed out here too: whatever this browser holds now, it is not

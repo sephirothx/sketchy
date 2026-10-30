@@ -27,11 +27,14 @@ import "../styles/lazy/settings.css";
 export function ChangePasswordDialog({
   username,
   canEmailLink,
+  onChanged,
   onClose,
 }: {
   username: string;
   /** A verified address exists for the link to arrive at. */
   canEmailLink: boolean;
+  /** The change went through: every other session is gone. */
+  onChanged?: () => void;
   onClose: () => void;
 }) {
   const currentRef = useRef<HTMLInputElement | null>(null);
@@ -73,6 +76,7 @@ export function ChangePasswordDialog({
       // so it remembers the session it now belongs to (#1007).
       reconnectWithCurrentIdentity();
       notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, "success");
+      onChanged?.();
       onClose();
     } catch (failure) {
       setError(

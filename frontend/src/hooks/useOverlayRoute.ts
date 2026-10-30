@@ -56,17 +56,25 @@ export function useOpenOverlay(): (
 `navigate(-1)` rather than a push to the recorded path, so the history does not
 grow an entry every time somebody opens and closes it. Somebody who arrived on
 the URL itself has nothing to go back to and gets the lobby, which is what was
-drawn underneath them anyway. */
+drawn underneath them anyway.
+
+The entry is read when the overlay closes, from the browser's history, not
+from the render that made this callback. Escape holds the callback of an
+earlier render until an effect hands it the next one, and choosing the
+interface language moves the page behind Settings (#1462) in between: the
+entry already said the page had moved, the callback still said it had not,
+and closing went Back to the address the page had just left. A slow device
+hit it, and a CI runner did, about once in three at 20x CPU throttling. */
 export function useCloseOverlay(): () => void {
   const navigate = useNavigate();
   const location = useLocation();
-  const background = overlayBackgroundOf(location.state);
-  const moved = (location.state as OverlayLocationState | null)?.overlayMoved === true;
   return useCallback(() => {
-    if (background && moved) navigate(background, { replace: true });
+    const state = (window.history.state?.usr ?? location.state) as OverlayLocationState | null;
+    const background = overlayBackgroundOf(state);
+    if (background && state?.overlayMoved === true) navigate(background, { replace: true });
     else if (background) navigate(-1);
     else navigate("/", { replace: true });
-  }, [navigate, background, moved]);
+  }, [navigate, location.state]);
 }
 
 /** Whether an overlay route - Settings, Friends - is open over the page.

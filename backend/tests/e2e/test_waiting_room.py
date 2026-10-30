@@ -239,3 +239,50 @@ async def test_a_phone_spectator_sees_they_are_watching_and_takes_an_open_seat()
             for context in contexts:
                 await context.close()
             await browser.close()
+
+
+async def test_the_invite_card_shows_the_room_as_a_qr_code_on_request():
+    """A button beside Copy code draws the invite link as a QR code (#864).
+
+    The encoder is fetched only when the button is pressed, and the dialog
+    closes on Escape and on Back without leaving the room (R-UX-15).
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        encoder_requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: encoder_requests.append(request.url)
+            if "/QrCode-" in request.url
+            else None,
+        )
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"QrHost{uuid4().hex[:6]}")
+            await open_new_room(page)
+            code = await room_code(page)
+            card = page.locator(".waiting-invite-card")
+            show = card.get_by_role("button", name="Show a QR code")
+            await show.wait_for()
+            assert encoder_requests == []
+
+            await show.click()
+            dialog = page.get_by_role("dialog", name="Join with a phone camera")
+            qr = dialog.get_by_role("img", name=f"QR code for the invite link to room {code}")
+            await qr.wait_for()
+            assert len(encoder_requests) == 1
+            await page.keyboard.press("Escape")
+            await dialog.wait_for(state="hidden")
+
+            # Back closes it as Escape does, and the room is still there.
+            await show.click()
+            await qr.wait_for()
+            await page.go_back()
+            await dialog.wait_for(state="hidden")
+            await card.wait_for()
+            assert page.url.rstrip("/").endswith(f"/room/{code}")
+        finally:
+            await context.close()
+            await browser.close()

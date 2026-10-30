@@ -89,3 +89,25 @@ export function formatDate(date: Date): string {
     day: "numeric",
   }).format(date);
 }
+
+// The year only when it is not this one. A list of things that happened
+// lately or will happen soon - when a device was last used, when it signs
+// itself out - reads the year in every entry for nothing, and is narrow on a
+// phone; a date in another year keeps it, so "Jan 26" is never ambiguous.
+function otherYear(date: Date): boolean {
+  return date.getFullYear() !== new Date().getFullYear();
+}
+
+/** {@link formatDateTime}, without the year when it is this year's. */
+export function formatNearDateTime(date: Date, format: TimeFormat): string {
+  if (Number.isNaN(date.getTime())) return ui.clock.unknown;
+  if (otherYear(date)) return formatDateTime(date, format);
+  return formatterFor("nearDateTime", { month: "short", day: "numeric", ...clockOptions(format) }, format).format(date);
+}
+
+/** {@link formatDate}, without the year when it is this year's. */
+export function formatNearDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) return ui.clock.unknown;
+  if (otherYear(date)) return formatDate(date);
+  return formatterFor("nearDate", { month: "short", day: "numeric" }).format(date);
+}
