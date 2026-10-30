@@ -102,7 +102,7 @@ export function SignedInDevices() {
             const lastUsed = new Date(session.lastUsedAt);
             return (
               <li key={session.id} className={session.anomalyAt ? "is-flagged" : undefined}>
-                <span className="session-info">
+                <div className="session-info">
                   <span className="session-name">
                     {session.anomalyAt && <span className="session-flag"><AlertCircleIcon size={18} strokeWidth={2.4} /></span>}
                     <strong>{session.deviceLabel}</strong>
@@ -129,11 +129,30 @@ export function SignedInDevices() {
                     {session.idleExpiresAt && (
                       <div>
                         <dt>{ui.signedInDevices.signsOut}</dt>
-                        <dd>{nearDate(new Date(session.idleExpiresAt))}</dd>
+                        <dd>
+                          <span className="session-when-long">{nearDateTime(new Date(session.idleExpiresAt))}</span>
+                          <span className="session-when-short">{nearDate(new Date(session.idleExpiresAt))}</span>
+                        </dd>
                       </div>
                     )}
                   </dl>
-                </span>
+                </div>
+                {/*
+                  Worth interrupting for: a session used from a browser it
+                  was not issued to is the shape a stolen cookie has
+                  (R-AUTH-22), so the whole card turns red and its Revoke
+                  is the filled one. Says only that it happened and when -
+                  the server keeps a hash of the address, not the address -
+                  and what to do: a password change signs every other
+                  device out, the copy included. Before the button, so the reason
+                  is read before the Revoke it explains; the grid draws it below.
+                */}
+                {session.anomalyAt && (
+                  <p className="session-anomaly" role="note">
+                    <b>{ui.signedInDevices.usedElsewhere({ when: nearDateTime(new Date(session.anomalyAt)) })}</b>{" "}
+                    {ui.signedInDevices.usedElsewhereAdvice}
+                  </p>
+                )}
                 <button
                   type="button"
                   className={session.anomalyAt ? "btn btn-danger btn-compact" : "btn btn-secondary btn-compact"}
@@ -142,21 +161,6 @@ export function SignedInDevices() {
                 >
                   {busyId === session.id ? ui.signedInDevices.revoking : ui.signedInDevices.revoke}
                 </button>
-                {/*
-                  Worth interrupting for: a session used from a browser it
-                  was not issued to is the shape a stolen cookie has
-                  (R-AUTH-22), so the whole card turns red and its Revoke
-                  is the filled one. Says only that it happened and when -
-                  the server keeps a hash of the address, not the address -
-                  and what to do: a password change signs every other
-                  device out, the copy included.
-                */}
-                {session.anomalyAt && (
-                  <p className="session-anomaly" role="note">
-                    <b>{ui.signedInDevices.usedElsewhere({ when: nearDateTime(new Date(session.anomalyAt)) })}</b>{" "}
-                    {ui.signedInDevices.usedElsewhereAdvice}
-                  </p>
-                )}
               </li>
             );
           })}
