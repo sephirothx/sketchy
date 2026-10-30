@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Er is nu geen tekening meer om te spelen. Probeer het later opnieuw.",
   solo_date_out_of_range: "De dagpuzzel van die dag is niet open.",
   no_such_daily: "Vandaag is er geen dagpuzzel. Probeer een vrije ronde.",
-  pinned_drawings_full: "Je vastgezette tekeningen zijn vol. Maak er eerst een los in je profiel.",
+  favorites_full: "Je hebt al zes favorieten. Haal er eerst een weg in je profiel.",
 
   // Prompt lists
   prompt_list_not_found: "Woordenlijst niet gevonden.",
@@ -947,10 +947,10 @@ export const NL: Catalogue = {
       `${p.label}, jouw reactie. Druk om hem te verwijderen`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Deze tekening op je profiel vastzetten en in de galerij delen",
-    unpinThisDrawing: "Deze tekening van je profiel losmaken",
-    thatDrawingCouldNotBePinned: "Deze tekening kon niet worden vastgezet.",
+  favoriteControl: {
+    favoriteThisDrawing: "Deze tekening aan je favorieten toevoegen en in de galerij delen",
+    unfavoriteThisDrawing: "Deze tekening uit je favorieten halen",
+    thatDrawingCouldNotBeFavorited: "Deze tekening kon niet aan je favorieten worden toegevoegd.",
   },
 
   shareControl: {
@@ -968,7 +968,7 @@ export const NL: Catalogue = {
     thatDrawingCouldNotBeShared: "Deze tekening kon niet gedeeld worden.",
     thatCouldNotBeTakenBack: "Dat kon niet ongedaan gemaakt worden. Probeer het opnieuw.",
     takeOutTitle: "Deze tekening uit de galerij halen?",
-    takeOutDescription: "Hij verdwijnt voor iedereen uit de galerij en van elk profiel waarop hij vastgezet is. Alleen jij kunt hem terugzetten.",
+    takeOutDescription: "Hij verdwijnt voor iedereen uit de galerij en uit de favorieten van elk profiel. Alleen jij kunt hem terugzetten.",
     takeOutConfirm: "Eruit halen",
   },
 
@@ -1574,13 +1574,13 @@ export const NL: Catalogue = {
     notKept: "niet bewaard",
     erased: "gewist",
     removedByModeration: "door de moderatie verwijderd",
-    pinnedDrawings: "Vastgezette tekeningen",
-    nothingPinnedYet: "Nog niets vastgezet. Zet een tekening vast vanuit de samenvatting van een spel, of vanuit een spel in je geschiedenis hieronder.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `${p.prompt} van ${p.drawer} openen`,
+    favorites: "Favorieten",
+    noFavoritesYet: "Nog geen favorieten. Voeg een tekening toe vanuit de samenvatting van een spel, of vanuit een spel in je geschiedenis hieronder.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `${p.prompt} van ${p.drawer} openen`,
     moveLeft: "Naar links",
     moveRight: "Naar rechts",
-    unpin: "Losmaken",
-    couldNotUpdatePinnedDrawings: "Je vastgezette tekeningen konden niet worden bijgewerkt. Probeer het opnieuw.",
+    unfavorite: "Weghalen",
+    couldNotUpdateFavorites: "Je favorieten konden niet worden bijgewerkt. Probeer het opnieuw.",
     couldNotLoadThisDrawing: "Deze tekening kon niet worden geladen.",
     nothingDrawn: "niets getekend",
     onlyThePlayersInThis: "Alleen de spelers van dit spel kunnen de beurten zien.",

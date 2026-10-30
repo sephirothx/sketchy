@@ -136,7 +136,7 @@ def drawer_is_watching(room: Room, entry: DrawingRecapEntry) -> bool:
 def share_broadcast(room: Room, turn_id: str) -> dict:
     """The room-wide `drawing_shared` payload: the drawing's share state as it
     now stands - seat tokens only, no account id (R-ROOM-07). It names no
-    actor: a change can come from outside the room (history, a pin, the
+    actor: a change can come from outside the room (history, a favorite, the
     Gallery), and what every seat needs is the state, not who moved it."""
     return {"turnId": turn_id, **room.drawing_share_state(turn_id)}
 

@@ -57,8 +57,8 @@ keyboard that takes half the screen, and one thumb.
   the game over screen or from the waiting room afterwards. Derived from guess counts,
   timings and reactions rather than points, so the same five appear in a no-scoring game,
   and each is dropped when the game gives it nothing to say.
-- Drawing viewer — the recap, game history and the pinned shelf open a finished game's
-  drawings in one viewer over the page: the prompt above the drawing, Pin, Share and Save
+- Drawing viewer — the recap, game history and the favorites shelf open a finished game's
+  drawings in one viewer over the page: the prompt above the drawing, Favorite, Share and Save
   image as icons and the reaction on its lower corners (under it on a phone), and a strip of
   thumbnails below - eight at a time on a desktop, a scrolling row on a phone - with an
   overview of the whole game above 24 drawings. Swipe, the arrows or the arrow keys move
@@ -74,15 +74,15 @@ keyboard that takes half the screen, and one thumb.
   total to the profile. They are never scored. The four faces are bundled artwork
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
-- Pinned drawings — a registered player keeps up to six drawings at the top of their
+- Favorites — a registered player keeps up to six drawings at the top of their
   profile, in their own order, chosen from games they played: their own drawings or
-  another player's, always credited to the drawer's name as it was that day. A pin is a
-  share: only a drawing the player may share can be pinned, pinning it puts it in the
-  gallery, and its drawer taking it out of the gallery takes it off every shelf. Pins go with the game, the turn, or an erased drawing, and with the account that
+  another player's, always credited to the drawer's name as it was that day. A favorite is a
+  share: only a drawing the player may share can be favorited, favoriting it puts it in the
+  gallery, and its drawer taking it out of the gallery takes it off every shelf. Favorites go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
-  owner moves a drawing left or right and unpins it there, and anyone opens one in
-  the drawing viewer. **Pin** sits beside a kept drawing on the game-over recap and in the
+  owner moves a drawing left or right and unfavorites it there, and anyone opens one in
+  the drawing viewer. **Favorite** sits beside a kept drawing on the game-over recap and in the
   profile's game history, for a registered player who may share it.
 - **Privacy notice** and **Terms of use** at `/privacy` and `/terms`, in all eight interface
   languages: what is kept, why and for how long, who
@@ -141,7 +141,7 @@ keyboard that takes half the screen, and one thumb.
   shows the drawing, the prompt, the round and turn, the drawer's name as it was that
   day, who shared it first, and its reaction counts — never the game, the room or who
   reacted. Any
-  registered player can react to an entry from the gallery or from a pinned shelf, one
+  registered player can react to an entry from the gallery or from a favorites shelf, one
   reaction per player per drawing; reactions given outside the room count but are not
   named. "This week" — the six most-reacted drawings shared in the last seven days — sits in
   the gallery's rail. A drawing can be reported from the gallery, a moderator can hide
@@ -1671,7 +1671,7 @@ your players share one address:
 | `AUTH_VERIFY_ACCOUNT_LIMIT` | 5 per day | `PUT /api/auth/email`, per account, charged after the password proof (#1240) |
 | `AUTH_VERIFY_RECIPIENT_LIMIT` | 3 per day | Verification mails to one address, whichever accounts ask; past it nothing is sent and the answer is unchanged |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
-| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - and the reaction, share and pin writes beside them, per address |
+| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - and the reaction, share and favorite writes beside them, per address |
 | `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
@@ -1763,7 +1763,7 @@ Only moderators and administrators can list and resolve or dismiss reports via
 `/api/moderation/reports`. Review is one-way: a pending report receives one
 resolution and cannot later be silently rewritten. An administrator can also
 **erase a drawing** for illegal content (`POST /api/moderation/drawings/{turn_id}/erase`,
-step-up, audited): it leaves every history, the gallery, pins and an open recap,
+step-up, audited): it leaves every history, the gallery, favorites and an open recap,
 and only the copy kept with the report remains, for administrators alone. What to do
 with a report beyond the buttons — the order of work, danger to life, sexual content
 involving minors, reporting to the police — is the
@@ -1956,7 +1956,7 @@ frontend/
     lib/widthKeyframes.ts Which of a pen stroke's widths are sent: keyframes, within a tolerance of the curve
     lib/penStroke.ts Where a stroke's keyframes go in its frames, and what the drawer's canvas may already paint
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
-    lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule, where Pin is offered, and its list arithmetic
+    lib/favorites.ts Favorites: the shelf's presence rule, where Favorite is offered, and its list arithmetic
     lib/profileStats.ts Which profile statistics are drawn before a first finished game, and which wait for one
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
@@ -2763,7 +2763,7 @@ in Any language - never a Local list;
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a player can
-   **Share** a drawing to the gallery, and a registered player can **Pin** one they may share
+   **Share** a drawing to the gallery, and a registered player can **Favorite** one they may share
    to their profile, which shares it too. Back in the waiting
    room each seat keeps its place and final score until the next game starts: in the
    players panel on a desktop, on the roster's tiles on a phone.

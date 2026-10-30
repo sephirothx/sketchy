@@ -69,7 +69,7 @@ from app.db.models import (
     SoloRun,
     SoloServe,
     TurnDrawing,
-    ProfileDrawingPin,
+    ProfileFavorite,
     TurnDrawingReaction,
     TurnDrawingShare,
     InboxEntry,
@@ -1810,9 +1810,9 @@ async def anonymize_account(
             )
             # Every drawing row this erasure writes, locked before any row that
             # hangs off one is touched, in one ascending statement: its own
-            # drawings, and the other players' drawings it shared or pinned
+            # drawings, and the other players' drawings it shared or favorited
             # (#1430). A drawer's withdrawal holds its drawing's row and then
-            # deletes the shares and pins on it; deleting this account's share
+            # deletes the shares and favorites on it; deleting this account's share
             # first and locking the drawing after was a cycle with that, and
             # two statements were a cycle with another erasure.
             erased_drawings = select(TurnRecord.id).where(
@@ -1840,11 +1840,11 @@ async def anonymize_account(
                     ).all()
                 )
             ) - own_drawings
-            others_pinned = set(
+            others_favorited = set(
                 (
                     await session.scalars(
-                        select(ProfileDrawingPin.turn_id).where(
-                            ProfileDrawingPin.user_id.in_(identity_ids)
+                        select(ProfileFavorite.turn_id).where(
+                            ProfileFavorite.user_id.in_(identity_ids)
                         )
                     )
                 ).all()
@@ -1856,7 +1856,7 @@ async def anonymize_account(
                         select(TurnDrawing)
                         .where(
                             TurnDrawing.turn_id.in_(
-                                sorted(own_drawings | others_shared | others_pinned)
+                                sorted(own_drawings | others_shared | others_favorited)
                             )
                         )
                         .options(defer(TurnDrawing.payload))
@@ -1864,7 +1864,7 @@ async def anonymize_account(
                         .with_for_update()
                     )
                 ).all()
-            } if own_drawings | others_shared | others_pinned else {}
+            } if own_drawings | others_shared | others_favorited else {}
             # A drawing is authored content, so it goes rather than being
             # anonymised like the turn around it. The row stays behind saying
             # so, which keeps an erased drawing distinguishable from one the
@@ -1920,16 +1920,16 @@ async def anonymize_account(
                     )
                 )
             )
-            # Pins go two ways (#440). The ones *on* the erased drawings, for
+            # Favorites go two ways (#440). The ones *on* the erased drawings, for
             # the reason the reactions did: erasure is a status on the drawing
             # row, so no cascade reaches them. And the ones this account *made*:
             # the users row stays, tombstoned, but there is no profile left to
-            # show a shelf on, and a pin is the pinner's choice, not history.
+            # show a shelf on, and a favorite is the owner's choice, not history.
             await session.execute(
-                delete(ProfileDrawingPin).where(
+                delete(ProfileFavorite).where(
                     or_(
-                        ProfileDrawingPin.user_id.in_(identity_ids),
-                        ProfileDrawingPin.turn_id.in_(
+                        ProfileFavorite.user_id.in_(identity_ids),
+                        ProfileFavorite.turn_id.in_(
                             select(TurnRecord.id).where(
                                 TurnRecord.drawer_user_id.in_(identity_ids)
                             )

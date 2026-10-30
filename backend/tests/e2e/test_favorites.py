@@ -1,6 +1,6 @@
-"""Pinned drawings (#440) end to end: pinned from the game-over recap, shown
-on the profile shelf to the owner and to another signed-in player, unpinned
-from the shelf, and pinned again from the profile's game history."""
+"""Favorites (#440) end to end: favorited from the game-over recap, shown
+on the profile shelf to the owner and to another signed-in player, unfavorited
+from the shelf, and favorited again from the profile's game history."""
 from __future__ import annotations
 
 from playwright.async_api import Page, async_playwright, expect
@@ -29,7 +29,7 @@ async def scribble(drawer: Page) -> None:
     await drawer.mouse.up()
 
 
-async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
+async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -38,19 +38,19 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
         other = await other_context.new_page()
 
         try:
-            # Both registered: only an account may pin (R-PIN-01), and the
+            # Both registered: only an account may favorite (R-PIN-01), and the
             # shelf is shown to any session, so the other player is the
             # signed-in non-participant... except they were in the game.
             # A third, anonymous context stands in for the stranger below.
             await host.goto(BASE_URL)
-            await use_guest_name(host, "PinHost")
-            await register_account(host, "pinhost")
+            await use_guest_name(host, "FavHost")
+            await register_account(host, "favhost")
             await open_new_room(host)
             code = await room_code(host)
 
             await other.goto(BASE_URL)
-            await use_guest_name(other, "PinOther")
-            await register_account(other, "pinother")
+            await use_guest_name(other, "FavOther")
+            await register_account(other, "favother")
             await join_by_code(other, code)
             await other.locator('[data-testid="waiting-room"]').wait_for()
 
@@ -73,13 +73,13 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             game_end = host.locator('[data-testid="game-end-overlay"]')
             await game_end.get_by_role("button", name="Drawings", exact=True).wait_for(timeout=12_000)
 
-            # Pin the first drawing from the recap. The history write lands
+            # Favorite the first drawing from the recap. The history write lands
             # just before the recap is offered, so the first press may be
             # answered "still being saved"; the control stays and a second
             # press is the retry the toast asks for.
             await game_end.get_by_role("button", name="Drawings", exact=True).click()
             await host.get_by_test_id("drawing-viewer").wait_for()
-            toggle = host.locator('[data-testid="pin-toggle"]')
+            toggle = host.locator('[data-testid="favorite-toggle"]')
             await expect(toggle).to_have_attribute("aria-pressed", "false")
             for _ in range(20):
                 await toggle.click()
@@ -94,7 +94,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             # The owner's shelf shows it, in a lobby tab of the same account.
             lobby = await host_context.new_page()
             await lobby.goto(f"{BASE_URL}/profile")
-            shelf = lobby.locator('[data-testid="pinned-drawings"]')
+            shelf = lobby.locator('[data-testid="favorites"]')
             await shelf.wait_for()
             await expect(shelf.locator(".profile-shelf-item")).to_have_count(1)
             await expect(shelf.locator(".profile-shelf-prompt").first).to_have_text(first_prompt)
@@ -104,20 +104,20 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             visitor = await other_context.new_page()
             host_id = (await (await host_context.request.get(f"{BASE_URL}/api/auth/me")).json())["id"]
             await visitor.goto(f"{BASE_URL}/profile/{host_id}")
-            await visitor.locator('[data-testid="pinned-drawings"]').wait_for()
+            await visitor.locator('[data-testid="favorites"]').wait_for()
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
-            await expect(visitor.get_by_role("button", name="Unpin")).to_have_count(0)
+            await expect(visitor.locator('[data-testid="favorites"]').get_by_role("button", name="Remove", exact=True)).to_have_count(0)
 
-            # A stranger - registered, never in the game - reacts to the pinned
+            # A stranger - registered, never in the game - reacts to the favorited
             # drawing from the shelf through the gallery door (R-PIN-08,
             # R-GAL-06): the tally counts it, and nobody is named.
             stranger_context = await browser.new_context()
             stranger = await stranger_context.new_page()
             await stranger.goto(BASE_URL)
-            await use_guest_name(stranger, "PinStranger")
-            await register_account(stranger, "pinstranger")
+            await use_guest_name(stranger, "FavStranger")
+            await register_account(stranger, "favstranger")
             await stranger.goto(f"{BASE_URL}/profile/{host_id}")
-            await stranger.locator('[data-testid="pinned-drawings"] .profile-shelf-open').first.click()
+            await stranger.locator('[data-testid="favorites"] .profile-shelf-open').first.click()
             await stranger.get_by_test_id("drawing-viewer").wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
@@ -129,7 +129,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await stranger.keyboard.press("Escape")
             await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
             await expect(
-                stranger.locator('[data-testid="pinned-drawings"] .reaction-chip .reaction-count').first
+                stranger.locator('[data-testid="favorites"] .reaction-chip .reaction-count').first
             ).to_have_text("1")
             await stranger_context.close()
 
@@ -138,27 +138,27 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             anonymous = await anonymous_context.new_page()
             await anonymous.goto(f"{BASE_URL}/profile/{host_id}")
             await anonymous.locator(".profile-stat").first.wait_for()
-            await expect(anonymous.locator('[data-testid="pinned-drawings-panel"]')).to_have_count(0)
+            await expect(anonymous.locator('[data-testid="favorites-panel"]')).to_have_count(0)
             await anonymous_context.close()
 
-            # Unpin from the shelf: the owner's own empty shelf stays, with its hint.
-            await shelf.locator(".profile-shelf-item").first.get_by_role("button", name="Unpin").click()
+            # Remove it from the shelf: the owner's own empty shelf stays, with its hint.
+            await shelf.locator(".profile-shelf-item").first.get_by_role("button", name="Remove").click()
             await expect(shelf.locator(".profile-shelf-item")).to_have_count(0)
-            await lobby.get_by_text("Nothing pinned yet", exact=False).wait_for()
+            await lobby.get_by_text("No favorites yet", exact=False).wait_for()
 
-            # Pin again from game history: the turn table offers the toggle
+            # Favorite again from game history: the turn table offers the toggle
             # beside View for each kept drawing, and the shelf above follows.
             game_row = lobby.locator(".profile-game").first
             await game_row.locator(".profile-game-header").click()
             await lobby.locator(".profile-turns").wait_for()
-            table_toggles = lobby.locator('.profile-turns [data-testid="pin-toggle"]')
+            table_toggles = lobby.locator('.profile-turns [data-testid="favorite-toggle"]')
             await expect(table_toggles).to_have_count(2)
             await expect(table_toggles.first).to_have_attribute("aria-pressed", "false")
             await table_toggles.first.click()
             await expect(table_toggles.first).to_have_attribute("aria-pressed", "true")
-            await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(1)
+            await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await table_toggles.nth(1).click()
-            await expect(lobby.locator('[data-testid="pinned-drawings"] .profile-shelf-item')).to_have_count(2)
+            await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(2)
 
             # Take out of Solo is on the drawer's own row, one of the two
             # (R-SOLO-17), and works from there; the viewer, whose buttons are
@@ -171,7 +171,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await lobby.locator(".profile-drawing-button").first.click()
             viewer = lobby.get_by_test_id("drawing-viewer")
             await viewer.wait_for()
-            await expect(viewer.locator('[data-testid="pin-toggle"]')).to_have_count(1)
+            await expect(viewer.locator('[data-testid="favorite-toggle"]')).to_have_count(1)
             await expect(viewer.locator('[data-testid="solo-take-out"]')).to_have_count(0)
 
             # Friends opened over the open viewer - as a friend-request toast's

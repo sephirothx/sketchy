@@ -1,5 +1,5 @@
 /* The drawing viewer (#1497, components/DrawingViewer.tsx): one dialog for the
-   Recap, game history and the pinned shelf.
+   Recap, game history and the favorites shelf.
 
    It is laid over the page on a dark scrim in both themes, so the arrows, the
    thumbnail strip and the overview button - which sit on the scrim - take light
@@ -224,7 +224,7 @@
   opacity: var(--opacity-disabled);
 }
 
-/* Pin, Share, Save image and the reaction, on the drawing's lower corners.
+/* Favorite, Share, Save image and the reaction, on the drawing's lower corners.
    They step aside while a drag or a zoom has the drawing. */
 .drawing-viewer-tools {
   position: absolute;
@@ -272,10 +272,10 @@
   -webkit-backdrop-filter: blur(6px);
 }
 
-/* Pin, Share and Save image are their icons alone, each keeping its full
+/* Favorite, Share and Save image are their icons alone, each keeping its full
    name for a screen reader and in its tooltip: one size, one ink and nothing
    else in the button, so every icon sits at its centre (#1497). */
-.drawing-viewer-actions > .pin-control,
+.drawing-viewer-actions > .favorite-control,
 .drawing-viewer-actions > .drawing-viewer-save,
 .drawing-viewer-actions > .share-pill {
   justify-content: center;
@@ -297,14 +297,25 @@
   color: inherit;
 }
 
-.drawing-viewer-actions > .pin-control.is-pinned,
+.drawing-viewer-actions > .favorite-control.is-favorited {
+  border-color: var(--warm-edge);
+  background: var(--warm-soft);
+  color: var(--ink);
+}
+
 .drawing-viewer-actions > .share-pill.has-mine {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary-ink);
 }
 
-[data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+[data-theme="dark"] .drawing-viewer-actions > .favorite-control.is-favorited {
+  /* The same reason as the indigo pair below: the dark theme's translucent
+     wash would show the white drawing through, so the light theme's holds. */
+  background: #fbeadf;
+  color: #292520;
+}
+
 [data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
   /* On the white drawing the dark theme's translucent indigo wash would
      show the white through; the light theme's pair reads on it. */
@@ -604,7 +615,11 @@
     height: 20px;
   }
 
-  [data-theme="dark"] .drawing-viewer-actions > .pin-control.is-pinned,
+  [data-theme="dark"] .drawing-viewer-actions > .favorite-control.is-favorited {
+    background: var(--warm-soft);
+    color: var(--ink);
+  }
+
   [data-theme="dark"] .drawing-viewer-actions > .share-pill.has-mine {
     background: var(--primary-soft);
     color: var(--primary-ink);

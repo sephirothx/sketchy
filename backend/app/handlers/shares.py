@@ -125,7 +125,7 @@ async def share_drawing(ctx: HandlerContext, sid, data):
     if result is None:
         return _refused(NOT_ACCEPTED)
     # What the rows hold now, not this one press applied to the room's memory:
-    # shares made from history, a pin or the Gallery never passed through it.
+    # shares made from history, a favorite or the Gallery never passed through it.
     apply_recorded_shares(room, result)
     await ctx.sio.emit(
         "drawing_shared", share_broadcast(room, payload.turn_id), room=room.id
@@ -157,7 +157,7 @@ def _apply(room, entry, player, shared: bool) -> None:
 
 
 async def refresh_recaps(ctx: HandlerContext, turn_ids: Iterable[str]) -> None:
-    """Carry a share write made outside the room - from history, a pin or
+    """Carry a share write made outside the room - from history, a favorite or
     the Gallery - into the room whose recap shows that drawing (#1430).
 
     The recap's share state is a copy of the rows, and only writes through

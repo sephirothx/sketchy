@@ -73,7 +73,7 @@ async def erased_identity_ids(
 
     Shared by default, the mode for a writer that only reads the accounts.
     `exclusive` takes `FOR UPDATE` instead, in the same one ordered statement,
-    for a writer that must also serialize with its own kind: the pin write
+    for a writer that must also serialize with its own kind: the favorite write
     replaces an account's whole shelf, and two of them for one account under
     shared locks both pass the barrier and collide on the shelf's unique
     positions. One ordered statement either way, so the barrier's rule that

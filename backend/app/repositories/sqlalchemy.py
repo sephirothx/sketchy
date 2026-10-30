@@ -58,7 +58,7 @@ from app.db.models import (
     PromptVersionTag,
     ScoreEvent,
     TurnDrawing,
-    ProfileDrawingPin,
+    ProfileFavorite,
     TurnDrawingReaction,
     SoloDailySet,
     SoloGalleryShare,
@@ -108,7 +108,7 @@ from app.domain_values import (
     GAME_OUTCOMES,
     GAME_PROMPT_SOURCE_MODES,
     GAME_VISIBILITIES,
-    PROFILE_PIN_SLOTS,
+    PROFILE_FAVORITE_SLOTS,
     GameOutcome,
     GalleryShelfDecision,
     GameVisibility,
@@ -184,9 +184,9 @@ from app.repositories.interfaces import (
     TurnDetail,
     TurnDrawingDetail,
     TurnDrawingInput,
-    ProfilePinDetail,
-    ProfilePinEntry,
-    ProfilePinsResult,
+    ProfileFavoriteDetail,
+    ProfileFavoriteEntry,
+    ProfileFavoritesResult,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
     TurnDrawingShareInput,
@@ -239,9 +239,9 @@ from app.refusals import ErrorCode
 
 logger = logging.getLogger(__name__)
 
-# How many times a pin write restarts when a merge lands inside the barrier's
+# How many times a favorite write restarts when a merge lands inside the barrier's
 # window between its alias read and its lock (app.auth.erasure).
-PIN_WRITE_LOCK_RETRIES = 3
+FAVORITE_WRITE_LOCK_RETRIES = 3
 
 
 # One screenful of the community catalogue, and the depth past which browsing
@@ -1021,7 +1021,7 @@ async def _solo_may_react(
 def _gallery_predicate():
     """What "in the Gallery" means (R-GAL-01), in one place: a kept, readable
     drawing somebody shared (#1430) and no moderator hid. Over `TurnDrawing`
-    alone; the third door beside the participant check and the pin predicate,
+    alone; the third door beside the participant check and the favorite predicate,
     and deliberately its own clauses so an edit to either cannot loosen it.
 
     No game visibility: who may share is decided when the share is written
@@ -1471,7 +1471,7 @@ async def erase_drawing_for_moderation(
 
     Everywhere a player could meet it: the bytes go as an account erasure
     takes them (`status` `deleted`, `ck_turn_drawings_erased`), and with them
-    every reaction, share and pin of it and the drawer's inbox entries about
+    every reaction, share and favorite of it and the drawer's inbox entries about
     it - erasure is a status on the row, so no cascade reaches those. What
     stays is the row saying so (`moderation_erased_at`), and the report's
     evidence copy, which the read routes hold back from all but
@@ -1543,7 +1543,7 @@ async def erase_drawing_for_moderation(
         delete(TurnDrawingReaction).where(TurnDrawingReaction.turn_id == turn_id)
     )
     await session.execute(
-        delete(ProfileDrawingPin).where(ProfileDrawingPin.turn_id == turn_id)
+        delete(ProfileFavorite).where(ProfileFavorite.turn_id == turn_id)
     )
     await session.execute(
         delete(TurnDrawingShare).where(TurnDrawingShare.turn_id == turn_id)
@@ -3580,7 +3580,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # committed in between would be replaced by the older total.
                 # Shared, because reactions to one drawer's drawings need not
                 # wait on each other; before the drawing row, because every
-                # writer that holds both (erasure, the pin write) takes the
+                # writer that holds both (erasure, the favorite write) takes the
                 # account first. The whole identity, ascending, in one
                 # statement - the erasure barrier's rule. The turn and its
                 # drawing were read before this lock: a deletion it waited
@@ -3784,7 +3784,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             notify = await _leave_share_notice(session, turn, now=now)
                 elif is_drawer:
                     # The drawer's withdrawal (R-SHARE-04): every share, every
-                    # pin - a pin is a share (R-PIN-03) - and a bar on the
+                    # favorite - a favorite is a share (R-PIN-03) - and a bar on the
                     # rest until the drawer shares it again. Their inbox entry
                     # about it is read: they have just acted on it.
                     await session.execute(
@@ -3795,8 +3795,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         delete(SoloGalleryShare).where(SoloGalleryShare.turn_id == db_turn_id)
                     )
                     await session.execute(
-                        delete(ProfileDrawingPin).where(
-                            ProfileDrawingPin.turn_id == db_turn_id
+                        delete(ProfileFavorite).where(
+                            ProfileFavorite.turn_id == db_turn_id
                         )
                     )
                     # Read everywhere: the drawer's other tabs hear it, or
@@ -3812,7 +3812,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         notify = identity_ids[0]
                     drawing_row.gallery_withdrawn_at = now
                 else:
-                    # One's own share, and one's own pin of it with it.
+                    # One's own share, and one's own favorite of it with it.
                     await session.execute(
                         delete(TurnDrawingShare).where(
                             TurnDrawingShare.turn_id == db_turn_id,
@@ -3823,9 +3823,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
                     await session.execute(
-                        delete(ProfileDrawingPin).where(
-                            ProfileDrawingPin.turn_id == db_turn_id,
-                            ProfileDrawingPin.user_id.in_(identity_ids),
+                        delete(ProfileFavorite).where(
+                            ProfileFavorite.turn_id == db_turn_id,
+                            ProfileFavorite.user_id.in_(identity_ids),
                         )
                     )
                     # And their Solo share of it, held or not: a player who sat
@@ -4372,12 +4372,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             )
         return checksum or None
 
-    async def set_profile_pins(
+    async def set_profile_favorites(
         self,
         *,
         requesting_user_id: str,
         turn_ids: Sequence[str],
-    ) -> ProfilePinsResult | None:
+    ) -> ProfileFavoritesResult | None:
         db_user_id = _optional_entity_id(requesting_user_id)
         if db_user_id is None:
             return None
@@ -4387,7 +4387,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             if db_turn_id is None or db_turn_id in db_turn_ids:
                 return None
             db_turn_ids.append(db_turn_id)
-        if len(db_turn_ids) > PROFILE_PIN_SLOTS:
+        if len(db_turn_ids) > PROFILE_FAVORITE_SLOTS:
             return None
         # The barrier can find, under its lock, a target merged in since its
         # alias read; it then abandons the transaction rather than lock more
@@ -4395,22 +4395,22 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         # complete set goes into one ordered statement. Bounded: a merge is a
         # sign-in, and three in a row inside this window is not a real thing.
         written: tuple[list[tuple[UUID, UUID]], list[UUID]] | None = None
-        for attempt in range(PIN_WRITE_LOCK_RETRIES):
+        for attempt in range(FAVORITE_WRITE_LOCK_RETRIES):
             try:
-                written = await self._replace_profile_pins(db_user_id, db_turn_ids)
+                written = await self._replace_profile_favorites(db_user_id, db_turn_ids)
             except LockSetChangedError:
-                if attempt == PIN_WRITE_LOCK_RETRIES - 1:
-                    telemetry.db_retry("profile_pins", "exhausted")
+                if attempt == FAVORITE_WRITE_LOCK_RETRIES - 1:
+                    telemetry.db_retry("profile_favorites", "exhausted")
                     raise
-                telemetry.db_retry("profile_pins", "retried")
+                telemetry.db_retry("profile_favorites", "retried")
                 continue
             break
         if written is None:
             return None
         rows, notified = written
-        return ProfilePinsResult(
-            pins=tuple(
-                ProfilePinDetail(
+        return ProfileFavoritesResult(
+            favorites=tuple(
+                ProfileFavoriteDetail(
                     turn_id=_public_id(db_turn_id),
                     game_id=_public_id(game_id),
                     position=position,
@@ -4420,21 +4420,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             notify_user_ids=tuple(_public_id(user_id) for user_id in notified),
         )
 
-    async def _replace_profile_pins(
+    async def _replace_profile_favorites(
         self, db_user_id: UUID, db_turn_ids: list[UUID]
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID]] | None:
         """One attempt at the whole-shelf write: the barrier, the checks, the
-        rows, and the shares the pins imply. `None` for every refusal; the
+        rows, and the shares the favorites imply. `None` for every refusal; the
         rows written and the drawers left a notice otherwise."""
         async with self._session_factory() as session:
             async with session.begin():
                 identity_ids = await _identity_ids(session, db_user_id)
                 # The erasure barrier (app.auth.erasure), for both accounts a
-                # pin is about. The pinner's: authentication before a deletion
-                # is not authorization after it, and a pin written past the
+                # favorite is about. The owner's: authentication before a deletion
+                # is not authorization after it, and a favorite written past the
                 # deletion would put a shelf back on a tombstoned profile.
                 # Each drawer's: their deletion erases the drawing and takes
-                # its pins with it, and a pin validated before that commit
+                # its favorites with it, and a favorite validated before that commit
                 # and written after it would outlive the drawing it names.
                 # One lock over all of them, ascending, held to the commit;
                 # the checks below run under it and see either the state
@@ -4458,7 +4458,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 )
                 if identity_ids[0] in erased:
                     return None
-                # Pins belong to the canonical account: a guest cannot pin
+                # Favorites belong to the canonical account: a guest cannot favorite
                 # (R-PIN-01), so there is never a guest shelf to merge.
                 account = await session.get(User, identity_ids[0])
                 if (
@@ -4468,7 +4468,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 ):
                     return None
                 # The drawing rows, locked after the accounts (the barrier's
-                # order) and in one ascending statement, since a pin is a
+                # order) and in one ascending statement, since a favorite is a
                 # share (R-PIN-03) and the share projection is written on them.
                 drawing_rows = {
                     row.turn_id: row
@@ -4484,7 +4484,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 }
                 # Everything a turn has to be: a seat for this identity in its
                 # game, a drawing there to show, and one this identity may
-                # share (R-SHARE-02) - pinning shares it. Checked before
+                # share (R-SHARE-02) - favoriting shares it. Checked before
                 # anything is written, so a refused list leaves the shelf as
                 # it was.
                 rows: list[tuple[UUID, UUID]] = []
@@ -4520,20 +4520,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # Replace rather than diff: the unique position per account
                 # would otherwise have to be shuffled through a spare slot.
                 await session.execute(
-                    delete(ProfileDrawingPin).where(
-                        ProfileDrawingPin.user_id == identity_ids[0]
+                    delete(ProfileFavorite).where(
+                        ProfileFavorite.user_id == identity_ids[0]
                     )
                 )
                 for position, (game_id, db_turn_id) in enumerate(rows):
                     session.add(
-                        ProfileDrawingPin(
+                        ProfileFavorite(
                             user_id=identity_ids[0],
                             game_id=game_id,
                             turn_id=db_turn_id,
                             position=position,
                         )
                     )
-                # A pin is a share (R-PIN-03): every pinned drawing the pinner
+                # A favorite is a share (R-PIN-03): every favorite the owner
                 # has not shared yet is shared now, exactly as the Share
                 # control would have - the drawer's lifting a withdrawal, and
                 # anybody else's telling the drawer (R-SHARE-09).
@@ -4562,20 +4562,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     await refresh_share_projection(session, drawing_row)
         return rows, notified
 
-    def _pinned_drawing_predicate(self, profile_user_id: UUID, turn_id: UUID):
-        """Everything a pinned-drawing read has to hold, as one predicate the
-        bytes and the validator share: this account pinned this turn, and the
-        drawing is in the Gallery - a pin is a share (R-PIN-03), so a drawing
+    def _favorite_drawing_predicate(self, profile_user_id: UUID, turn_id: UUID):
+        """Everything a favorite-drawing read has to hold, as one predicate the
+        bytes and the validator share: this account favorited this turn, and the
+        drawing is in the Gallery - a favorite is a share (R-PIN-03), so a drawing
         taken back out is off every shelf in the same act. Deliberately not
         the participant subquery `get_turn_drawing` uses, nor the gallery
         query - this is its own door (R-PIN-06), and it stays a separate
         query so a later edit to either cannot loosen the other by accident."""
-        pinned = (
-            select(ProfileDrawingPin.turn_id)
+        favorited = (
+            select(ProfileFavorite.turn_id)
             .where(
-                ProfileDrawingPin.user_id == profile_user_id,
-                ProfileDrawingPin.turn_id == turn_id,
-                ProfileDrawingPin.game_id == TurnDrawing.game_id,
+                ProfileFavorite.user_id == profile_user_id,
+                ProfileFavorite.turn_id == turn_id,
+                ProfileFavorite.game_id == TurnDrawing.game_id,
             )
             .exists()
         )
@@ -4585,15 +4585,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             TurnDrawing.payload.is_not(None),
             TurnDrawing.gallery_share_count > 0,
             # A drawing a moderator hid from the Gallery is hidden from every
-            # shelf that shows it to strangers (R-GAL-09): a pin is not a way
+            # shelf that shows it to strangers (R-GAL-09): a favorite is not a way
             # around a takedown any more than around a withdrawal.
             TurnDrawing.gallery_hidden_at.is_(None),
-            pinned,
+            favorited,
         )
 
-    async def get_profile_pins(
+    async def get_profile_favorites(
         self, profile_user_id: str, *, viewer_user_id: str | None = None
-    ) -> tuple[ProfilePinEntry, ...]:
+    ) -> tuple[ProfileFavoriteEntry, ...]:
         db_profile_user_id = _optional_entity_id(profile_user_id)
         if db_profile_user_id is None:
             return ()
@@ -4607,35 +4607,35 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             )
             rows = (
                 await session.execute(
-                    select(ProfileDrawingPin, TurnRecord)
+                    select(ProfileFavorite, TurnRecord)
                     .join(
                         TurnRecord,
                         and_(
-                            TurnRecord.id == ProfileDrawingPin.turn_id,
-                            TurnRecord.game_id == ProfileDrawingPin.game_id,
+                            TurnRecord.id == ProfileFavorite.turn_id,
+                            TurnRecord.game_id == ProfileFavorite.game_id,
                         ),
                     )
                     .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
                     .where(
-                        ProfileDrawingPin.user_id == canonical,
+                        ProfileFavorite.user_id == canonical,
                         TurnDrawing.status == TurnDrawingStatus.READY.value,
                         TurnDrawing.payload.is_not(None),
                         TurnDrawing.gallery_share_count > 0,
                         TurnDrawing.gallery_hidden_at.is_(None),
                     )
-                    .order_by(ProfileDrawingPin.position)
+                    .order_by(ProfileFavorite.position)
                 )
             ).all()
             summaries = await _reaction_summaries(
                 session, [turn.id for _, turn in rows], viewer_ids
             )
         entries = []
-        for pin, turn in rows:
+        for favorite, turn in rows:
             summary = summaries.get(turn.id, _NO_REACTIONS)
             entries.append(
-                ProfilePinEntry(
-                    turn_id=_public_id(pin.turn_id),
-                    position=pin.position,
+                ProfileFavoriteEntry(
+                    turn_id=_public_id(favorite.turn_id),
+                    position=favorite.position,
                     round_number=turn.round_number,
                     turn_number=turn.turn_number,
                     drawer_display_name=turn.drawer_display_name_snapshot,
@@ -4651,7 +4651,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             )
         return tuple(entries)
 
-    async def get_pinned_drawing(
+    async def get_favorite_drawing(
         self, profile_user_id: str, turn_id: str
     ) -> TurnDrawingDetail | None:
         db_profile_user_id = _optional_entity_id(profile_user_id)
@@ -4662,7 +4662,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             canonical = await _canonical_user_id(session, db_profile_user_id)
             row = await session.scalar(
                 select(TurnDrawing).where(
-                    self._pinned_drawing_predicate(canonical, db_turn_id)
+                    self._favorite_drawing_predicate(canonical, db_turn_id)
                 )
             )
         if row is None:
@@ -4673,7 +4673,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             checksum_sha256=row.checksum_sha256 or "",
         )
 
-    async def get_pinned_drawing_checksum(
+    async def get_favorite_drawing_checksum(
         self, profile_user_id: str, turn_id: str
     ) -> str | None:
         db_profile_user_id = _optional_entity_id(profile_user_id)
@@ -4684,7 +4684,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             canonical = await _canonical_user_id(session, db_profile_user_id)
             checksum = await session.scalar(
                 select(TurnDrawing.checksum_sha256).where(
-                    self._pinned_drawing_predicate(canonical, db_turn_id)
+                    self._favorite_drawing_predicate(canonical, db_turn_id)
                 )
             )
         return checksum or None

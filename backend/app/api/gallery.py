@@ -47,7 +47,7 @@ drawing_limiter = RateLimiter(limit=600, window_seconds=60)
 
 
 def gallery_entry_payload(entry: GalleryEntry) -> dict:
-    """What an entry publishes (R-GAL-03): the pin's shape, the finish time,
+    """What an entry publishes (R-GAL-03): the favorite's shape, the finish time,
     who shared it first and when (R-SHARE-06), and the viewer's own facts. No
     `gameId`, no room, no reactor's name."""
     return {

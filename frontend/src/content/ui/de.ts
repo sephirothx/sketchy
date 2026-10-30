@@ -315,7 +315,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   solo_pool_empty: "Gerade ist keine Zeichnung zum Spielen übrig. Versuch es später noch einmal.",
   solo_date_out_of_range: "Das Tagesrätsel für diesen Tag ist nicht offen.",
   no_such_daily: "Heute gibt es kein Tagesrätsel. Probier eine freie Runde.",
-  pinned_drawings_full: "Deine angehefteten Zeichnungen sind voll. Löse zuerst eine in deinem Profil.",
+  favorites_full: "Du hast schon sechs Favoriten. Entferne zuerst einen in deinem Profil.",
 
   // Prompt lists
   prompt_list_not_found: "Begriffsliste nicht gefunden.",
@@ -947,10 +947,10 @@ export const DE: Catalogue = {
       `${p.label}, deine Reaktion. Drücken, um sie zu entfernen`,
   },
 
-  pinControl: {
-    pinThisDrawing: "Diese Zeichnung an dein Profil heften und in der Galerie zeigen",
-    unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
-    thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",
+  favoriteControl: {
+    favoriteThisDrawing: "Diese Zeichnung zu deinen Favoriten hinzufügen und in der Galerie zeigen",
+    unfavoriteThisDrawing: "Diese Zeichnung aus deinen Favoriten entfernen",
+    thatDrawingCouldNotBeFavorited: "Diese Zeichnung konnte nicht zu deinen Favoriten hinzugefügt werden.",
   },
 
   shareControl: {
@@ -968,7 +968,7 @@ export const DE: Catalogue = {
     thatDrawingCouldNotBeShared: "Diese Zeichnung konnte nicht geteilt werden.",
     thatCouldNotBeTakenBack: "Das ließ sich nicht zurücknehmen. Versuch es noch einmal.",
     takeOutTitle: "Diese Zeichnung aus der Galerie nehmen?",
-    takeOutDescription: "Sie verschwindet für alle aus der Galerie und wird von jedem Profil gelöst, an das sie geheftet ist. Nur du kannst sie zurückholen.",
+    takeOutDescription: "Sie verschwindet für alle aus der Galerie und aus den Favoriten jedes Profils. Nur du kannst sie zurückholen.",
     takeOutConfirm: "Herausnehmen",
   },
 
@@ -1574,13 +1574,13 @@ export const DE: Catalogue = {
     notKept: "nicht aufbewahrt",
     erased: "gelöscht",
     removedByModeration: "von der Moderation entfernt",
-    pinnedDrawings: "Angeheftete Zeichnungen",
-    nothingPinnedYet: "Noch nichts angeheftet. Hefte eine Zeichnung aus dem Rückblick eines Spiels an, oder aus einem Spiel in deinem Verlauf unten.",
-    openPinnedDrawing: (p: { prompt: string; drawer: string }) => `${p.prompt} von ${p.drawer} öffnen`,
+    favorites: "Favoriten",
+    noFavoritesYet: "Noch keine Favoriten. Füge eine Zeichnung aus dem Rückblick eines Spiels oder aus einem Spiel in deinem Verlauf unten hinzu.",
+    openFavorite: (p: { prompt: string; drawer: string }) => `${p.prompt} von ${p.drawer} öffnen`,
     moveLeft: "Nach links",
     moveRight: "Nach rechts",
-    unpin: "Lösen",
-    couldNotUpdatePinnedDrawings: "Deine angehefteten Zeichnungen konnten nicht aktualisiert werden. Bitte versuche es erneut.",
+    unfavorite: "Entfernen",
+    couldNotUpdateFavorites: "Deine Favoriten konnten nicht aktualisiert werden. Bitte versuche es erneut.",
     couldNotLoadThisDrawing: "Diese Zeichnung konnte nicht geladen werden.",
     nothingDrawn: "nichts gezeichnet",
     onlyThePlayersInThis: "Nur die Spieler dieses Spiels können seine Züge sehen.",

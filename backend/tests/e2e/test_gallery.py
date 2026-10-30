@@ -30,7 +30,7 @@ from tests.e2e.lobby_helpers import (
     use_guest_name,
 )
 from tests.e2e.staff_helpers import set_role
-from tests.e2e.test_pinned_drawings import scribble
+from tests.e2e.test_favorites import scribble
 from tests.e2e.test_profile_page import choose_prompt
 
 CARDS = '[data-testid="gallery-card"]'
@@ -386,7 +386,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await theirs.get_by_role("button").first.click()
             await owner.locator('[data-testid="gallery-drawing-page"]').wait_for()
             await owner.locator('[data-testid="share-take-out"]').click()
-            # It ends every other share and pin, so it asks first.
+            # It ends every other share and favorite, so it asks first.
             confirm = owner.get_by_role(
                 "alertdialog", name="Take this drawing out of the gallery?"
             )

@@ -673,7 +673,7 @@ class Room:
             # Every seat token that played it, whether or not it was still
             # seated at the end - the standings list only those who were. With
             # the seat's own tokens (`ownSeatTokens`) this says whether the
-            # viewer sat in the game: who may share or pin from its recap.
+            # viewer sat in the game: who may share or favorite from its recap.
             "seatTokens": sorted(self.last_game_seats),
         }
 
@@ -756,7 +756,7 @@ class Room:
     ) -> None:
         """A finished game's share state for one drawing, as its rows hold it
         after a write (#1430): the sharers, first first, and whether its
-        drawer took it out. A share made from history, a pin or the Gallery
+        drawer took it out. A share made from history, a favorite or the Gallery
         never passed through this room, so after a recap write the rows, not
         the room's own memory, are the answer. The moments only order the
         tokens: a finished game's shares are never folded into a write again.

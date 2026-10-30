@@ -505,7 +505,7 @@ export const RecapPage = roomPage(roomHeader() + roomGrid(
           </div>
         </div>
         <div style="display: flex; flex: 0 0 auto; gap: 8px">
-          ${btn.secondary('Pin', { iconL: icon.pin(15) })}
+          ${btn.secondary('Favorite', { iconL: icon.star(15) })}
           ${btn.primary('Save image', { iconL: icon.download(15) })}
           ${btn.secondary('Close')}
         </div>

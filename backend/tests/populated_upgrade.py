@@ -6,7 +6,7 @@ constraint added over existing rows is only proven where somebody wrote a
 seeded test for it. So this seeds one database through the application's own
 writers - accounts, a friendship, a published and starred list whose revision
 a finished game pins, played games with drawings, reactions from the room and
-the Gallery, a profile pin, a lobby line, a finished export - at
+the Gallery, a profile favorite, a lobby line, a finished export - at
 `FIXTURE_REVISION`, and dumps its rows as SQL. `tests/test_populated_upgrade.py`
 restores the schema at that revision, loads the rows, upgrades to head and
 reads every history surface back, so each revision written after it runs over
@@ -111,7 +111,7 @@ async def seed(factory: async_sessionmaker[AsyncSession]) -> Seeded:
     await history.set_drawing_reaction(
         None, recorded.turn_id, requesting_user_id=outsider.id, emoji="wow", from_gallery=True
     )
-    await history.set_profile_pins(requesting_user_id=drawer.id, turn_ids=[recorded.turn_id])
+    await history.set_profile_favorites(requesting_user_id=drawer.id, turn_ids=[recorded.turn_id])
 
     messages = MessageRetentionService(factory)
     await messages.record_lobby(

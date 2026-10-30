@@ -1,7 +1,7 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
 import type { HintMode, ReactionTally, ScoringMode } from "../types";
-import type { ProfilePin } from "./pinnedDrawings";
+import type { ProfileFavorite } from "./favorites";
 
 /**
  * A player as anyone may see them: what a seat in a room already shows, and
@@ -268,30 +268,30 @@ export function setHistoryShare(
   return apiRequest<HistoryShareResult>(path, { method: shared ? "PUT" : "DELETE" });
 }
 
-/** A profile's pinned drawings, in the owner's order (#440). Any session may ask. */
-export function fetchProfilePins(userId: string) {
-  return apiRequest<{ pins: ProfilePin[] }>(
-    `/api/users/${encodeURIComponent(userId)}/pins`,
+/** A profile's favorites, in the owner's order (#440). Any session may ask. */
+export function fetchProfileFavorites(userId: string) {
+  return apiRequest<{ favorites: ProfileFavorite[] }>(
+    `/api/users/${encodeURIComponent(userId)}/favorites`,
   );
 }
 
 /**
- * A pinned drawing's bytes through the pin route: the one door beside the
+ * A favorite's bytes through the favorite route: the one door beside the
  * participant route, open to any session (R-PIN-06).
  */
-export function fetchPinnedDrawing(userId: string, turnId: string): Promise<ArrayBuffer> {
+export function fetchFavoriteDrawing(userId: string, turnId: string): Promise<ArrayBuffer> {
   return apiBinaryRequest(
-    `/api/users/${encodeURIComponent(userId)}/pins/${encodeURIComponent(turnId)}/drawing`,
+    `/api/users/${encodeURIComponent(userId)}/favorites/${encodeURIComponent(turnId)}/drawing`,
   );
 }
 
 /**
- * Replace the signed-in player's shelf with `turnIds`, in that order: pin,
- * unpin and reorder are all this one write (R-PIN-02). A seventh answers
- * `pinned_drawings_full`; every other refusal is a 404.
+ * Replace the signed-in player's shelf with `turnIds`, in that order: favorite,
+ * unfavorite and reorder are all this one write (R-PIN-02). A seventh answers
+ * `favorites_full`; every other refusal is a 404.
  */
-export function setMyPins(turnIds: string[]) {
-  return apiRequest<{ pins: { turnId: string }[] }>("/api/me/pins", {
+export function setMyFavorites(turnIds: string[]) {
+  return apiRequest<{ favorites: { turnId: string }[] }>("/api/me/favorites", {
     method: "PUT",
     body: { turnIds },
   });

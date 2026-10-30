@@ -12,7 +12,7 @@ or taken it out, and its prompt is still active and rated for everyone.
 To a given player it must also be a game they were not in, and a concept
 they can guess in one of their play languages. Each of those is its own
 clause, and this door's clauses are its own (R-HIST-16): never a disjunction
-with the participant, pin or Gallery doors.
+with the participant, favorite or Gallery doors.
 """
 from __future__ import annotations
 
