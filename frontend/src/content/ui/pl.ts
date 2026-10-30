@@ -2053,16 +2053,17 @@ export const PL: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Ostatnio używane: ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Automatyczne wylogowanie: ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Użyte w innej przeglądarce: ${p.when}. Jeśli to nie ty, usuń dostęp temu urządzeniu.`,
+    lastUsed: "Ostatnio używane",
+    signsOut: "Wygasa",
+    now: "Teraz",
+    usedElsewhere: (p: { when: string }) => `Użyte w innej przeglądarce: ${p.when}.`,
+    usedElsewhereAdvice: "Jeśli to nie ty, usuń dostęp temu urządzeniu i zmień hasło.",
     couldNotLoadSignedDevices: "Nie udało się wczytać zalogowanych urządzeń.",
     couldNotRevokeDevice: "Nie udało się usunąć dostępu urządzenia.",
     couldNotSignOutEverywhere: "Nie udało się wylogować ze wszystkich urządzeń.",
-    revokeAnyDeviceYouNoLonger: "Usuń dostęp każdemu urządzeniu, którego nie rozpoznajesz. Nazwy urządzeń są ogólne i nie zawierają wersji przeglądarki.\n          Nieużywane urządzenie wylogowuje się samo po dziewięćdziesięciu dniach.",
+    hint: "Usuń dostęp każdemu urządzeniu, którego nie rozpoznajesz.",
     loadingDevices: "Wczytywanie urządzeń…",
-    currentDevice: "Bieżące urządzenie",
+    thisDevice: "To urządzenie",
     revoking: "Usuwanie dostępu…",
     revoke: "Usuń dostęp",
     signingOut: "Wylogowywanie…",

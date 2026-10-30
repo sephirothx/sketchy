@@ -2047,16 +2047,17 @@ export const FR: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Dernière utilisation ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Se déconnecte tout seul ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Utilisé depuis un autre navigateur le ${p.when}. Révoque cet appareil si ce n’était pas toi.`,
+    lastUsed: "Dernière utilisation",
+    signsOut: "Expire",
+    now: "Maintenant",
+    usedElsewhere: (p: { when: string }) => `Utilisé depuis un autre navigateur le ${p.when}.`,
+    usedElsewhereAdvice: "Si ce n’était pas toi, révoque cet appareil et change ton mot de passe.",
     couldNotLoadSignedDevices: "Les appareils connectés n’ont pas pu être chargés.",
     couldNotRevokeDevice: "L’appareil n’a pas pu être révoqué.",
     couldNotSignOutEverywhere: "Impossible de se déconnecter partout.",
-    revokeAnyDeviceYouNoLonger: "Révoque tout appareil que tu ne reconnais plus. Les noms d’appareils sont approximatifs et ne stockent pas les versions de navigateur.\n          Un appareil que tu cesses d’utiliser se déconnecte seul au bout de quatre-vingt-dix jours.",
+    hint: "Révoque tout appareil que tu ne reconnais pas.",
     loadingDevices: "Chargement des appareils…",
-    currentDevice: "Appareil actuel",
+    thisDevice: "Cet appareil",
     revoking: "Révocation…",
     revoke: "Révoquer",
     signingOut: "Déconnexion…",

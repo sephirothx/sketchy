@@ -2047,16 +2047,17 @@ export const IT: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Usato l’ultima volta ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Si disconnette da solo ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Usato da un altro browser il ${p.when}. Revoca questo dispositivo se non eri tu.`,
+    lastUsed: "Ultimo uso",
+    signsOut: "Scade",
+    now: "Adesso",
+    usedElsewhere: (p: { when: string }) => `Usato da un altro browser il ${p.when}.`,
+    usedElsewhereAdvice: "Se non eri tu, revoca questo dispositivo e cambia la password.",
     couldNotLoadSignedDevices: "Non è stato possibile caricare i dispositivi connessi.",
     couldNotRevokeDevice: "Non è stato possibile revocare il dispositivo.",
     couldNotSignOutEverywhere: "Non è stato possibile disconnettersi ovunque.",
-    revokeAnyDeviceYouNoLonger: "Revoca ogni dispositivo che non riconosci più. I nomi dei dispositivi sono approssimativi e non conservano le versioni del browser.\n          Un dispositivo che smetti di usare si disconnette da solo dopo novanta giorni.",
+    hint: "Revoca ogni dispositivo che non riconosci.",
     loadingDevices: "Caricamento dei dispositivi…",
-    currentDevice: "Dispositivo attuale",
+    thisDevice: "Questo dispositivo",
     revoking: "Revoca…",
     revoke: "Revoca",
     signingOut: "Uscita…",

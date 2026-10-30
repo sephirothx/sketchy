@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useClock } from "../hooks/useClock";
 import { ConfirmationDialog } from "./ConfirmationDialog";
+import { AlertCircleIcon, LeaveIcon } from "./icons";
 import { SettingsRow } from "./SettingsRow";
 import {
   fetchAccountSessions,
@@ -22,7 +23,7 @@ import { ui } from "../content/ui/index.ts";
  * a device used from a browser it was not issued to most of all.
  */
 export function SignedInDevices() {
-  const { dateTime } = useClock();
+  const { nearDateTime, nearDate } = useClock();
   const logout = useAuthStore((state) => state.logout);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,16 +81,16 @@ export function SignedInDevices() {
 
   return (
     <>
-      <SettingsRow
-        label={ui.settingsOverlay.signedDevices}
-        hint={ui.signedInDevices.revokeAnyDeviceYouNoLonger}
-      >
+      <SettingsRow label={ui.settingsOverlay.signedDevices} hint={ui.signedInDevices.hint}>
+        {/* A button, not a link-styled word: it opens a confirmation, and the
+            filled red is kept for that confirmation's own button. */}
         <button
           type="button"
-          className="btn btn-danger-ghost btn-compact"
+          className="btn btn-secondary btn-compact session-sign-out-all"
           onClick={() => setConfirmingAll(true)}
           disabled={busyId !== null || sessions.length === 0}
         >
+          <LeaveIcon />
           {busyId === "all" ? ui.signedInDevices.signingOut : ui.signedInDevices.signOutEverywhere}
         </button>
       </SettingsRow>
@@ -97,39 +98,68 @@ export function SignedInDevices() {
       {error && <p className="auth-error" role="alert">{error}</p>}
       {!loading && sessions.length > 0 && (
         <ul className="session-list" aria-label={ui.settingsOverlay.signedDevices}>
-          {sessions.map((session) => (
-            <li key={session.id}>
-              <span>
-                <strong>{session.deviceLabel}</strong>
-                {session.current && <span className="session-current">{ui.signedInDevices.currentDevice}</span>}
-                <small>{ui.signedInDevices.lastUsed({ when: dateTime(new Date(session.lastUsedAt)) })}</small>
-                {session.idleExpiresAt && (
-                  <small>
-                    {ui.signedInDevices.signsOutOn({ when: dateTime(new Date(session.idleExpiresAt)) })}
-                  </small>
-                )}
+          {sessions.map((session) => {
+            const lastUsed = new Date(session.lastUsedAt);
+            return (
+              <li key={session.id} className={session.anomalyAt ? "is-flagged" : undefined}>
+                <span className="session-info">
+                  <span className="session-name">
+                    {session.anomalyAt && <span className="session-flag"><AlertCircleIcon size={18} strokeWidth={2.4} /></span>}
+                    <strong>{session.deviceLabel}</strong>
+                    {session.current && <span className="session-current">{ui.signedInDevices.thisDevice}</span>}
+                  </span>
+                  <dl className="session-dates">
+                    <div>
+                      <dt>{ui.signedInDevices.lastUsed}</dt>
+                      {/* The device in hand is in use as it is read; its own
+                          last use is only as fresh as its last request. */}
+                      {session.current ? (
+                        <dd>{ui.signedInDevices.now}</dd>
+                      ) : (
+                        <dd>
+                          {/* The time only where there is room for it: a
+                              phone keeps both dates on one line. */}
+                          <span className="session-when-long">{nearDateTime(lastUsed)}</span>
+                          <span className="session-when-short">{nearDate(lastUsed)}</span>
+                        </dd>
+                      )}
+                    </div>
+                    {/* When it lapses on its own, which the list must show
+                        (R-AUTH-03). */}
+                    {session.idleExpiresAt && (
+                      <div>
+                        <dt>{ui.signedInDevices.signsOut}</dt>
+                        <dd>{nearDate(new Date(session.idleExpiresAt))}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </span>
+                <button
+                  type="button"
+                  className={session.anomalyAt ? "btn btn-danger btn-compact" : "btn btn-secondary btn-compact"}
+                  disabled={busyId !== null}
+                  onClick={() => void revoke(session)}
+                >
+                  {busyId === session.id ? ui.signedInDevices.revoking : ui.signedInDevices.revoke}
+                </button>
                 {/*
                   Worth interrupting for: a session used from a browser it
-                  was not issued to is the shape a stolen cookie has. Says
-                  only that it happened and when - the server keeps a hash
-                  of the address, not the address.
+                  was not issued to is the shape a stolen cookie has
+                  (R-AUTH-22), so the whole card turns red and its Revoke
+                  is the filled one. Says only that it happened and when -
+                  the server keeps a hash of the address, not the address -
+                  and what to do: a password change signs every other
+                  device out, the copy included.
                 */}
                 {session.anomalyAt && (
-                  <small className="session-anomaly" role="note">
-                    {ui.signedInDevices.usedElsewhere({ when: dateTime(new Date(session.anomalyAt)) })}
-                  </small>
+                  <p className="session-anomaly" role="note">
+                    <b>{ui.signedInDevices.usedElsewhere({ when: nearDateTime(new Date(session.anomalyAt)) })}</b>{" "}
+                    {ui.signedInDevices.usedElsewhereAdvice}
+                  </p>
                 )}
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-compact"
-                disabled={busyId !== null}
-                onClick={() => void revoke(session)}
-              >
-                {busyId === session.id ? ui.signedInDevices.revoking : ui.signedInDevices.revoke}
-              </button>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
       {/* Asked first, because it reaches further than it reads: "everywhere"

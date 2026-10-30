@@ -2063,16 +2063,17 @@ export const EN = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Last used ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Signs out on its own ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Used from a different browser on ${p.when}. Revoke this device if that was not you.`,
+    lastUsed: "Last used",
+    signsOut: "Signs out",
+    now: "Now",
+    usedElsewhere: (p: { when: string }) => `Used from a different browser on ${p.when}.`,
+    usedElsewhereAdvice: "If that was not you, revoke this device and change your password.",
     couldNotLoadSignedDevices: "Could not load signed-in devices.",
     couldNotRevokeDevice: "Could not revoke device.",
     couldNotSignOutEverywhere: "Could not sign out everywhere.",
-    revokeAnyDeviceYouNoLonger: "Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.\n          A device you stop using signs itself out after ninety days.",
+    hint: "Revoke any device you don't recognize.",
     loadingDevices: "Loading devices…",
-    currentDevice: "Current device",
+    thisDevice: "This device",
     revoking: "Revoking…",
     revoke: "Revoke",
     signingOut: "Signing out…",

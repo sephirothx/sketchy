@@ -2045,16 +2045,17 @@ export const DE: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Zuletzt genutzt ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Meldet sich von selbst ab ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Am ${p.when} aus einem anderen Browser genutzt. Melde dieses Gerät ab, wenn du das nicht warst.`,
+    lastUsed: "Zuletzt genutzt",
+    signsOut: "Läuft ab",
+    now: "Jetzt",
+    usedElsewhere: (p: { when: string }) => `Am ${p.when} aus einem anderen Browser genutzt.`,
+    usedElsewhereAdvice: "Wenn du das nicht warst, melde dieses Gerät ab und ändere dein Passwort.",
     couldNotLoadSignedDevices: "Angemeldete Geräte konnten nicht geladen werden.",
     couldNotRevokeDevice: "Das Gerät konnte nicht abgemeldet werden.",
     couldNotSignOutEverywhere: "Abmelden auf allen Geräten nicht möglich.",
-    revokeAnyDeviceYouNoLonger: "Melde jedes Gerät ab, das du nicht mehr kennst. Gerätenamen sind grob und speichern keine Browserversionen.\n          Ein Gerät, das du nicht mehr nutzt, meldet sich nach neunzig Tagen selbst ab.",
+    hint: "Melde jedes Gerät ab, das du nicht erkennst.",
     loadingDevices: "Geräte werden geladen …",
-    currentDevice: "Aktuelles Gerät",
+    thisDevice: "Dieses Gerät",
     revoking: "Wird widerrufen …",
     revoke: "Widerrufen",
     signingOut: "Wird abgemeldet …",

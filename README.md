@@ -1003,8 +1003,9 @@ token is also quietly replaced once a week, which is per-device: the browser doi
 it swaps its own cookie and every other device stays signed in. If a replaced
 token is ever used afterwards, that means a second copy of it exists - so that
 device is signed out entirely and has to sign in again, which is how you find out.
-A session used from a browser it was not issued to is flagged in the list, with
-the date, so you can revoke it. **Sign out everywhere** asks before it acts,
+A session used from a browser it was not issued to is flagged in the list: its
+card turns red, with the date and what to do - revoke it and change your
+password, which signs every other device out, the copy included. **Sign out everywhere** asks before it acts,
 because everywhere includes the device you are holding.
 
 #### Two-factor authentication

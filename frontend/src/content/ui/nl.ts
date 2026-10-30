@@ -2045,16 +2045,17 @@ export const NL: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Laatst gebruikt ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Logt vanzelf uit ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Gebruikt vanuit een andere browser op ${p.when}. Trek dit apparaat in als jij dat niet was.`,
+    lastUsed: "Laatst gebruikt",
+    signsOut: "Verloopt",
+    now: "Nu",
+    usedElsewhere: (p: { when: string }) => `Gebruikt vanuit een andere browser op ${p.when}.`,
+    usedElsewhereAdvice: "Was jij dat niet, trek dit apparaat dan in en wijzig je wachtwoord.",
     couldNotLoadSignedDevices: "De ingelogde apparaten konden niet geladen worden.",
     couldNotRevokeDevice: "Het apparaat kon niet ingetrokken worden.",
     couldNotSignOutEverywhere: "Overal uitloggen lukte niet.",
-    revokeAnyDeviceYouNoLonger: "Trek elk apparaat in dat je niet meer herkent. Apparaatnamen zijn grof en bewaren geen browserversies.\n          Een apparaat dat je niet meer gebruikt, logt zichzelf na negentig dagen uit.",
+    hint: "Trek elk apparaat in dat je niet herkent.",
     loadingDevices: "Apparaten laden…",
-    currentDevice: "Huidig apparaat",
+    thisDevice: "Dit apparaat",
     revoking: "Intrekken…",
     revoke: "Intrekken",
     signingOut: "Uitloggen…",

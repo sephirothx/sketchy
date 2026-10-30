@@ -2044,16 +2044,17 @@ export const PT: Catalogue = {
   },
 
   signedInDevices: {
-    lastUsed: (p: { when: string }) => `Usado pela última vez ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Termina a sessão sozinho ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Usado a partir de outro navegador a ${p.when}. Revoga este dispositivo se não foste tu.`,
+    lastUsed: "Último uso",
+    signsOut: "Expira",
+    now: "Agora",
+    usedElsewhere: (p: { when: string }) => `Usado a partir de outro navegador a ${p.when}.`,
+    usedElsewhereAdvice: "Se não foste tu, revoga este dispositivo e altera a palavra-passe.",
     couldNotLoadSignedDevices: "Não foi possível carregar os dispositivos com sessão iniciada.",
     couldNotRevokeDevice: "Não foi possível revogar o dispositivo.",
     couldNotSignOutEverywhere: "Não foi possível terminar a sessão em todo o lado.",
-    revokeAnyDeviceYouNoLonger: "Revoga qualquer dispositivo que já não reconheças. Os nomes dos dispositivos são aproximados e não guardam versões de navegador.\n          Um dispositivo que deixas de usar termina a sessão sozinho ao fim de noventa dias.",
+    hint: "Revoga qualquer dispositivo que não reconheças.",
     loadingDevices: "A carregar dispositivos…",
-    currentDevice: "Dispositivo atual",
+    thisDevice: "Este dispositivo",
     revoking: "A revogar…",
     revoke: "Revogar",
     signingOut: "A terminar sessão…",

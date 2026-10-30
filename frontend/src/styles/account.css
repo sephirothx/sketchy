@@ -305,9 +305,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Each device a card of two lines - its name, then two labelled dates - so a
+   long list stays short (#864). */
 .session-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   list-style: none;
   margin: 16px 0;
   max-height: min(45vh, 360px);
@@ -319,21 +321,64 @@
   align-items: center;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 12px;
+  column-gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 7px 8px 7px 12px;
+  row-gap: 4px;
 }
 
-.session-list li > span { display: grid; gap: 3px; }
-.session-list small { color: var(--muted); }
-.session-current { color: var(--success-ink); font-size: 12px; font-weight: 700; }
-.session-list .btn { flex: none; }
+.session-info { display: grid; gap: 1px; min-width: 0; }
+.session-name { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.session-name strong { font-weight: 700; }
+.session-current {
+  background: var(--success-soft);
+  border-radius: var(--radius-pill);
+  color: var(--success-ink);
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 1px 8px;
+}
 
-/* A session used from a browser it was not issued to. Given the warning
-   colour rather than the muted one every other line in the list has: it is the
-   one row somebody is meant to stop and look at (R-AUTH-22). */
-.session-anomaly { color: var(--warning); font-weight: 700; }
+.session-dates {
+  color: var(--muted);
+  column-gap: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  margin: 0;
+}
+.session-dates dt { display: inline; font-weight: 800; }
+.session-dates dd { display: inline; margin: 0 0 0 4px; }
+.session-when-short { display: none; }
+
+@media (max-width: 640px) {
+  .session-dates { column-gap: 12px; font-size: 12.5px; }
+  .session-when-long { display: none; }
+  .session-when-short { display: inline; }
+}
+
+.session-list .btn { flex: none; }
+.session-sign-out-all { color: var(--danger); }
+
+/* A session used from a browser it was not issued to (R-AUTH-22): the one
+   card somebody is meant to stop at, so the whole card turns red rather than
+   one line of it - a warning-coloured line among muted ones was easy to read
+   past - and its Revoke is the filled danger button. */
+.session-list li.is-flagged {
+  background: var(--danger-soft);
+  border: 1.5px solid var(--danger);
+  padding: 9px 8px 10px 12px;
+}
+.session-flag { color: var(--danger); display: inline-flex; }
+.session-anomaly {
+  color: var(--danger);
+  font-size: 13px;
+  grid-column: 1 / -1;
+  line-height: 1.4;
+  margin: 0;
+}
+.session-anomaly b { font-weight: 800; }
 
 .two-factor-wide { max-width: 640px; }
 /* The entry column is an `.auth-form` like every other dialog's, so labels,
