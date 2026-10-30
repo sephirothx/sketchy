@@ -57,7 +57,7 @@ type Problem = "blocked" | "none" | "failed" | "unloaded";
 /**
  * Join by code's camera view (#1530): reads a room's QR code and hands the
  * code over the moment it is read, so the sheet can join with nothing else
- * pressed. A code for anything but a room on this site is said so and
+ * pressed. A code for anything but a room is said so and
  * ignored, and scanning goes on (lib/scannedRoomCode.ts).
  *
  * The camera runs only while this is on screen and the tab is visible: it
@@ -152,7 +152,7 @@ export default function QrScanner({
         }
         if (stopped) return;
         for (const text of codes) {
-          const code = roomCodeFromScan(text, window.location.origin);
+          const code = roomCodeFromScan(text);
           if (code) {
             stop();
             onCodeRef.current(code);
