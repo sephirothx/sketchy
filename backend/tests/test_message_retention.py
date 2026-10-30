@@ -1156,6 +1156,12 @@ async def test_one_row_the_database_refuses_does_not_cost_the_batch():
                 room=room, player=player, text=text, message_kind="chat",
                 audience="room", recipient_sids=[player.sid],
             )
+        # Drained before the close, because `aclose` is not a wait for the
+        # writer: it gives the drain SHUTDOWN_DRAIN_SECONDS and then cancels
+        # it, by design. A CI runner once held the first single-row write
+        # past that bound, and the shutdown - not the fallback - lost both
+        # good lines.
+        await service.drain()
         await service.aclose()
 
         async with factory() as session:
@@ -1276,6 +1282,8 @@ async def test_on_postgresql_a_real_nul_costs_only_its_own_row():
                 room=room, player=player, text=text, message_kind="chat",
                 audience="room", recipient_sids=[player.sid],
             )
+        # Drained first, for the reason the staged version gives.
+        await service.drain()
         await service.aclose()
 
         async with factory() as session:
