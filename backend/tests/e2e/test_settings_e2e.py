@@ -1,5 +1,7 @@
+from uuid import uuid4
+
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     register_account,
     use_guest_name,
@@ -344,6 +346,8 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
 
             await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
+            devices = page.get_by_role("list", name="Signed-in devices")
+            await expect(devices.locator("li")).to_have_count(2)
             await page.get_by_role("button", name="Change password").click()
             change = page.get_by_role("dialog", name="Change your password")
             await change.wait_for(state="visible")
@@ -356,6 +360,12 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await change.get_by_role("button", name="Change password").click()
             await change.wait_for(state="hidden")
 
+            # The device list sits in the page under the dialog (#864), so it
+            # has to follow the change: only this browser's new session, not
+            # two that were revoked while it stayed mounted.
+            await expect(devices.locator("li")).to_have_count(1)
+            await expect(devices.get_by_text("This device")).to_be_visible()
+
             # This device keeps its session; the other one is out.
             assert await page.evaluate(
                 "async () => (await (await fetch('/api/auth/me')).json())?.username"
@@ -367,6 +377,44 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
         finally:
             await owner.close()
             await other.close()
+            await browser.close()
+
+
+async def test_a_device_used_from_another_browser_is_shown_in_red():
+    """A copied cookie used from a different browser is recorded as an
+    anomaly (R-AUTH-22), and its card is the one in the list that cannot be
+    read past: red, a filled Revoke, and what to do about it."""
+    username = f"Copied{uuid4().hex[:6]}"
+    firefox = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner = await browser.new_context()
+        thief = await browser.new_context(user_agent=firefox)
+        page = await owner.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username)
+            await register_account(page, username)
+            await thief.add_cookies(await owner.cookies())
+            stolen = await thief.new_page()
+            await stolen.goto(BASE_URL)
+            assert await stolen.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json())?.username"
+            ) == username
+
+            await open_player_settings(page)
+            devices = page.get_by_role("list", name="Signed-in devices")
+            card = devices.locator("li.is-flagged")
+            await expect(card).to_have_count(1)
+            await expect(card).to_contain_text("Used from a different browser")
+            await expect(card).to_contain_text("change your password")
+            assert "btn-danger" in (await card.get_by_role("button", name="Revoke").get_attribute("class") or "")
+            # The dates are labelled, and Sign out everywhere is a button.
+            await expect(card.locator("dt", has_text="Last used")).to_be_visible()
+            await expect(page.get_by_role("button", name="Sign out everywhere")).to_be_visible()
+        finally:
+            await owner.close()
+            await thief.close()
             await browser.close()
 
 

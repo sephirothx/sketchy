@@ -1003,8 +1003,9 @@ token is also quietly replaced once a week, which is per-device: the browser doi
 it swaps its own cookie and every other device stays signed in. If a replaced
 token is ever used afterwards, that means a second copy of it exists - so that
 device is signed out entirely and has to sign in again, which is how you find out.
-A session used from a browser it was not issued to is flagged in the list, with
-the date, so you can revoke it. **Log out everywhere** asks before it acts,
+A session used from a browser it was not issued to is flagged in the list: its
+card turns red, with the date and what to do - revoke it and change your
+password, which signs every other device out, the copy included. **Sign out everywhere** asks before it acts,
 because everywhere includes the device you are holding.
 
 #### Two-factor authentication
@@ -1500,9 +1501,10 @@ The identity menu is navigation only: Settings, profile, prompt stats, prompt
 lists, bug reports, sign out. Account absorbs what the menu used to hold: the
 username and name color, the email, changing the password (its own dialog:
 current password, the new one twice, or a mailed link for somebody who has
-forgotten it — the change signs every other device out), signed-in devices,
-the data export, and deleting the account, which is its own dialog with the
-password and a typed `DELETE` rather than the bottom of the data export.
+forgotten it — the change signs every other device out), the signed-in devices
+and the data exports, both listed in the page rather than behind a dialog, and
+deleting the account, which is its own dialog with the password and a typed
+`DELETE` rather than the bottom of the data export.
 
 A registered player can upload a **picture** to stand in for their initial, from
 **Settings → Account**: the pencil on the disc. The browser lets the player
@@ -1569,7 +1571,7 @@ guest preferences stay local and are supplied only to the live seat.
 Every guest or registered player can request an export from **Settings →
 Account → Your data**, at most once a week: building one walks every game the
 account played, so a request too soon is refused with the date the next one is
-accepted, a failed build does not count, and the dialog disables the control
+accepted, a failed build does not count, and the row disables the control
 and names the date rather than offer a request that will be refused.
 An export request creates a durable asynchronous job and produces a private,
 versioned JSON document containing that player's account fields, linked guest

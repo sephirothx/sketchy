@@ -512,7 +512,7 @@ export const NL: Catalogue = {
       `${p.summary}. Spelers en scores openen.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Aangevraagd ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -521,11 +521,6 @@ export const NL: Catalogue = {
         : "Eén export per week; klaargezette exports verlopen na zeven dagen.",
     couldNotLoadYourDataExports: "Je data-exports konden niet geladen worden.",
     couldNotRequestYourDataExport: "Je data-export kon niet aangevraagd worden.",
-    yourData: "Jouw gegevens",
-    downloadPrivateJsonCopyYourAccount: "Download een privékopie in JSON van je account en je spelgegevens. Profielen en berichten van andere spelers zitten er niet in.",
-    dataExports: "Data-exports",
-    loadingExports: "Exports laden…",
-    youHaveNotRequestedExportYet: "Je hebt nog geen export aangevraagd.",
     download: "Downloaden",
     requesting: "Aanvragen…",
     requestExport: "Export aanvragen",
@@ -2049,18 +2044,18 @@ export const NL: Catalogue = {
     history: "geschiedenis",
   },
 
-  sessionManagerDialog: {
-    lastUsed: (p: { when: string }) => `Laatst gebruikt ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Logt vanzelf uit ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Gebruikt vanuit een andere browser op ${p.when}. Trek dit apparaat in als jij dat niet was.`,
+  signedInDevices: {
+    lastUsed: "Laatst gebruikt",
+    signsOut: "Verloopt",
+    now: "Nu",
+    usedElsewhere: (p: { when: string }) => `Gebruikt vanuit een andere browser op ${p.when}.`,
+    usedElsewhereAdvice: "Was jij dat niet, trek dit apparaat dan in en wijzig je wachtwoord.",
     couldNotLoadSignedDevices: "De ingelogde apparaten konden niet geladen worden.",
     couldNotRevokeDevice: "Het apparaat kon niet ingetrokken worden.",
     couldNotSignOutEverywhere: "Overal uitloggen lukte niet.",
-    signedDevices: "Ingelogde apparaten",
-    revokeAnyDeviceYouNoLonger: "Trek elk apparaat in dat je niet meer herkent. Apparaatnamen zijn grof en bewaren geen browserversies.\n          Een apparaat dat je niet meer gebruikt, logt zichzelf na negentig dagen uit.",
+    hint: "Trek elk apparaat in dat je niet herkent.",
     loadingDevices: "Apparaten laden…",
-    currentDevice: "Huidig apparaat",
+    thisDevice: "Dit apparaat",
     revoking: "Intrekken…",
     revoke: "Intrekken",
     signingOut: "Uitloggen…",
@@ -2179,7 +2174,6 @@ export const NL: Catalogue = {
     changePassword: "Wachtwoord wijzigen",
     manage: "Beheren",
     yourData: "Jouw gegevens",
-    requestExport: "Export aanvragen",
     delete: "Verwijderen…",
     display: "Weergave",
     theme: "Thema",
@@ -2234,7 +2228,6 @@ export const NL: Catalogue = {
     anAuthenticatorAppSCode: "Een code uit een authenticatie-app, bovenop je wachtwoord. Moderators en beheerders moeten er een hebben.",
     setUp: "Instellen",
     guestKeptInThisBrowser: "Je gastnaam, punten en geschiedenis staan alleen in deze browser.",
-    everyBrowserStillHoldingA: "Elke browser die nog een sessie heeft, en een manier om er een te beëindigen.",
     worksForAGuestToo: "Werkt ook voor gasten: de spellen die je hebt gespeeld zijn van jou.",
     everyGameListAndSetting: "Elk spel, elke lijst en elke instelling die Sketchy over je bewaart, als één JSON-bestand.",
     deleteThisGuest: "Deze gast verwijderen",

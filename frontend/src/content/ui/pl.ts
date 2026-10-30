@@ -510,7 +510,7 @@ export const PL: Catalogue = {
       (p: { summary: string }) => `${p.summary}. Otwórz listę graczy i wyniki.`,
   },
 
-  accountDataDialog: {
+  dataExports: {
     requestedOn: (p: { when: string }) =>
       `Zlecono: ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
@@ -519,11 +519,6 @@ export const PL: Catalogue = {
         : "Jeden eksport na tydzień; gotowe eksporty wygasają po siedmiu dniach.",
     couldNotLoadYourDataExports: "Nie udało się wczytać twoich eksportów danych.",
     couldNotRequestYourDataExport: "Nie udało się zlecić eksportu danych.",
-    yourData: "Twoje dane",
-    downloadPrivateJsonCopyYourAccount: "Pobierz prywatną kopię danych konta i rozgrywek w formacie JSON. Profile i wiadomości innych graczy nie są w niej uwzględnione.",
-    dataExports: "Eksporty danych",
-    loadingExports: "Wczytywanie eksportów…",
-    youHaveNotRequestedExportYet: "Nie zlecono jeszcze żadnego eksportu.",
     download: "Pobierz",
     requesting: "Zlecanie…",
     requestExport: "Zleć eksport",
@@ -2057,18 +2052,18 @@ export const PL: Catalogue = {
     history: "historia zmian",
   },
 
-  sessionManagerDialog: {
-    lastUsed: (p: { when: string }) => `Ostatnio używane: ${p.when}`,
-    signsOutOn: (p: { when: string }) => `Automatyczne wylogowanie: ${p.when}`,
-    usedElsewhere: (p: { when: string }) =>
-      `Użyte w innej przeglądarce: ${p.when}. Jeśli to nie ty, usuń dostęp temu urządzeniu.`,
+  signedInDevices: {
+    lastUsed: "Ostatnio używane",
+    signsOut: "Wygasa",
+    now: "Teraz",
+    usedElsewhere: (p: { when: string }) => `Użyte w innej przeglądarce: ${p.when}.`,
+    usedElsewhereAdvice: "Jeśli to nie ty, usuń dostęp temu urządzeniu i zmień hasło.",
     couldNotLoadSignedDevices: "Nie udało się wczytać zalogowanych urządzeń.",
     couldNotRevokeDevice: "Nie udało się usunąć dostępu urządzenia.",
     couldNotSignOutEverywhere: "Nie udało się wylogować ze wszystkich urządzeń.",
-    signedDevices: "Zalogowane urządzenia",
-    revokeAnyDeviceYouNoLonger: "Usuń dostęp każdemu urządzeniu, którego nie rozpoznajesz. Nazwy urządzeń są ogólne i nie zawierają wersji przeglądarki.\n          Nieużywane urządzenie wylogowuje się samo po dziewięćdziesięciu dniach.",
+    hint: "Usuń dostęp każdemu urządzeniu, którego nie rozpoznajesz.",
     loadingDevices: "Wczytywanie urządzeń…",
-    currentDevice: "Bieżące urządzenie",
+    thisDevice: "To urządzenie",
     revoking: "Usuwanie dostępu…",
     revoke: "Usuń dostęp",
     signingOut: "Wylogowywanie…",
@@ -2187,7 +2182,6 @@ export const PL: Catalogue = {
     changePassword: "Zmień hasło",
     manage: "Zarządzaj",
     yourData: "Twoje dane",
-    requestExport: "Poproś o eksport",
     delete: "Usuń…",
     display: "Wyświetlanie",
     theme: "Motyw",
@@ -2244,8 +2238,6 @@ export const PL: Catalogue = {
       "Kod z aplikacji uwierzytelniającej, oprócz hasła. Obowiązkowe dla moderatorów i administratorów.",
     setUp: "Skonfiguruj",
     guestKeptInThisBrowser: "Twoja nazwa gościa, punkty i historia są przechowywane tylko w tej przeglądarce.",
-    everyBrowserStillHoldingA:
-      "Każda przeglądarka, w której trwa sesja, i możliwość zakończenia każdej z nich.",
     worksForAGuestToo: "Działa też dla gościa: rozegrane przez ciebie gry należą do ciebie.",
     everyGameListAndSetting:
       "Każda gra, lista i ustawienie, które Sketchy przechowuje na twój temat, w jednym pliku JSON.",
