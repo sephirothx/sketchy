@@ -321,7 +321,7 @@ export const ProfilePage = `
   </div>
 
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; margin-bottom: 22px">
-    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; margin-bottom: 14px">Pinned drawings</h2>
+    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; margin-bottom: 14px">Favorites</h2>
     <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
       ${[['lighthouse', P.marta, [['fire', 2], ['heart', 1]]], ['roller coaster', P.bruno, [['laugh', 1]]], ['bow and arrow', P.yuki, []]].map(([prompt, drawer, tally], i) => `
       <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
@@ -331,7 +331,7 @@ export const ProfilePage = `
         <div style="display: flex; align-items: center; gap: 2px">
           ${btn.iconOnly(icon.chevL(14), 'Move left', 32)}
           ${btn.iconOnly(icon.chevR(14), 'Move right', 32)}
-          ${btn.ghost('Unpin', { iconL: icon.x(13), style: 'margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px' })}
+          ${btn.ghost('Remove', { iconL: icon.x(13), style: 'margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px' })}
         </div>
       </li>`).join('')}
     </ul>

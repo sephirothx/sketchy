@@ -786,7 +786,7 @@ export type ErrorCode =
   | "solo_pool_empty"
   | "solo_date_out_of_range"
   | "no_such_daily"
-  | "pinned_drawings_full"
+  | "favorites_full"
   | "prompt_list_not_found"
   | "prompt_list_conflict"
   | "prompt_list_invalid"

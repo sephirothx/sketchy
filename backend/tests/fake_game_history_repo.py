@@ -23,9 +23,9 @@ from app.repositories.interfaces import (
     TurnDrawingReactionInput,
     TurnDrawingShareInput,
     TurnRecordInput,
-    ProfilePinDetail,
-    ProfilePinEntry,
-    ProfilePinsResult,
+    ProfileFavoriteDetail,
+    ProfileFavoriteEntry,
+    ProfileFavoritesResult,
 )
 
 
@@ -91,14 +91,14 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self.reaction_writes: list[ReactionWrite] = []
         self.reaction_result: DrawingReactionResult | None = None
         self.accept_reactions = False
-        self.pin_writes: list[tuple[str, tuple[str, ...]]] = []
+        self.favorite_writes: list[tuple[str, tuple[str, ...]]] = []
         # Later share writes, and what the next one answers; `None` refuses.
         self.share_writes: list[ShareWrite] = []
         self.share_result: DrawingShareResult | None = None
         # What a share-state read answers per turn, and the reads made.
         self.share_state: dict[str, DrawingShareResult] = {}
         self.share_reads: list[str] = []
-        self.accept_pins = True
+        self.accept_favorites = True
         self.reaction_seat_id = "seat-1"
 
     async def save_game(
@@ -200,18 +200,18 @@ class FakeGameHistoryRepository(GameHistoryRepository):
             reaction_counts={emoji: 1} if emoji else {},
         )
 
-    async def set_profile_pins(
+    async def set_profile_favorites(
         self,
         *,
         requesting_user_id: str,
         turn_ids: Sequence[str],
-    ) -> ProfilePinsResult | None:
-        self.pin_writes.append((requesting_user_id, tuple(turn_ids)))
-        if not self.accept_pins:
+    ) -> ProfileFavoritesResult | None:
+        self.favorite_writes.append((requesting_user_id, tuple(turn_ids)))
+        if not self.accept_favorites:
             return None
-        return ProfilePinsResult(
-            pins=tuple(
-                ProfilePinDetail(turn_id=turn_id, game_id="game", position=position)
+        return ProfileFavoritesResult(
+            favorites=tuple(
+                ProfileFavoriteDetail(turn_id=turn_id, game_id="game", position=position)
                 for position, turn_id in enumerate(turn_ids)
             )
         )
@@ -234,9 +234,9 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     ) -> str | None:
         return None
 
-    async def get_profile_pins(
+    async def get_profile_favorites(
         self, profile_user_id: str, *, viewer_user_id: str | None = None
-    ) -> tuple[ProfilePinEntry, ...]:
+    ) -> tuple[ProfileFavoriteEntry, ...]:
         return ()
 
     async def list_gallery(
@@ -272,12 +272,12 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     async def get_gallery_drawing_checksum(self, turn_id: str) -> str | None:
         return None
 
-    async def get_pinned_drawing(
+    async def get_favorite_drawing(
         self, profile_user_id: str, turn_id: str
     ) -> TurnDrawingDetail | None:
         return None
 
-    async def get_pinned_drawing_checksum(
+    async def get_favorite_drawing_checksum(
         self, profile_user_id: str, turn_id: str
     ) -> str | None:
         return None

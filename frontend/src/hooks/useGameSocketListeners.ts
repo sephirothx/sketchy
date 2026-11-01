@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
-import { usePinsStore } from "../store/pinsStore";
+import { useFavoritesStore } from "../store/favoritesStore";
 import { triggerConfettiBurst, triggerConfettiShower } from "../lib/confetti";
 import {
   playCloseGuessSound,
@@ -246,14 +246,14 @@ export function useGameSocketListeners() {
 
     const onDrawingShared = (payload: DrawingSharedEvent) => {
       store.getState().applyDrawingShare(payload);
-      // Its drawer took it out: every pin of it went too (R-SHARE-04), mine
+      // Its drawer took it out: every favorite of it went too (R-SHARE-04), mine
       // included, and the shelf must not send it back on its next write.
-      if (payload.shareWithdrawn) usePinsStore.getState().forget(payload.turnId);
+      if (payload.shareWithdrawn) useFavoritesStore.getState().forget(payload.turnId);
     };
 
     const onDrawingRemoved = (payload: DrawingRemovedEvent) => {
       store.getState().removeRecapDrawing(payload);
-      usePinsStore.getState().forget(payload.turnId);
+      useFavoritesStore.getState().forget(payload.turnId);
     };
 
     const onSyncGame = (payload: {

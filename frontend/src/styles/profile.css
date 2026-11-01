@@ -290,7 +290,7 @@
   border-color: var(--primary-ink);
 }
 
-/* View and Pin side by side in the turn table's drawing cell. */
+/* View and Favorite side by side in the turn table's drawing cell. */
 .profile-drawing-actions {
   display: inline-flex;
   align-items: center;
@@ -298,14 +298,22 @@
   white-space: nowrap;
 }
 
-.pin-control.is-pinned {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
+.favorite-control.is-favorited {
+  background: var(--warm-soft);
+  border-color: var(--warm-edge);
+  color: var(--ink);
 }
 
-/* Pinned drawings (#440): up to six frames replayed small, the owner's
-   order, with the owner's move and unpin controls under each. auto-fill so a
+/* A favorite is a filled star in marker orange (#1501): the warm accent is
+   the game's celebration colour, and keeps it apart from the indigo of the
+   routine controls beside it and the heart of a reaction. */
+.favorite-control.is-favorited svg {
+  fill: var(--warm);
+  stroke: var(--warm-edge);
+}
+
+/* Favorites (#440): up to six frames replayed small, the owner's
+   order, with the owner's move and unfavorite controls under each. auto-fill so a
    phone gets two per row and a desktop the whole six. */
 .profile-shelf {
   list-style: none;
@@ -400,7 +408,7 @@
   gap: 2px;
 }
 
-.profile-shelf-unpin {
+.profile-shelf-unfavorite {
   margin-left: auto;
 }
 

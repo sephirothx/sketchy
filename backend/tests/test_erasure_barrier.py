@@ -28,7 +28,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     IdentityAlias,
-    ProfileDrawingPin,
+    ProfileFavorite,
     RoomMessage,
     TurnDrawing,
     TurnDrawingReaction,
@@ -627,9 +627,9 @@ async def test_a_game_write_waits_for_a_deletion_in_flight_then_writes_tombstone
         await engine.dispose()
 
 
-async def _public_game_between(factory, history, pinner_id: str, drawer_id: str) -> tuple[str, UUID, UUID]:
-    """A public game the two played, and the turn each drew: (game, drawer's turn, pinner's turn)."""
-    game_id = await record_private_game(history, owner_id=drawer_id, other_id=pinner_id)
+async def _public_game_between(factory, history, favoriter_id: str, drawer_id: str) -> tuple[str, UUID, UUID]:
+    """A public game the two played, and the turn each drew: (game, drawer's turn, owner's turn)."""
+    game_id = await record_private_game(history, owner_id=drawer_id, other_id=favoriter_id)
     async with factory() as session:
         async with session.begin():
             game = await session.get(GameRecord, UUID(game_id))
@@ -640,55 +640,55 @@ async def _public_game_between(factory, history, pinner_id: str, drawer_id: str)
                     await session.scalars(select(TurnRecord).where(TurnRecord.game_id == UUID(game_id)))
                 ).all()
             }
-    return game_id, turns[UUID(drawer_id)], turns[UUID(pinner_id)]
+    return game_id, turns[UUID(drawer_id)], turns[UUID(favoriter_id)]
 
 
-async def _pins(factory) -> list[tuple[UUID, UUID]]:
+async def _favorites(factory) -> list[tuple[UUID, UUID]]:
     async with factory() as session:
-        rows = (await session.scalars(select(ProfileDrawingPin))).all()
+        rows = (await session.scalars(select(ProfileFavorite))).all()
     return sorted((row.user_id, row.turn_id) for row in rows)
 
 
-async def test_a_pin_authorized_before_a_deletion_is_refused_after_it():
-    """Both accounts a pin is about are behind the barrier: the pinner, whose
+async def test_a_favorite_authorized_before_a_deletion_is_refused_after_it():
+    """Both accounts a favorite is about are behind the barrier: the owner, whose
     tombstoned profile must not get a shelf back, and the drawer, whose
-    erased drawing must not be pinned after the fact (#811 review)."""
+    erased drawing must not be favorited after the fact (#811 review)."""
     factory, engine = await create_test_db()
     try:
         users = SqlAlchemyUserRepository(factory)
         drawer_guest = await users.create_anonymous("Drawer")
         drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
-        pinner_guest = await users.create_anonymous("Pinner")
-        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        owner_guest = await users.create_anonymous("Owner")
+        owner = await users.claim_account(owner_guest.id, "owner", "hash")
         history = SqlAlchemyGameHistoryRepository(factory)
-        _, drawers_turn, pinners_turn = await _public_game_between(factory, history, pinner.id, drawer.id)
+        _, drawers_turn, owners_turn = await _public_game_between(factory, history, owner.id, drawer.id)
 
-        assert await history.set_profile_pins(
-            requesting_user_id=pinner.id, turn_ids=[str(drawers_turn), str(pinners_turn)]
+        assert await history.set_profile_favorites(
+            requesting_user_id=owner.id, turn_ids=[str(drawers_turn), str(owners_turn)]
         )
 
         await anonymize_account(factory, user_id=drawer.id)
-        assert await _pins(factory) == [(UUID(pinner.id), pinners_turn)], "the erased drawing's pin went"
+        assert await _favorites(factory) == [(UUID(owner.id), owners_turn)], "the erased drawing's favorite went"
         assert (
-            await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)])
-        ) is None, "an erased drawing cannot be pinned after the fact"
-        assert await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)])
+            await history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(drawers_turn)])
+        ) is None, "an erased drawing cannot be favorited after the fact"
+        assert await history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(owners_turn)])
 
-        await anonymize_account(factory, user_id=pinner.id)
-        assert await _pins(factory) == [], "a tombstoned account keeps no shelf"
+        await anonymize_account(factory, user_id=owner.id)
+        assert await _favorites(factory) == [], "a tombstoned account keeps no shelf"
         assert (
-            await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)])
+            await history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(owners_turn)])
         ) is None, "and gets none back"
-        assert await _pins(factory) == []
+        assert await _favorites(factory) == []
     finally:
         await engine.dispose()
 
 
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
-async def test_a_pin_write_waits_for_the_drawers_deletion_in_flight_then_refuses(monkeypatch):
-    """The drawer's deletion holds their row FOR UPDATE; a pin of their
+async def test_a_favorite_write_waits_for_the_drawers_deletion_in_flight_then_refuses(monkeypatch):
+    """The drawer's deletion holds their row FOR UPDATE; a favorite of their
     drawing validated under the shared lock waits, then reads the drawing as
-    erased and writes nothing - no pin outlives the drawing it names."""
+    erased and writes nothing - no favorite outlives the drawing it names."""
     import app.auth.account_data as account_data
 
     factory, engine = await create_test_db()
@@ -696,10 +696,10 @@ async def test_a_pin_write_waits_for_the_drawers_deletion_in_flight_then_refuses
         users = SqlAlchemyUserRepository(factory)
         drawer_guest = await users.create_anonymous("Drawer")
         drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
-        pinner_guest = await users.create_anonymous("Pinner")
-        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        owner_guest = await users.create_anonymous("Owner")
+        owner = await users.claim_account(owner_guest.id, "owner", "hash")
         history = SqlAlchemyGameHistoryRepository(factory)
-        _, drawers_turn, _ = await _public_game_between(factory, history, pinner.id, drawer.id)
+        _, drawers_turn, _ = await _public_game_between(factory, history, owner.id, drawer.id)
 
         real = account_data.delete_avatars_for
         deletion_holds_the_row = asyncio.Event()
@@ -714,15 +714,15 @@ async def test_a_pin_write_waits_for_the_drawers_deletion_in_flight_then_refuses
         erase = asyncio.create_task(anonymize_account(factory, user_id=drawer.id))
         await deletion_holds_the_row.wait()
         write = asyncio.create_task(
-            history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)])
+            history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(drawers_turn)])
         )
         await asyncio.sleep(0.3)
-        assert not write.done(), "the pin write must wait for the deletion's lock"
+        assert not write.done(), "the favorite write must wait for the deletion's lock"
         let_the_deletion_commit.set()
         _, result = await asyncio.gather(erase, write)
 
         assert result is None
-        assert await _pins(factory) == []
+        assert await _favorites(factory) == []
     finally:
         await engine.dispose()
 
@@ -738,21 +738,21 @@ async def test_two_shelf_writes_for_one_account_serialize_instead_of_colliding()
         users = SqlAlchemyUserRepository(factory)
         drawer_guest = await users.create_anonymous("Drawer")
         drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
-        pinner_guest = await users.create_anonymous("Pinner")
-        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        owner_guest = await users.create_anonymous("Owner")
+        owner = await users.claim_account(owner_guest.id, "owner", "hash")
         history = SqlAlchemyGameHistoryRepository(factory)
-        _, drawers_turn, pinners_turn = await _public_game_between(factory, history, pinner.id, drawer.id)
+        _, drawers_turn, owners_turn = await _public_game_between(factory, history, owner.id, drawer.id)
 
         for _ in range(5):
             first, second = await asyncio.gather(
-                history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)]),
-                history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)]),
+                history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(drawers_turn)]),
+                history.set_profile_favorites(requesting_user_id=owner.id, turn_ids=[str(owners_turn)]),
             )
             assert first is not None and second is not None, "both replacements complete"
-            pins = await _pins(factory)
-            assert pins in (
-                [(UUID(pinner.id), drawers_turn)],
-                [(UUID(pinner.id), pinners_turn)],
+            favorites = await _favorites(factory)
+            assert favorites in (
+                [(UUID(owner.id), drawers_turn)],
+                [(UUID(owner.id), owners_turn)],
             ), "the shelf is whichever list committed last, whole"
     finally:
         await engine.dispose()
@@ -772,9 +772,9 @@ async def _claimed_from_a_merged_guest(users, factory, name: str) -> tuple[str, 
 
 
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
-async def test_crossed_pin_writes_over_merged_drawers_do_not_deadlock():
-    """A and B played as guests A' and B', since merged. A pins B''s drawing
-    while B pins A''s: each write locks its pinner and the other's guest, and
+async def test_crossed_favorite_writes_over_merged_drawers_do_not_deadlock():
+    """A and B played as guests A' and B', since merged. A favorites B''s drawing
+    while B favorites A''s: each write locks its owner and the other's guest, and
     reaching for the guest's account in a second statement made a cycle.
     Resolved before locking, both complete (#811 review)."""
     factory, engine = await create_test_db()
@@ -787,11 +787,11 @@ async def test_crossed_pin_writes_over_merged_drawers_do_not_deadlock():
 
         for _ in range(5):
             first, second = await asyncio.gather(
-                history.set_profile_pins(requesting_user_id=a, turn_ids=[str(b_guests_turn)]),
-                history.set_profile_pins(requesting_user_id=b, turn_ids=[str(a_guests_turn)]),
+                history.set_profile_favorites(requesting_user_id=a, turn_ids=[str(b_guests_turn)]),
+                history.set_profile_favorites(requesting_user_id=b, turn_ids=[str(a_guests_turn)]),
             )
             assert first is not None and second is not None, "neither write is a deadlock victim"
-        assert await _pins(factory) == sorted([(UUID(a), b_guests_turn), (UUID(b), a_guests_turn)])
+        assert await _favorites(factory) == sorted([(UUID(a), b_guests_turn), (UUID(b), a_guests_turn)])
     finally:
         await engine.dispose()
 
@@ -845,11 +845,11 @@ async def _merge(factory, guest_id: str, into: str) -> None:
 
 
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
-async def test_a_merge_inside_the_barriers_window_restarts_the_pin_write_instead_of_locking_more(
+async def test_a_merge_inside_the_barriers_window_restarts_the_favorite_write_instead_of_locking_more(
     monkeypatch,
 ):
-    """A and B sit in a public game where guests A' and B' drew. A pins B''s
-    turn and B pins A''s, and both merges commit after each write's unlocked
+    """A and B sit in a public game where guests A' and B' drew. A favorites B''s
+    turn and B favorites A''s, and both merges commit after each write's unlocked
     alias read and before its lock. Locking the newly found targets in a
     second statement gave each writer one of {A, B} while wanting the other;
     the exclusive barrier now abandons the transaction and the write starts
@@ -884,8 +884,8 @@ async def test_a_merge_inside_the_barriers_window_restarts_the_pin_write_instead
 
         monkeypatch.setattr(erasure, "_after_alias_resolution", pause_once)
         writes = asyncio.gather(
-            history.set_profile_pins(requesting_user_id=a, turn_ids=[str(turn_b_guest)]),
-            history.set_profile_pins(requesting_user_id=b, turn_ids=[str(turn_a_guest)]),
+            history.set_profile_favorites(requesting_user_id=a, turn_ids=[str(turn_b_guest)]),
+            history.set_profile_favorites(requesting_user_id=b, turn_ids=[str(turn_a_guest)]),
         )
         await asyncio.wait_for(both_paused.wait(), timeout=5)
         await _merge(factory, a_guest, into=a)
@@ -895,7 +895,7 @@ async def test_a_merge_inside_the_barriers_window_restarts_the_pin_write_instead
 
         assert first is not None and second is not None, "neither write is a deadlock victim"
         assert paused > 2, "at least one write started over"
-        assert await _pins(factory) == sorted([(UUID(a), turn_b_guest), (UUID(b), turn_a_guest)])
+        assert await _favorites(factory) == sorted([(UUID(a), turn_b_guest), (UUID(b), turn_a_guest)])
     finally:
         await engine.dispose()
 

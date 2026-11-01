@@ -21,7 +21,7 @@ from tests.e2e.lobby_helpers import (
 )
 from tests.e2e.staff_helpers import set_role
 from tests.e2e.test_gallery import share_from_recap
-from tests.e2e.test_pinned_drawings import scribble
+from tests.e2e.test_favorites import scribble
 from tests.e2e.test_profile_page import choose_prompt
 
 

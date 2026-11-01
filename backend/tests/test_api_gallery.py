@@ -504,9 +504,9 @@ async def test_a_claimed_guests_drawing_can_still_be_reported(env):
     assert (await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "mine"})).status_code == 422
 
 
-async def test_a_hidden_drawing_leaves_every_shelf_and_cannot_be_pinned(env):
-    """Hidden from the Gallery is hidden from a profile's pins too: the shelf
-    drops it, its bytes are a 404 through the pin door, and a new pin of it
+async def test_a_hidden_drawing_leaves_every_shelf_and_cannot_be_favorited(env):
+    """Hidden from the Gallery is hidden from a profile's favorites too: the shelf
+    drops it, its bytes are a 404 through the favorite door, and a new favorite of it
     is refused (R-GAL-09, R-PIN-06)."""
     http, users, history, factory = env
     ann = await _registered(users, "Ann")
@@ -517,20 +517,20 @@ async def test_a_hidden_drawing_leaves_every_shelf_and_cannot_be_pinned(env):
     other = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(hours=1))
 
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [game.turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})).status_code == 200
     await sign_in_as(http, factory, cid.id)
-    assert len((await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]) == 1
-    assert (await http.get(f"/api/users/{bob.id}/pins/{game.turn_id}/drawing")).status_code == 200
+    assert len((await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"]) == 1
+    assert (await http.get(f"/api/users/{bob.id}/favorites/{game.turn_id}/drawing")).status_code == 200
 
     await _as_moderator(http, factory, mod.id)
     assert (await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
     assert (await http.patch(f"/api/moderation/gallery/{other.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
 
     await sign_in_as(http, factory, cid.id)
-    assert (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"] == []
-    assert (await http.get(f"/api/users/{bob.id}/pins/{game.turn_id}/drawing")).status_code == 404
+    assert (await http.get(f"/api/users/{bob.id}/favorites")).json()["favorites"] == []
+    assert (await http.get(f"/api/users/{bob.id}/favorites/{game.turn_id}/drawing")).status_code == 404
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [game.turn_id, other.turn_id]})).status_code == 404, "a hidden drawing cannot be pinned"
+    assert (await http.put("/api/me/favorites", json={"turnIds": [game.turn_id, other.turn_id]})).status_code == 404, "a hidden drawing cannot be favorited"
     # The participant's own history still has it (R-GAL-09).
     assert (await http.get(f"/api/games/{game.game_id}/turns/{game.turn_id}/drawing")).status_code == 200
 

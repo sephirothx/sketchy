@@ -187,7 +187,7 @@ async def test_one_entry_per_drawing_however_many_share_it(env):
     assert entry["drawing"]["sharedBy"] is None and not entry["drawing"]["inGallery"]
 
 
-async def test_pinning_somebody_elses_drawing_pushes_their_notice(env):
+async def test_favoriting_somebody_elses_drawing_pushes_their_notice(env):
     http, users, history, factory, pushed, changed = env
     ann = await _registered(users, "Ann")
     bob = await _registered(users, "Bob")
@@ -195,7 +195,7 @@ async def test_pinning_somebody_elses_drawing_pushes_their_notice(env):
         history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
     )
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put("/api/me/pins", json={"turnIds": [game.turn_id]})).status_code == 200
+    assert (await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})).status_code == 200
     assert pushed == [ann.id] and changed
 
 
@@ -206,7 +206,7 @@ async def test_the_inbox_routes_need_a_session(env):
 
 
 async def test_every_share_write_reaches_an_open_recap_of_the_drawing(env):
-    """History, a pin and the Gallery's door each write without the room;
+    """History, a favorite and the Gallery's door each write without the room;
     each names the drawings it touched so a recap showing one is brought up
     to date (R-SHARE-07)."""
     http, users, history, factory, _, _ = env
@@ -217,7 +217,7 @@ async def test_every_share_write_reaches_an_open_recap_of_the_drawing(env):
     )
     await sign_in_as(http, factory, bob.id)
     await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
-    await http.put("/api/me/pins", json={"turnIds": [game.turn_id]})
+    await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})
     await sign_in_as(http, factory, ann.id)
     await http.delete(f"/api/gallery/{game.turn_id}/share")
     assert http.refreshed == [(game.turn_id,)] * 3

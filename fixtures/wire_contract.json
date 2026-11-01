@@ -1929,7 +1929,7 @@
    "soloWithdrawn",
    "turnId"
   ],
-  "api.profiles:pin_entry_payload": [
+  "api.profiles:favorite_entry_payload": [
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
@@ -1942,7 +1942,7 @@
    "turnId",
    "turnNumber"
   ],
-  "api.profiles:pins_payload": [
+  "api.profiles:favorites_payload": [
    "turnId"
   ],
   "api.profiles:reaction_payload": [
@@ -3053,7 +3053,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 67,
+ "protocolVersion": 68,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -3212,7 +3212,7 @@
    "solo_pool_empty",
    "solo_date_out_of_range",
    "no_such_daily",
-   "pinned_drawings_full",
+   "favorites_full",
    "prompt_list_not_found",
    "prompt_list_conflict",
    "prompt_list_invalid",

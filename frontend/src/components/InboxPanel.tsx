@@ -24,7 +24,7 @@ import { useToast } from "../lib/toast";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { useFriendsStore } from "../store/friendsStore";
 import { useInboxStore } from "../store/inboxStore";
-import { usePinsStore } from "../store/pinsStore";
+import { useFavoritesStore } from "../store/favoritesStore";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/inbox.css";
@@ -392,7 +392,7 @@ function Row({ entry, onClose }: { entry: InboxEntry; onClose: () => void }) {
               const turnId = entry.drawing.turnId;
               void act(async () => {
                 await withdrawFromGallery(turnId);
-                usePinsStore.getState().forget(turnId);
+                useFavoritesStore.getState().forget(turnId);
               });
             }}
           />,

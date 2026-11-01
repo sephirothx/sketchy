@@ -269,7 +269,7 @@ class TurnDrawingReactionDetail:
     """One reaction as history names it: the seat that gave it and the code.
 
     Only reactions with a seat are listed; the ones given from outside the
-    room (the Gallery, a pinned shelf) are in the counts and nowhere else
+    room (the Gallery, a favorites shelf) are in the counts and nowhere else
     (R-REACT-05).
     """
 
@@ -427,8 +427,8 @@ class TurnDetail:
 
 
 @dataclass(frozen=True)
-class ProfilePinDetail:
-    """One pinned drawing, in shelf order (#440)."""
+class ProfileFavoriteDetail:
+    """One favorite, in shelf order (#440)."""
 
     turn_id: str
     game_id: str
@@ -436,8 +436,8 @@ class ProfilePinDetail:
 
 
 @dataclass(frozen=True)
-class ProfilePinEntry:
-    """One pinned drawing as the shelf shows it (#440): what the recap shows
+class ProfileFavoriteEntry:
+    """One favorite as the shelf shows it (#440): what the recap shows
     for a turn, credited through the turn's frozen drawer snapshot (#387), and
     deliberately **without** the game id - the shelf has no reason to link a
     game, and a viewer who was not in it has no page to open."""
@@ -460,18 +460,18 @@ class ProfilePinEntry:
 
 
 @dataclass(frozen=True)
-class ProfilePinsResult:
-    """The pinner's whole shelf after a write: the ordered set, never a page."""
+class ProfileFavoritesResult:
+    """The owner's whole shelf after a write: the ordered set, never a page."""
 
-    pins: tuple[ProfilePinDetail, ...]
+    favorites: tuple[ProfileFavoriteDetail, ...]
     # Drawers whose drawing this write shared for the first time by somebody
-    # else, to be told once it commits (R-SHARE-09): pinning shares (R-PIN-03).
+    # else, to be told once it commits (R-SHARE-09): favoriting shares (R-PIN-03).
     notify_user_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class GalleryEntry:
-    """One drawing as the Gallery shows it (R-GAL-03): what a pin publishes,
+    """One drawing as the Gallery shows it (R-GAL-03): what a favorite publishes,
     the game's finish time, who shared it first and when (R-SHARE-06), and
     the viewer's own facts - never a game id, a room name or a reactor's
     name."""
@@ -1135,7 +1135,7 @@ class GameHistoryRepository(ABC):
         Anyone who sat in the game may share a public game's drawing; the
         drawer may share their own from any game (R-SHARE-02). Taking it back
         is the sharer's own share, or - for the drawer - every share, every
-        pin of it, and a bar on anybody else sharing it again until the drawer
+        favorite of it, and a bar on anybody else sharing it again until the drawer
         does (R-SHARE-04). Guests may do all of it: sharing is not reacting.
         ``game_id`` is ``None`` from the Gallery's door, which names the turn
         alone; the requester still has to have sat in the game.
@@ -1158,36 +1158,36 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
-    async def set_profile_pins(
+    async def set_profile_favorites(
         self,
         *,
         requesting_user_id: str,
         turn_ids: Sequence[str],
-    ) -> ProfilePinsResult | None:
-        """Replace the requester's pinned drawings with ``turn_ids``, in that order.
+    ) -> ProfileFavoritesResult | None:
+        """Replace the requester's favorites with ``turn_ids``, in that order.
 
-        One write for pinning, unpinning and reordering alike: the list is the
+        One write for favoriting, unfavoriting and reordering alike: the list is the
         whole shelf, so the cap and the position uniqueness fall out of its
         length and its order. The caller bounds the length (R-PIN-02); this
         checks the rest and answers ``None`` when any turn fails it - unknown,
         from a game the requester did not sit in, one the requester may not
         share (R-SHARE-02), or with no ready drawing - or when the requester
         is not a registered account, so every refusal can be the same 404
-        (R-HIST-16). Nothing is written on a refusal. A pin is a share
+        (R-HIST-16). Nothing is written on a refusal. A favorite is a share
         (R-PIN-03): each turn the requester has not shared yet is shared by
         this write, and the drawers that leaves a notice for are answered.
         """
         ...
 
     @abstractmethod
-    async def get_profile_pins(
+    async def get_profile_favorites(
         self, profile_user_id: str, *, viewer_user_id: str | None = None
-    ) -> tuple[ProfilePinEntry, ...]:
+    ) -> tuple[ProfileFavoriteEntry, ...]:
         """The shelf of ``profile_user_id``, in the owner's order.
 
         Who may ask is the route's question (any session, R-PIN-06); this
-        answers what is there to show: pins whose drawing is still in the
-        Gallery (R-PIN-06). A pin the erasure path has not yet
+        answers what is there to show: favorites whose drawing is still in the
+        Gallery (R-PIN-06). A favorite the erasure path has not yet
         caught up with is left out rather than shown as a hole. With a
         ``viewer_user_id``, each entry also says what that viewer picked and
         whether the drawing is theirs, so the shelf can offer a picker.
@@ -1257,24 +1257,24 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_pinned_drawing(
+    async def get_favorite_drawing(
         self, profile_user_id: str, turn_id: str
     ) -> TurnDrawingDetail | None:
-        """A pinned drawing's bytes for any signed-in viewer (R-PIN-06).
+        """A favorite's bytes for any signed-in viewer (R-PIN-06).
 
         The one other door beside `get_turn_drawing`'s participant check
         (R-HIST-16), and its own query rather than a disjunction in that one:
-        authorization is the join to the pins table - this account pinned
+        authorization is the join to the favorites table - this account favorited
         this turn - together with the game being public and the drawing
-        ready. Unpinning, erasing or a private game answer ``None`` at once.
+        ready. Unfavoriting, erasing or a private game answer ``None`` at once.
         """
         ...
 
     @abstractmethod
-    async def get_pinned_drawing_checksum(
+    async def get_favorite_drawing_checksum(
         self, profile_user_id: str, turn_id: str
     ) -> str | None:
-        """The validator for `get_pinned_drawing`, under the same query and
+        """The validator for `get_favorite_drawing`, under the same query and
         without the blob (R-HIST-24, R-PLAT-14)."""
         ...
 

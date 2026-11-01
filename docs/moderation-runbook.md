@@ -44,9 +44,9 @@ sees them, and within 24 hours at most; the rest within 72 hours.
 | Warning | moderator | — | A notice the player must acknowledge before taking a new seat (R-INBOX-04). Kept 12 months. |
 | Suspension | moderator | revoke | Ends every session and live seat. A day, a week, a month or no end date. A suspended player can still download or delete their data. |
 | Remove picture | moderator | — | The profile picture goes; uploading another is blocked for a while (R-AVA-08). |
-| Hide from the Gallery | moderator | release | The drawing leaves the Gallery, This week and every pin. **The players who were in the game keep seeing it** in their history. |
+| Hide from the Gallery | moderator | release | The drawing leaves the Gallery, This week and every favorite. **The players who were in the game keep seeing it** in their history. |
 | Hide a prompt or list | moderator | release | Takes it out of play and out of the catalogue (R-LIST-13). A list is hidden **for its words** by default - they come back hidden if its owner types them again - or **for its name or description**, when the words are innocent (R-MOD-11). |
-| **Erase drawing** | administrator | **none** | The drawing goes from every player's history, the Gallery, pins, profiles and a recap still open; its reactions and shares go with it, and the game reads *Removed by moderation*. The copy kept with the report stays, readable by administrators only (R-MOD-22). |
+| **Erase drawing** | administrator | **none** | The drawing goes from every player's history, the Gallery, favorites, profiles and a recap still open; its reactions and shares go with it, and the game reads *Removed by moderation*. The copy kept with the report stays, readable by administrators only (R-MOD-22). |
 
 Hiding is for a drawing that should not be public. Erasing is for a drawing **nobody may
 keep seeing**: one that is illegal. When in doubt, hide first and ask an administrator.

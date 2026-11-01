@@ -23,7 +23,7 @@ import { setGalleryReaction } from "../lib/profile";
 import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
-import { usePinsStore } from "../store/pinsStore";
+import { useFavoritesStore } from "../store/favoritesStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -101,7 +101,7 @@ export function GalleryDrawingPage() {
   const takeBack = async () => {
     if (!shown) return;
     const result = await withdrawFromGallery(shown.turnId);
-    usePinsStore.getState().forget(shown.turnId);
+    useFavoritesStore.getState().forget(shown.turnId);
     if (!result.inGallery) {
       setMissing(true);
       return;

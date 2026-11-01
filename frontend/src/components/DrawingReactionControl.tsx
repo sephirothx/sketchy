@@ -29,7 +29,7 @@ interface DrawingReactionControlProps {
   counts?: Record<string, number> | null;
   /**
    * My own pick as the server said it, for a surface where I have no seat to
-   * find myself by (the pinned shelf, the Gallery). `undefined` means "look
+   * find myself by (the favorites shelf, the Gallery). `undefined` means "look
    * me up in `reactions` by `myReactorId`".
    */
   mine?: string | null;

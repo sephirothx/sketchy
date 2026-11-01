@@ -13,7 +13,7 @@ from app.api.inbox import inbox_payload
 from app.auth.account_data import anonymize_account
 from app.db.models import (
     InboxEntry,
-    ProfileDrawingPin,
+    ProfileFavorite,
     TurnDrawing,
     TurnDrawingShare,
 )
@@ -180,7 +180,7 @@ async def test_a_blank_hidden_or_unkept_drawing_cannot_be_shared(repos):
     )
 
 
-async def test_the_drawers_withdrawal_takes_every_share_and_pin_and_holds(repos):
+async def test_the_drawers_withdrawal_takes_every_share_and_favorite_and_holds(repos):
     """R-SHARE-04: the drawer's withdrawal is everybody's, until the drawer
     shares it again."""
     users, history, factory = repos
@@ -190,7 +190,7 @@ async def test_the_drawers_withdrawal_takes_every_share_and_pin_and_holds(repos)
         history, drawer=ann.id, reactor=bob.id, visibility="public",
         shared_by="reactor",
     )
-    assert await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[game.turn_id])
+    assert await history.set_profile_favorites(requesting_user_id=bob.id, turn_ids=[game.turn_id])
     assert await _gallery_ids(history) == [game.turn_id]
 
     withdrawn = await history.set_drawing_share(
@@ -198,18 +198,18 @@ async def test_the_drawers_withdrawal_takes_every_share_and_pin_and_holds(repos)
     )
     assert withdrawn is not None and withdrawn.shares == () and withdrawn.withdrawn
     assert await _gallery_ids(history) == []
-    assert await history.get_profile_pins(bob.id) == ()
+    assert await history.get_profile_favorites(bob.id) == ()
     async with factory() as session:
-        assert (await session.scalars(select(ProfileDrawingPin))).all() == []
+        assert (await session.scalars(select(ProfileFavorite))).all() == []
     row = await _drawing(factory, game.turn_id)
     assert row.gallery_share_count == 0 and row.gallery_withdrawn_at is not None
 
     assert await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=True
     ) is None, "nobody else may share it again"
-    assert await history.set_profile_pins(
+    assert await history.set_profile_favorites(
         requesting_user_id=bob.id, turn_ids=[game.turn_id]
-    ) is None, "nor pin it, since a pin is a share"
+    ) is None, "nor favorite it, since a favorite is a share"
 
     again = await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=ann.id, shared=True
@@ -220,7 +220,7 @@ async def test_the_drawers_withdrawal_takes_every_share_and_pin_and_holds(repos)
     ), "once the drawer shares it again, so may anyone"
 
 
-async def test_a_sharer_takes_back_only_their_own_share_and_pin(repos):
+async def test_a_sharer_takes_back_only_their_own_share_and_favorite(repos):
     users, history, factory = repos
     ann = await registered(users, "Ann")
     bob = await registered(users, "Bob")
@@ -228,14 +228,14 @@ async def test_a_sharer_takes_back_only_their_own_share_and_pin(repos):
         history, drawer=ann.id, reactor=bob.id, visibility="public",
         shared_by=("drawer", "reactor"),
     )
-    assert await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[game.turn_id])
+    assert await history.set_profile_favorites(requesting_user_id=bob.id, turn_ids=[game.turn_id])
     first = (await _drawing(factory, game.turn_id)).gallery_shared_at
 
     taken = await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=bob.id, shared=False
     )
     assert taken.shares == (game.drawer_seat,) and not taken.withdrawn
-    assert await history.get_profile_pins(bob.id) == ()
+    assert await history.get_profile_favorites(bob.id) == ()
     assert await _gallery_ids(history) == [game.turn_id], "the drawer's share holds it"
     assert (await _drawing(factory, game.turn_id)).gallery_shared_at == first
 
@@ -348,8 +348,8 @@ async def test_the_drawers_withdrawal_settles_the_notice(repos):
     assert notice.read_at is not None, "taking it out is acting on it"
 
 
-async def test_pinning_shares_and_tells_the_drawer(repos):
-    """R-PIN-03: a pin is a share - the pinner's, with the share's rules."""
+async def test_favoriting_shares_and_tells_the_drawer(repos):
+    """R-PIN-03: a favorite is a share - the owner's, with the share's rules."""
     users, history, factory = repos
     ann = await registered(users, "Ann")
     bob = await registered(users, "Bob")
@@ -359,22 +359,22 @@ async def test_pinning_shares_and_tells_the_drawer(repos):
     private = await record_game(
         history, drawer=ann.id, reactor=bob.id, visibility="private", shared_by=None,
     )
-    assert await history.set_profile_pins(
+    assert await history.set_profile_favorites(
         requesting_user_id=bob.id, turn_ids=[private.turn_id]
     ) is None, "somebody else's private drawing is not theirs to share"
 
-    pinned = await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[public.turn_id])
-    assert pinned.notify_user_ids == (ann.id,)
+    favorited = await history.set_profile_favorites(requesting_user_id=bob.id, turn_ids=[public.turn_id])
+    assert favorited.notify_user_ids == (ann.id,)
     assert await _gallery_ids(history) == [public.turn_id]
-    [entry] = await history.get_profile_pins(bob.id)
+    [entry] = await history.get_profile_favorites(bob.id)
     assert entry.turn_id == public.turn_id
 
-    # The drawer may pin their own private drawing: it shares it.
-    mine = await history.set_profile_pins(requesting_user_id=ann.id, turn_ids=[private.turn_id])
+    # The drawer may favorite their own private drawing: it shares it.
+    mine = await history.set_profile_favorites(requesting_user_id=ann.id, turn_ids=[private.turn_id])
     assert mine.notify_user_ids == ()
     assert private.turn_id in await _gallery_ids(history)
-    # Unpinning keeps the share: the two are separate acts after the first.
-    await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[])
+    # Unfavoriting keeps the share: the two are separate acts after the first.
+    await history.set_profile_favorites(requesting_user_id=bob.id, turn_ids=[])
     assert public.turn_id in await _gallery_ids(history)
     async with factory() as session:
         sharers = (await session.scalars(select(TurnDrawingShare.user_id))).all()
@@ -585,12 +585,12 @@ async def test_the_share_state_read_is_what_the_writes_left(repos):
     assert empty is not None and empty.shares == () and not empty.withdrawn
 
     await history.set_drawing_share(None, game.turn_id, requesting_user_id=bob.id, shared=False)
-    await history.set_profile_pins(requesting_user_id=bob.id, turn_ids=[game.turn_id])
+    await history.set_profile_favorites(requesting_user_id=bob.id, turn_ids=[game.turn_id])
     await history.set_drawing_share(
         game.game_id, game.turn_id, requesting_user_id=ann.id, shared=True
     )
     state = await history.get_drawing_share_state(game.turn_id)
-    assert state.shares == (game.reactor_seat, game.drawer_seat), "the pin shared first"
+    assert state.shares == (game.reactor_seat, game.drawer_seat), "the favorite shared first"
 
     await history.set_drawing_share(None, game.turn_id, requesting_user_id=ann.id, shared=False)
     state = await history.get_drawing_share_state(game.turn_id)

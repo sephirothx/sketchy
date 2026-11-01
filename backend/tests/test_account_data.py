@@ -58,7 +58,7 @@ from app.db.models import (
     RoomMessage,
     RoomPreset,
     ScoreEvent,
-    ProfileDrawingPin,
+    ProfileFavorite,
     TurnDrawing,
     TurnRecord,
     User,
@@ -1553,9 +1553,9 @@ async def test_deletion_takes_the_reactions_on_erased_drawings_and_keeps_the_one
     assert seat.display_name == "Deleted player"
 
 
-async def test_deletion_takes_the_pins_on_erased_drawings_and_the_ones_the_account_made(env):
-    """A pin on an erased drawing has nothing left to show; a pin the deleted
-    account made has no profile left to show it on. A pin another player put
+async def test_deletion_takes_the_favorites_on_erased_drawings_and_the_ones_the_account_made(env):
+    """A favorite on an erased drawing has nothing left to show; a favorite the deleted
+    account made has no profile left to show it on. A favorite another player put
     on their own drawing is neither, and stays."""
     http, users, history, factory = env
     owner = await register(http, "PinnedDeleter")
@@ -1576,9 +1576,9 @@ async def test_deletion_takes_the_pins_on_erased_drawings_and_the_ones_the_accou
             # and what is under test is the erasure, not the rule.
             session.add_all(
                 [
-                    ProfileDrawingPin(user_id=UUID(owner["id"]), game_id=UUID(game_id), turn_id=other_turn.id, position=0),
-                    ProfileDrawingPin(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=owner_turn.id, position=0),
-                    ProfileDrawingPin(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=other_turn.id, position=1),
+                    ProfileFavorite(user_id=UUID(owner["id"]), game_id=UUID(game_id), turn_id=other_turn.id, position=0),
+                    ProfileFavorite(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=owner_turn.id, position=0),
+                    ProfileFavorite(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=other_turn.id, position=1),
                 ]
             )
 
@@ -1586,8 +1586,8 @@ async def test_deletion_takes_the_pins_on_erased_drawings_and_the_ones_the_accou
     assert response.status_code == 200
 
     async with factory() as session:
-        remaining = (await session.scalars(select(ProfileDrawingPin))).all()
-    assert [(pin.user_id, pin.turn_id) for pin in remaining] == [(UUID(other.id), other_turn.id)]
+        remaining = (await session.scalars(select(ProfileFavorite))).all()
+    assert [(favorite.user_id, favorite.turn_id) for favorite in remaining] == [(UUID(other.id), other_turn.id)]
 
 
 async def test_deletion_takes_the_stars_that_account_gave(env):

@@ -193,7 +193,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
 
 
 async def test_a_new_profile_says_empty_one_way_and_offers_no_filter_over_nothing():
-    """#1280: a guest's first look at their own profile had Pinned and
+    """#1280: a guest's first look at their own profile had Favorites and
     Statistics as plain notes, the history as a dashed card, and "Include
     abandoned games" over an empty list."""
     from uuid import uuid4

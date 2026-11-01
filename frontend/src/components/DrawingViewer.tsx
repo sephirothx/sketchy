@@ -49,10 +49,10 @@ import "../styles/lazy/drawing-viewer.css";
 import "../styles/lazy/reactions.css";
 
 /** The one viewer for a finished game's drawings (#1497): the Recap at game
-over, game history on the profile, and the pinned shelf all open it.
+over, game history on the profile, and the favorites shelf all open it.
 
 It opens over the page as a dialog. The drawing sits in a card under its prompt
-and drawer; Pin, Share, Save image and the reaction ride on the drawing's lower
+and drawer; Favorite, Share, Save image and the reaction ride on the drawing's lower
 corners on a desktop, and sit in a row under it on a phone. A strip of
 thumbnails below is the way to any drawing in one tap, which is also what keeps
 swiping optional (WCAG 2.5.1): eight at a time with buttons for the next eight
@@ -88,7 +88,7 @@ interface DrawingViewerProps {
    * viewer does not care which.
    */
   renderReactions?: (entry: DrawingRecapMetadata) => ReactNode;
-  /** The controls beside Save image - Share and Pin (#440, #1430). A prop for
+  /** The controls beside Save image - Share and Favorite (#440, #1430). A prop for
       the same reason `renderReactions` is. */
   renderActions?: (entry: DrawingRecapMetadata) => ReactNode;
   /** Told the drawing on screen when the viewer goes, so one the room

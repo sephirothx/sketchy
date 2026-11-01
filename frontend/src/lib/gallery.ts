@@ -13,7 +13,7 @@ import type { DrawingRecapMetadata } from "../types";
 export type GallerySort = "hot" | "new" | "top";
 export type GalleryWindow = "all" | "month" | "week";
 
-/** One entry of `GET /api/gallery`: what a pin publishes and nothing more
+/** One entry of `GET /api/gallery`: what a favorite publishes and nothing more
     (R-GAL-03) - the frozen drawer snapshot, the prompt, the counts, who
     shared it first, and deliberately no game id. */
 export interface GalleryEntry {
@@ -97,7 +97,7 @@ export function fetchGallery(
 
 /**
  * A Gallery drawing's bytes through the gallery door (R-GAL-06): the third
- * route beside the participant's and the pin's, and every refusal a 404.
+ * route beside the participant's and the favorite's, and every refusal a 404.
  */
 export function fetchGalleryDrawing(turnId: string): Promise<ArrayBuffer> {
   return apiBinaryRequest(`/api/gallery/${encodeURIComponent(turnId)}/drawing`);

@@ -1,25 +1,25 @@
 /**
- * Pinned drawings (#440): the six drawings a profile chose to show, and the
+ * Favorites (#440): the six drawings a profile chose to show, and the
  * list arithmetic behind the owner's controls.
  *
  * The server takes the whole ordered shelf on every write (R-PIN-02), so the
  * helpers here produce the next list rather than a "move" or "remove"
- * command: pin, unpin and reorder are the same request with a different
+ * command: favorite, unfavorite and reorder are the same request with a different
  * list. Pure, so the node suite can hold them to their edges without a DOM.
  */
 import type { DrawingRecapMetadata } from "../types";
 
-/** The cap, mirrored from `PROFILE_PIN_SLOTS`: the whole shelf, never a page of it. */
-export const PINNED_DRAWING_SLOTS = 6;
+/** The cap, mirrored from `PROFILE_FAVORITE_SLOTS`: the whole shelf, never a page of it. */
+export const FAVORITE_SLOTS = 6;
 
-export interface PinnedReaction {
+export interface FavoriteReaction {
   seatId: string;
   emoji: string;
 }
 
-/** One entry of `GET /api/users/{id}/pins`: a game-detail turn where the two
+/** One entry of `GET /api/users/{id}/favorites`: a game-detail turn where the two
     overlap, credited through the frozen drawer snapshot, and no game id. */
-export interface ProfilePin {
+export interface ProfileFavorite {
   turnId: string;
   roundNumber: number;
   turnNumber: number;
@@ -29,7 +29,7 @@ export interface ProfilePin {
   prompt: string;
   strokeCount: number;
   /** The reactions given by a seat, named; outsiders' are only in the counts. */
-  reactions: PinnedReaction[];
+  reactions: FavoriteReaction[];
   /** Every reaction by code, the seatless ones included (R-REACT-05). */
   reactionCounts: Record<string, number>;
   /** The viewer's own pick, and whether the drawing is theirs: what the picker needs. */
@@ -42,7 +42,7 @@ export type ShelfPresence = "absent" | "empty" | "shelf";
 /**
  * Whether the profile shows a shelf at all. Signed out is *absent*, not
  * empty (R-PIN-06): the server would answer 404 and the page must not imply
- * there is nothing pinned. The owner alone sees an empty shelf, because it is
+ * there is nothing favorited. The owner alone sees an empty shelf, because it is
  * the one place that can tell them how to fill it.
  */
 export function shelfPresence(input: {
@@ -55,18 +55,18 @@ export function shelfPresence(input: {
   return input.isOwner ? "empty" : "absent";
 }
 
-export type PinEligibility = "offered" | "hidden";
+export type FavoriteEligibility = "offered" | "hidden";
 
 /**
- * Whether a Pin control is offered at all (R-PIN-09): the write would be
+ * Whether a Favorite control is offered at all (R-PIN-09): the write would be
  * refused for a guest, a spectator or a drawing that was not kept, and - since
- * a pin is a share (R-PIN-03) - for a drawing the viewer may not share: a
+ * a favorite is a share (R-PIN-03) - for a drawing the viewer may not share: a
  * private game's that is not theirs, a blank one, or one its drawer took out
  * of the Gallery. A control that cannot work is not shown. Guests are not
  * told here how to become able to: the reaction control beside every drawing
  * already says it once.
  */
-export function pinEligibility(input: {
+export function favoriteEligibility(input: {
   isRegistered: boolean;
   isSpectator?: boolean;
   isPublicGame: boolean;
@@ -74,7 +74,7 @@ export function pinEligibility(input: {
   isDrawer?: boolean;
   blank?: boolean;
   withdrawn?: boolean;
-}): PinEligibility {
+}): FavoriteEligibility {
   if (!input.isRegistered || input.isSpectator || !input.open || input.blank) {
     return "hidden";
   }
@@ -82,21 +82,21 @@ export function pinEligibility(input: {
   return "offered";
 }
 
-export function isPinned(turnIds: readonly string[], turnId: string): boolean {
+export function isFavorite(turnIds: readonly string[], turnId: string): boolean {
   return turnIds.includes(turnId);
 }
 
 export function shelfIsFull(turnIds: readonly string[]): boolean {
-  return turnIds.length >= PINNED_DRAWING_SLOTS;
+  return turnIds.length >= FAVORITE_SLOTS;
 }
 
 /** The list with `turnId` appended, or `null` when it is already there or the shelf is full. */
-export function withPin(turnIds: readonly string[], turnId: string): string[] | null {
-  if (isPinned(turnIds, turnId) || shelfIsFull(turnIds)) return null;
+export function withFavorite(turnIds: readonly string[], turnId: string): string[] | null {
+  if (isFavorite(turnIds, turnId) || shelfIsFull(turnIds)) return null;
   return [...turnIds, turnId];
 }
 
-export function withoutPin(turnIds: readonly string[], turnId: string): string[] {
+export function withoutFavorite(turnIds: readonly string[], turnId: string): string[] {
   return turnIds.filter((id) => id !== turnId);
 }
 
@@ -105,7 +105,7 @@ export function withoutPin(turnIds: readonly string[], turnId: string): string[]
  * on either side returns the list unchanged, so a button at an edge is safe
  * to press and simply does nothing; the component disables it besides.
  */
-export function movePin(turnIds: readonly string[], index: number, delta: number): string[] {
+export function moveFavorite(turnIds: readonly string[], index: number, delta: number): string[] {
   const target = index + delta;
   if (index < 0 || index >= turnIds.length || target < 0 || target >= turnIds.length) {
     return [...turnIds];
@@ -117,21 +117,21 @@ export function movePin(turnIds: readonly string[], index: number, delta: number
 }
 
 /** Shelf entries as the recap gallery reads them, in shelf order. */
-export function pinsAsRecapEntries(pins: readonly ProfilePin[]): DrawingRecapMetadata[] {
-  return pins.map((pin, index) => ({
+export function favoritesAsRecapEntries(favorites: readonly ProfileFavorite[]): DrawingRecapMetadata[] {
+  return favorites.map((favorite, index) => ({
     index,
-    turnId: pin.turnId,
-    roundNumber: pin.roundNumber,
-    turnNumber: pin.turnNumber,
+    turnId: favorite.turnId,
+    roundNumber: favorite.roundNumber,
+    turnNumber: favorite.turnNumber,
     // The shelf knows no seat: the byline is the snapshot, and whether the
     // viewer drew it comes from the server (`drawnByMe`), so the gallery
     // never needs a drawer id to compare against.
     drawerId: "",
-    drawerNickname: pin.drawerDisplayName,
-    drawerNameColor: pin.drawerNameColor ?? undefined,
-    drawerIsAnonymous: pin.drawerIsAnonymous,
-    prompt: pin.prompt,
-    actionCount: pin.strokeCount,
+    drawerNickname: favorite.drawerDisplayName,
+    drawerNameColor: favorite.drawerNameColor ?? undefined,
+    drawerIsAnonymous: favorite.drawerIsAnonymous,
+    prompt: favorite.prompt,
+    actionCount: favorite.strokeCount,
     available: true,
   }));
 }

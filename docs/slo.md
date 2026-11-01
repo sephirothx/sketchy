@@ -69,7 +69,7 @@ beta traffic says what normal looks like.
 The database's application-side signals name a cause as well as an effect (#892).
 `sketchy_db_query_duration_seconds` is labelled by `operation` (session resolve, save
 game, prompt usage, message batch, event flush, gallery page, community catalogue,
-history page, export build, retention sweep, profile pins, stats rebuild, other) and
+history page, export build, retention sweep, profile favorites, stats rebuild, other) and
 reaches 30 s, the web role's statement timeout, so a slow p95 has a name.
 `sketchy_db_pool_wait_seconds` is the wait for a connection, which that histogram
 starts after: `SketchyPoolWaiting` (warn, p95 over 100 ms for 5 m) is the queue the

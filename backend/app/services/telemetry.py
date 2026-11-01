@@ -92,7 +92,7 @@ DB_OPERATIONS = (
     "history_page",
     "export_build",
     "retention_sweep",
-    "profile_pins",
+    "profile_favorites",
     "stats_rebuild",
     "other",
 )

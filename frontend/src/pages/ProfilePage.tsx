@@ -13,22 +13,22 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingViewer } from "../components/DrawingViewer";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
-import { PinControl } from "../components/PinControl";
+import { FavoriteControl } from "../components/FavoriteControl";
 import { ShareControl } from "../components/ShareControl";
 import { shareCredit, shareOffer } from "../lib/shares";
-import { PinnedDrawingsShelf } from "../components/PinnedDrawingsShelf";
+import { FavoritesShelf } from "../components/FavoritesShelf";
 import { ReactionTally } from "../components/ReactionTally";
 import type { DrawingRecapMetadata, DrawingReaction } from "../types";
 import { reactionEligibility } from "../lib/reactions";
-import { isPinned, pinEligibility, shelfPresence, withPin, withoutPin } from "../lib/pinnedDrawings";
+import { isFavorite, favoriteEligibility, shelfPresence, withFavorite, withoutFavorite } from "../lib/favorites";
 import { useToast } from "../lib/toast";
 import { refusalSentence, refusalText } from "../lib/refusals.ts";
-import { useMyPins, usePinsStore } from "../store/pinsStore";
-import type { ProfilePin } from "../lib/pinnedDrawings";
+import { useMyFavorites, useFavoritesStore } from "../store/favoritesStore";
+import type { ProfileFavorite } from "../lib/favorites";
 import {
   fetchGameDetail,
   fetchGameDrawing,
-  fetchProfilePins,
+  fetchProfileFavorites,
   fetchGames,
   fetchProfile,
   formatDuration,
@@ -184,7 +184,7 @@ function GameRow({
 }) {
   const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
-  const myPins = useMyPins();
+  const myFavorites = useMyFavorites();
   const { notify } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
@@ -212,7 +212,7 @@ function GameRow({
   // Share, or take back (#1430): the turn's share state as the server left it.
   async function shareTurn(turnId: string, shared: boolean) {
     const result = await setHistoryShare(game.id, turnId, shared);
-    if (!shared) usePinsStore.getState().forget(turnId);
+    if (!shared) useFavoritesStore.getState().forget(turnId);
     setDetail((current) =>
       current
         ? {
@@ -257,29 +257,29 @@ function GameRow({
     );
   }
 
-  // Pin or unpin one turn: the whole shelf, rewritten (R-PIN-02). The turn
+  // Favorite or unfavorite one turn: the whole shelf, rewritten (R-PIN-02). The turn
   // table and the gallery share it, and the shelf above follows the store.
-  // A pin is a share (R-PIN-03): the pin write shares it, and the share
+  // A favorite is a share (R-PIN-03): the favorite write shares it, and the share
   // request after it - which finds the share already made - is what brings
   // the turn's share state back to this table.
-  const togglePin = async (turnId: string) => {
-    const pinning = !isPinned(myPins.turnIds, turnId);
-    const done = await myPins.mutate((current) =>
-      isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
+  const toggleFavorite = async (turnId: string) => {
+    const favoriting = !isFavorite(myFavorites.turnIds, turnId);
+    const done = await myFavorites.mutate((current) =>
+      isFavorite(current, turnId) ? withoutFavorite(current, turnId) : withFavorite(current, turnId),
     );
     if (!done) {
-      notify(refusalSentence("pinned_drawings_full"), "error");
+      notify(refusalSentence("favorites_full"), "error");
       return;
     }
-    if (pinning) await shareTurn(turnId, true).catch(() => undefined);
+    if (favoriting) await shareTurn(turnId, true).catch(() => undefined);
   };
   const isMine = (turn: GameTurn) =>
     Boolean(turn.drawerSeatId) && turn.drawerSeatId === detail?.mySeatId;
-  const pinControlFor = (turn: GameTurn) => (
-    <PinControl
-      pinned={isPinned(myPins.turnIds, turn.id)}
-      disabled={!myPins.ready || myPins.pending}
-      eligibility={pinEligibility({
+  const favoriteControlFor = (turn: GameTurn) => (
+    <FavoriteControl
+      favorited={isFavorite(myFavorites.turnIds, turn.id)}
+      disabled={!myFavorites.ready || myFavorites.pending}
+      eligibility={favoriteEligibility({
         isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
         isPublicGame: game.visibility === "public",
         open: turn.drawingStatus === "ready",
@@ -287,7 +287,7 @@ function GameRow({
         blank: turn.strokeCount <= 0,
         withdrawn: turn.shareWithdrawn,
       })}
-      onToggle={() => togglePin(turn.id)}
+      onToggle={() => toggleFavorite(turn.id)}
     />
   );
 
@@ -553,7 +553,7 @@ function GameRow({
                 renderActions={(entry) => (
                   <>
                     {shareControlFor(detail.turns[entry.index])}
-                    {pinControlFor(detail.turns[entry.index])}
+                    {favoriteControlFor(detail.turns[entry.index])}
                   </>
                 )}
               />
@@ -592,7 +592,7 @@ function GameRow({
                           >
                             {ui.profilePage.view}
                           </button>
-                          {pinControlFor(turn)}
+                          {favoriteControlFor(turn)}
                           {soloControlFor(turn)}
                         </span>
                       ) : (
@@ -679,10 +679,10 @@ function ProfileView({ userId }: { userId: string }) {
   // red alert over nothing.
   const [missing, setMissing] = useState(false);
   // `null` until the shelf has been asked for; a signed-out viewer never asks.
-  const [pins, setPins] = useState<ProfilePin[] | null>(null);
-  const myTurnIds = usePinsStore((s) => s.turnIds);
-  const myPinsLoaded = usePinsStore((s) => s.loaded);
-  const myPinsPending = usePinsStore((s) => s.pending);
+  const [favorites, setFavorites] = useState<ProfileFavorite[] | null>(null);
+  const myTurnIds = useFavoritesStore((s) => s.turnIds);
+  const myFavoritesLoaded = useFavoritesStore((s) => s.loaded);
+  const myFavoritesPending = useFavoritesStore((s) => s.pending);
   const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
@@ -726,13 +726,13 @@ function ProfileView({ userId }: { userId: string }) {
         // is not a failure to load the profile.
         if (currentUser?.id) {
           try {
-            const shelf = await fetchProfilePins(userId);
-            if (!cancelled) setPins(shelf.pins);
+            const shelf = await fetchProfileFavorites(userId);
+            if (!cancelled) setFavorites(shelf.favorites);
           } catch {
-            if (!cancelled) setPins([]);
+            if (!cancelled) setFavorites([]);
           }
         } else {
-          setPins(null);
+          setFavorites(null);
         }
       } catch (loadError) {
         if (cancelled) return;
@@ -748,25 +748,25 @@ function ProfileView({ userId }: { userId: string }) {
     // to fetch the list again rather than keep the one a stranger got.
   }, [userId, includeAbandoned, currentUser?.id]);
 
-  // The owner's shelf follows the shared store: a pin pressed in the turn
+  // The owner's shelf follows the shared store: a favorite pressed in the turn
   // table below, or in a game-over recap in another tab, is a new entry the
   // shelf has to fetch, since the store holds ids and the shelf shows frames.
   useEffect(() => {
-    if (!isOwnProfile || !myPinsLoaded || pins === null) return;
-    const shown = pins.map((pin) => pin.turnId);
+    if (!isOwnProfile || !myFavoritesLoaded || favorites === null) return;
+    const shown = favorites.map((favorite) => favorite.turnId);
     if (shown.length === myTurnIds.length && shown.every((id, i) => id === myTurnIds[i])) return;
     let cancelled = false;
-    void fetchProfilePins(userId)
+    void fetchProfileFavorites(userId)
       .then((shelf) => {
-        if (!cancelled) setPins(shelf.pins);
+        if (!cancelled) setFavorites(shelf.favorites);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-    // `pins` is what the effect corrects; listing it would refetch on its own answer.
+    // `favorites` is what the effect corrects; listing it would refetch on its own answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOwnProfile, myPinsLoaded, myTurnIds, userId]);
+  }, [isOwnProfile, myFavoritesLoaded, myTurnIds, userId]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
@@ -925,29 +925,29 @@ function ProfileView({ userId }: { userId: string }) {
             </section>
           )}
 
-          {pins !== null
+          {favorites !== null
             && shelfPresence({
               viewerSignedIn: Boolean(currentUser),
               isOwner: isOwnProfile,
-              count: pins.length,
+              count: favorites.length,
             }) !== "absent" && (
-            <section className="surface-card panel" data-testid="pinned-drawings-panel">
-              <h2>{ui.profilePage.pinnedDrawings}</h2>
-              <PinnedDrawingsShelf
+            <section className="surface-card panel" data-testid="favorites-panel">
+              <h2>{ui.profilePage.favorites}</h2>
+              <FavoritesShelf
                 userId={userId}
-                pins={pins}
+                favorites={favorites}
                 isOwner={isOwnProfile}
-                disabled={!myPinsLoaded || myPinsPending}
+                disabled={!myFavoritesLoaded || myFavoritesPending}
                 viewerIsRegistered={Boolean(currentUser && !currentUser.isAnonymous)}
                 onRequestAccount={() => setAuthMode("claim")}
                 onReorder={async (turnIds) => {
-                  // Through the same queue as every Pin control, so a move
-                  // and a pin pressed together cannot overwrite each other.
+                  // Through the same queue as every Favorite control, so a move
+                  // and a favorite pressed together cannot overwrite each other.
                   // The server answers with ids only; the entries are the
                   // ones already here, in the order just confirmed.
-                  await usePinsStore.getState().mutate(() => turnIds);
-                  const byId = new Map(pins.map((pin) => [pin.turnId, pin]));
-                  setPins(turnIds.flatMap((id) => byId.get(id) ?? []));
+                  await useFavoritesStore.getState().mutate(() => turnIds);
+                  const byId = new Map(favorites.map((favorite) => [favorite.turnId, favorite]));
+                  setFavorites(turnIds.flatMap((id) => byId.get(id) ?? []));
                 }}
               />
             </section>

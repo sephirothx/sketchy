@@ -4,7 +4,7 @@ import "../styles/lazy/reactions.css";
 
 /**
  * The per-emoji counts of one drawing, read-only: the profile's turn table
- * and the pinned-drawings shelf, where the viewer may not have been in the
+ * and the favorites shelf, where the viewer may not have been in the
  * game and so has no picker. Nothing when there is nothing to count.
  */
 export function ReactionTally({

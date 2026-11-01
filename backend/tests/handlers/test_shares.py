@@ -338,7 +338,7 @@ async def test_a_share_made_outside_the_room_reaches_its_open_recap():
 async def test_a_player_who_left_and_came_back_is_told_their_old_seat():
     """A rejoin is a new token, while the recap's drawings and standings name
     the old one: the seat is told both, so its client still offers Share and
-    Pin, and Take out on its own drawing (review of #1431)."""
+    Favorite, and Take out on its own drawing (review of #1431)."""
     ctx, room, players, history, share = await finished()
     entry = room.last_game_drawings[0]
     drawer = room.players[entry.drawer_id]
@@ -364,7 +364,7 @@ async def test_a_drawer_who_left_before_the_end_is_still_a_seat_that_played():
     """The standings list only who was seated at the end. Ann drew, walked
     out, and came back after Bob and Cid finished: the recap's seats still
     name her old token, and her new seat is told it is hers, so her client
-    offers Share, Take out and Pin on the game she sat in (review of #1431)."""
+    offers Share, Take out and Favorite on the game she sat in (review of #1431)."""
     room_manager, room, players = build_room(
         rounds=1, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cid": "user-cid"}
     )

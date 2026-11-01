@@ -21,7 +21,7 @@ second to replay. A card that goes, or whose drawing changes, cancels what it
 asked for, so no obsolete image is shown and no URL is left behind.
 
 Fetched when it first comes within a screen of the viewport, as the gallery
-always did and the pinned shelf now does too. */
+always did and the favorites shelf now does too. */
 
 /** How long a card waits to ask again after the queue dropped its job, when
     nothing says it left the view: there is no IntersectionObserver, or it is
