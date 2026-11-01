@@ -1,0 +1,23 @@
+# An allowlist: the image is built from what is named here and nothing else,
+# so a local database, a .env, a virtualenv or node_modules can never reach a
+# layer (the repository has leaked a database once already, #452).
+*
+!backend/alembic/
+!backend/alembic.ini
+!backend/app/
+!backend/data/
+!backend/requirements.txt
+!frontend/
+!ops/postgres/migrate-with-snapshot.sh
+
+**/__pycache__
+**/*.py[cod]
+**/*.db
+**/*.db-*
+**/.env
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/tests
+frontend/benchmarks

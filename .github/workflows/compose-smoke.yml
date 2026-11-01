@@ -1,0 +1,76 @@
+name: Compose smoke
+
+# The production stack, built and played from outside (#405): ops/compose/smoke/smoke.sh.
+# A separate workflow because it builds the image and runs the whole stack,
+# about five minutes. On a pull request it runs when something changes that
+# only this job exercises: how the image is put together, the stack around it,
+# startup and migration, the build steps that read outside frontend/, and the
+# smoke's own drivers. Everything else that goes into the image is covered by
+# the other jobs on the PR, and by this one every night on main, which catches
+# what the filter lets through within a day. Not a required check for the same
+# reason: a path-filtered workflow reports nothing on the PRs it skips, and a
+# required check that never reports blocks the merge.
+on:
+  pull_request:
+    paths: &paths
+      - Dockerfile
+      - .dockerignore
+      - ops/compose/**
+      - ops/postgres/**
+      - backend/requirements.txt
+      - backend/alembic.ini
+      - backend/alembic/**
+      - backend/app/db/**
+      - backend/app/deployment.py
+      - backend/app/main.py
+      - backend/app/server.py
+      - backend/app/probe.py
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/vite.config.ts
+      - frontend/scripts/**
+      - benchmarks/load.py
+      - fixtures/live_strokes/**
+      - .github/workflows/compose-smoke.yml
+  push:
+    branches: [main]
+    paths: *paths
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Compose smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        id: python
+        with:
+          python-version: "3.14"
+
+      # Keyed as in ci.yml, so this restores the virtualenv those jobs built.
+      - name: Cache the backend virtualenv
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+
+      - name: Create backend virtualenv and install dependencies
+        if: steps.venv.outputs.cache-hit != 'true'
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
+
+      - name: Run the smoke
+        run: ops/compose/smoke/smoke.sh

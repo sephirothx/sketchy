@@ -219,9 +219,15 @@ export default defineConfig({
       },
     },
   },
+  // An image build has no .git in its context, so the Dockerfile passes the
+  // commit in instead (SKETCHY_COMMIT_SHA / SKETCHY_COMMIT_DATE, #405).
   define: {
-    __APP_COMMIT_SHA__: JSON.stringify(gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : '')),
-    __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),
+    __APP_COMMIT_SHA__: JSON.stringify(
+      process.env.SKETCHY_COMMIT_SHA || gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : ''),
+    ),
+    __APP_COMMIT_DATE__: JSON.stringify(
+      process.env.SKETCHY_COMMIT_DATE || gitLog('--date=short --format=%cd'),
+    ),
     __APP_BUILD_TIME__: JSON.stringify(buildTime),
   },
 })
