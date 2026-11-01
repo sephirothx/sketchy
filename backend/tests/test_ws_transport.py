@@ -339,8 +339,9 @@ def _feed_alone(wire: bytes) -> tuple[list[int], int]:
         # Coverage following subprocesses would trace the child, and its
         # tracer's allocations would count toward the peak.
         env={key: value for key, value in os.environ.items() if not key.startswith("COVERAGE_")},
-        check=True,
     )
+    # The child's traceback, not the script's repr that `check=True` would print.
+    assert completed.returncode == 0, completed.stderr.decode()
     result = json.loads(completed.stdout)
     return result["closes"], result["peak"]
 
