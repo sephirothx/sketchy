@@ -101,6 +101,35 @@ export function withoutFavorite(turnIds: readonly string[], turnId: string): str
 }
 
 /**
+ * The list with `turnId` in it or out of it, as a press asked - not flipped
+ * from whatever the list holds. A mutation can run on a list the press never
+ * saw (the queue, or a reread after a 404), and a toggle computed there
+ * would take off a drawing the player just asked to add. Already as asked
+ * returns the list unchanged; `null` only for an add to a full shelf.
+ */
+export function favoriteSetTo(turnIds: readonly string[], turnId: string, favorited: boolean): string[] | null {
+  if (isFavorite(turnIds, turnId) === favorited) return [...turnIds];
+  return favorited ? withFavorite(turnIds, turnId) : withoutFavorite(turnIds, turnId);
+}
+
+/**
+ * A shelf the owner arranged, laid over the list as it stands now. `asked`
+ * was made from `base`; by the time it is sent the list may have gained a
+ * favorite from another control, or lost one the server dropped. What the
+ * owner took off stays off, what they kept keeps their order if it is still
+ * there, and anything they never saw follows at the end.
+ */
+export function rebaseFavorites(
+  asked: readonly string[],
+  base: readonly string[],
+  current: readonly string[],
+): string[] {
+  const kept = asked.filter((id) => current.includes(id));
+  const unseen = current.filter((id) => !asked.includes(id) && !base.includes(id));
+  return [...kept, ...unseen];
+}
+
+/**
  * The list with the entry at `index` moved by `delta` places. Out of range
  * on either side returns the list unchanged, so a button at an edge is safe
  * to press and simply does nothing; the component disables it besides.

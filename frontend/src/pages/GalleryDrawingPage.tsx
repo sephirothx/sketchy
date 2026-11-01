@@ -17,6 +17,7 @@ import {
   withdrawFromGallery,
   type GalleryEntry,
 } from "../lib/gallery";
+import { GalleryFavoriteControl } from "../components/GalleryFavoriteControl";
 import { GallerySharedBy } from "../components/GalleryDrawings";
 import { ShareControl } from "../components/ShareControl";
 import { setGalleryReaction } from "../lib/profile";
@@ -255,6 +256,24 @@ export function GalleryDrawingPage() {
                     onReact={react}
                     onRequestAccount={() => setAuthMode("claim")}
                     placement="panel"
+                  />
+                  <GalleryFavoriteControl
+                    turnId={shown.turnId}
+                    look="labelled"
+                    // A player who sat in the game shares it by favoriting
+                    // it (R-PIN-03): read the entry again, so their new share
+                    // can be taken back from here.
+                    onChanged={() => {
+                      void fetchGalleryEntry(shown.turnId)
+                        .then((fetched) =>
+                          setEntry((current) =>
+                            current?.reader === reader && current.entry.turnId === fetched.turnId
+                              ? { reader, entry: { ...current.entry, sharedBy: fetched.sharedBy, sharedByMe: fetched.sharedByMe } }
+                              : current,
+                          ),
+                        )
+                        .catch(() => undefined);
+                    }}
                   />
                   {user && !shown.drawnByMe && (
                     <button

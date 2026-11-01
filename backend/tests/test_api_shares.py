@@ -3,6 +3,7 @@ the push after a committed share, and the drawer's catch-up read."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import pytest_asyncio
 from fastapi import FastAPI
@@ -227,3 +228,98 @@ async def test_every_share_write_reaches_an_open_recap_of_the_drawing(env):
     refused = await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/share")
     assert refused.status_code == 404
     assert len(http.refreshed) == 3, "a refused write changed nothing to refresh"
+
+
+# ---- favorites from the Gallery (#1501)
+
+
+async def _favorites_of(factory, user_id: str) -> list[str]:
+    from sqlalchemy import select
+
+    from app.db.models import ProfileFavorite
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(ProfileFavorite.turn_id)
+                .where(ProfileFavorite.user_id == UUID(user_id))
+                .order_by(ProfileFavorite.position)
+            )
+        ).all()
+    return [str(row) for row in rows]
+
+
+async def test_a_stranger_favorites_a_gallery_drawing_without_sharing_or_telling_anyone(env):
+    """A registered account that never sat in the game may favorite any
+    drawing in the Gallery (R-PIN-01): it is public already, so the favorite
+    shares nothing more and the drawer is not told (R-PIN-03)."""
+    http, users, history, factory, pushed, _ = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public")
+    await sign_in_as(http, factory, cid.id)
+
+    put = await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})
+    assert put.status_code == 200
+    assert put.json() == {"favorites": [{"turnId": game.turn_id}]}
+    assert pushed == [], "nothing shared, nobody told"
+    entry = (await http.get(f"/api/gallery/{game.turn_id}")).json()
+    assert entry["sharedByMe"] is False, "the stranger is not a sharer"
+
+    shelf = (await http.get(f"/api/users/{cid.id}/favorites")).json()["favorites"]
+    assert [item["turnId"] for item in shelf] == [game.turn_id]
+    drawing = await http.get(f"/api/users/{cid.id}/favorites/{game.turn_id}/drawing")
+    assert drawing.status_code == 200
+
+
+async def test_a_stranger_cannot_favorite_a_drawing_that_is_not_in_the_gallery(env):
+    http, users, history, factory, *_ = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    unshared = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by=None,
+    )
+    private = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="private")
+    await sign_in_as(http, factory, cid.id)
+    for turn_id, why in ((unshared.turn_id, "never shared"), (private.turn_id, "a private game")):
+        response = await http.put("/api/me/favorites", json={"turnIds": [turn_id]})
+        assert response.status_code == 404, why
+    assert await _favorites_of(factory, cid.id) == []
+
+
+async def test_a_drawing_leaving_the_gallery_takes_every_favorite_of_it(env):
+    """A favorite from outside the game hangs on the drawing being in the
+    Gallery; when its last share goes, so does every favorite of it (R-PIN-05)."""
+    http, users, history, factory, *_ = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by="reactor",
+    )
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})).status_code == 200
+
+    # Bob, the only sharer, takes his share back: the drawing leaves the Gallery.
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.delete(f"/api/gallery/{game.turn_id}/share")).status_code == 200
+    assert await _favorites_of(factory, cid.id) == []
+
+
+async def test_a_co_player_of_a_private_game_favorites_what_its_drawer_shared(env):
+    """Bob sat in Ann's private game and may not share her drawing (R-SHARE-02),
+    but once Ann shares it, it is a Gallery drawing like any other: Bob may
+    favorite it as anybody may, and doing so shares nothing."""
+    http, users, history, factory, pushed, _ = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="private", shared_by="drawer",
+    )
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/favorites", json={"turnIds": [game.turn_id]})).status_code == 200
+    assert pushed == []
+    entry = (await http.get(f"/api/gallery/{game.turn_id}")).json()
+    assert entry["sharedByMe"] is False, "Bob favorited it without sharing it"

@@ -1170,12 +1170,14 @@ class GameHistoryRepository(ABC):
         whole shelf, so the cap and the position uniqueness fall out of its
         length and its order. The caller bounds the length (R-PIN-02); this
         checks the rest and answers ``None`` when any turn fails it - unknown,
-        from a game the requester did not sit in, one the requester may not
-        share (R-SHARE-02), or with no ready drawing - or when the requester
-        is not a registered account, so every refusal can be the same 404
-        (R-HIST-16). Nothing is written on a refusal. A favorite is a share
-        (R-PIN-03): each turn the requester has not shared yet is shared by
-        this write, and the drawers that leaves a notice for are answered.
+        with no ready drawing, or neither one the requester may share
+        (R-SHARE-02) from a game they sat in nor one in the Gallery (#1501) -
+        or when the requester is not a registered account, so every refusal
+        can be the same 404 (R-HIST-16). Nothing is written on a refusal. A
+        favorite from a game the requester sat in is a share (R-PIN-03): each
+        such turn they have not shared yet is shared by this write, and the
+        drawers that leaves a notice for are answered. Any other favorite
+        shares nothing.
         """
         ...
 

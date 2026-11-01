@@ -968,6 +968,11 @@ export const EN = {
     favoriteThisDrawing: "Add this drawing to your favorites and share it to the gallery",
     unfavoriteThisDrawing: "Remove this drawing from your favorites",
     thatDrawingCouldNotBeFavorited: "That drawing could not be added to your favorites.",
+    addThisDrawingToYourFavorites: "Add this drawing to your favorites",
+    favorite: "Favorite",
+    inYourFavorites: "In your favorites",
+    addedToYourFavorites: "Added to your favorites.",
+    seeThem: "See them",
   },
 
   shareControl: {

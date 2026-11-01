@@ -1,10 +1,16 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
+import { ApiError } from "../lib/api";
 import { fetchProfileFavorites, setMyFavorites } from "../lib/profile";
 import { useAuthStore } from "./authStore";
 
-/** What a mutation computes: the next whole shelf, or `null` to refuse without a request. */
+/** What a mutation computes: the next whole shelf, or `null` to refuse without a request.
+
+It may run on a list the press never saw - later in the queue, or again on a
+reread after a 404 - so it states what the press asked ("B on", "this order")
+rather than flipping what it finds: a toggle run on a fresher list can undo
+the very thing it was pressed for. */
 export type ShelfMutation = (current: readonly string[]) => string[] | null;
 
 interface FavoritesStore {
@@ -33,7 +39,10 @@ interface FavoritesStore {
    * forgets the other's favorite. Refused with `ShelfNotReadyError` until the
    * shelf for the signed-in account has been read - a whole-list write from
    * an unread shelf would erase it. Resolves `false` when the mutation
-   * itself declined (`null`), `true` once the server has the new list.
+   * itself declined (`null`), `true` once the server has the new list - or
+   * once nothing is left to send, or the answer belongs to a shelf nobody is
+   * looking at any more. A 404 rereads the shelf and runs the mutation once
+   * more on it, since it is most often a favorite the server already dropped.
    */
   mutate: (change: ShelfMutation) => Promise<boolean>;
   /**
@@ -62,6 +71,10 @@ let generation = 0;
     stays unread until the identity changes or the page is reloaded. */
 export const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000] as const;
 let inFlight: { accountId: string; token: object; promise: Promise<void> } | null = null;
+
+function sameShelf(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
 
 export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
   ownerId: null,
@@ -115,6 +128,7 @@ export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
       }
       const next = change(turnIds);
       if (next === null) return false;
+      if (sameShelf(next, turnIds)) return true;
       // The write is for this identity and this generation: an answer that
       // arrives after a sign-out, a sign-in or a newer read belongs to a
       // shelf nobody is looking at any more, and is dropped rather than
@@ -122,7 +136,25 @@ export const useFavoritesStore = create<FavoritesStore>((set, get) => ({
       const mine = ++generation;
       set({ pending: true });
       try {
-        const answer = await setMyFavorites(next);
+        let answer: Awaited<ReturnType<typeof setMyFavorites>>;
+        try {
+          answer = await setMyFavorites(next);
+        } catch (failure) {
+          // A 404 for a shelf this tab read is most often a favorite the
+          // server has already dropped - a drawing that left the Gallery
+          // (R-PIN-05), which nothing tells this tab - and the whole-list
+          // write would send it again on every later press until a reload.
+          // So the shelf is read again and the change computed once more
+          // from it; a second refusal is this press's own.
+          if (!(failure instanceof ApiError) || failure.status !== 404) throw failure;
+          const fresh = (await fetchProfileFavorites(ownerId)).favorites.map((favorite) => favorite.turnId);
+          if (mine !== generation || get().ownerId !== ownerId) return true;
+          set({ turnIds: fresh });
+          const retried = change(fresh);
+          if (retried === null) return false;
+          if (sameShelf(retried, fresh)) return true;
+          answer = await setMyFavorites(retried);
+        }
         if (mine !== generation || get().ownerId !== ownerId) return true;
         set({ turnIds: answer.favorites.map((favorite) => favorite.turnId), loaded: true });
         return true;

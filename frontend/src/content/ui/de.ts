@@ -951,6 +951,11 @@ export const DE: Catalogue = {
     favoriteThisDrawing: "Diese Zeichnung zu deinen Favoriten hinzufügen und in der Galerie zeigen",
     unfavoriteThisDrawing: "Diese Zeichnung aus deinen Favoriten entfernen",
     thatDrawingCouldNotBeFavorited: "Diese Zeichnung konnte nicht zu deinen Favoriten hinzugefügt werden.",
+    addThisDrawingToYourFavorites: "Diese Zeichnung zu deinen Favoriten hinzufügen",
+    favorite: "Favorit",
+    inYourFavorites: "In deinen Favoriten",
+    addedToYourFavorites: "Zu deinen Favoriten hinzugefügt.",
+    seeThem: "Ansehen",
   },
 
   shareControl: {

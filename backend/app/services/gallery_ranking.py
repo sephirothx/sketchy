@@ -11,12 +11,18 @@ from datetime import datetime, timedelta, timezone
 import math
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sqlalchemy import union_all
 
-from app.db.models import SoloGalleryShare, TurnDrawing, TurnDrawingReaction, TurnDrawingShare
+from app.db.models import (
+    ProfileFavorite,
+    SoloGalleryShare,
+    TurnDrawing,
+    TurnDrawingReaction,
+    TurnDrawingShare,
+)
 
 # Reddit's constant: a decade of reactions is worth 45 000 seconds, twelve and
 # a half hours. With at most sixteen seats in a room, the room's own verdict
@@ -111,6 +117,15 @@ async def refresh_share_projection(session: AsyncSession, drawing: TurnDrawing) 
     drawing.gallery_share_count = int(count)
     drawing.gallery_shared_at = _earlier(drawing.gallery_shared_at, first)
     drawing.hot_score = drawing_hot_score(drawing)
+    if not count:
+        # Out of the Gallery, off every shelf (R-PIN-05, #1501). A favorite
+        # from somebody who never sat in the game hangs on nothing else, and
+        # one from a player who did came with their own share, which has
+        # just gone too. Here rather than at each place a share is deleted,
+        # since every one of them ends in this refresh.
+        await session.execute(
+            delete(ProfileFavorite).where(ProfileFavorite.turn_id == drawing.turn_id)
+        )
 
 
 def _count_by_turn():

@@ -926,8 +926,8 @@ told about and no entry about a fact that rolled back; the account's sockets are
   removal (`services/avatars.py`), its subject the `user_warnings` row. Answering the
   warning marks it read.
 - `drawing_shared` — the first share of a drawing by somebody other than its drawer, in
-  the share's write; a live share's in the finished-game write (`save_game`); a favorite, since
-  a favorite is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
+  the share's write; a live share's in the finished-game write (`save_game`); a favorite from
+  a game its owner sat in, since that favorite is a share (R-PIN-03). One per drawing while its entry is kept, ninety days
 (R-SHARE-09). The drawer's withdrawal
   marks it read — they have just acted on it — and the entry stays, naming nobody once no
   share stands.
@@ -1957,7 +1957,7 @@ being written like the reactions — a share by somebody other than the drawer o
 private game's drawing, or of one its drawer took out, is a `ValueError`; a blank or
 unkept drawing's is dropped. They are part of the payload digest and of the handoff
 envelope (version 4). Later writes — the recap, history, the Gallery's door, and the
-favorite write, since a favorite is a share (R-PIN-03) — go through `set_drawing_share` (or the favorite
+favorite write, since a favorite from a game its owner sat in is a share (R-PIN-03) — go through `set_drawing_share` (or the favorite
 write's own copy of its rules), one transaction that locks the sharer's and the drawer's
 accounts in one ascending statement and then the drawing row, checks who may share,
 inserts or deletes, and sets the projections. The drawer's withdrawal deletes every
@@ -1997,9 +1997,13 @@ history graph uses (#512), so a turn from another game can never be named by mis
 What may be favorited is checked by the write, since neither rule is expressible here: a turn
 with a `ready`, unhidden, non-blank drawing the owner sat in the game of and may share
 (R-SHARE-02) — their own from any game, another player's from a public one its drawer has
-not taken out — credited through the turn's frozen drawer snapshot. A favorite **is** a share
-(R-PIN-03): the write shares every favorite the owner has not shared yet, in the
-same transaction, with its inbox entry for the drawer. Only a `registered` account may favorite, so a guest merge
+not taken out — or, since #1501, any drawing in the Gallery (`_gallery_shows`), credited
+through the turn's frozen drawer snapshot. A favorite from a game the owner sat in **is** a
+share (R-PIN-03): the write shares every such favorite the owner has not shared yet, in the
+same transaction, with its inbox entry for the drawer. Any other favorite shares nothing and
+writes no inbox entry. When a drawing's share count falls to zero (`refresh_share_projection`,
+the one place every share deletion ends), every favorite of it is deleted in the same
+transaction (R-PIN-05): a stranger's has nothing else to hang on. Only a `registered` account may favorite, so a guest merge
 never brings a shelf with it.
 
 **Reads.** `get_profile_favorites` lists the shelf, joined to the turn and the drawing so a favorite

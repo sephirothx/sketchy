@@ -126,11 +126,19 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
                     '[data-testid="reaction-control"] .reaction-chip[data-emoji="wow"] .reaction-count'
                 )
             ).to_have_text("1")
+            # ...and makes it a favorite of their own from the same viewer
+            # (#1501): it is a Gallery drawing, so a stranger to the game may.
+            star = stranger.get_by_test_id("drawing-viewer").locator('[data-testid="favorite-toggle"]')
+            await expect(star).to_have_attribute("aria-pressed", "false")
+            await star.click()
+            await expect(star).to_have_attribute("aria-pressed", "true")
             await stranger.keyboard.press("Escape")
             await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
             await expect(
                 stranger.locator('[data-testid="favorites"] .reaction-chip .reaction-count').first
             ).to_have_text("1")
+            await stranger.goto(f"{BASE_URL}/profile")
+            await expect(stranger.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await stranger_context.close()
 
             # A visitor with no session sees no shelf at all (R-PIN-06).
