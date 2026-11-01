@@ -40,6 +40,9 @@
     "typescript-eslint": "^8.62.0",
     "vite": "^8.1.6"
   },
+  "overrides": {
+    "minimatch": "^11.0.3"
+  },
   "allowScripts": {
     "fsevents@2.3.3": true
   }
