@@ -121,6 +121,29 @@
   -webkit-line-clamp: 2;
 }
 
+/* A prompt a visitor to somebody's favorites may show (#1501): the two-line
+   clamp would cut a long word's last tiles, and its length is the one thing
+   the tiles say. A block box is not clamped; the word clamps itself. */
+.drawing-viewer-title h2:has(> .prompt-slot) {
+  display: block;
+  /* The title clips to its clamp; the tiles' button needs its focus ring. */
+  overflow: visible;
+}
+
+.drawing-viewer-prompt {
+  display: -webkit-box;
+  /* The title no longer clips, so a word wider than it breaks instead of
+     running under the close button. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  margin-inline: calc(-1 * var(--ink-overhang));
+  padding-inline: var(--ink-overhang);
+  overflow: hidden;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .drawing-viewer-byline {
   margin: 0;
   color: var(--muted);

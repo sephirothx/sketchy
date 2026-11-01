@@ -321,18 +321,18 @@ export const ProfilePage = `
   </div>
 
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; margin-bottom: 22px">
-    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; margin-bottom: 14px">Favorites</h2>
-    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; display: flex; align-items: center; gap: 8px"><span style="color: ${T.warm}; display: inline-flex">${icon.star(18, true)}</span>Favorites</h2>
+      <span style="font-size: 13px; font-weight: 700; color: ${T.faint}">3 of 6</span>
+      <span style="margin-left: auto">${btn.secondary('Arrange', { iconL: icon.grip(15) })}</span>
+    </div>
+    <p style="margin: 4px 0 14px; font-size: 14px; color: ${T.muted}">Visitors see each prompt hidden until they tap it.</p>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 16px">
       ${[['lighthouse', P.marta, [['fire', 2], ['heart', 1]]], ['roller coaster', P.bruno, [['laugh', 1]]], ['bow and arrow', P.yuki, []]].map(([prompt, drawer, tally], i) => `
-      <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+      <li style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
         <div style="aspect-ratio: 4 / 3; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 10px; overflow: hidden; width: 100%">${lighthouseSVG}</div>
-        <span style="font-weight: 700; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${prompt}</span>
-        <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: ${T.muted}">${pname(drawer)}${tally.length ? `<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700">${tally.map(([code, count]) => `<span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt(code, 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">${count}</span></span>`).join('')}</span>` : ''}</span>
-        <div style="display: flex; align-items: center; gap: 2px">
-          ${btn.iconOnly(icon.chevL(14), 'Move left', 32)}
-          ${btn.iconOnly(icon.chevR(14), 'Move right', 32)}
-          ${btn.ghost('Remove', { iconL: icon.x(13), style: 'margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px' })}
-        </div>
+        <span style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${prompt}</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: ${T.muted}">by ${pname(drawer)}${tally.length ? `<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700">${tally.map(([code, count]) => `<span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt(code, 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">${count}</span></span>`).join('')}</span>` : ''}</span>
       </li>`).join('')}
     </ul>
   </section>

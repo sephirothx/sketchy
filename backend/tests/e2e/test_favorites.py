@@ -29,6 +29,16 @@ async def scribble(drawer: Page) -> None:
     await drawer.mouse.up()
 
 
+async def narrowest_tile(page: Page, scope: str) -> float:
+    """The narrowest hidden-prompt tile in `scope`, in CSS pixels.
+
+    A shrink-to-fit title once crushed every tile to its 2px floor, which no
+    click notices: the tiles were still there, only unreadable."""
+    tiles = page.locator(f"{scope} .hidden-prompt-tile")
+    await tiles.first.wait_for()
+    return await tiles.evaluate_all("(ts) => Math.min(...ts.map((t) => t.getBoundingClientRect().width))")
+
+
 async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -106,7 +116,18 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await visitor.goto(f"{BASE_URL}/profile/{host_id}")
             await visitor.locator('[data-testid="favorites"]').wait_for()
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
-            await expect(visitor.locator('[data-testid="favorites"]').get_by_role("button", name="Remove", exact=True)).to_have_count(0)
+            await expect(visitor.get_by_role("button", name="Arrange")).to_have_count(0)
+            # ...and guesses first (#1501): the prompt is letter tiles until asked for.
+            await expect(visitor.locator(".profile-shelf-prompt")).to_be_hidden()
+            assert await narrowest_tile(visitor, '[data-testid="favorites"]') > 8
+            drawer_line = visitor.locator('[data-testid="favorites"] .profile-shelf-drawer').first
+            before = await drawer_line.bounding_box()
+            await visitor.locator('[data-testid="favorites"] .hidden-prompt').click()
+            await expect(visitor.locator(".profile-shelf-prompt")).to_be_visible()
+            await expect(visitor.locator(".profile-shelf-prompt")).to_have_text(first_prompt)
+            await expect(visitor.locator('[data-testid="favorites"] .hidden-prompt')).to_be_hidden()
+            # The word takes the tiles' place: the drawer's name under it stays put.
+            assert await drawer_line.bounding_box() == before
 
             # A stranger - registered, never in the game - reacts to the favorited
             # drawing from the shelf through the gallery door (R-PIN-08,
@@ -119,6 +140,14 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await stranger.goto(f"{BASE_URL}/profile/{host_id}")
             await stranger.locator('[data-testid="favorites"] .profile-shelf-open').first.click()
             await stranger.get_by_test_id("drawing-viewer").wait_for()
+            # The viewer's title sizes itself to its tiles; they keep their size.
+            assert await narrowest_tile(stranger, '[data-testid="drawing-viewer"]') > 8
+            # Shown there, the word takes the tiles' place and the drawing stays put.
+            frame = stranger.get_by_test_id("drawing-viewer").locator(".drawing-viewer-frame")
+            before = await frame.bounding_box()
+            await stranger.get_by_test_id("drawing-viewer").locator(".hidden-prompt").click()
+            await expect(stranger.get_by_test_id("drawing-viewer").locator(".drawing-viewer-prompt")).to_be_visible()
+            assert await frame.bounding_box() == before
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
             await expect(
@@ -134,9 +163,11 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(star).to_have_attribute("aria-pressed", "true")
             await stranger.keyboard.press("Escape")
             await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
+            # The tally sits on the drawing's corner, not after the drawer's name.
             await expect(
-                stranger.locator('[data-testid="favorites"] .reaction-chip .reaction-count').first
+                stranger.locator('[data-testid="favorites"] .profile-shelf-frame .reaction-chip .reaction-count').first
             ).to_have_text("1")
+            await expect(stranger.locator('[data-testid="favorites"] .profile-shelf-byline .reaction-chip')).to_have_count(0)
             await stranger.goto(f"{BASE_URL}/profile")
             await expect(stranger.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await stranger_context.close()
@@ -149,8 +180,10 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(anonymous.locator('[data-testid="favorites-panel"]')).to_have_count(0)
             await anonymous_context.close()
 
-            # Remove it from the shelf: the owner's own empty shelf stays, with its hint.
-            await shelf.locator(".profile-shelf-item").first.get_by_role("button", name="Remove").click()
+            # Remove it from the shelf in Arrange mode: the owner's own empty
+            # shelf stays, with its hint.
+            await lobby.get_by_role("button", name="Arrange").click()
+            await shelf.get_by_role("button", name=f"Remove {first_prompt} from your favorites").click()
             await expect(shelf.locator(".profile-shelf-item")).to_have_count(0)
             await lobby.get_by_text("No favorites yet", exact=False).wait_for()
 
@@ -167,6 +200,36 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await table_toggles.nth(1).click()
             await expect(lobby.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(2)
+
+            # Arrange (#1501): a handle and the arrow keys move a drawing, and
+            # so does dragging it; each landing is one write of the shelf.
+            prompts = lobby.locator('[data-testid="favorites"] .profile-shelf-prompt')
+            first, second = await prompts.nth(0).inner_text(), await prompts.nth(1).inner_text()
+            await lobby.get_by_role("button", name="Arrange").click()
+            handle = lobby.locator(".profile-shelf-handle").first
+            await handle.focus()
+            await lobby.keyboard.press("Space")
+            await expect(handle).to_have_attribute("aria-pressed", "true")
+            await lobby.keyboard.press("ArrowRight")
+            await lobby.keyboard.press("Space")
+            await expect(prompts).to_have_text([second, first])
+            await expect(lobby.locator(".profile-shelf-handle").first).to_be_enabled()
+            # The drawings slide to their new places; measure where they land,
+            # not where a slide still running draws them.
+            await lobby.wait_for_function("() => document.getAnimations().length === 0")
+            frames = lobby.locator(".profile-shelf-frame")
+            start = await frames.nth(0).bounding_box()
+            end = await frames.nth(1).bounding_box()
+            assert start is not None and end is not None
+            await lobby.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+            await lobby.mouse.down()
+            await lobby.mouse.move(end["x"] + end["width"] / 2, end["y"] + end["height"] / 2, steps=12)
+            await lobby.mouse.up()
+            await expect(prompts).to_have_text([first, second])
+            await expect(lobby.locator(".profile-shelf-handle").first).to_be_enabled()
+            await lobby.get_by_role("button", name="Done").click()
+            stored = await (await host_context.request.get(f"{BASE_URL}/api/users/{host_id}/favorites")).json()
+            assert [item["prompt"] for item in stored["favorites"]] == [first, second]
 
             # Take out of Solo is on the drawer's own row, one of the two
             # (R-SOLO-17), and works from there; the viewer, whose buttons are
