@@ -132,6 +132,12 @@
 
 .drawing-viewer-prompt {
   display: -webkit-box;
+  /* The title no longer clips, so a word wider than it breaks instead of
+     running under the close button. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  margin-inline: calc(-1 * var(--ink-overhang));
+  padding-inline: var(--ink-overhang);
   overflow: hidden;
   text-wrap: balance;
   -webkit-box-orient: vertical;
