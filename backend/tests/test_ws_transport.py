@@ -285,19 +285,64 @@ def _open_pair(monkeypatch):
     return client, server
 
 
-def _feed(server, wire: bytes) -> tuple[list, int]:
-    """Hand `wire` to the server in one read; return its events and the peak
-    Python allocation it took to produce them."""
-    import tracemalloc
+def _feed(server, wire: bytes) -> list:
+    """Hand `wire` to the server in one read; return its events."""
+    server.receive_data(wire)
+    return list(server.events())
 
-    tracemalloc.start()
-    try:
-        server.receive_data(wire)
-        events = list(server.events())
-        _, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
-    return events, peak
+
+# The peak is measured in a fresh interpreter, not here: tracemalloc's peak is
+# process-wide, so in a test worker any other thread allocating during the feed
+# - xdist's channel, an executor thread a previous test left behind - counts as
+# the bomb's. One CI run (#1524) saw 5.3 MB against a 3 MiB bound that way. The
+# child has one thread and does one thing, so its peak is the feed's alone.
+_FEED_ALONE = """
+import json, sys, tracemalloc, wsproto
+from wsproto.connection import ConnectionType
+from wsproto.events import AcceptConnection, CloseConnection, Request
+from wsproto.extensions import PerMessageDeflate
+from app.ws_transport import NegotiatingConnection
+
+class BrowserOffer(PerMessageDeflate):
+    def offer(self):
+        return "client_max_window_bits"
+
+server = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+client = wsproto.WSConnection(ConnectionType.CLIENT)
+server.receive_data(client.send(Request(host="h", target="/", extensions=[BrowserOffer()])))
+list(server.events())
+server.send(AcceptConnection(extensions=[PerMessageDeflate()]))
+wire = sys.stdin.buffer.read()
+tracemalloc.start()
+server.receive_data(wire)
+events = list(server.events())
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+print(json.dumps({"closes": [e.code for e in events if isinstance(e, CloseConnection)], "peak": peak}))
+"""
+
+
+def _feed_alone(wire: bytes) -> tuple[list[int], int]:
+    """Hand `wire` to a freshly negotiated server in a process of its own;
+    return the close codes it produced and the peak Python allocation it took.
+    The wire must be a first message: the child's inflater starts empty."""
+    import json
+    import os
+    import subprocess
+    import sys
+
+    completed = subprocess.run(
+        [sys.executable, "-c", _FEED_ALONE],
+        input=wire,
+        capture_output=True,
+        cwd=Path(__file__).resolve().parents[1],
+        # Coverage following subprocesses would trace the child, and its
+        # tracer's allocations would count toward the peak.
+        env={key: value for key, value in os.environ.items() if not key.startswith("COVERAGE_")},
+        check=True,
+    )
+    result = json.loads(completed.stdout)
+    return result["closes"], result["peak"]
 
 
 def _text(events) -> str:
@@ -309,22 +354,21 @@ def test_a_compressed_bomb_closes_with_1009_before_it_is_inflated(monkeypatch):
     it. Now the most one message inflates to is the ceiling plus one byte."""
     from app.socket_server import MAX_PACKET_BYTES
 
-    client, server = _open_pair(monkeypatch)
+    client, _ = _open_pair(monkeypatch)
     wire = bytes(client.send(wsproto.events.TextMessage(data="x" * (32 * 1024 * 1024))))
     assert len(wire) < 64 * 1024, "a thousandfold bomb"
 
-    events, peak = _feed(server, wire)
+    closes, peak = _feed_alone(wire)
 
-    closes = [e for e in events if isinstance(e, CloseConnection)]
-    assert closes and closes[0].code == 1009
+    assert closes[:1] == [1009]
     assert peak < 3 * MAX_PACKET_BYTES, f"inflated {peak} bytes on the way to refusing it"
 
 
 def test_a_binary_bomb_is_bounded_the_same_way(monkeypatch):
-    client, server = _open_pair(monkeypatch)
+    client, _ = _open_pair(monkeypatch)
     wire = bytes(client.send(wsproto.events.BytesMessage(data=b"\0" * (8 * 1024 * 1024))))
-    events, peak = _feed(server, wire)
-    assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
+    closes, peak = _feed_alone(wire)
+    assert closes == [1009]
     assert peak < 3 * ws_transport.INBOUND_MESSAGE_LIMIT
 
 
@@ -337,19 +381,19 @@ def test_the_budget_spans_every_frame_of_a_fragmented_message(monkeypatch):
         bytes(client.send(wsproto.events.TextMessage(data=quarter, message_finished=index == 3)))
         for index in range(4)
     )
-    events, _ = _feed(server, wire)
+    events = _feed(server, wire)
     assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
 
 
 def test_a_message_at_the_ceiling_passes_and_one_byte_more_does_not(monkeypatch):
     limit = ws_transport.INBOUND_MESSAGE_LIMIT
     client, server = _open_pair(monkeypatch)
-    events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * limit))))
+    events = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * limit))))
     assert len(_text(events)) == limit
     assert not [e for e in events if isinstance(e, CloseConnection)]
 
     client, server = _open_pair(monkeypatch)
-    events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * (limit + 1)))))
+    events = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * (limit + 1)))))
     assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
 
 
@@ -359,13 +403,13 @@ def test_messages_under_the_ceiling_keep_passing_with_context_takeover(monkeypat
     client, server = _open_pair(monkeypatch)
     big = "w" * (ws_transport.INBOUND_MESSAGE_LIMIT - 10)
     for _ in range(3):
-        events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=big))))
+        events = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=big))))
         assert _text(events) == big
     fragments = [
         bytes(client.send(wsproto.events.TextMessage(data="ab" * 1000, message_finished=last)))
         for last in (False, True)
     ]
-    events, _ = _feed(server, b"".join(fragments))
+    events = _feed(server, b"".join(fragments))
     assert _text(events) == "ab" * 2000
 
 
@@ -381,7 +425,7 @@ def test_the_largest_create_room_still_passes_the_inflate_budget(monkeypatch):
         "42" + json.dumps(["create_room", {"customPrompts": blob}]),
     ):
         client, server = _open_pair(monkeypatch)
-        events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=packet))))
+        events = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=packet))))
         assert _text(events) == packet
         assert not [e for e in events if isinstance(e, CloseConnection)]
 
@@ -448,15 +492,14 @@ def _final_block(text: bytes) -> bytes:
     return compressor.compress(text) + compressor.flush(zlib.Z_FINISH)
 
 
-def test_input_after_a_final_deflate_block_is_refused_not_kept(monkeypatch):
+def test_input_after_a_final_deflate_block_is_refused_not_kept():
     """#1234 review: after BFINAL, zlib keeps every further byte as unused
     data and inflates none of it, so a budget that counts output never saw
     fifty 1 MiB continuations pile up."""
-    client, server = _open_pair(monkeypatch)
     first = _raw_frame(_final_block(b"42[\"x\"]"), opcode=1, fin=False, rsv1=True)
     junk = _raw_frame(b"\x00" * (256 * 1024), opcode=0, fin=False, rsv1=False)
-    events, peak = _feed(server, first + junk)
-    assert [event.code for event in events if isinstance(event, CloseConnection)] == [1007]
+    closes, peak = _feed_alone(first + junk)
+    assert closes == [1007]
     assert peak < 2 * 1024 * 1024
 
 
@@ -465,10 +508,10 @@ def test_a_message_that_ends_its_stream_is_read_and_the_next_one_too(monkeypatch
     the next message then starts a stream of its own."""
     client, server = _open_pair(monkeypatch)
     first = _raw_frame(_final_block(b"hello"), opcode=1, fin=True, rsv1=True)
-    events, _ = _feed(server, first)
+    events = _feed(server, first)
     assert _text(events) == "hello"
     second = _raw_frame(_final_block(b"again"), opcode=1, fin=True, rsv1=True)
-    events, _ = _feed(server, second)
+    events = _feed(server, second)
     assert _text(events) == "again"
     assert not [event for event in events if isinstance(event, CloseConnection)]
 
@@ -490,14 +533,14 @@ def test_an_unfinished_message_of_empty_blocks_is_cut_at_its_compressed_size(mon
         _raw_frame(chunk, opcode=0, fin=False, rsv1=False)
         for _ in range(ws_transport.INBOUND_COMPRESSED_MESSAGE_LIMIT // len(chunk) + 1)
     ]
-    events, _ = _feed(server, b"".join(frames))
+    events = _feed(server, b"".join(frames))
     assert [event.code for event in events if isinstance(event, CloseConnection)] == [1009]
 
 
 def test_a_message_just_under_the_compressed_limit_still_passes(monkeypatch):
     client, server = _open_pair(monkeypatch)
     blocks = EMPTY_STORED_BLOCK * ((ws_transport.INBOUND_MESSAGE_LIMIT // 2) // len(EMPTY_STORED_BLOCK))
-    events, _ = _feed(server, _raw_frame(blocks + _final_block(b"42[\"x\"]"), opcode=1, fin=True, rsv1=True))
+    events = _feed(server, _raw_frame(blocks + _final_block(b"42[\"x\"]"), opcode=1, fin=True, rsv1=True))
     assert _text(events) == '42["x"]'
 
 
