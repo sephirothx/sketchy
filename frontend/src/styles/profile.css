@@ -717,6 +717,7 @@
   .profile-shelf-reactions {
     right: 6px;
     bottom: 6px;
+    max-width: calc(100% - 12px);
     padding: 3px 7px;
     gap: 6px;
   }
