@@ -10,16 +10,19 @@ import "../styles/lazy/reactions.css";
 export function ReactionTally({
   reactions,
   counts,
+  className,
 }: {
   reactions: readonly { emoji: string }[];
   /** The server's counts, when it sent them: they include the seatless reactions. */
   counts?: Record<string, number> | null;
+  /** Where the tally sits, for a surface that places it (the shelf's corner). */
+  className?: string;
 }) {
   const chips = compactTally(resolveTally(reactions, counts));
   if (chips.length === 0) return null;
   return (
     <span
-      className="profile-turn-reactions"
+      className={className ? `profile-turn-reactions ${className}` : "profile-turn-reactions"}
       aria-label={chips.map((chip) => `${chip.label} ${chip.count}`).join(", ")}
     >
       {chips.map((chip) => (

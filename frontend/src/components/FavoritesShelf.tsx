@@ -6,7 +6,7 @@ import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingViewer } from "./DrawingViewer";
 import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
-import { CheckIcon, GripIcon, StarIcon, XIcon } from "./icons";
+import { CheckIcon, EyeIcon, GripIcon, StarIcon, XIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ApiError } from "../lib/api";
 import { fetchGalleryDrawing } from "../lib/gallery";
@@ -519,6 +519,11 @@ export function FavoritesShelf({
                     >
                       <FavoriteThumbnail userId={userId} favorite={favorite} labelled={visible} />
                     </button>
+                    <ReactionTally
+                      reactions={favorite.reactions}
+                      counts={shown(favorite).reactionCounts}
+                      className="profile-shelf-reactions"
+                    />
                     {arranging && (
                       <>
                         <button
@@ -557,10 +562,15 @@ export function FavoritesShelf({
                     )}
                   </div>
                   <div className="profile-shelf-caption">
-                    {visible ? (
+                    {isOwner ? (
                       <span className="profile-shelf-prompt">{favorite.prompt}</span>
                     ) : (
-                      <HiddenPrompt prompt={favorite.prompt} onReveal={() => reveal(turnId)} />
+                      <PromptSlot
+                        prompt={favorite.prompt}
+                        shown={visible}
+                        onReveal={() => reveal(turnId)}
+                        textClassName="profile-shelf-prompt"
+                      />
                     )}
                     <span className="profile-shelf-byline">
                       <span className="profile-shelf-drawer">
@@ -572,7 +582,6 @@ export function FavoritesShelf({
                           {favorite.drawerDisplayName}
                         </strong>
                       </span>
-                      <ReactionTally reactions={favorite.reactions} counts={shown(favorite).reactionCounts} />
                     </span>
                   </div>
                 </li>
@@ -612,8 +621,16 @@ export function FavoritesShelf({
           }
           renderPrompt={(entry) => {
             const favorite = viewing.favorites[entry.index];
-            if (!favorite || promptShown(favorite.turnId)) return favorite?.prompt ?? entry.prompt;
-            return <HiddenPrompt prompt={favorite.prompt} onReveal={() => reveal(favorite.turnId)} large />;
+            if (!favorite || isOwner) return favorite?.prompt ?? entry.prompt;
+            return (
+              <PromptSlot
+                prompt={favorite.prompt}
+                shown={promptShown(favorite.turnId)}
+                onReveal={() => reveal(favorite.turnId)}
+                textClassName="drawing-viewer-prompt"
+                large
+              />
+            );
           }}
           renderActions={(entry) => {
             // Somebody's favorite is a Gallery drawing, so any registered
@@ -652,25 +669,58 @@ export function FavoritesShelf({
 }
 
 /**
+ * Where a visitor's prompt stands (#1501): the word and its tiles share one
+ * cell, the one not showing kept invisible, so the cell is the size of the
+ * larger of the two either way and showing the word moves nothing around
+ * it - not the drawer's name under it on the shelf, nor the drawing under
+ * the viewer's title. The invisible one is out of reach: no focus, no name,
+ * nothing to find on the page.
+ */
+function PromptSlot({
+  prompt,
+  shown,
+  onReveal,
+  textClassName,
+  large = false,
+}: {
+  prompt: string;
+  shown: boolean;
+  onReveal: () => void;
+  textClassName: string;
+  large?: boolean;
+}) {
+  return (
+    <span className={`prompt-slot${large ? " is-large" : ""}`}>
+      <span className={`${textClassName}${shown ? "" : " is-away"}`}>{prompt}</span>
+      <HiddenPrompt prompt={prompt} onReveal={onReveal} large={large} away={shown} />
+    </span>
+  );
+}
+
+/**
  * A prompt not yet seen: a blank tile per letter, words and punctuation kept
- * (`hiddenPromptShape`), as one button that shows it. Its name says how many
- * letters, which is what the tiles say to anyone looking.
+ * (`hiddenPromptShape`), and an eye, as one button that shows it - the eye
+ * says the tiles are pressed to be read. Its name says how many letters,
+ * which is what the tiles say to anyone looking.
  */
 export function HiddenPrompt({
   prompt,
   onReveal,
   large = false,
+  away = false,
 }: {
   prompt: string;
   onReveal: () => void;
   large?: boolean;
+  /** Shown already: the tiles only hold the word's room (`PromptSlot`). */
+  away?: boolean;
 }) {
   const { words, counts } = hiddenPromptShape(prompt);
   const label = ui.profilePage.showThePrompt({ shape: counts.join(", ") });
   return (
     <button
       type="button"
-      className={`hidden-prompt${large ? " is-large" : ""}`}
+      className={`hidden-prompt${large ? " is-large" : ""}${away ? " is-away" : ""}`}
       aria-label={label}
       title={label}
       onClick={onReveal}
@@ -685,6 +735,12 @@ export function HiddenPrompt({
                 <span key={`${segmentIndex}-${charIndex}`} className="hidden-prompt-tile" />
               ))
             ),
+          )}
+          {/* In the last word, so it never wraps onto a line of its own. */}
+          {wordIndex === words.length - 1 && (
+            <span className="hidden-prompt-eye">
+              <EyeIcon size={large ? 20 : 15} />
+            </span>
           )}
         </span>
       ))}

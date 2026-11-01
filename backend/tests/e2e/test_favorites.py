@@ -118,10 +118,16 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
             await expect(visitor.get_by_role("button", name="Arrange")).to_have_count(0)
             # ...and guesses first (#1501): the prompt is letter tiles until asked for.
-            await expect(visitor.locator(".profile-shelf-prompt")).to_have_count(0)
+            await expect(visitor.locator(".profile-shelf-prompt")).to_be_hidden()
             assert await narrowest_tile(visitor, '[data-testid="favorites"]') > 8
+            drawer_line = visitor.locator('[data-testid="favorites"] .profile-shelf-drawer').first
+            before = await drawer_line.bounding_box()
             await visitor.locator('[data-testid="favorites"] .hidden-prompt').click()
+            await expect(visitor.locator(".profile-shelf-prompt")).to_be_visible()
             await expect(visitor.locator(".profile-shelf-prompt")).to_have_text(first_prompt)
+            await expect(visitor.locator('[data-testid="favorites"] .hidden-prompt')).to_be_hidden()
+            # The word takes the tiles' place: the drawer's name under it stays put.
+            assert await drawer_line.bounding_box() == before
 
             # A stranger - registered, never in the game - reacts to the favorited
             # drawing from the shelf through the gallery door (R-PIN-08,
@@ -136,6 +142,12 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await stranger.get_by_test_id("drawing-viewer").wait_for()
             # The viewer's title sizes itself to its tiles; they keep their size.
             assert await narrowest_tile(stranger, '[data-testid="drawing-viewer"]') > 8
+            # Shown there, the word takes the tiles' place and the drawing stays put.
+            frame = stranger.get_by_test_id("drawing-viewer").locator(".drawing-viewer-frame")
+            before = await frame.bounding_box()
+            await stranger.get_by_test_id("drawing-viewer").locator(".hidden-prompt").click()
+            await expect(stranger.get_by_test_id("drawing-viewer").locator(".drawing-viewer-prompt")).to_be_visible()
+            assert await frame.bounding_box() == before
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-wow"]').click()
             await expect(
@@ -151,9 +163,11 @@ async def test_a_drawing_favorited_from_the_recap_reaches_the_profile_shelf():
             await expect(star).to_have_attribute("aria-pressed", "true")
             await stranger.keyboard.press("Escape")
             await expect(stranger.get_by_test_id("drawing-viewer")).to_have_count(0)
+            # The tally sits on the drawing's corner, not after the drawer's name.
             await expect(
-                stranger.locator('[data-testid="favorites"] .reaction-chip .reaction-count').first
+                stranger.locator('[data-testid="favorites"] .profile-shelf-frame .reaction-chip .reaction-count').first
             ).to_have_text("1")
+            await expect(stranger.locator('[data-testid="favorites"] .profile-shelf-byline .reaction-chip')).to_have_count(0)
             await stranger.goto(f"{BASE_URL}/profile")
             await expect(stranger.locator('[data-testid="favorites"] .profile-shelf-item')).to_have_count(1)
             await stranger_context.close()

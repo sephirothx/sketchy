@@ -496,6 +496,22 @@
   cursor: pointer;
 }
 
+/* The drawing's reactions sit on its corner, where the viewer shows them:
+   after the drawer's name they read as the drawer's own. The corner is the
+   one Arrange mode leaves free. */
+.profile-shelf-reactions {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-raised);
+  /* It counts and is not pressed: a tap or a drag goes to the drawing. */
+  pointer-events: none;
+}
+
 .profile-shelf-handle[aria-disabled="true"],
 .profile-shelf-remove:disabled {
   opacity: var(--opacity-disabled);
@@ -541,6 +557,32 @@
   white-space: nowrap;
   padding-inline: var(--ink-overhang);
   margin-inline: calc(-1 * var(--ink-overhang));
+}
+
+/* A visitor's prompt (#1501): the word and its tiles in one cell, the one
+   not showing invisible, so the cell keeps the larger one's size and showing
+   the word moves nothing. The column may narrow below either, or a long
+   word's tiles could not shrink to a phone's column. */
+.prompt-slot {
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto);
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.prompt-slot > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  justify-self: start;
+}
+
+.prompt-slot.is-large > * {
+  justify-self: center;
+}
+
+.prompt-slot > .is-away {
+  visibility: hidden;
 }
 
 /* A prompt not yet seen (#1501): a blank tile per letter, the game's mask in
@@ -598,6 +640,23 @@
   background: var(--line-strong);
 }
 
+/* Says the tiles are pressed to be read; it lights up with them. */
+.hidden-prompt-eye {
+  display: inline-flex;
+  flex: none;
+  margin-left: 5px;
+  color: var(--muted);
+}
+
+.hidden-prompt.is-large .hidden-prompt-eye {
+  margin-left: 8px;
+}
+
+.hidden-prompt:hover .hidden-prompt-eye,
+.hidden-prompt:focus-visible .hidden-prompt-eye {
+  color: var(--primary);
+}
+
 .hidden-prompt-glyph {
   color: var(--muted);
   font-family: var(--font-display);
@@ -647,6 +706,13 @@
   .profile-shelf-remove {
     height: 40px;
     top: 6px;
+  }
+
+  .profile-shelf-reactions {
+    right: 6px;
+    bottom: 6px;
+    padding: 3px 7px;
+    gap: 6px;
   }
 
   .profile-shelf-handle {

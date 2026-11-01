@@ -82,7 +82,8 @@ keyboard that takes half the screen, and one thumb.
   nobody. A drawing leaving the gallery takes itself off every shelf. Favorites go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile, three
-  across: a visitor sees each prompt as blank letter tiles and taps them to see it, and
+  across: a visitor sees each prompt as blank letter tiles with an eye and taps them to see it
+  in their place, each drawing's reactions sit on its corner, and
   the owner, in **Arrange** mode, drags drawings into order (or lifts one by its handle
   and moves it with the arrow keys) and removes them. Anyone opens one in the drawing
   viewer. **Favorite**, a star filled in orange once it is one, sits beside a

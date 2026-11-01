@@ -121,13 +121,21 @@
   -webkit-line-clamp: 2;
 }
 
-/* A prompt still hidden on somebody's favorites (#1501): the two-line clamp
-   would cut a long word's last tiles, and its length is the one thing the
-   tiles say. A block box is not clamped. */
-.drawing-viewer-title h2:has(> .hidden-prompt) {
+/* A prompt a visitor to somebody's favorites may show (#1501): the two-line
+   clamp would cut a long word's last tiles, and its length is the one thing
+   the tiles say. A block box is not clamped; the word clamps itself. */
+.drawing-viewer-title h2:has(> .prompt-slot) {
   display: block;
   /* The title clips to its clamp; the tiles' button needs its focus ring. */
   overflow: visible;
+}
+
+.drawing-viewer-prompt {
+  display: -webkit-box;
+  overflow: hidden;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .drawing-viewer-byline {
