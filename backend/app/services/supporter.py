@@ -162,6 +162,25 @@ async def unstopped_owners(
     return owners
 
 
+async def order_was_reversed(session: AsyncSession, order_id: str) -> bool:
+    return (
+        await session.scalar(
+            select(SupportPurchase.id)
+            .where(
+                SupportPurchase.provider_order_id == order_id,
+                SupportPurchase.kind.in_(
+                    (
+                        SupportPurchaseKind.REFUND.value,
+                        SupportPurchaseKind.CHARGEBACK.value,
+                    )
+                ),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 async def renewing_subscriptions(
     session: AsyncSession, user_ids: Iterable[UUID]
 ) -> tuple[str, ...]:
@@ -270,7 +289,27 @@ async def _attributed_account(session: AsyncSession, event: ProviderEvent) -> UU
 async def apply_provider_event(
     session: AsyncSession, provider: str, event: ProviderEvent
 ) -> tuple[bool, UUID | None]:
-    """Record one webhook's fact. Returns whether it was new, and whose it is."""
+    """Record one webhook's fact. Returns whether it was new, and whose it is.
+
+    A purchase with none of our custom data and no row we recognise is not ours:
+    a Paddle account can sell other things, and those are none of this ledger's
+    business, nor this code's to cancel.
+    """
+    if event.kind == SupportPurchaseKind.PURCHASE and not event.account_id:
+        known = await session.scalar(
+            select(SupportPurchase.id)
+            .where(
+                or_(
+                    SupportPurchase.provider_order_id == event.order_id,
+                    SupportPurchase.provider_subscription_id == event.subscription_id,
+                )
+                if event.subscription_id
+                else SupportPurchase.provider_order_id == event.order_id
+            )
+            .limit(1)
+        )
+        if known is None:
+            return False, None
     user_id = await _attributed_account(session, event)
     recorded = await record_support_fact(
         session,

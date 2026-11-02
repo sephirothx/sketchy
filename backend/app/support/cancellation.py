@@ -31,10 +31,11 @@ async def cancel_subscription(
     cancelled = await provider.cancel_at_period_end(subscription_id)
     async with session_factory() as session:
         async with session.begin():
-            await apply_provider_event(
+            recorded, _ = await apply_provider_event(
                 session, provider.name, cancellation_event(subscription_id)
             )
-            if not notify:
+            # Two requests in flight can both reach the provider; one mail.
+            if not notify or not recorded:
                 return
             user = await session.get(User, user_id) if user_id else None
             address = cancelled.email or (user.email if user else None)

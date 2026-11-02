@@ -29,6 +29,7 @@ from app.refusals import ErrorCode
 from app.request_text import ControlFreeModel
 from app.services.supporter import (
     apply_provider_event,
+    order_was_reversed,
     renewing_subscriptions,
     subscriptions_of_order,
     supporter_status,
@@ -93,9 +94,13 @@ async def _subscriptions_to_stop(
         return await subscriptions_of_order(session, event.order_id)
     if event.kind != SupportPurchaseKind.PURCHASE:
         return ()
-    if user_id is None:
+    if event.subscription_id and (
         # Paid after the account was deleted: nobody can use what this renews.
-        return (event.subscription_id,) if event.subscription_id else ()
+        user_id is None
+        # A refund can land first, and then nothing else would stop this year.
+        or await order_was_reversed(session, event.order_id)
+    ):
+        return (event.subscription_id,)
     if event.product == PRODUCT_LIFETIME:
         # The lifetime pass replaces the year it was bought on top of.
         return await renewing_subscriptions(session, [user_id])
@@ -230,7 +235,14 @@ def create_support_router(
                         if user_id is not None
                         else {}
                     )
-            for subscription_id, owner in owners.items():
+        except Exception:
+            # Nothing safe to name: the identifier may be the buyer's address.
+            logger.error("support_cancel_request_lookup_failed", exc_info=True)
+            return
+        for subscription_id, owner in owners.items():
+            # One at a time: a failure must not skip the rest, and this is the
+            # line that lets the operator stop it by hand.
+            try:
                 await cancel_subscription(
                     session_factory, provider, subscription_id, user_id=owner
                 )
@@ -248,8 +260,10 @@ def create_support_router(
                                 details={"subscription": subscription_id},
                             )
                         )
-        except Exception:
-            logger.error("support_cancel_request_failed", exc_info=True)
+            except Exception:
+                logger.error(
+                    "support_subscription_not_cancelled %s", subscription_id, exc_info=True
+                )
 
     @router.post("/cancel/request")
     async def cancel_request(

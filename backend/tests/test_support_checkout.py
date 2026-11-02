@@ -412,6 +412,26 @@ async def test_a_refund_stops_the_subscription_so_nothing_charges_again(site, mo
     assert kinds.count("cancellation") == 1
 
 
+async def test_another_products_subscription_is_none_of_our_business(site):
+    http, factory = site
+    await _register(http)
+    assert (await _post(http, _paid("e1", "o1", None, subscription="sub_other"))).status_code == 200
+    assert await _rows(factory) == []
+
+
+async def test_a_refund_that_landed_first_still_stops_the_renewal(site):
+    http, factory = site
+    user_id = await _register(http)
+    refund = _event(
+        "e1",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
+    )
+    await _post(http, refund)
+    await _post(http, _paid("e2", "o1", user_id))
+    assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
+
+
 async def test_paying_after_deleting_the_account_stops_what_would_renew(site):
     http, factory = site
     user_id = await _register(http)
