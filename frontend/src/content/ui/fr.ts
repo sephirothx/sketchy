@@ -2181,6 +2181,8 @@ export const FR: Catalogue = {
   avatarDoodles: {
     whale: "Baleine",
     octopus: "Pieuvre",
+    snail: "Escargot",
+    bee: "Abeille",
     hedgehog: "Hérisson",
     dino: "Dino",
     unicorn: "Licorne",

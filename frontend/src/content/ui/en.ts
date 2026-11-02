@@ -2197,6 +2197,8 @@ export const EN = {
   avatarDoodles: {
     whale: "Whale",
     octopus: "Octopus",
+    snail: "Snail",
+    bee: "Bee",
     hedgehog: "Hedgehog",
     dino: "Dino",
     unicorn: "Unicorn",

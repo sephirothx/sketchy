@@ -2179,6 +2179,8 @@ export const NL: Catalogue = {
   avatarDoodles: {
     whale: "Walvis",
     octopus: "Octopus",
+    snail: "Slak",
+    bee: "Bij",
     hedgehog: "Egel",
     dino: "Dino",
     unicorn: "Eenhoorn",
