@@ -11,9 +11,9 @@ append-only property was a convention of the code. Three roles instead:
 - `sketchy_app` - the web process and operator commands - reads and writes
   rows and nothing else: no DDL, no `TRUNCATE`, no `TRIGGER`, and only
   `INSERT` and `SELECT` on the ledgers, `audit_events`, `score_events` and
-  `support_purchases` - the last with two columns besides, `user_id` and
+  `support_purchases` - the last with three columns besides: `user_id` and
   `gifted_by_user_id`, which deletion clears because the account row they name
-  is tombstoned, not removed;
+  is tombstoned, not removed, and `owner_deleted_at`, which says when;
 - `sketchy_monitor` holds `pg_monitor` and reads no table
   (`ops/postgres/init.sql`, #889).
 
