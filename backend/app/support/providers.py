@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import http.client
 import json
 import logging
 import urllib.error
@@ -112,7 +113,10 @@ def verify_signature(
         supplied = fields["h1"]
     except (KeyError, ValueError) as error:
         raise BadSignature("no signature") from error
-    if not secret or not hmac.compare_digest(_sign(secret, timestamp, body), supplied):
+    # As bytes: `compare_digest` raises on non-ASCII text, and anybody can send that.
+    if not secret or not hmac.compare_digest(
+        _sign(secret, timestamp, body).encode(), supplied.encode("utf-8", "replace")
+    ):
         raise BadSignature("signature does not match")
     if abs(now.timestamp() - timestamp) > SIGNATURE_TOLERANCE.total_seconds():
         raise BadSignature("signature too old")
@@ -163,7 +167,9 @@ def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
 def _adjustment_event(event_id: str, data: dict) -> ProviderEvent | None:
     # Any approved refund ends the pass, partial ones included: a withdrawal
     # within the fourteen days is refunded pro rata, so partial is the normal
-    # shape of "this contract is over" (#1471).
+    # shape of "this contract is over" (#1471). A chargeback the seller later
+    # wins (`chargeback_reverse`) is deliberately not acted on: the pass stays
+    # ended, and the operator can grant it back.
     kinds = {
         "refund": SupportPurchaseKind.REFUND,
         "chargeback": SupportPurchaseKind.CHARGEBACK,
@@ -249,10 +255,17 @@ class PaddleProvider:
 
         try:
             return await asyncio.to_thread(send)
-        except (urllib.error.URLError, TimeoutError, ValueError) as error:
-            # The path has an id in it and nothing else; the error, no body.
-            logger.warning("support_provider_call_failed %s %s: %s", method, path, error)
-            raise ProviderUnavailable(str(error)) from error
+        # OSError covers URLError and timeouts; HTTPException a connection that
+        # dropped mid-response. Either way the provider did not answer.
+        except (OSError, http.client.HTTPException, ValueError) as error:
+            # Never the query: a lookup by e-mail carries the buyer's address.
+            logger.warning(
+                "support_provider_call_failed %s %s: %s",
+                method,
+                path.partition("?")[0],
+                type(error).__name__,
+            )
+            raise ProviderUnavailable(type(error).__name__) from error
 
     async def create_checkout(
         self, *, product: str, account_id: str, extra_minor: int, base_url: str
@@ -322,7 +335,8 @@ class PaddleProvider:
         found: list[str] = []
         for customer in customers.get("data") or []:
             query = urllib.parse.urlencode(
-                {"customer_id": customer["id"], "status": "active"}
+                # `past_due` too: it can still be cancelled, and still charges.
+                {"customer_id": customer["id"], "status": "active,past_due"}
             )
             subscriptions = await self._call("GET", f"/subscriptions?{query}")
             found += [item["id"] for item in subscriptions.get("data") or []]

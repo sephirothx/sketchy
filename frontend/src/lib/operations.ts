@@ -348,7 +348,7 @@ export const ATTENTION = {
   drawingStoreBytes: 50e9,
 } as const;
 
-export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues" | "retention";
+export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues" | "support" | "retention";
 
 export type AttentionReason = {
   key: string;

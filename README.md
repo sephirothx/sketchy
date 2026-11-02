@@ -1908,12 +1908,6 @@ backend/
       solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
       solo_access.py Who may open which of Solo's doors: the one gate the supporter pass narrows
       supporter.py Supporter status, derived from the purchase ledger and never stored
-    support/
-      providers.py One interface over whoever sells the pass: Paddle Billing, or a local stub
-      config.py    Which provider sells the pass, from the environment
-      cancellation.py Stopping a subscription's renewal, and saying so
-      signals.py   What the webhook route has seen, for the operator
-      grant.py     Audited command for a comp, or for repairing a provider-side mistake
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread
@@ -1922,6 +1916,12 @@ backend/
       bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
       storage_report.py What each table of the live database occupies, from the catalogue
       integrity_audit.py Stored drawings, projections and ledgers re-checked on a schedule; reported, never repaired
+    support/
+      providers.py One interface over whoever sells the pass: Paddle Billing, or a local stub
+      config.py    Which provider sells the pass, from the environment
+      cancellation.py Stopping a subscription's renewal, and saying so
+      signals.py   What the webhook route has seen, for the operator
+      grant.py     Audited command for a comp, or for repairing a provider-side mistake
     presenters.py Pure construction of room, turn, round, and session payloads
     refusals.py   The one refusal vocabulary (`ErrorCode`), shared by REST and the socket
     auth/mail_copy.py The five outgoing messages, in each of the eight languages

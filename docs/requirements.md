@@ -674,7 +674,7 @@ decoration and more of Solo, never an edge in a room.
 | **R-SUP-06** | A merchant of record MUST sell the pass: it holds the card and the tax, by hosted checkout. No provider script MUST run on this origin (R-PLAT-20), so Paddle's payment link opens on a separate page ([`ops/paddle-checkout/`](../ops/paddle-checkout/index.html)). |
 | **R-SUP-07** | A webhook MUST prove itself by signature before anything is read from it, and a signature older than five minutes is a replay. Production MUST refuse to start with a provider and no secret, and MUST refuse `stub`: either would be a free pass for anybody who can send a request. |
 | **R-SUP-08** | With `SUPPORT_PROVIDER` unset there MUST be no tier: no routes and no status field. A self-hosted deployment that sells nothing shows nothing. |
-| **R-SUP-09** | A player MUST be able to stop a renewal on this site, in one click signed in and with no login signed out, confirmed by mail (Germany's §312k). The time already paid stands. The signed-out form MUST answer the same whatever it finds. Deleting an account, or buying a lifetime pass over a renewing year, MUST stop the renewal too: nothing may charge for what can no longer be used. |
+| **R-SUP-09** | A player MUST be able to stop a renewal on this site, in one click signed in and with no login signed out, confirmed by mail (Germany's §312k). The time already paid stands. The signed-out form MUST answer the same, and as quickly, whatever it finds. Deleting an account, a refund or chargeback of a year, or buying a lifetime pass over a renewing year MUST stop the renewal too: nothing may charge for what can no longer be used. A suspended player MUST still be able to stop one, since a suspension is not refunded. |
 
 ### Account inbox
 

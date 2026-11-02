@@ -161,6 +161,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   account_required: accountRequired,
   support_already_active: "You already have a supporter pass.",
   support_unavailable: "The checkout could not be reached. Nothing was charged. Please try again.",
+  support_cancel_failed: "The renewal could not be stopped, so it is still on. Please try again.",
   identity_unavailable: "Sketchy could not confirm who you are. Reload and try again.",
 
   // Rooms

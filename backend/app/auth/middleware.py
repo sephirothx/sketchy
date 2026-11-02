@@ -217,6 +217,9 @@ class SessionAuthMiddleware:
             path.startswith("/api/auth/data-exports")
             or path == "/api/auth/account"
             or path == "/api/auth/logout"
+            # Stopping a renewal (R-SUP-09): a suspension is not refunded, and
+            # it must not also hold a suspended player to the next charge.
+            or path.startswith("/api/support/cancel")
             # The drawings the suspension notice is about: the refusal below
             # names them, and this is the one path that can hand them over.
             # One per report the decision covered (#620), so the path names

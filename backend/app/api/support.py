@@ -13,7 +13,7 @@ from typing import Literal
 from urllib.parse import parse_qs
 from uuid import UUID
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ConfigDict, Field
 from sqlalchemy import func, select
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.api.friends import ACCOUNT_REQUIRED_HEADER
 from app.auth.rate_limit import RateLimiter
-from app.db.models import AuditEvent, SupportPurchase, User, generate_uuid
+from app.db.models import AuditEvent, User, generate_uuid
 from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
@@ -30,7 +30,9 @@ from app.request_text import ControlFreeModel
 from app.services.supporter import (
     apply_provider_event,
     renewing_subscriptions,
+    subscriptions_of_order,
     supporter_status,
+    unstopped_owners,
 )
 from app.support.cancellation import cancel_quietly, cancel_subscription
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
@@ -39,6 +41,7 @@ from app.support.providers import (
     SIGNATURE_HEADER,
     BadSignature,
     Provider,
+    ProviderEvent,
     ProviderUnavailable,
     StubProvider,
     provider_for,
@@ -78,6 +81,25 @@ class CheckoutBody(ControlFreeModel):
 class CancelRequestBody(ControlFreeModel):
     # A username or the e-mail the provider has: §312k asks for no login.
     identifier: str = Field(min_length=1, max_length=254)
+
+
+async def _subscriptions_to_stop(
+    session: AsyncSession, event: ProviderEvent, user_id: UUID | None
+) -> tuple[str, ...]:
+    """What this fact means must no longer charge (R-SUP-09)."""
+    if event.kind in (SupportPurchaseKind.REFUND, SupportPurchaseKind.CHARGEBACK):
+        # A refund does not stop a subscription by itself: left alone, next
+        # year's renewal would charge again and quietly reopen the pass.
+        return await subscriptions_of_order(session, event.order_id)
+    if event.kind != SupportPurchaseKind.PURCHASE:
+        return ()
+    if user_id is None:
+        # Paid after the account was deleted: nobody can use what this renews.
+        return (event.subscription_id,) if event.subscription_id else ()
+    if event.product == PRODUCT_LIFETIME:
+        # The lifetime pass replaces the year it was bought on top of.
+        return await renewing_subscriptions(session, [user_id])
+    return ()
 
 
 def create_support_router(
@@ -151,15 +173,15 @@ def create_support_router(
                     recorded, user_id = await apply_provider_event(
                         session, provider.name, event
                     )
-                    stale_years: tuple[str, ...] = ()
-                    if recorded and user_id and event.product == PRODUCT_LIFETIME:
-                        stale_years = await renewing_subscriptions(session, [user_id])
+                    to_stop: tuple[str, ...] = ()
+                    if recorded:
+                        to_stop = await _subscriptions_to_stop(session, event, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
             logger.exception("support_webhook_failed")
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
-        await cancel_quietly(session_factory, provider, stale_years)
+        await cancel_quietly(session_factory, provider, to_stop)
         return JSONResponse({"ok": True})
 
     @router.post("/webhooks/{provider_name}")
@@ -181,36 +203,20 @@ def create_support_router(
                     session_factory, provider, subscription_id, user_id=user.id
                 )
         except ProviderUnavailable as error:
-            raise Refusal(502, ErrorCode.SUPPORT_UNAVAILABLE) from error
+            raise Refusal(502, ErrorCode.SUPPORT_CANCEL_FAILED) from error
         async with session_factory() as session:
             status = await supporter_status(session, user.id)
         return status.payload()
 
-    @router.post("/cancel/request")
-    async def cancel_request(body: CancelRequestBody, request: Request) -> dict:
-        """Signed out (§312k). The answer is the same whether or not anything
-        matched, so the form cannot be used to find out who holds a pass."""
-        throttle(cancel_limiter, getattr(request.state, "client_ip_hash", None))
-        identifier = body.identifier.strip()
-        user_id: UUID | None = None
-        subscriptions: tuple[str, ...] = ()
+    async def carry_out_cancel_request(identifier: str) -> None:
+        """After the answer has gone: what it found must not show in how long it
+        took, or in whether the provider happened to be up (R-SUP-09). So a failure
+        cannot reach the person who asked, and is left for the operator."""
         try:
             if "@" in identifier:
                 named = await provider.subscriptions_of_email(identifier)
                 async with session_factory() as session:
-                    known = await session.execute(
-                        select(
-                            SupportPurchase.provider_subscription_id, SupportPurchase.user_id
-                        )
-                        .where(
-                            SupportPurchase.provider_subscription_id.in_(named),
-                            SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
-                        )
-                        .limit(len(named) or 1)
-                    )
-                    rows = known.all()
-                subscriptions = tuple(row[0] for row in rows)
-                user_id = next((row[1] for row in rows if row[1]), None)
+                    owners = await unstopped_owners(session, named)
             else:
                 async with session_factory() as session:
                     user_id = await session.scalar(
@@ -219,27 +225,40 @@ def create_support_router(
                             User.state == AccountState.REGISTERED.value,
                         )
                     )
-                    if user_id is not None:
-                        subscriptions = await renewing_subscriptions(session, [user_id])
-            for subscription_id in subscriptions:
-                await cancel_subscription(
-                    session_factory, provider, subscription_id, user_id=user_id
-                )
-        except ProviderUnavailable as error:
-            raise Refusal(502, ErrorCode.SUPPORT_UNAVAILABLE) from error
-        if subscriptions and user_id:
-            async with session_factory() as session:
-                async with session.begin():
-                    session.add(
-                        AuditEvent(
-                            id=generate_uuid(),
-                            event_type="support.cancel_requested",
-                            target_user_id=user_id,
-                            target_type=AuditTargetType.USER.value,
-                            target_id=str(user_id),
-                            details={"count": len(subscriptions)},
-                        )
+                    owners = (
+                        dict.fromkeys(await renewing_subscriptions(session, [user_id]), user_id)
+                        if user_id is not None
+                        else {}
                     )
+            for subscription_id, owner in owners.items():
+                await cancel_subscription(
+                    session_factory, provider, subscription_id, user_id=owner
+                )
+                if owner is None:
+                    continue
+                async with session_factory() as session:
+                    async with session.begin():
+                        session.add(
+                            AuditEvent(
+                                id=generate_uuid(),
+                                event_type="support.cancel_requested",
+                                target_user_id=owner,
+                                target_type=AuditTargetType.USER.value,
+                                target_id=str(owner),
+                                details={"subscription": subscription_id},
+                            )
+                        )
+        except Exception:
+            logger.error("support_cancel_request_failed", exc_info=True)
+
+    @router.post("/cancel/request")
+    async def cancel_request(
+        body: CancelRequestBody, request: Request, tasks: BackgroundTasks
+    ) -> dict:
+        """Signed out (§312k). The answer is the same whatever matched, so the
+        form cannot be used to find out who holds a pass."""
+        throttle(cancel_limiter, getattr(request.state, "client_ip_hash", None))
+        tasks.add_task(carry_out_cancel_request, body.identifier.strip())
         return {"ok": True}
 
     if isinstance(provider, StubProvider):

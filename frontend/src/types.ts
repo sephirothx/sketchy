@@ -785,6 +785,7 @@ export type ErrorCode =
   | "solo_conflict"
   | "support_already_active"
   | "support_unavailable"
+  | "support_cancel_failed"
   | "solo_pool_empty"
   | "solo_date_out_of_range"
   | "no_such_daily"

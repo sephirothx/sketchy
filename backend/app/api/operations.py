@@ -72,11 +72,25 @@ def _scrape_token() -> str:
 
 
 async def _support_lines(session_factory) -> list[str]:
-    """Nothing at all on a deployment that sells nothing (#1473)."""
+    """Nothing at all on a deployment that sells nothing (#1473).
+
+    The gauge costs a query, so it follows `_queue_depths_for_scrape`: omitted
+    if the database does not answer promptly, and the counters still reported.
+    """
     if support_config() is None:
         return []
-    async with session_factory() as session:
-        active = await active_supporters(session)
+
+    async def count() -> int:
+        async with session_factory() as session:
+            return await active_supporters(session)
+
+    active: int | None = None
+    try:
+        active = await asyncio.wait_for(count(), timeout=QUEUE_SCRAPE_TIMEOUT_SECONDS)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("active supporters left out of the scrape", exc_info=True)
     return [
         *gauge_lines(
             "sketchy_supporters_active", "Accounts holding a supporter pass right now.", active
@@ -302,8 +316,8 @@ QUEUE_SCRAPE_TIMEOUT_SECONDS = 2.0
 async def _queue_depths_for_scrape(queues: QueueDepths) -> QueueSnapshot | None:
     """The queue depths if the database answers promptly, else nothing.
 
-    Every other series in the scrape is process memory. This is the only one
-    that costs a query, and a scrape that returned 500 because the database
+    Almost every other series in the scrape is process memory. This costs a
+    query, and a scrape that returned 500 because the database
     was down would take the loop lag, the error rates and the pool gauges
     down with it - at exactly the moment they are being asked for. So the
     family is omitted, the way the pool gauges are omitted for a pool that

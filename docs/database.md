@@ -888,13 +888,19 @@ transaction; on a cancellation, the subscription) · `provider_subscription_id` 
 it; none on a lifetime pass) · `kind`
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
-is a lifetime pass; a refund or a chargeback has neither) · `amount_minor`
+is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
 (`ck_support_purchases_amount`, not negative) · `currency` · `created_at`.
 `uq_support_purchases_provider_event` makes a webhook delivered twice one fact.
 `ix_support_purchases_order`, `ix_support_purchases_user_id` and
 `ix_support_purchases_subscription` serve status. A `cancellation` leaves the periods alone:
 it is what lets the page say "ends" instead of "renews". Its event id is `cancel:<subscription>`,
 so our own click and each webhook about it are one fact.
+
+A comp, or a repair after a provider-side mistake, is an audited `stub` purchase:
+
+```bash
+cd backend && .venv/bin/python -m app.support.grant <username> --months 12 --admin <username> --reason "…"
+```
 
 **Status is a query, never a flag** ([`services/supporter.py`](../backend/app/services/supporter.py),
 R-SUP-01): a purchase row of this account whose period contains now, and whose order has no

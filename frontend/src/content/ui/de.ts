@@ -149,6 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   account_required: accountRequired,
   support_already_active: "Du hast schon einen Unterstützerpass.",
   support_unavailable: "Die Kasse ist gerade nicht erreichbar. Es wurde nichts abgebucht. Bitte versuch es noch einmal.",
+  support_cancel_failed: "Die Verlängerung konnte nicht gestoppt werden und läuft noch. Bitte versuch es noch einmal.",
   identity_unavailable: "Sketchy konnte nicht bestätigen, wer du bist. Lade neu und versuch es noch einmal.",
 
   // Rooms

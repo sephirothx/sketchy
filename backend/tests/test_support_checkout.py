@@ -30,6 +30,8 @@ from app.support.grant import SupportGrantError, grant_pass
 from app.support.providers import (
     BadSignature,
     PaddleProvider,
+    ProviderUnavailable,
+    StubProvider,
     parse_paddle_event,
     signature_header,
     verify_signature,
@@ -368,11 +370,133 @@ async def test_a_grant_is_a_stub_purchase_with_an_audit_row(site):
         await grant_pass(factory, username="marta", admin="boss", reason=" ", months=1)
 
 
+async def test_a_refund_names_its_buyer_not_whoever_has_a_lifetime_pass(site):
+    http, factory = site
+    buyer = await _register(http)
+    await _post(http, _paid("e1", "o1", buyer))
+    http.cookies.clear()
+    stranger = await _register(http, "Bruno")
+    lifetime = _event(
+        "e2",
+        "transaction.completed",
+        {
+            "id": "o2",
+            "currency_code": "EUR",
+            "billed_at": NOW.isoformat(),
+            "custom_data": {"account_id": str(stranger), "product": "lifetime"},
+            "details": {"totals": {"total": "6900"}},
+        },
+    )
+    await _post(http, lifetime)
+    refund = _event(
+        "e3",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
+    )
+    await _post(http, refund)
+    rows = {row.provider_event_id: row for row in await _rows(factory)}
+    assert rows["e3"].user_id == buyer
+
+
+async def test_a_refund_stops_the_subscription_so_nothing_charges_again(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    refund = _event(
+        "e2",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
+    )
+    await _post(http, refund)
+    kinds = [row.kind for row in await _rows(factory)]
+    assert kinds.count("cancellation") == 1
+
+
+async def test_paying_after_deleting_the_account_stops_what_would_renew(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    await anonymize_account(factory, user_id=user_id)
+    await _post(http, _paid("e2", "o2", user_id, subscription="sub_late"))
+    assert "cancel:sub_late" in {row.provider_event_id for row in await _rows(factory)}
+
+
+async def test_a_failing_provider_does_not_undo_a_recorded_webhook(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+
+    async def down(self, subscription_id):
+        raise ConnectionResetError("the provider hung up")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    refund = _event(
+        "e2",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
+    )
+    assert (await _post(http, refund)).status_code == 200
+    assert "e2" in {row.provider_event_id for row in await _rows(factory)}
+
+
+async def test_a_failed_cancel_says_the_renewal_is_still_on(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    response = await http.post("/api/support/cancel")
+    assert response.status_code == 502
+    assert response.json()["errorCode"] == "support_cancel_failed"
+    async with factory() as session:
+        assert (await supporter_status(session, user_id)).renews
+    # The signed-out form says nothing either way.
+    http.cookies.clear()
+    assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 200
+
+
+async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id, subscription="sub_a"))
+    await _post(http, _paid("e2", "o2", None, subscription="sub_a"))
+    await _post(http, _paid("e3", "o3", user_id, subscription="sub_b"))
+    calls: list[str] = []
+    real = StubProvider.cancel_at_period_end
+
+    async def counted(self, subscription_id):
+        calls.append(subscription_id)
+        return await real(self, subscription_id)
+
+    async def known(self, email):
+        return ("sub_a", "sub_b", "sub_of_another_product")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", counted)
+    monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
+    http.cookies.clear()
+    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    assert sorted(calls) == ["sub_a", "sub_b"]
+    # Sending it again cancels nothing, and so mails nobody.
+    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    assert sorted(calls) == ["sub_a", "sub_b"]
+
+
 def test_signature_checks_are_exact():
     body = b'{"a":1}'
     now = datetime.now(timezone.utc)
     verify_signature("s", body, signature_header("s", body, now), now)
-    for header in (None, "", "ts=1", "h1=abc", "ts=x;h1=abc", signature_header("t", body, now)):
+    for header in (
+        None,
+        "",
+        "ts=1",
+        "h1=abc",
+        "ts=x;h1=abc",
+        f"ts={int(now.timestamp())};h1=h\u00e9llo",
+        signature_header("t", body, now),
+    ):
         with pytest.raises(BadSignature):
             verify_signature("s", body, header, now)
     with pytest.raises(BadSignature):

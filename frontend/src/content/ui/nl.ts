@@ -149,6 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   account_required: accountRequired,
   support_already_active: "Je hebt al een supporterspas.",
   support_unavailable: "De betaalpagina is niet bereikbaar. Er is niets afgeschreven. Probeer het opnieuw.",
+  support_cancel_failed: "De verlenging kon niet worden gestopt en staat dus nog aan. Probeer het opnieuw.",
   identity_unavailable: "Sketchy kon niet bevestigen wie je bent. Herlaad en probeer het nog eens.",
 
   // Rooms

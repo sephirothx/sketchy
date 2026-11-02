@@ -14,7 +14,7 @@ from app.auth.mail import queue_email
 from app.db.models import User, UserSettings
 from app.domain_values import EmailTemplate
 from app.services.supporter import apply_provider_event
-from app.support.providers import Provider, ProviderUnavailable, cancellation_event
+from app.support.providers import Provider, cancellation_event
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +58,17 @@ async def cancel_quietly(
 ) -> None:
     """For a caller that must not fail on this: nobody is there to be told.
 
-    A deleted account, or a year a lifetime pass just replaced. A failure here is
-    a charge that should not happen, so it is logged at error level for the
-    operator to cancel by hand.
+    A deleted account, a refunded year, or a year a lifetime pass just replaced.
+    A failure here is a charge that should not happen, so it is logged at error
+    level for the operator to cancel by hand. Nothing escapes: the caller's own
+    work is already committed, and a provider's retry would find it a duplicate.
     """
     for subscription_id in subscription_ids:
         try:
             await cancel_subscription(
                 session_factory, provider, subscription_id, notify=False
             )
-        except ProviderUnavailable:
-            logger.error("support_subscription_not_cancelled %s", subscription_id)
+        except Exception:
+            logger.error(
+                "support_subscription_not_cancelled %s", subscription_id, exc_info=True
+            )

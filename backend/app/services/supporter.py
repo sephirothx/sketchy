@@ -128,6 +128,40 @@ def _stopped(subscription_id: ColumnElement) -> ColumnElement:
     )
 
 
+async def subscriptions_of_order(session: AsyncSession, order_id: str) -> tuple[str, ...]:
+    """What still renews this order: a refunded year must not charge again."""
+    rows = await session.scalars(
+        select(SupportPurchase.provider_subscription_id)
+        .where(
+            SupportPurchase.provider_order_id == order_id,
+            SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            SupportPurchase.provider_subscription_id.is_not(None),
+            ~_stopped(SupportPurchase.provider_subscription_id),
+        )
+        .distinct()
+    )
+    return tuple(rows.all())
+
+
+async def unstopped_owners(
+    session: AsyncSession, subscription_ids: Iterable[str]
+) -> dict[str, UUID | None]:
+    """Which of these subscriptions we sold and have not stopped, and for whom."""
+    rows = await session.execute(
+        select(SupportPurchase.provider_subscription_id, SupportPurchase.user_id)
+        .where(
+            SupportPurchase.provider_subscription_id.in_(list(subscription_ids)),
+            SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            ~_stopped(SupportPurchase.provider_subscription_id),
+        )
+        .distinct()
+    )
+    owners: dict[str, UUID | None] = {}
+    for subscription_id, user_id in rows.all():
+        owners[subscription_id] = owners.get(subscription_id) or user_id
+    return owners
+
+
 async def renewing_subscriptions(
     session: AsyncSession, user_ids: Iterable[UUID]
 ) -> tuple[str, ...]:
@@ -213,13 +247,14 @@ async def _attributed_account(session: AsyncSession, event: ProviderEvent) -> UU
         except ValueError:
             candidate = None
     if candidate is None:
-        related = or_(
-            SupportPurchase.provider_order_id == event.order_id,
-            SupportPurchase.provider_subscription_id == event.subscription_id,
-        )
+        # Only the identifiers this event has: comparing to None would be
+        # `IS NULL`, which every lifetime row matches, and name a stranger.
+        related = [SupportPurchase.provider_order_id == event.order_id]
+        if event.subscription_id:
+            related.append(SupportPurchase.provider_subscription_id == event.subscription_id)
         candidate = await session.scalar(
             select(SupportPurchase.user_id)
-            .where(related, SupportPurchase.user_id.is_not(None))
+            .where(or_(*related), SupportPurchase.user_id.is_not(None))
             .limit(1)
         )
     if candidate is None:

@@ -149,6 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   account_required: accountRequired,
   support_already_active: "Ya tienes un pase de apoyo.",
   support_unavailable: "No se pudo abrir el pago. No se ha cobrado nada. Inténtalo de nuevo.",
+  support_cancel_failed: "No se pudo detener la renovación, así que sigue activa. Inténtalo de nuevo.",
   identity_unavailable: "Sketchy no pudo confirmar quién eres. Recarga e inténtalo de nuevo.",
 
   // Rooms

@@ -149,6 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   account_required: accountRequired,
   support_already_active: "Masz już przepustkę wspierającego.",
   support_unavailable: "Nie udało się otworzyć płatności. Nic nie zostało pobrane. Spróbuj ponownie.",
+  support_cancel_failed: "Nie udało się zatrzymać odnowienia, więc nadal jest włączone. Spróbuj ponownie.",
   identity_unavailable: "Nie udało się potwierdzić, kim jesteś. Odśwież stronę i spróbuj ponownie.",
 
   // Rooms
