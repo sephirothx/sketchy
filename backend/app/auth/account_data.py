@@ -1508,6 +1508,14 @@ async def _write_export_artifact(
     # Including a reversal of an order of theirs that names nobody, because one
     # can land before its purchase: status counts it, so the export must show it.
     own_order = aliased(SupportPurchase)
+    # A refund row carries no gift column, but it is the same order's money.
+    gifted_orders = set(
+        await session.scalars(
+            select(SupportPurchase.provider_order_id).where(
+                SupportPurchase.user_id.in_(identity_ids), SupportPurchase.is_gift
+            )
+        )
+    )
     writer.key("support")
     await _write_rows(
         writer,
@@ -1531,10 +1539,10 @@ async def _write_export_artifact(
             "periodStart": _timestamp(fact.period_start),
             "periodEnd": _timestamp(fact.period_end),
             # What somebody else paid is theirs: a gift shows its period alone.
-            "amountMinor": None if fact.is_gift else fact.amount_minor,
-            "currency": None if fact.is_gift else fact.currency,
-            "orderId": None if fact.is_gift else fact.provider_order_id,
-            "gift": fact.is_gift,
+            "amountMinor": None if fact.provider_order_id in gifted_orders else fact.amount_minor,
+            "currency": None if fact.provider_order_id in gifted_orders else fact.currency,
+            "orderId": None if fact.provider_order_id in gifted_orders else fact.provider_order_id,
+            "gift": fact.provider_order_id in gifted_orders,
             # Who gave it, unless they asked not to be named (#1540).
             "giftedByUserId": (
                 None

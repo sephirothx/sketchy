@@ -37,6 +37,9 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("gift_anonymous", sa.Boolean(), server_default=sa.false(), nullable=False)
         )
+        batch.add_column(
+            sa.Column("is_gift", sa.Boolean(), server_default=sa.false(), nullable=False)
+        )
         batch.create_foreign_key(
             "fk_support_purchases_gifted_by_user_id",
             "users",
@@ -56,5 +59,6 @@ def downgrade() -> None:
     op.drop_index("ix_support_purchases_gifted_by_user_id", table_name="support_purchases")
     with op.batch_alter_table("support_purchases") as batch:
         batch.drop_constraint("fk_support_purchases_gifted_by_user_id", type_="foreignkey")
+        batch.drop_column("is_gift")
         batch.drop_column("gift_anonymous")
         batch.drop_column("gifted_by_user_id")

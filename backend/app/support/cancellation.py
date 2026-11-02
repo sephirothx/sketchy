@@ -5,6 +5,7 @@ can say "ends" instead of "renews", and owes a confirmation by mail (§312k).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
@@ -16,7 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.auth.mail import queue_email
 from app.db.models import EmailOutboxEntry, User, UserSettings
 from app.domain_values import EmailTemplate
-from app.services.supporter import apply_provider_event, renewals_nothing_pays_for
+from app.services.supporter import (
+    apply_provider_event,
+    renewals_nothing_pays_for,
+    supporter_status,
+)
 from app.services.sweeps import SweepBudget, SweepReport
 from app.support.config import support_config
 from app.support.providers import Provider, cancellation_event, provider_for
@@ -156,14 +161,34 @@ async def postpone_renewals(
     session_factory: async_sessionmaker[AsyncSession],
     provider: Provider,
     subscription_ids: tuple[str, ...],
-    until: datetime,
-) -> None:
+    user_id: UUID,
+    *,
+    lock: asyncio.Lock,
+) -> bool:
     """A gift's months are paid for, so a renewal waits for them to end. Where the
     provider will not move it, it stops: a pass that ends can be bought again, and a
-    charge for months already given cannot be taken back here."""
-    for subscription_id in subscription_ids:
+    charge for months already given cannot be taken back here. Whether each one was
+    dealt with; False asks for the webhook to be delivered again.
+
+    One at a time, and to the account's last end as read under the lock: two gifts
+    landing together would otherwise finish in either order, and the earlier date
+    could win. One worker, so a lock in the process is the whole of that.
+    """
+    async with lock:
         try:
-            await provider.move_renewal(subscription_id, until)
+            async with session_factory() as session:
+                until = (await supporter_status(session, user_id)).until
         except Exception:
-            logger.warning("support_renewal_not_moved %s", subscription_id, exc_info=True)
-            await cancel_quietly(session_factory, provider, (subscription_id,))
+            logger.error("support_renewal_not_moved %s", subscription_ids, exc_info=True)
+            return False
+        if until is None:
+            return True
+        dealt_with = True
+        for subscription_id in subscription_ids:
+            try:
+                await provider.move_renewal(subscription_id, until)
+            except Exception:
+                logger.warning("support_renewal_not_moved %s", subscription_id, exc_info=True)
+                if not await cancel_quietly(session_factory, provider, (subscription_id,)):
+                    dealt_with = False
+        return dealt_with

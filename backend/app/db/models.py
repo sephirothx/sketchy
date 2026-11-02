@@ -909,6 +909,11 @@ class SupportPurchase(Base):
     gift_anonymous: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    # Kept apart from who gave it: deleting the giver clears that, and what they paid
+    # must stay out of the recipient's export all the same.
+    is_gift: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     # What renews this purchase, if anything. A lifetime pass has none.
     provider_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # When deletion cleared `user_id`: how long a renewal nobody owns has been owed a
@@ -923,11 +928,6 @@ class SupportPurchase(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
-
-    @property
-    def is_gift(self) -> bool:
-        """Somebody else paid for this row."""
-        return self.gift_anonymous or self.gifted_by_user_id is not None
 
 
 class AuditEvent(Base):

@@ -1,6 +1,7 @@
 """Gift a pass (#1540): who may, when it starts, and who is told what."""
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -268,6 +269,83 @@ async def test_only_the_last_gift_says_the_renewal_waits_for_it(site):
     assert [gift["renews"] for gift in gifts] == [False, True]
 
 
+async def _year(http, recipient: UUID) -> None:
+    now = datetime.now(timezone.utc)
+    await _webhook(
+        http,
+        "e1",
+        {
+            "id": "o1",
+            "currency_code": "EUR",
+            "subscription_id": "sub_1",
+            "custom_data": {"account_id": str(recipient), "product": "year"},
+            "billing_period": {
+                "starts_at": (now - timedelta(days=1)).isoformat(),
+                "ends_at": (now + timedelta(days=100)).isoformat(),
+            },
+            "details": {"totals": {"total": "1900"}},
+        },
+    )
+
+
+async def test_two_gifts_together_leave_the_renewal_on_the_later_end(site, monkeypatch):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    await _year(http, recipient)
+    await _register(http, "Marta")
+    first_url = (await _gift(http, recipient)).json()["url"]
+    await _register(http, "Carla")
+    second_url = (await _gift(http, recipient)).json()["url"]
+    entered, release = asyncio.Event(), asyncio.Event()
+    landed: list[datetime] = []
+
+    async def slow_first(self, subscription_id, when):
+        if not entered.is_set():
+            entered.set()
+            await release.wait()
+        landed.append(when)
+
+    monkeypatch.setattr(StubProvider, "move_renewal", slow_first)
+    first = asyncio.create_task(_pay_stub(http, first_url))
+    await entered.wait()
+    second = asyncio.create_task(_pay_stub(http, second_url))
+    await asyncio.sleep(0.05)
+    release.set()
+    await asyncio.gather(first, second)
+    async with factory() as session:
+        status = await supporter_status(session, recipient)
+    assert landed[-1] == status.until
+
+
+async def test_a_renewal_neither_moved_nor_stopped_comes_back_on_the_retry(site, monkeypatch):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    await _year(http, recipient)
+    gift = {
+        "id": "o2",
+        "currency_code": "EUR",
+        "billed_at": datetime.now(timezone.utc).isoformat(),
+        "custom_data": {"account_id": str(recipient), "product": "gift"},
+        "details": {"totals": {"total": "1900"}},
+    }
+    moved: list[str] = []
+
+    async def down(self, subscription_id, when=None):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "move_renewal", down)
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    assert (await _webhook(http, "e2", gift)).status_code == 500
+    monkeypatch.undo()
+
+    async def move(self, subscription_id, when):
+        moved.append(subscription_id)
+
+    monkeypatch.setattr(StubProvider, "move_renewal", move)
+    assert (await _webhook(http, "e2", gift)).status_code == 200
+    assert moved == ["sub_1"]
+
+
 async def test_a_gift_with_no_renewal_moves_nothing(site, monkeypatch):
     http, factory = site
     recipient = await _register(http, "Bruno")
@@ -363,3 +441,5 @@ async def test_deleting_the_giver_keeps_the_gift_and_forgets_who(site):
         assert (await supporter_status(session, recipient)).active
     # And the recipient's notice no longer names them.
     assert (await _inbox(factory, recipient))[0].subject_id is None
+    # Their name goes; that somebody else paid does not.
+    assert row.is_gift

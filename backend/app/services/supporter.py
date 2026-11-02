@@ -382,6 +382,7 @@ async def record_support_fact(
     provider_subscription_id: str | None = None,
     gifted_by_user_id: UUID | None = None,
     gift_anonymous: bool = False,
+    is_gift: bool = False,
 ) -> bool:
     """Record one provider event; False if it was already recorded.
 
@@ -408,6 +409,7 @@ async def record_support_fact(
             provider_subscription_id=provider_subscription_id,
             gifted_by_user_id=gifted_by_user_id,
             gift_anonymous=gift_anonymous,
+            is_gift=is_gift,
         )
         .on_conflict_do_nothing(index_elements=["provider", "provider_event_id"])
     )
@@ -500,6 +502,7 @@ async def apply_provider_event(
         period_end=event.period_end,
         gifted_by_user_id=await _gift_giver(session, event),
         gift_anonymous=event.gift_anonymous,
+        is_gift=event.product == PRODUCT_GIFT and event.kind == SupportPurchaseKind.PURCHASE,
     )
     return recorded, user_id
 

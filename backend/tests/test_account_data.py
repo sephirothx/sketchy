@@ -346,6 +346,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                 SupportPurchase(
                     user_id=other_row.id,
                     gifted_by_user_id=owner_row.id,
+                    is_gift=True,
                     provider="stub",
                     provider_event_id="gift-from-the-owner",
                     provider_order_id="gift-from-the-owner",
@@ -1105,6 +1106,50 @@ async def test_deletion_erases_drawings_made_under_a_merged_identity(env):
 # suite drove these through the HTTP surface, which never asks for an account
 # that is not there - so the guards that make these functions safe to call with
 # an unverified id had never been taken.
+
+
+async def test_what_a_giver_paid_stays_out_of_the_export_after_deletion_and_refund(env):
+    """Clearing the giver on their deletion must not turn the row into the recipient's
+    own purchase, and a refund row has no gift column of its own (#1540)."""
+    http, _, _, factory = env
+    registered = await register(http, "Recipient")
+    period = {
+        "period_start": datetime(2026, 11, 1, tzinfo=timezone.utc),
+        "period_end": datetime(2027, 11, 1, tzinfo=timezone.utc),
+    }
+    async with factory() as session:
+        async with session.begin():
+            for order in ("named-then-deleted", "anonymous-then-refunded"):
+                session.add(
+                    SupportPurchase(
+                        user_id=UUID(registered["id"]),
+                        is_gift=True,
+                        gift_anonymous=order.startswith("anonymous"),
+                        provider="stub",
+                        provider_event_id=order,
+                        provider_order_id=order,
+                        kind="purchase",
+                        amount_minor=1900,
+                        currency="EUR",
+                        **period,
+                    )
+                )
+            session.add(
+                SupportPurchase(
+                    user_id=UUID(registered["id"]),
+                    provider="stub",
+                    provider_event_id="refund-of-it",
+                    provider_order_id="anonymous-then-refunded",
+                    kind="refund",
+                    amount_minor=1900,
+                    currency="EUR",
+                )
+            )
+    _, artifact = await request_ready_export(http)
+    assert len(artifact["support"]) == 3
+    for fact in artifact["support"]:
+        assert fact["gift"] is True
+        assert (fact["amountMinor"], fact["currency"], fact["orderId"]) == (None, None, None)
 
 
 async def test_a_second_export_within_a_week_is_refused_with_the_date(env):

@@ -888,7 +888,7 @@ What a provider told us about a supporter pass, one row per event (#1472). `id` 
 transaction; on a cancellation, the subscription) · `provider_subscription_id` (what renews
 it; none on a lifetime pass or a gift) · `gifted_by_user_id` (→ `users`, `SET NULL`: who paid,
 when `user_id` was given it, so status, the mark and the refund rule need no change) ·
-`gift_anonymous` · `owner_deleted_at` (when deletion cleared `user_id`, the only way to tell how long a renewal nobody owns has been owed a stop) · `kind`
+`gift_anonymous` · `is_gift` (somebody else paid; kept apart from `gifted_by_user_id`, which deletion clears, because what they paid stays out of the recipient's export either way, as does a refund of that order) · `owner_deleted_at` (when deletion cleared `user_id`, the only way to tell how long a renewal nobody owns has been owed a stop) · `kind`
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
