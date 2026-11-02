@@ -2,8 +2,9 @@
 
 Today's Daily and the 5 and 10 runs are every registered player's. Endless and the
 Daily archive come with the supporter pass. Every door asks this when a run is
-created or a Daily opened, never in the middle of one, so a pass that ends never
-cuts a run short. With no provider there is no pass to ask for, and all are open.
+created or a Daily opened, and a past Daily's also when its first drawing is answered,
+since opening one creates its serves. Never in the middle of one, so a pass that ends
+never cuts a run short. With no provider there is no pass to ask for, and all are open.
 """
 from __future__ import annotations
 

@@ -222,6 +222,17 @@ function SoloSession() {
     try {
       answer = await settleServe(serve.serveId, outcome, seconds);
     } catch (failure) {
+      // A past Daily opened with a pass that has since ended, and nothing answered:
+      // beginning it now is the archive door's, and sending it again will not change
+      // that (R-SUP-18). Back to the page, which shows the door as it now stands.
+      if (failure instanceof ApiError && failure.errorCode === "supporter_only") {
+        forgetServeStart(serve.serveId);
+        setRun(null);
+        setCard(null);
+        setError(refusalText(failure, words().couldNotLoad));
+        void loadSummary();
+        return;
+      }
       // A report that reached the server and lost its answer is refused the
       // second time (R-SOLO-06), and so is one for a run ended in another
       // tab: the server's run says which it was.
