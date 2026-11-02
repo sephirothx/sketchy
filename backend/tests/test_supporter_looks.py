@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from app.api.errors import install_refusal_handler
 from app.api.support import create_support_router
 from app.auth.avatar_doodles import DOODLES, SUPPORTER_DOODLES, doodle_key, doodle_name, random_doodle_key
+from app.auth.account_data import anonymize_account
 from app.auth.avatars import SupporterOnly
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -184,3 +185,24 @@ async def test_a_refund_of_one_order_keeps_them_while_another_stands(site):
     await _refund(http)
     async with factory() as session:
         assert (await session.get(User, user_id)).name_style == "ocean"
+
+
+async def test_a_lapsed_order_does_not_keep_the_choices_a_chargeback_takes(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _buy(http, user_id, event="old", order="old", end=NOW - timedelta(days=30))
+    await _buy(http, user_id)
+    await _style(http, "ocean")
+    await _refund(http)
+    async with factory() as session:
+        assert (await session.get(User, user_id)).name_style is None
+
+
+async def test_deleting_an_account_erases_its_style(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _buy(http, user_id)
+    await _style(http, "ocean")
+    await anonymize_account(factory, user_id=user_id)
+    async with factory() as session:
+        assert (await session.get(User, user_id)).name_style is None

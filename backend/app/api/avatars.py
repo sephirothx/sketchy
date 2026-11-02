@@ -29,7 +29,7 @@ from app.auth.avatars import (
     SupporterOnly,
     avatar_url,
 )
-from app.auth.avatar_doodles import DOODLES, doodle_key
+from app.auth.avatar_doodles import ALL_DOODLES, doodle_key
 from app.auth.rate_limit import PersistentRateLimiter
 from app.repositories.interfaces import UserRepository
 from app.services.avatars import (
@@ -160,7 +160,7 @@ def create_avatar_router(
         # the account sits in (#1241). The one already worn changes nothing,
         # so it costs nothing - no row, no broadcast, nothing spent.
         user = await require_registered(request)
-        if body.name in DOODLES and user.avatar_key == doodle_key(body.name):
+        if body.name in ALL_DOODLES and user.avatar_key == doodle_key(body.name):
             return {"avatarKey": user.avatar_key, "avatarUrl": avatar_url(user.avatar_key)}
         await spend_change(user)
         request_id, ip_hash = await audit_coordinates(request, session_factory)

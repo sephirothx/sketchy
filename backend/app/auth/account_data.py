@@ -1085,6 +1085,7 @@ async def _write_export_artifact(
             "emailVerifiedAt": _timestamp(account.email_verified_at),
             "displayName": account.display_name,
             "nameColor": account.name_color,
+            "nameStyle": account.name_style,
             "avatarKey": account.avatar_key,
             # The picture itself: the player's own upload, so it is theirs to
             # take with them (R-PRIV-01), as bytes rather than a URL that dies
@@ -2242,6 +2243,7 @@ async def anonymize_account(
                 identity.email_verified_at = None
                 identity.display_name = DELETED_DISPLAY_NAME
                 identity.name_color = None
+                identity.name_style = None
                 identity.avatar_key = None
                 identity.avatar_upload_blocked_until = None
                 identity.role = UserRole.USER.value

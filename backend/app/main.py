@@ -1183,16 +1183,17 @@ async def refresh_supporter_mark_on_live_surfaces(user_id: str) -> None:
     account, _ = await user_repo.get_seat_account(user_id)
     if account is None:
         return
-    shown, style = account.supporter_mark, account.name_style
+    look = (account.supporter_mark, account.name_style, account.avatar_key)
     for room in list(room_manager.rooms.values()):
         changed = False
         for player in room.players.values():
-            if player.user_id == user_id and (player.supporter_mark, player.name_style) != (
-                shown,
-                style,
-            ):
-                player.supporter_mark = shown
-                player.name_style = style
+            if player.user_id == user_id and not player.is_anonymous and (
+                player.supporter_mark,
+                player.name_style,
+                player.avatar_key,
+            ) != look:
+                # The picture too: a refund can take a supporter doodle back.
+                player.supporter_mark, player.name_style, player.avatar_key = look
                 changed = True
         if changed:
             await handler_context.game_flow._emit_room_state(room)

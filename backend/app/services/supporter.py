@@ -359,11 +359,15 @@ async def revert_supporter_choices(session: AsyncSession, user_id: UUID) -> None
     Only with no other purchase left standing: a lapse keeps them, and so does a
     refund of one order while another still pays.
     """
+    now = datetime.now(timezone.utc)
     still_paid = await session.scalar(
         select(SupportPurchase.id)
         .where(
             SupportPurchase.user_id == user_id,
             SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            # Time that has run out pays for nothing: a lapsed year must not let a
+            # later purchase's chargeback keep what it chose.
+            or_(SupportPurchase.period_end.is_(None), SupportPurchase.period_end > now),
             _not_reversed(),
         )
         .limit(1)

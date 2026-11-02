@@ -2399,6 +2399,7 @@
    "lastSeenAt",
    "mergedAt",
    "nameColor",
+   "nameStyle",
    "orderId",
    "penPressure",
    "periodEnd",

@@ -31,6 +31,9 @@
    colour, which stays underneath as the fallback. Per theme, because one pair
    cannot read on both; colour-safe mode paints none of it. */
 .name-style {
+  /* As wide as the name, or a short one shows only the gradient's first colour. */
+  width: fit-content;
+  max-width: 100%;
   background-image: linear-gradient(90deg, var(--name-style-from), var(--name-style-to));
   -webkit-background-clip: text;
   background-clip: text;
@@ -38,6 +41,9 @@
 }
 
 :root[data-color-safe] .name-style {
+  /* As wide as the name, or a short one shows only the gradient's first colour. */
+  width: fit-content;
+  max-width: 100%;
   background-image: none;
   -webkit-text-fill-color: currentcolor;
 }

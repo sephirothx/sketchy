@@ -124,3 +124,11 @@
   color: var(--muted);
   white-space: nowrap;
 }
+
+.friends-row-name.name-style {
+  flex: 0 1 auto;
+}
+
+.friends-row-name.name-style ~ .friends-row-actions {
+  margin-left: auto;
+}

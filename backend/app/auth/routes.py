@@ -410,6 +410,12 @@ def create_auth_router(
         limit=_limit("AUTH_REGISTER_LIMIT", 10),
         window_seconds=3600,
     )
+    name_style_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="name_style",
+        limit=_limit("NAME_STYLE_LIMIT", 30),
+        window_seconds=3600,
+    )
     lookup_limiter = PersistentRateLimiter(
         session_factory,
         scope="account_lookup",
@@ -1013,7 +1019,9 @@ def create_auth_router(
         offers only what may be chosen, so this is a stale tab or a made-up
         request (R-SUP-17).
         """
-        await throttle(lookup_limiter, request)
+        # Each change is a whole `room_state` to everybody seated with them, so it
+        # has the bound a doodle has, not a lookup's (R-AVA-09).
+        await throttle(name_style_limiter, request)
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
