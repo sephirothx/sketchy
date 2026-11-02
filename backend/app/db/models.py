@@ -32,6 +32,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    SUPPORT_PROVIDERS,
+    SUPPORT_PURCHASE_KINDS,
     BugReportScreenshotStatus,
     GAME_OUTCOMES,
     GAME_VISIBILITIES,
@@ -647,6 +649,11 @@ class UserSettings(Base):
     solo_opt_out: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    # Whether a supporter's mark shows beside their name (#1472). On by default;
+    # "hide my mark" is its negation, and it says nothing about a non-supporter.
+    show_supporter_mark: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     # Which language this player reads the interface in (R-I18N-06). Distinct
     # from `prompt_language`: a Dutch speaker playing an English room is
     # ordinary, and the two registries are allowed to diverge. Stored per
@@ -839,6 +846,60 @@ class EmailOutboxEntry(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class SupportPurchase(Base):
+    """What a provider told us about a supporter pass, one row per event (#1472).
+
+    Append-only by grant (`db/roles.py`), with one exception: deletion nulls
+    `user_id`, because the account row is tombstoned rather than removed, so
+    `ON DELETE SET NULL` never fires. The rest of the row stays - the provider
+    keeps the invoice, and a later refund for a deleted account still finds its
+    order. No raw payload: a provider's carries the buyer's email.
+    """
+
+    __tablename__ = "support_purchases"
+    __table_args__ = (
+        _values_check("provider", SUPPORT_PROVIDERS, "ck_support_purchases_provider"),
+        _values_check("kind", SUPPORT_PURCHASE_KINDS, "ck_support_purchases_kind"),
+        # A purchase has a start, and an end unless it is for life; a refund or
+        # a chargeback names an order and has no period of its own.
+        CheckConstraint(
+            "(kind = 'purchase' AND period_start IS NOT NULL "
+            "AND (period_end IS NULL OR period_end > period_start)) OR "
+            "(kind <> 'purchase' AND period_start IS NULL AND period_end IS NULL)",
+            name="ck_support_purchases_period",
+        ),
+        CheckConstraint("amount_minor >= 0", name="ck_support_purchases_amount"),
+        # A webhook delivered twice is one fact.
+        UniqueConstraint(
+            "provider", "provider_event_id", name="uq_support_purchases_provider_event"
+        ),
+        # Status asks of each purchase whether its order was reversed.
+        Index("ix_support_purchases_order", "provider", "provider_order_id"),
+        Index("ix_support_purchases_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    provider_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    period_start: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # Null on a purchase: a lifetime pass.
+    period_end: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
 
 
 class AuditEvent(Base):

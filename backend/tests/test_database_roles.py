@@ -51,6 +51,8 @@ async def test_the_application_role_cannot_truncate_alter_or_rewrite_the_ledgers
             "DELETE FROM audit_events",
             "UPDATE score_events SET points_delta = points_delta",
             "DELETE FROM score_events",
+            "UPDATE support_purchases SET amount_minor = amount_minor",
+            "DELETE FROM support_purchases",
             "ALTER TABLE score_events DISABLE TRIGGER USER",
             "DELETE FROM alembic_version",
         )
@@ -64,6 +66,8 @@ async def test_the_application_role_cannot_truncate_alter_or_rewrite_the_ledgers
                 text("INSERT INTO audit_events (id, event_type, details) VALUES (gen_random_uuid(), 'probe', '{}')")
             )
             assert await connection.scalar(text("SELECT count(*) FROM audit_events")) >= 1
+            # Deleting an account clears who bought a pass, and only that.
+            await connection.execute(text("UPDATE support_purchases SET user_id = NULL"))
         await verify_least_privilege(engine)
     finally:
         await engine.dispose()

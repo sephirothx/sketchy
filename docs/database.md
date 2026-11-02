@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c8d9e0f1a2b5_pins_become_favorites.py` (#1501). Both this line and the table
+`d9e0f1a2b3c6_support_purchases.py` (#1472). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-73 tables in nine domains.
+74 tables in nine domains.
 
 ```mermaid
 erDiagram
@@ -107,6 +107,7 @@ erDiagram
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
     users ||--o{ inbox_entries : "told"
+    users ||--o{ support_purchases : "paid for"
     users ||--o{ turn_drawing_shares : "shares"
 
     game_records ||--o{ game_participants : "seats"
@@ -154,7 +155,7 @@ erDiagram
 | Domain | Tables |
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
-| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges`, `inbox_entries` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges`, `inbox_entries`, `support_purchases` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_drawing_shares`, `gallery_shelf_reviews`, `profile_favorites`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
@@ -603,6 +604,8 @@ plays in, in their order — never the default, never twice, at most seven; #120
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · `solo_opt_out` (false by default: the drawer said no to
 Solo serving any of their drawings, #1434; `soloOptOut` on the settings routes, R-SOLO-16) ·
+`show_supporter_mark` (true by default: a supporter's mark shows beside their name;
+`showSupporterMark` on the settings routes, R-SUP-05) ·
 timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
@@ -804,7 +807,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v18_fields.json`](../fixtures/account_data_export_v18_fields.json).
+pinned by [`fixtures/account_data_export_v19_fields.json`](../fixtures/account_data_export_v19_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -876,6 +879,29 @@ transaction (R-AVA-05). The export carries the bytes.
 ### `external_identities`
 **Reserved, unused in v1.** Schema for a future authenticated identity provider. No
 provider-login API is enabled until identity-linking flows ship.
+
+### `support_purchases`
+What a provider told us about a supporter pass, one row per event (#1472). `id` (UUIDv7) ·
+`user_id` (→ `users`, `SET NULL`, nullable) · `provider` (`paddle \| stub`,
+`ck_support_purchases_provider`) · `provider_event_id` · `provider_order_id` · `kind`
+(`purchase \| refund \| chargeback`, `ck_support_purchases_kind`) · `period_start`,
+`period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
+is a lifetime pass; a refund or a chargeback has neither) · `amount_minor`
+(`ck_support_purchases_amount`, not negative) · `currency` · `created_at`.
+`uq_support_purchases_provider_event` makes a webhook delivered twice one fact.
+`ix_support_purchases_order` and `ix_support_purchases_user_id` serve status.
+
+**Status is a query, never a flag** ([`services/supporter.py`](../backend/app/services/supporter.py),
+R-SUP-01): a purchase row of this account whose period contains now, and whose order has no
+refund or chargeback under any account. Order of arrival does not matter, so a refund that
+landed first still wins, and a renewal is one more row with its own period. `/api/auth/me`
+reads it as subqueries on its settings statement, so it adds none (R-PLAT-17).
+
+Append-only by grant (`APPEND_ONLY_TABLES` in [`db/roles.py`](../backend/app/db/roles.py)),
+with one column-level exception: `UPDATE (user_id)`, because deletion tombstones the
+`users` row and so `ON DELETE SET NULL` never fires. There is no raw payload column; a
+provider's payload carries the buyer's email. The erasure barrier does not apply, since
+nothing here writes a name, text or pixels.
 
 ### `inbox_entries`
 `id` · `user_id` (→ `users`, **CASCADE**, NOT NULL) · `kind` · `subject_id` (nullable, no
@@ -2986,6 +3012,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Data | Retention | Deletion SLA | Exempt | Mechanism | Sweep |
 | --- | --- | --- | --- | --- | --- |
 | Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block | — |
+| Supporter pass facts (`support_purchases`) | Indefinite: the provider keeps the invoice, and a later refund has to find its order | — | — | Never removed; `user_id` is nulled when the account is deleted | — |
 | Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |
 | Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) | `auth_tokens` |
@@ -3144,6 +3171,8 @@ Deletion:
   names is read when it is shown (`inbox_entries` in §4, `user_warnings` in §5);
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
+
+A supporter pass's facts stay with `user_id` null (`support_purchases` in §4).
 
 The stable anonymized row, scores, prompts, and shared game structure **remain**, so
 another player's history is never damaged. Prompt usage facts carry no user identifier

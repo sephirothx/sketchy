@@ -17,6 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.db.models import User, UserSettings
+from app.services.supporter import (
+    SupporterStatus,
+    supporter_status,
+    supporter_status_columns,
+)
 from app.domain_values import (
     AccountState,
     DEFAULT_BRUSH_SIZE,
@@ -193,6 +198,9 @@ class UserSettingsPatch(ControlFreeModel):
     # Whether Solo may serve this player's public drawings to strangers
     # (#1434): an account's choice, never seeded from a browser.
     solo_opt_out: bool | None = Field(default=None, alias="soloOptOut")
+    # Whether a supporter's mark shows beside their name (#1472). Also the
+    # account's choice alone.
+    show_supporter_mark: bool | None = Field(default=None, alias="showSupporterMark")
 
     @field_validator("key_bindings")
     @classmethod
@@ -227,6 +235,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "extraPromptLanguages": list(settings.extra_prompt_languages),
         "locale": settings.locale,
         "soloOptOut": settings.solo_opt_out,
+        "showSupporterMark": settings.show_supporter_mark,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }
@@ -269,27 +278,39 @@ async def get_or_create_user_settings(
 
 async def settings_of_registered_account(
     session_factory: async_sessionmaker[AsyncSession], *, user_id: str
-) -> dict:
-    """The settings of an account the caller has already read as registered.
+) -> tuple[dict, dict]:
+    """The settings and supporter status of an account already read as registered.
 
-    `GET /api/auth/me` carries them (#983), and has just read the account row,
-    so this skips `_registered_user`'s second read of it: one statement in the
-    steady state, where `get_or_create_user_settings` sends two (R-PLAT-17).
-    An account registered before settings were seeded gets its row here, as it
-    would there.
+    `GET /api/auth/me` carries them (#983, #1472), and has just read the account
+    row, so this skips `_registered_user`'s second read of it: one statement in
+    the steady state, where `get_or_create_user_settings` sends two (R-PLAT-17).
+    Status rides that statement as subqueries, so being a supporter costs no
+    round trip. An account registered before settings were seeded gets its row
+    here, as it would there, and only that once asks for its status separately.
     """
     db_user_id = UUID(user_id)
+    now = datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
-            settings = await session.get(UserSettings, db_user_id)
-            if settings is None:
+            row = (
+                await session.execute(
+                    select(UserSettings, *supporter_status_columns(db_user_id, now)).where(
+                        UserSettings.user_id == db_user_id
+                    )
+                )
+            ).first()
+            if row is None:
                 settings = UserSettings(
                     user_id=db_user_id,
                     **_settings_values(UserSettingsSeed()),
                 )
                 session.add(settings)
                 await session.flush()
-        return user_settings_payload(settings)
+                status = await supporter_status(session, db_user_id, now=now)
+            else:
+                settings = row[0]
+                status = SupporterStatus.from_columns(*row[1:])
+        return user_settings_payload(settings), status.payload()
 
 
 def _settings_insert(session: AsyncSession):

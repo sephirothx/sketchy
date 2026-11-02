@@ -2067,6 +2067,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/repositories/solo.py`](../backend/app/repositories/solo.py) | Solo's reads and writes (#1434): what a player may be served, and their runs. |
 | [`app/services/solo_pool.py`](../backend/app/services/solo_pool.py) | Solo's pool (#1434): which recorded drawings it may serve, written and rebuilt. |
 | [`app/api/solo.py`](../backend/app/api/solo.py) | Solo's REST surface (#1434): runs, the drawings they serve, and what each came to. |
+| [`app/services/supporter.py`](../backend/app/services/supporter.py) | Supporter status, derived from the purchase ledger and never stored (#1472). |
 | [`app/services/solo_access.py`](../backend/app/services/solo_access.py) | Who may open which of Solo's doors (#1434): the one gate, in one place. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |

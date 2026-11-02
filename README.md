@@ -1902,6 +1902,7 @@ backend/
       gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
       solo_access.py Who may open which of Solo's doors: the one gate the supporter pass narrows
+      supporter.py Supporter status, derived from the purchase ledger and never stored
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread

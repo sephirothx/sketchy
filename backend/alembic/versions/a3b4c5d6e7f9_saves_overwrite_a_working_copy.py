@@ -82,7 +82,7 @@ def upgrade() -> None:
     op.execute(
         "UPDATE prompts SET position = COALESCE(("
         "SELECT i.position FROM prompt_list_revision_items i "
-        f"JOIN prompt_list_revisions r ON r.id = i.revision_id "
+        "JOIN prompt_list_revisions r ON r.id = i.revision_id "
         "JOIN prompt_lists l ON l.id = r.prompt_list_id AND l.version = r.version "
         "WHERE r.prompt_list_id = prompts.prompt_list_id "
         "AND i.prompt_version_id = prompts.prompt_version_id), 0)"
