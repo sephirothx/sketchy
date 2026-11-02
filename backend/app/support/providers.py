@@ -395,8 +395,16 @@ class PaddleProvider:
         return False
 
     async def move_renewal(self, subscription_id: str, when: datetime) -> None:
-        # Refused for a subscription past due or within 30 minutes of renewing.
+        # Refused for a subscription past due or within 30 minutes of renewing. Read
+        # first: a redelivered webhook must not risk that on what has already moved.
         quoted = urllib.parse.quote(subscription_id, safe="")
+        current = await self._call("GET", f"/subscriptions/{quoted}")
+        try:
+            billed = datetime.fromisoformat(str((current.get("data") or {}).get("next_billed_at")))
+        except ValueError:
+            billed = None
+        if billed is not None and billed >= when.replace(microsecond=0):
+            return
         await self._call(
             "PATCH",
             f"/subscriptions/{quoted}",

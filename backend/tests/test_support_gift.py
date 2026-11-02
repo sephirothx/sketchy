@@ -25,7 +25,12 @@ from app.db.models import InboxEntry, SupportPurchase, UserBlock
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.supporter import pass_facts, supporter_status, tell_ending_supporters
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
-from app.support.providers import ProviderUnavailable, StubProvider, signature_header
+from app.support.providers import (
+    ProviderRefused,
+    ProviderUnavailable,
+    StubProvider,
+    signature_header,
+)
 
 from tests.dbfixtures import create_test_db
 
@@ -227,7 +232,7 @@ async def test_a_renewal_paddle_will_not_move_stops_instead(site, monkeypatch):
     )
 
     async def refused(self, subscription_id, when):
-        raise ProviderUnavailable("HTTPError")
+        raise ProviderRefused("400")
 
     monkeypatch.setattr(StubProvider, "move_renewal", refused)
     await _register(http, "Marta")
@@ -334,8 +339,11 @@ async def test_a_renewal_neither_moved_nor_stopped_comes_back_on_the_retry(site,
         raise ProviderUnavailable("down")
 
     monkeypatch.setattr(StubProvider, "move_renewal", down)
-    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
     assert (await _webhook(http, "e2", gift)).status_code == 500
+    # A timeout is not a no: it may have worked, and the renewal is healthy.
+    async with factory() as session:
+        assert (await supporter_status(session, recipient)).renews
+    assert "cancel:sub_1" not in await _event_ids(factory)
     monkeypatch.undo()
 
     async def move(self, subscription_id, when):

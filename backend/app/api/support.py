@@ -128,8 +128,11 @@ async def _subscriptions_to_stop(
         status = await supporter_status(session, user_id)
         if status.active and status.until is None:
             return (event.subscription_id,)
-    if event.product == PRODUCT_LIFETIME:
-        # The lifetime pass replaces the year it was bought on top of.
+    if event.product == PRODUCT_LIFETIME and not await order_was_reversed(
+        session, event.order_id
+    ):
+        # The lifetime pass replaces the year it was bought on top of. A refunded one
+        # replaces nothing: a retry may find a new year bought since.
         return await renewing_subscriptions(session, [user_id])
     return ()
 

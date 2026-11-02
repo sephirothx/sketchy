@@ -24,7 +24,7 @@ from app.services.supporter import (
 )
 from app.services.sweeps import SweepBudget, SweepReport
 from app.support.config import support_config
-from app.support.providers import Provider, cancellation_event, provider_for
+from app.support.providers import Provider, ProviderRefused, cancellation_event, provider_for
 
 logger = logging.getLogger(__name__)
 
@@ -187,8 +187,13 @@ async def postpone_renewals(
         for subscription_id in subscription_ids:
             try:
                 await provider.move_renewal(subscription_id, until)
-            except Exception:
+            except ProviderRefused:
                 logger.warning("support_renewal_not_moved %s", subscription_id, exc_info=True)
                 if not await cancel_quietly(session_factory, provider, (subscription_id,)):
                     dealt_with = False
+            except Exception:
+                # Not a no: it may even have worked. Stopping a healthy renewal for a
+                # timeout could not be undone, and the retry costs nothing.
+                logger.warning("support_renewal_not_moved %s", subscription_id, exc_info=True)
+                dealt_with = False
         return dealt_with
