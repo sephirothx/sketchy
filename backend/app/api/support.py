@@ -232,8 +232,21 @@ def create_support_router(
         lifetime = status.active and status.until is None
         # A year on top of a renewing year is a second charge for nothing.
         # Moving up to a lifetime pass is fine: the webhook stops the year.
-        if lifetime or (status.renews and body.product != PRODUCT_LIFETIME):
+        if lifetime or (status.active and status.renews and body.product != PRODUCT_LIFETIME):
             raise Refusal(409, ErrorCode.SUPPORT_ALREADY_ACTIVE)
+        if status.renews and not status.active:
+            # A year that ran out unpaid can still be collected: stopped first, or
+            # this would be a second charge for the same months. And a player with no
+            # pass must never be told they already hold one.
+            async with session_factory() as session:
+                lapsed = await renewing_subscriptions(session, [user.id])
+            try:
+                for subscription_id in lapsed:
+                    await cancel_subscription(
+                        session_factory, provider, subscription_id, user_id=user.id, notify=False
+                    )
+            except ProviderUnavailable as error:
+                raise Refusal(502, ErrorCode.SUPPORT_CANCEL_FAILED) from error
         try:
             url = await provider.create_checkout(
                 product=body.product,

@@ -718,6 +718,46 @@ async def test_a_period_past_and_unstopped_can_still_be_cancelled(site):
         assert not (await supporter_status(session, user_id, now=later)).renews
 
 
+async def _lapsed_year(http, user_id: UUID) -> None:
+    now = datetime.now(timezone.utc)
+    await _post(
+        http,
+        _event(
+            "e1",
+            "transaction.completed",
+            {
+                "id": "o1",
+                "subscription_id": "sub_1",
+                "currency_code": "EUR",
+                "custom_data": {"account_id": str(user_id), "product": "year"},
+                "billing_period": {
+                    "starts_at": (now - timedelta(days=400)).isoformat(),
+                    "ends_at": (now - timedelta(days=35)).isoformat(),
+                },
+                "details": {"totals": {"total": "1900"}},
+            },
+        ),
+    )
+
+
+async def test_a_lapsed_year_can_buy_again_once_the_old_one_is_stopped(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _lapsed_year(http, user_id)
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    # Never two charges for the same months: nothing to pay until it stops.
+    refused = await http.post("/api/support/checkout", json={"product": "year"})
+    assert refused.status_code == 502
+    assert refused.json()["errorCode"] == "support_cancel_failed"
+    monkeypatch.undo()
+    assert (await http.post("/api/support/checkout", json={"product": "year"})).status_code == 200
+    assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
+
+
 async def test_a_year_arriving_after_the_lifetime_pass_is_stopped(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)

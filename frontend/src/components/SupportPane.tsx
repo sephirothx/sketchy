@@ -293,6 +293,19 @@ export function SupportPane() {
   return (
     <div className="support-pane" data-testid="support-pane">
       {body}
+      {/* No pass, but a year that ran out unpaid can still be collected (R-SUP-09). */}
+      {isRegistered && status?.renews && !status.active && (
+        <div className="support-links">
+          <a
+            className="support-cancel-link"
+            href="/support/cancel"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {ui.support.cancelRenewal}
+          </a>
+        </div>
+      )}
       {plans.tipUrl && <TipLink url={plans.tipUrl} />}
     </div>
   );
