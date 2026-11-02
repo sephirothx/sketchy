@@ -134,7 +134,9 @@ async def test_a_past_daily_started_before_a_lapse_stays_open(env):  # noqa: F81
 
 async def test_a_started_daily_held_back_is_not_offered_after_a_lapse(env):  # noqa: F811
     http, users, history, solo, factory = env
-    await _candidates(users, history, factory, 12)
+    # Five for the past date and five for each date open now: up to three of them,
+    # picked oldest first, so today's has its own at any hour of the day.
+    await _candidates(users, history, factory, 20)
     other = await player(users, factory, "OnTime")
     await solo.open_daily(other.id, PAST, now=_noon(PAST))
     fan = await player(users, factory, "Fan")
