@@ -29,7 +29,7 @@ from uuid import UUID
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.telemetry import database_operation_of, telemetry
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
@@ -68,6 +68,7 @@ from app.db.models import (
     SoloDailyResult,
     SoloRun,
     SoloServe,
+    SupportPurchase,
     TurnDrawing,
     ProfileFavorite,
     TurnDrawingReaction,
@@ -125,8 +126,10 @@ from app.domain_values import (
 # revision it was saved as (#1359). To 18 when Solo's runs and the drawings
 # they served joined it (`soloRuns`, `soloServes`, `soloDailyResults`,
 # `soloBests`, #1434) - without the turn,
-# which would name a stranger's drawing the player saw only anonymously.
-EXPORT_SCHEMA_VERSION = 18
+# which would name a stranger's drawing the player saw only anonymously. To 19
+# when the supporter pass's facts joined it (`support`) and settings gained
+# `showSupporterMark` (#1472).
+EXPORT_SCHEMA_VERSION = 19
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -1122,6 +1125,7 @@ async def _write_export_artifact(
             "extraPromptLanguages": list(settings.extra_prompt_languages),
             "locale": settings.locale,
             "soloOptOut": settings.solo_opt_out,
+            "showSupporterMark": settings.show_supporter_mark,
             "createdAt": _timestamp(settings.created_at),
             "updatedAt": _timestamp(settings.updated_at),
         }
@@ -1493,6 +1497,38 @@ async def _write_export_artifact(
             "achievedAt": _timestamp(best.achieved_at),
         },
     )
+    # The account's own ledger rows: the money it paid and got back (R-SUP-04).
+    # Including a reversal of an order of theirs that names nobody, because one
+    # can land before its purchase: status counts it, so the export must show it.
+    own_order = aliased(SupportPurchase)
+    writer.key("support")
+    await _write_rows(
+        writer,
+        session,
+        select(SupportPurchase)
+        .where(
+            or_(
+                SupportPurchase.user_id.in_(identity_ids),
+                select(own_order.id)
+                .where(
+                    own_order.user_id.in_(identity_ids),
+                    own_order.provider == SupportPurchase.provider,
+                    own_order.provider_order_id == SupportPurchase.provider_order_id,
+                )
+                .exists(),
+            )
+        )
+        .order_by(SupportPurchase.created_at, SupportPurchase.id),
+        lambda fact: {
+            "kind": fact.kind,
+            "periodStart": _timestamp(fact.period_start),
+            "periodEnd": _timestamp(fact.period_end),
+            "amountMinor": fact.amount_minor,
+            "currency": fact.currency,
+            "orderId": fact.provider_order_id,
+            "createdAt": _timestamp(fact.created_at),
+        },
+    )
     writer.key("exportRequests")
     await _write_rows(
         writer,
@@ -1807,6 +1843,14 @@ async def anonymize_account(
                     drawer_name_color_snapshot=None,
                     drawer_is_anonymous_snapshot=True,
                 )
+            )
+            # Who bought a supporter pass goes; what was bought stays, because the
+            # provider keeps the invoice and a later refund still has to find its
+            # order. `ON DELETE SET NULL` cannot do this: the account row stays.
+            await session.execute(
+                update(SupportPurchase)
+                .where(SupportPurchase.user_id.in_(identity_ids))
+                .values(user_id=None)
             )
             # Every drawing row this erasure writes, locked before any row that
             # hangs off one is touched, in one ascending statement: its own

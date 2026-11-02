@@ -35,6 +35,7 @@ from app.auth.routes import create_auth_router
 from app.canvas_history import PackedCanvasHistory
 from app.canvas_storage import stored_drawing_checksum
 from app.db.models import (
+    SupportPurchase,
     SoloBest,
     SoloDailyResult,
     SoloRun,
@@ -326,6 +327,32 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             owner_settings = await session.get(UserSettings, owner_row.id)
             assert owner_settings is not None
             owner_settings.extra_prompt_languages = ["nl", "fr"]
+            for buyer, order in ((owner_row, "order-of-the-owner"), (other_row, "order-of-bob")):
+                session.add(
+                    SupportPurchase(
+                        user_id=buyer.id,
+                        provider="stub",
+                        provider_event_id=order,
+                        provider_order_id=order,
+                        kind="purchase",
+                        period_start=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                        period_end=datetime(2027, 11, 1, tzinfo=timezone.utc),
+                        amount_minor=1900,
+                        currency="EUR",
+                    )
+                )
+            # A refund that landed knowing nobody is still theirs to see.
+            session.add(
+                SupportPurchase(
+                    user_id=None,
+                    provider="stub",
+                    provider_event_id="refund-naming-nobody",
+                    provider_order_id="order-of-the-owner",
+                    kind="refund",
+                    amount_minor=1900,
+                    currency="EUR",
+                )
+            )
             session.add(
                 PlayerReport(
                     id=submitted_report_id,
@@ -580,8 +607,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 18
-    assert artifact["schemaVersion"] == 18
+    assert status["schemaVersion"] == 19
+    assert artifact["schemaVersion"] == 19
     # What the account was told, as kinds and values (#1436).
     [told] = artifact["inbox"]
     # A count of reviewed reports carries no dates: they would say when a
@@ -689,8 +716,13 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert (daily["solved"], daily["points"], daily["marks"][0]["outcome"]) == (1, 240, "solved")
     assert artifact["soloBests"] == [{"length": "5", "best": 1240, "achievedAt": daily["startedAt"]}]
 
+    assert [(fact["kind"], fact["orderId"], fact["amountMinor"]) for fact in artifact["support"]] == [
+        ("purchase", "order-of-the-owner", 1900),
+        ("refund", "order-of-the-owner", 1900),
+    ]
+
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v18_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v19_fields.json").read_text(
             encoding="utf-8"
         )
     )

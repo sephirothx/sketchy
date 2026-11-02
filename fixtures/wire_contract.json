@@ -2186,6 +2186,7 @@
    "keyBindings",
    "penPressure",
    "promptLanguage",
+   "showSupporterMark",
    "soloOptOut",
    "soundEffects",
    "timeFormat",
@@ -2348,6 +2349,7 @@
   ],
   "auth.account_data:_write_export_artifact": [
    "achievedAt",
+   "amountMinor",
    "avatarKey",
    "blockedUserId",
    "brushCursor",
@@ -2374,7 +2376,10 @@
    "lastSeenAt",
    "mergedAt",
    "nameColor",
+   "orderId",
    "penPressure",
+   "periodEnd",
+   "periodStart",
    "positionsPlayed",
    "promptLanguage",
    "promptListId",
@@ -2390,6 +2395,7 @@
    "runId",
    "servedAt",
    "settledAt",
+   "showSupporterMark",
    "soloOptOut",
    "solveSeconds",
    "soundEffects",
@@ -3053,7 +3059,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 68,
+ "protocolVersion": 69,
  "refusal": {
   "codes": [
    "invalid_payload",

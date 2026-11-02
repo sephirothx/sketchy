@@ -21,7 +21,7 @@ from sqlalchemy import event, update
 from app.api.profiles import create_profile_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import User
+from app.db.models import SupportPurchase, User
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -85,6 +85,29 @@ async def test_me_is_two_statements_for_a_guest_and_three_with_a_registered_acco
         assert steady[0].startswith("SELECT auth_sessions")
         assert steady[1].startswith("SELECT users")
         assert steady[2].startswith("SELECT user_settings")
+
+        # Having bought a pass costs no round trip: status rides that statement
+        # (#1472), however many facts the ledger holds.
+        now = datetime.now(timezone.utc)
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    SupportPurchase(
+                        user_id=UUID(registered.json()["id"]),
+                        provider="stub",
+                        provider_event_id="e1",
+                        provider_order_id="o1",
+                        kind="purchase",
+                        period_start=now - timedelta(days=1),
+                        period_end=now + timedelta(days=1),
+                        amount_minor=1900,
+                        currency="EUR",
+                    )
+                )
+        statements.clear()
+        body = (await http.get("/api/auth/me")).json()
+        assert body["supporter"]["active"] is True
+        assert len(statements) == 3, statements
 
         async with factory() as session:
             async with session.begin():

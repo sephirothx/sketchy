@@ -10,7 +10,9 @@ append-only property was a convention of the code. Three roles instead:
   `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`);
 - `sketchy_app` - the web process and operator commands - reads and writes
   rows and nothing else: no DDL, no `TRUNCATE`, no `TRIGGER`, and only
-  `INSERT` and `SELECT` on the two ledgers, `audit_events` and `score_events`;
+  `INSERT` and `SELECT` on the ledgers, `audit_events`, `score_events` and
+  `support_purchases` - the last with one column besides, `user_id`, which
+  deletion clears because the account row it names is tombstoned, not removed;
 - `sketchy_monitor` holds `pg_monitor` and reads no table
   (`ops/postgres/init.sql`, #889).
 
@@ -32,8 +34,9 @@ APP_ROLE = "sketchy_app"
 MONITOR_ROLE = "sketchy_monitor"
 
 # Append-only by grant, not only by convention: the application may add to
-# them and read them, and nothing it runs can rewrite or remove a row.
-APPEND_ONLY_TABLES = ("audit_events", "score_events")
+# them and read them, and nothing it runs can rewrite or remove a row. The one
+# exception is `support_purchases.user_id`, below.
+APPEND_ONLY_TABLES = ("audit_events", "score_events", "support_purchases")
 ROW_PRIVILEGES = "SELECT, INSERT, UPDATE, DELETE"
 
 # What the web process seeds at startup, and so must be able to ANALYZE
@@ -65,6 +68,9 @@ def grant_statements(app_role: str = APP_ROLE) -> tuple[str, ...]:
         f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT {ROW_PRIVILEGES} ON TABLES TO {app_role}",
         f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {app_role}",
         f"REVOKE UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES ON {ledgers} FROM {app_role}",
+        # After the revoke, which takes column grants with it: deleting an account
+        # clears who bought, and nothing can rewrite what was bought.
+        f"GRANT UPDATE (user_id) ON support_purchases TO {app_role}",
         # The revision check reads it; only the migration writes it.
         f"REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON alembic_version FROM {app_role}",
     )

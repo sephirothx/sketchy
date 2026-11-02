@@ -619,6 +619,21 @@ REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
 # so; a picture's removal restricts uploads and says for how long. They share
 # the machinery - shown once, acknowledged - and nothing else (R-AVA-08).
 WARNING_KINDS = ("warning", "avatar_removal")
+# What sold a supporter pass, and what a row of its ledger records (#1472).
+class SupportProvider(StrEnum):
+    PADDLE = "paddle"
+    # Checkout that runs here, for development and the end-to-end suite.
+    STUB = "stub"
+
+
+class SupportPurchaseKind(StrEnum):
+    PURCHASE = "purchase"
+    REFUND = "refund"
+    CHARGEBACK = "chargeback"
+
+
+SUPPORT_PROVIDERS = tuple(provider.value for provider in SupportProvider)
+SUPPORT_PURCHASE_KINDS = tuple(kind.value for kind in SupportPurchaseKind)
 # What an account's inbox can hold (#1436). An entry is the message about a
 # fact kept elsewhere - the warning row, the share, the friendship, the role -
 # and names it by `subject_id` where there is one row to name.

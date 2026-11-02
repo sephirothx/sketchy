@@ -870,8 +870,10 @@ def create_auth_router(
             # as a replay and signs the player out everywhere. Left out, the
             # page asks for the settings on their own, as it did before.
             try:
-                payload["settings"] = await settings_of_registered_account(
-                    session_factory, user_id=str(user.id)
+                payload["settings"], payload["supporter"] = (
+                    await settings_of_registered_account(
+                        session_factory, user_id=str(user.id)
+                    )
                 )
             except Exception:
                 logger.warning("auth_me_settings_unavailable", exc_info=True)
