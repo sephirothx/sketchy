@@ -451,3 +451,29 @@ export function QueuesCard({ live, reasons }: { live: LiveSnapshot; reasons: Att
     </SignalCard>
   );
 }
+
+/** The supporter pass, for a deployment that sells one (#1473): how many hold
+it, and whether the provider's webhooks are arriving and proving themselves. */
+export function SupportCard({ live, reasons }: { live: LiveSnapshot; reasons: AttentionReason[] }) {
+  const { support } = live;
+  if (!support) return null;
+  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "Not since start");
+  return (
+    <SignalCard
+      title="Supporters"
+      sub="Passes in force, and the provider's webhooks"
+      card="support"
+      reasons={reasons}
+    >
+      <div className="ops-signal-grid" role="group" aria-label="Supporter pass">
+        <Cell label="Active supporters" value={support.active.toLocaleString()} />
+        <Cell label="Last webhook" value={when(support.lastWebhookAt)} />
+        <Cell
+          label="Last signature failure"
+          value={when(support.lastSignatureFailureAt)}
+          warning={support.lastSignatureFailureAt !== null}
+        />
+      </div>
+    </SignalCard>
+  );
+}

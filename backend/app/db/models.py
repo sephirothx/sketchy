@@ -878,6 +878,7 @@ class SupportPurchase(Base):
         # Status asks of each purchase whether its order was reversed.
         Index("ix_support_purchases_order", "provider", "provider_order_id"),
         Index("ix_support_purchases_user_id", "user_id"),
+        Index("ix_support_purchases_subscription", "provider_subscription_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -890,7 +891,13 @@ class SupportPurchase(Base):
     )
     provider: Mapped[str] = mapped_column(String(16), nullable=False)
     provider_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # The transaction; on a cancellation, the subscription it stopped.
     provider_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # What renews this purchase, if anything. A lifetime pass has none.
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # When deletion cleared `user_id`: how long a renewal nobody owns has been owed a
+    # stop, which nothing else on the row can say.
+    owner_deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     period_start: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # Null on a purchase: a lifetime pass.

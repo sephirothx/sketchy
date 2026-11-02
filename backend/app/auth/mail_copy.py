@@ -69,6 +69,10 @@ class MailCopy:
     hidden_prompt: str
     hidden_prompt_list: str
 
+    # Germany's §312k: cancelling a contract online is confirmed in writing.
+    support_cancelled_subject: str
+    support_cancelled_body: str
+
     # A moderation category - `offensive_drawing` - as a phrase that fits the
     # suspension's "recorded as …" clause. The slug with its underscores
     # swapped for spaces is English in every language, and `spam` hid that by
@@ -112,6 +116,10 @@ EN = MailCopy(
     hidden_default_what="some content you shared",
     hidden_prompt="A prompt you shared",
     hidden_prompt_list="A prompt list you shared",
+    support_cancelled_subject="Your Sketchy supporter pass won't renew",
+    support_cancelled_body=(
+        "Your supporter pass will not renew, and nothing more will be charged. It stays active until the end of the time you already paid for.\n\nIf you did not ask for this, reply to the receipt from our reseller, Paddle."
+    ),
     categories={
         "harassment": "harassment",
         "offensive_drawing": "an offensive drawing",
@@ -159,6 +167,10 @@ DE = MailCopy(
     hidden_default_what="Ein von dir geteilter Inhalt",
     hidden_prompt="Ein von dir geteilter Begriff",
     hidden_prompt_list="Eine von dir geteilte Begriffsliste",
+    support_cancelled_subject="Dein Sketchy-Unterstützerpass wird nicht verlängert",
+    support_cancelled_body=(
+        "Dein Unterstützerpass wird nicht verlängert, und es wird nichts mehr abgebucht. Er bleibt bis zum Ende der bereits bezahlten Zeit aktiv.\n\nFalls du das nicht veranlasst hast, antworte auf die Quittung unseres Wiederverkäufers Paddle."
+    ),
     categories={
         "harassment": "Belästigung",
         "offensive_drawing": "eine anstößige Zeichnung",
@@ -205,6 +217,10 @@ ES = MailCopy(
     hidden_default_what="Algo que compartiste",
     hidden_prompt="Una palabra que compartiste",
     hidden_prompt_list="Una lista de palabras que compartiste",
+    support_cancelled_subject="Tu pase de apoyo de Sketchy no se renovará",
+    support_cancelled_body=(
+        "Tu pase de apoyo no se renovará y no se cobrará nada más. Seguirá activo hasta el final del tiempo que ya pagaste.\n\nSi no lo pediste, responde al recibo de nuestro revendedor, Paddle."
+    ),
     categories={
         "harassment": "acoso",
         "offensive_drawing": "un dibujo ofensivo",
@@ -252,6 +268,10 @@ FR = MailCopy(
     hidden_default_what="Un contenu que tu as partagé",
     hidden_prompt="Un mot que tu as partagé",
     hidden_prompt_list="Une liste de mots que tu as partagée",
+    support_cancelled_subject="Ton pass de soutien Sketchy ne sera pas renouvelé",
+    support_cancelled_body=(
+        "Ton pass de soutien ne sera pas renouvelé et rien de plus ne sera prélevé. Il reste actif jusqu'à la fin de la période déjà payée.\n\nSi tu n'as rien demandé, réponds au reçu de notre revendeur, Paddle."
+    ),
     categories={
         "harassment": "harcèlement",
         "offensive_drawing": "un dessin choquant",
@@ -299,6 +319,10 @@ IT = MailCopy(
     hidden_default_what="Un contenuto che hai condiviso",
     hidden_prompt="Una parola che hai condiviso",
     hidden_prompt_list="Una lista di parole che hai condiviso",
+    support_cancelled_subject="Il tuo pass sostenitore di Sketchy non si rinnoverà",
+    support_cancelled_body=(
+        "Il tuo pass sostenitore non si rinnoverà e non verrà addebitato altro. Resta attivo fino alla fine del periodo già pagato.\n\nSe non l'hai chiesto tu, rispondi alla ricevuta del nostro rivenditore, Paddle."
+    ),
     categories={
         "harassment": "molestie",
         "offensive_drawing": "un disegno offensivo",
@@ -346,6 +370,10 @@ NL = MailCopy(
     hidden_default_what="Iets dat je gedeeld hebt",
     hidden_prompt="Een woord dat je gedeeld hebt",
     hidden_prompt_list="Een woordenlijst die je gedeeld hebt",
+    support_cancelled_subject="Je Sketchy-supporterspas wordt niet verlengd",
+    support_cancelled_body=(
+        "Je supporterspas wordt niet verlengd en er wordt niets meer afgeschreven. Hij blijft actief tot het einde van de tijd die je al betaald hebt.\n\nHeb je hier niet om gevraagd? Antwoord dan op het betaalbewijs van onze wederverkoper, Paddle."
+    ),
     categories={
         "harassment": "intimidatie",
         "offensive_drawing": "een aanstootgevende tekening",
@@ -392,6 +420,10 @@ PT = MailCopy(
     hidden_default_what="Algo que partilhaste",
     hidden_prompt="Uma palavra que partilhaste",
     hidden_prompt_list="Uma lista de palavras que partilhaste",
+    support_cancelled_subject="O teu passe de apoiante do Sketchy não será renovado",
+    support_cancelled_body=(
+        "O teu passe de apoiante não será renovado e não será cobrado mais nada. Continua ativo até ao fim do tempo que já pagaste.\n\nSe não pediste isto, responde ao recibo do nosso revendedor, a Paddle."
+    ),
     categories={
         "harassment": "assédio",
         "offensive_drawing": "um desenho ofensivo",
@@ -439,6 +471,10 @@ PL = MailCopy(
     hidden_default_what="część udostępnionych przez Ciebie treści",
     hidden_prompt="udostępnione przez Ciebie hasło",
     hidden_prompt_list="udostępnioną przez Ciebie listę haseł",
+    support_cancelled_subject="Twoja przepustka wspierającego Sketchy nie zostanie odnowiona",
+    support_cancelled_body=(
+        "Twoja przepustka wspierającego nie zostanie odnowiona i nic więcej nie zostanie pobrane. Pozostaje aktywna do końca już opłaconego okresu.\n\nJeśli o to nie prosisz, odpowiedz na potwierdzenie od naszego sprzedawcy, Paddle."
+    ),
     categories={
         "harassment": "nękanie",
         "offensive_drawing": "obraźliwy rysunek",

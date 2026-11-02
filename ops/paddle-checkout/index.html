@@ -1,0 +1,33 @@
+<!doctype html>
+<!--
+  The page Paddle's payment link opens on (`SUPPORT_CHECKOUT_URL`).
+
+  Paddle requires Paddle.js on it, and R-PLAT-20 forbids any provider script on
+  Sketchy's own origin, so host this as a static file on a separate subdomain,
+  such as pay.example.com, with nothing else on it. It reads no cookie of
+  Sketchy's and shares no origin with the game. Add that domain to Paddle's
+  approved websites, then replace the two values below.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sketchy checkout</title>
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  </head>
+  <body>
+    <noscript>The checkout needs JavaScript. Nothing has been charged.</noscript>
+    <script>
+      // Paddle.js opens the checkout by itself when the URL carries `_ptxn`.
+      Paddle.Initialize({
+        token: "REPLACE_WITH_THE_CLIENT_SIDE_TOKEN",
+        checkout: {
+          settings: {
+            displayMode: "overlay",
+            successUrl: "REPLACE_WITH_PUBLIC_BASE_URL/support/thanks",
+          },
+        },
+      });
+    </script>
+  </body>
+</html>

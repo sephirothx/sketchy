@@ -41,6 +41,9 @@ from app.services.game_handoff import sweep_interval_seconds as handoff_sweep_in
 from app.services.drawing_storage import DrawingStoreFootprint, DrawingStoreSize
 from app.services.queue_depths import QueueDepths, QueueSnapshot
 from app.services.readiness import ReadinessProbe
+from app.services.supporter import active_supporters
+from app.support.config import support_config
+from app.support.signals import support_signals
 from app.services.runtime_metrics import (
     metrics,
     recent_events,
@@ -66,6 +69,48 @@ def _refuse_control_characters(*values: str | None) -> None:
 
 def _scrape_token() -> str:
     return os.environ.get("METRICS_TOKEN", "").strip()
+
+
+async def _support_lines(session_factory) -> list[str]:
+    """Nothing at all on a deployment that sells nothing (#1473).
+
+    The gauge costs a query, so it follows `_queue_depths_for_scrape`: omitted
+    if the database does not answer promptly, and the counters still reported.
+    """
+    if support_config() is None:
+        return []
+
+    async def count() -> int:
+        async with session_factory() as session:
+            return await active_supporters(session)
+
+    active: int | None = None
+    try:
+        active = await asyncio.wait_for(count(), timeout=QUEUE_SCRAPE_TIMEOUT_SECONDS)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("active supporters left out of the scrape", exc_info=True)
+    return [
+        *gauge_lines(
+            "sketchy_supporters_active", "Accounts holding a supporter pass right now.", active
+        ),
+        *support_signals.prometheus_lines(),
+    ]
+
+
+async def _support_json(session_factory) -> dict[str, object] | None:
+    if support_config() is None:
+        return None
+    async with session_factory() as session:
+        active = await active_supporters(session)
+    last = support_signals.last_webhook_at
+    failure = support_signals.last_signature_failure_at
+    return {
+        "active": active,
+        "lastWebhookAt": last.isoformat() if last else None,
+        "lastSignatureFailureAt": failure.isoformat() if failure else None,
+    }
 
 
 def _loop_lines(loops: dict[str, dict[str, object]]) -> list[str]:
@@ -271,8 +316,8 @@ QUEUE_SCRAPE_TIMEOUT_SECONDS = 2.0
 async def _queue_depths_for_scrape(queues: QueueDepths) -> QueueSnapshot | None:
     """The queue depths if the database answers promptly, else nothing.
 
-    Every other series in the scrape is process memory. This is the only one
-    that costs a query, and a scrape that returned 500 because the database
+    Almost every other series in the scrape is process memory. This costs a
+    query, and a scrape that returned 500 because the database
     was down would take the loop lag, the error rates and the pool gauges
     down with it - at exactly the moment they are being asked for. So the
     family is omitted, the way the pool gauges are omitted for a pool that
@@ -637,6 +682,7 @@ def create_operations_router(
             *_integrity_lines(integrity_checks_from(loop_snapshot())),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
             *_drawing_store_lines(await _drawing_store_for_scrape(drawings)),
+            *await _support_lines(session_factory),
         ]
         database = await scraped_database_readiness()
         if database is not None:
@@ -709,6 +755,7 @@ def create_operations_router(
             "loops": _camel_loops(loop_snapshot()),
             "retention": _retention_json(retention_sweeps_from(loop_snapshot())),
             "series": signals["series"],
+            "support": await _support_json(session_factory),
         }
 
     @router.get("/api/admin/metrics/events")

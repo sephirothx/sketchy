@@ -238,6 +238,12 @@ export type ServerSignals = {
     readiness: { ok: boolean; reason: string | null; checkedAgoSeconds: number } | null;
   };
   drawingStore: DrawingStore | null;
+  /** Null on a deployment that sells nothing (#1473). */
+  support: {
+    active: number;
+    lastWebhookAt: string | null;
+    lastSignatureFailureAt: string | null;
+  } | null;
   queues: {
     mailOutbox: QueueDepth & { sweepSeconds: number };
     dataExports: QueueDepth;
@@ -342,7 +348,7 @@ export const ATTENTION = {
   drawingStoreBytes: 50e9,
 } as const;
 
-export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues" | "retention";
+export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues" | "support" | "retention";
 
 export type AttentionReason = {
   key: string;

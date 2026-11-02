@@ -58,6 +58,7 @@ def _kinds(statements: list[str]) -> list[str]:
 async def test_me_is_two_statements_for_a_guest_and_three_with_a_registered_accounts_settings(
     monkeypatch,
 ):
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
     factory, engine = await create_test_db()
     try:
         http = await _site(factory, monkeypatch)

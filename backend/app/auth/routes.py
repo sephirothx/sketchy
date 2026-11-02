@@ -80,6 +80,9 @@ from app.auth.recovery import (
 )
 from app.api.serializers import user_payload
 from app.api.user_settings import settings_of_registered_account
+from app.support.cancellation import cancel_quietly
+from app.support.config import support_config
+from app.support.providers import provider_for
 from app.services.guest_names import online_guest_holding
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
@@ -870,11 +873,12 @@ def create_auth_router(
             # as a replay and signs the player out everywhere. Left out, the
             # page asks for the settings on their own, as it did before.
             try:
-                payload["settings"], payload["supporter"] = (
-                    await settings_of_registered_account(
-                        session_factory, user_id=str(user.id)
-                    )
+                payload["settings"], supporter = await settings_of_registered_account(
+                    session_factory, user_id=str(user.id)
                 )
+                # With no provider there is no tier, and so no field (#1473).
+                if support_config() is not None:
+                    payload["supporter"] = supporter
             except Exception:
                 logger.warning("auth_me_settings_unavailable", exc_info=True)
         return payload
@@ -1407,6 +1411,13 @@ def create_auth_router(
             result = await anonymize_account(session_factory, user_id=user.id)
         except AccountDataError as error:
             raise Refusal(409, ErrorCode.ACCOUNT_DELETE_REFUSED, str(error)) from error
+        # Nobody is left to charge: a renewal after this would be for no one.
+        # After the commit, because a provider call has no place inside it.
+        config = support_config()
+        if config is not None and result.subscriptions_to_cancel:
+            await cancel_quietly(
+                session_factory, provider_for(config), result.subscriptions_to_cancel
+            )
         # Their friends lose a row too, and are still connected to hear it.
         # Best effort and after the commit, like every other notification: the
         # deletion is done, and a socket that missed this sees it on the next

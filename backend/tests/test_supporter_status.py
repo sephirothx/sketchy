@@ -227,6 +227,7 @@ async def _site(factory, monkeypatch) -> AsyncClient:
 
 
 async def test_me_says_whether_a_registered_account_is_a_supporter(db, monkeypatch):
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
     async with await _site(db, monkeypatch) as http:
         await http.post("/api/auth/display-name", json={"displayName": "Marta"})
         guest = (await http.get("/api/auth/me")).json()
@@ -236,7 +237,7 @@ async def test_me_says_whether_a_registered_account_is_a_supporter(db, monkeypat
             "/api/auth/register", json={"username": "Marta", "password": "a-good-password"}
         )
         me = (await http.get("/api/auth/me")).json()
-        assert me["supporter"] == {"active": False, "until": None}
+        assert me["supporter"] == {"active": False, "until": None, "renews": False}
         assert me["settings"]["showSupporterMark"] is True
 
         now = datetime.now(timezone.utc)
@@ -251,3 +252,14 @@ async def test_me_says_whether_a_registered_account_is_a_supporter(db, monkeypat
         me = (await http.get("/api/auth/me")).json()
         assert me["supporter"]["active"] is True
         assert datetime.fromisoformat(me["supporter"]["until"]) == now + YEAR
+
+
+async def test_with_no_provider_me_has_no_supporter_field(db, monkeypatch):
+    monkeypatch.delenv("SUPPORT_PROVIDER", raising=False)
+    async with await _site(db, monkeypatch) as http:
+        await http.post("/api/auth/display-name", json={"displayName": "Marta"})
+        await http.post(
+            "/api/auth/register", json={"username": "Marta", "password": "a-good-password"}
+        )
+        me = (await http.get("/api/auth/me")).json()
+        assert "settings" in me and "supporter" not in me

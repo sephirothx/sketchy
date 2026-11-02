@@ -2067,6 +2067,13 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/repositories/solo.py`](../backend/app/repositories/solo.py) | Solo's reads and writes (#1434): what a player may be served, and their runs. |
 | [`app/services/solo_pool.py`](../backend/app/services/solo_pool.py) | Solo's pool (#1434): which recorded drawings it may serve, written and rebuilt. |
 | [`app/api/solo.py`](../backend/app/api/solo.py) | Solo's REST surface (#1434): runs, the drawings they serve, and what each came to. |
+| [`app/support/__init__.py`](../backend/app/support/__init__.py) | The supporter pass's money path: which provider, and how to talk to it (#1473). |
+| [`app/support/cancellation.py`](../backend/app/support/cancellation.py) | Stopping a subscription's renewal, and saying so (#1473). |
+| [`app/support/config.py`](../backend/app/support/config.py) | Which provider sells the supporter pass, from the environment (#1473). |
+| [`app/support/grant.py`](../backend/app/support/grant.py) | Audited command for a comp, or for repairing a provider-side mistake (#1473). |
+| [`app/support/providers.py`](../backend/app/support/providers.py) | One interface over whoever sells the pass: Paddle Billing, or a local stub (#1473). |
+| [`app/support/signals.py`](../backend/app/support/signals.py) | What the webhook route has seen, for the operator (#1473). |
+| [`app/api/support.py`](../backend/app/api/support.py) | The supporter pass's REST surface: checkout, webhook, cancel (#1473). |
 | [`app/services/supporter.py`](../backend/app/services/supporter.py) | Supporter status, derived from the purchase ledger and never stored (#1472). |
 | [`app/services/solo_access.py`](../backend/app/services/solo_access.py) | Who may open which of Solo's doors (#1434): the one gate, in one place. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |

@@ -1865,6 +1865,10 @@
    "slaSeconds",
    "sweepSeconds"
   ],
+  "api.operations:_support_json": [
+   "lastSignatureFailureAt",
+   "lastWebhookAt"
+  ],
   "api.operations:audit_ledger": [
    "actorName",
    "actorUserId",
@@ -3057,9 +3061,12 @@
    "topOperations",
    "uptimeSeconds",
    "windowMinutes"
+  ],
+  "support.cancellation:cancel_subscription": [
+   "displayName"
   ]
  },
- "protocolVersion": 69,
+ "protocolVersion": 70,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -3215,6 +3222,9 @@
    "drawing_unreadable",
    "no_such_solo_run",
    "solo_conflict",
+   "support_already_active",
+   "support_unavailable",
+   "support_cancel_failed",
    "solo_pool_empty",
    "solo_date_out_of_range",
    "no_such_daily",

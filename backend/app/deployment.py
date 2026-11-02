@@ -7,6 +7,8 @@ import logging
 import os
 import sys
 from urllib.parse import urlsplit
+from app.domain_values import SUPPORT_PROVIDERS, SupportProvider
+from app.support.config import support_config
 
 logger = logging.getLogger(__name__)
 
@@ -328,6 +330,43 @@ def _contact_problem(address: str) -> str | None:
     if all(label.isdigit() for label in labels):
         return "its domain is an IP address"
     return None
+
+
+def validate_support_configuration(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse a supporter tier that cannot work, or that would give passes away.
+
+    An unknown provider is refused anywhere. In production `stub` is refused,
+    since its checkout is a button that says paid, and so is a provider with no
+    webhook secret: an unverifiable webhook is a free pass for anybody who can
+    send a request (R-SUP-07).
+    """
+    values = os.environ if environ is None else environ
+    config = support_config(values)
+    if config is None:
+        return
+    if config.provider not in SUPPORT_PROVIDERS:
+        raise RuntimeError(
+            f"SUPPORT_PROVIDER is {config.provider!r}; it must be one of {SUPPORT_PROVIDERS}."
+        )
+    if not is_production(values):
+        return
+    if config.provider == SupportProvider.STUB.value:
+        raise RuntimeError("SUPPORT_PROVIDER=stub gives passes away; it cannot run in production.")
+    missing = [
+        name
+        for name, value in (
+            ("SUPPORT_WEBHOOK_SECRET", config.webhook_secret),
+            ("SUPPORT_API_KEY", config.api_key),
+            ("SUPPORT_PRICE_YEAR", config.price_year),
+            ("SUPPORT_PRICE_LIFETIME", config.price_lifetime),
+            ("SUPPORT_EXTRA_PRODUCT_ID", config.extra_product_id),
+        )
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            f"SUPPORT_PROVIDER is set, so production needs: {', '.join(missing)}."
+        )
 
 
 def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:

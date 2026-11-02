@@ -460,6 +460,8 @@ def retention_sweeps() -> tuple[Sweep, ...]:
     from app.services.shutdown import purge_expired_shutdown_abandonments
     from app.repositories.sqlalchemy import release_held_solo_shares
 
+    from app.support.cancellation import stop_renewals_nothing_pays_for
+
     return (
         Sweep(
             "room_messages",
@@ -493,6 +495,11 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             "solo_held_shares",
             release_held_solo_shares,
             exempt="nothing is removed: a share held for an open Daily is released, not deleted",
+        ),
+        Sweep(
+            "unpaid_for_renewals",
+            stop_renewals_nothing_pays_for,
+            exempt="nothing is removed: a renewal that should have stopped is tried again",
         ),
         Sweep(
             "bug_report_screenshots",
@@ -666,9 +673,15 @@ async def run_retention_sweeps(
             continue
         described = _describe(report)
         counters.removed += int(described.get("rows") or 0)
+        # A sweep that calls something else can return its account and still have
+        # failed at what it was for: the iteration failed, and its lateness still counts.
+        fell_short = bool(described.get("failed_attempts"))
+        if fell_short:
+            failed = True
+            counters.failures += 1
         described = {
             **described,
-            "failed": False,
+            "failed": fell_short,
             # Decided here and carried, rather than worked out again by each
             # reader: whether a table is past its SLA is a policy question
             # with one answer, and two surfaces deciding it separately is how

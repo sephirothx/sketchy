@@ -522,6 +522,7 @@ class EmailTemplate(StrEnum):
     PASSWORD_CHANGED = "password_changed"
     ACCOUNT_BANNED = "account_banned"
     CONTENT_HIDDEN = "content_hidden"
+    SUPPORT_CANCELLED = "support_cancelled"
 
 
 class AuditTargetType(StrEnum):
@@ -630,6 +631,9 @@ class SupportPurchaseKind(StrEnum):
     PURCHASE = "purchase"
     REFUND = "refund"
     CHARGEBACK = "chargeback"
+    # A subscription told not to renew. Its periods stand, so status ignores it;
+    # it is what lets the page say "ends" instead of "renews" (#1473).
+    CANCELLATION = "cancellation"
 
 
 SUPPORT_PROVIDERS = tuple(provider.value for provider in SupportProvider)
