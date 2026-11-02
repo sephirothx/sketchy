@@ -293,6 +293,33 @@ async def _year(http, recipient: UUID) -> None:
     )
 
 
+async def test_a_renewal_neither_moved_nor_stopped_comes_back_on_the_retry(site, monkeypatch):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    await _year(http, recipient)
+    gift = {
+        "id": "o2",
+        "currency_code": "EUR",
+        "billed_at": datetime.now(timezone.utc).isoformat(),
+        "custom_data": {"account_id": str(recipient), "product": "gift"},
+        "details": {"totals": {"total": "1900"}},
+    }
+
+    async def refused(self, subscription_id, when):
+        raise ProviderRefused("400")
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "move_renewal", refused)
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    assert (await _webhook(http, "e2", gift)).status_code == 500
+    monkeypatch.undo()
+    monkeypatch.setattr(StubProvider, "move_renewal", refused)
+    assert (await _webhook(http, "e2", gift)).status_code == 200
+    assert "cancel:sub_1" in await _event_ids(factory)
+
+
 async def test_two_gifts_together_leave_the_renewal_on_the_later_end(site, monkeypatch):
     http, factory = site
     recipient = await _register(http, "Bruno")
@@ -322,7 +349,7 @@ async def test_two_gifts_together_leave_the_renewal_on_the_later_end(site, monke
     assert landed[-1] == status.until
 
 
-async def test_a_renewal_neither_moved_nor_stopped_comes_back_on_the_retry(site, monkeypatch):
+async def test_a_move_that_may_have_worked_comes_back_on_the_retry(site, monkeypatch):
     http, factory = site
     recipient = await _register(http, "Bruno")
     await _year(http, recipient)
