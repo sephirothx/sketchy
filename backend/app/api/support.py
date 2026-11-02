@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Literal
@@ -80,6 +81,11 @@ class CheckoutBody(ControlFreeModel):
 
     product: Literal["year", "lifetime"]
     extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
+
+
+# One address, nothing else: Paddle's filter takes a comma-separated list, and an
+# empty one may match everybody. Anything looser could stop renewals in bulk.
+_ONE_ADDRESS = re.compile(r"[^@\s,]+@[^@\s,]+")
 
 
 class CancelRequestBody(ControlFreeModel):
@@ -319,6 +325,8 @@ def create_support_router(
         """After the answer has gone: what it found must not show in how long it
         took, or in whether the provider happened to be up (R-SUP-09). So a failure
         cannot reach the person who asked, and is left for the operator."""
+        if not _ONE_ADDRESS.fullmatch(email):
+            return
         try:
             named = await provider.subscriptions_of_email(email)
             async with session_factory() as session:

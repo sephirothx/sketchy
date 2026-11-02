@@ -494,7 +494,7 @@ export const EN = {
     backToLobby: "Back to the lobby",
     cancelTitle: "Cancel your renewal",
     cancelNothing: "You have no renewal to cancel.",
-    cancelSignedOut: "No need to sign in. Enter the e-mail you paid with: its renewal stops, and a confirmation goes out by e-mail.",
+    cancelSignedOut: "No need to sign in. Enter the e-mail you paid with: the renewal stops, and a confirmation goes out by e-mail.",
     cancelEmail: "The e-mail you paid with",
     cancelRequested: "If that matches a pass, its renewal is stopped and a confirmation is on its way.",
     nudge: "Like Sketchy? Supporters keep it free for everyone.",

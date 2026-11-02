@@ -745,12 +745,24 @@ async def test_a_webhook_recording_the_stop_first_does_not_lose_the_mail(site, m
     assert (await http.post("/api/support/cancel")).status_code == 200
 
 
-async def test_a_public_username_stops_nothing_at_the_signed_out_form(site):
+async def test_a_public_username_stops_nothing_at_the_signed_out_form(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)
     await _post(http, _paid("e1", "o1", user_id))
+    asked: list[str] = []
+
+    async def known(self, email):
+        asked.append(email)
+        return ()
+
+    monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
     http.cookies.clear()
-    assert (await http.post("/api/support/cancel/request", json={"email": "marta"})).status_code == 200
+    # Only one address ever reaches the provider: its filter takes a list, and an
+    # empty one may match everybody.
+    for value in ("marta", "   ", "a@example.test,b@example.test", "a@b@example.test"):
+        response = await http.post("/api/support/cancel/request", json={"email": value})
+        assert response.status_code == 200
+    assert asked == []
     assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 422
     async with factory() as session:
         assert (await supporter_status(session, user_id)).renews
