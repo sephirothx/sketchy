@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d9e0f1a2b3c6_support_purchases.py` (#1472). Both this line and the table
+`e0f1a2b3c4d7_support_subscriptions.py` (#1473). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -836,7 +836,7 @@ waited longer, so a one-message drain starves neither.
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 
 Templates: `verify_email`, `reset_password`, `password_changed`, `account_banned`,
-`content_hidden`. **Nothing else is ever sent to a player's address.**
+`content_hidden`, and `support_cancelled`, the confirmation a stopped renewal owes (§312k). **Nothing else is ever sent to a player's address.**
 
 **Flow.** Mail is queued in the **same transaction** as the action that causes it, and
 delivered by a sweeper woken by that transaction's commit, which sweeps again at once
@@ -883,13 +883,18 @@ provider-login API is enabled until identity-linking flows ship.
 ### `support_purchases`
 What a provider told us about a supporter pass, one row per event (#1472). `id` (UUIDv7) ·
 `user_id` (→ `users`, `SET NULL`, nullable) · `provider` (`paddle \| stub`,
-`ck_support_purchases_provider`) · `provider_event_id` · `provider_order_id` · `kind`
-(`purchase \| refund \| chargeback`, `ck_support_purchases_kind`) · `period_start`,
+`ck_support_purchases_provider`) · `provider_event_id` · `provider_order_id` (the
+transaction; on a cancellation, the subscription) · `provider_subscription_id` (what renews
+it; none on a lifetime pass) · `kind`
+(`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund or a chargeback has neither) · `amount_minor`
 (`ck_support_purchases_amount`, not negative) · `currency` · `created_at`.
 `uq_support_purchases_provider_event` makes a webhook delivered twice one fact.
-`ix_support_purchases_order` and `ix_support_purchases_user_id` serve status.
+`ix_support_purchases_order`, `ix_support_purchases_user_id` and
+`ix_support_purchases_subscription` serve status. A `cancellation` leaves the periods alone:
+it is what lets the page say "ends" instead of "renews". Its event id is `cancel:<subscription>`,
+so our own click and each webhook about it are one fact.
 
 **Status is a query, never a flag** ([`services/supporter.py`](../backend/app/services/supporter.py),
 R-SUP-01): a purchase row of this account whose period contains now, and whose order has no

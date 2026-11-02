@@ -51,6 +51,9 @@ from app.api.operations import create_operations_router
 from app.api.inbox import create_inbox_router, drawers_told_about_game
 from app.api.user_settings import create_user_settings_router
 from app.api.solo import create_solo_router
+from app.api.support import create_support_router
+from app.domain_values import SUPPORT_PROVIDERS
+from app.support.config import support_config
 from app.api.friends import create_friends_router, create_recent_players_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
@@ -71,6 +74,7 @@ from app.deployment import (
     reconnect_spread_seconds,
     shutdown_drain_seconds,
     validate_contact_address,
+    validate_support_configuration,
     validate_database_configuration,
     validate_mail_configuration,
     validate_frontend_build,
@@ -1007,6 +1011,7 @@ async def lifespan(_app: FastAPI):
         validate_mail_configuration()
         # The privacy notice and the terms send players here (#1417).
         validate_contact_address()
+        validate_support_configuration()
         # The game is the page as much as the API (#1418).
         validate_frontend_build(_frontend_dist / "index.html")
         await init_db()
@@ -1254,6 +1259,11 @@ api.include_router(
 api.include_router(
     create_inbox_router(async_session_factory, on_inbox_changed=push_inbox_changed)
 )
+# With no provider there is no tier: not a route, not a field (#1473). An unknown
+# one is left for `validate_support_configuration` to refuse at startup by name.
+_support = support_config()
+if _support is not None and _support.provider in SUPPORT_PROVIDERS:
+    api.include_router(create_support_router(async_session_factory, _support))
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:
     """A changed picture reaches the seats and the lobby that show it.
 

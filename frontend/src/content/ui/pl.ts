@@ -64,6 +64,8 @@ function weakPassword(params: MessageParams): string {
 /** *Create an account to …* - one refusal, said about the thing it refused. */
 function accountRequired(params: MessageParams): string {
   switch (params.action) {
+    case "support":
+      return "Załóż konto, aby dostać przepustkę wspierającego.";
     case "avatar":
       return "Utwórz konto, aby wybrać zdjęcie.";
     case "prompt_lists":
@@ -145,6 +147,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   database_busy: "Sketchy ma problem z połączeniem z bazą danych. Spróbuj ponownie.",
   account_ended: "To konto nie jest już aktywne.",
   account_required: accountRequired,
+  support_already_active: "Masz już przepustkę wspierającego.",
+  support_unavailable: "Nie udało się otworzyć płatności. Nic nie zostało pobrane. Spróbuj ponownie.",
   identity_unavailable: "Nie udało się potwierdzić, kim jesteś. Odśwież stronę i spróbuj ponownie.",
 
   // Rooms

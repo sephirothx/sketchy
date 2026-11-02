@@ -64,6 +64,8 @@ function weakPassword(params: MessageParams): string {
 /** *Create an account to …* - one refusal, said about the thing it refused. */
 function accountRequired(params: MessageParams): string {
   switch (params.action) {
+    case "support":
+      return "Crea un account per avere un pass sostenitore.";
     case "avatar":
       return "Crea un account per scegliere un’immagine.";
     case "prompt_lists":
@@ -145,6 +147,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   database_busy: "Sketchy fatica a raggiungere il suo database. Riprova.",
   account_ended: "Questo account non è più attivo.",
   account_required: accountRequired,
+  support_already_active: "Hai già un pass sostenitore.",
+  support_unavailable: "Non è stato possibile aprire il pagamento. Non è stato addebitato nulla. Riprova.",
   identity_unavailable: "Sketchy non è riuscito a confermare chi sei. Ricarica e riprova.",
 
   // Rooms

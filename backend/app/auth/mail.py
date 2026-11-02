@@ -186,6 +186,11 @@ def render(
             words.hidden_subject,
             f"{greeting}\n\n{words.hidden_body.format(what=what)}\n",
         )
+    if template == EmailTemplate.SUPPORT_CANCELLED.value:
+        return (
+            words.support_cancelled_subject,
+            f"{greeting}\n\n{words.support_cancelled_body}\n",
+        )
     raise ValueError(f"no renderer for email template {template!r}")
 
 

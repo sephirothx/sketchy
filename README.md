@@ -897,6 +897,11 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_SECURITY` | `starttls` | `starttls` upgrades the connection before anything is sent (port 587), `tls` encrypts from the first byte (port 465), `none` sends in the clear. Both encrypted modes verify the relay's certificate against the system trust store, so any public mail provider works with no further setup and a relay that fails verification fails the send. A relay signed by a private authority is trusted by pointing `SSL_CERT_FILE` (or `SSL_CERT_DIR`) at a bundle that includes it. Production refuses `none` together with `SMTP_PASSWORD`; an unknown value, or the retired `SMTP_STARTTLS`, fails startup |
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender. **Required in production** (#1418), on a domain mail can be delivered to - a `localhost`, `.local`, `.test` or `example` domain is refused at startup, since DMARC fails it - and a warning is logged when its domain is not `PUBLIC_BASE_URL`'s. A display name is allowed (`Sketchy <play@sketchy.app>`) |
+| `SUPPORT_PROVIDER` | unset | Who sells the supporter pass: `paddle` or `stub`. Unset turns the tier off: no button, no routes, no status field. `stub` is a local page with a Pay button, for development and the end-to-end suite, and production refuses it. |
+| `SUPPORT_WEBHOOK_SECRET` | unset | Paddle's notification secret. **Required in production** with a provider set: an unverifiable webhook is a free pass for anybody who can send a request. |
+| `SUPPORT_API_KEY`, `SUPPORT_API_URL` | unset, `https://api.paddle.com` | Paddle's API key, and where to reach it (`https://sandbox-api.paddle.com` for the sandbox). The key is **required in production** with a provider set. |
+| `SUPPORT_PRICE_YEAR`, `SUPPORT_PRICE_LIFETIME`, `SUPPORT_EXTRA_PRODUCT_ID` | unset | The two catalog prices, and the product a one-time extra is sold under. **Required in production** with a provider set. |
+| `SUPPORT_CHECKOUT_URL` | unset | The page Paddle's payment link opens on. It must load Paddle.js, which R-PLAT-20 forbids on this origin, so it lives elsewhere: see [`ops/paddle-checkout/`](ops/paddle-checkout/index.html). Unset uses the account's default payment link. |
 | `CONTACT_ADDRESS` | unset | The operator's address, which the privacy notice and the terms give for privacy requests, a parent asking for an under-age player's data to go, and anything Settings cannot do (`GET /api/legal`). Any environment refuses a malformed address; production refuses to start without one, or with one on a domain nobody can write to (`localhost`, `.local`, `.test`, `.example`, `.invalid`) (#1417) |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, where a plain-HTTP request is redirected in production, and the origin of every URL in `/sitemap.xml` and `robots.txt` (#1458). Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | The fallback interval for emptying the outbox: a queued message wakes the sender when its transaction commits, and a full batch is followed by another at once, so this only paces retries and anything queued by another process |
@@ -1903,6 +1908,12 @@ backend/
       solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
       solo_access.py Who may open which of Solo's doors: the one gate the supporter pass narrows
       supporter.py Supporter status, derived from the purchase ledger and never stored
+    support/
+      providers.py One interface over whoever sells the pass: Paddle Billing, or a local stub
+      config.py    Which provider sells the pass, from the environment
+      cancellation.py Stopping a subscription's renewal, and saying so
+      signals.py   What the webhook route has seen, for the operator
+      grant.py     Audited command for a comp, or for repairing a provider-side mistake
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread

@@ -783,6 +783,8 @@ export type ErrorCode =
   | "drawing_unreadable"
   | "no_such_solo_run"
   | "solo_conflict"
+  | "support_already_active"
+  | "support_unavailable"
   | "solo_pool_empty"
   | "solo_date_out_of_range"
   | "no_such_daily"

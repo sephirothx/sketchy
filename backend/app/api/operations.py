@@ -41,6 +41,9 @@ from app.services.game_handoff import sweep_interval_seconds as handoff_sweep_in
 from app.services.drawing_storage import DrawingStoreFootprint, DrawingStoreSize
 from app.services.queue_depths import QueueDepths, QueueSnapshot
 from app.services.readiness import ReadinessProbe
+from app.services.supporter import active_supporters
+from app.support.config import support_config
+from app.support.signals import support_signals
 from app.services.runtime_metrics import (
     metrics,
     recent_events,
@@ -66,6 +69,34 @@ def _refuse_control_characters(*values: str | None) -> None:
 
 def _scrape_token() -> str:
     return os.environ.get("METRICS_TOKEN", "").strip()
+
+
+async def _support_lines(session_factory) -> list[str]:
+    """Nothing at all on a deployment that sells nothing (#1473)."""
+    if support_config() is None:
+        return []
+    async with session_factory() as session:
+        active = await active_supporters(session)
+    return [
+        *gauge_lines(
+            "sketchy_supporters_active", "Accounts holding a supporter pass right now.", active
+        ),
+        *support_signals.prometheus_lines(),
+    ]
+
+
+async def _support_json(session_factory) -> dict[str, object] | None:
+    if support_config() is None:
+        return None
+    async with session_factory() as session:
+        active = await active_supporters(session)
+    last = support_signals.last_webhook_at
+    failure = support_signals.last_signature_failure_at
+    return {
+        "active": active,
+        "lastWebhookAt": last.isoformat() if last else None,
+        "lastSignatureFailureAt": failure.isoformat() if failure else None,
+    }
 
 
 def _loop_lines(loops: dict[str, dict[str, object]]) -> list[str]:
@@ -637,6 +668,7 @@ def create_operations_router(
             *_integrity_lines(integrity_checks_from(loop_snapshot())),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
             *_drawing_store_lines(await _drawing_store_for_scrape(drawings)),
+            *await _support_lines(session_factory),
         ]
         database = await scraped_database_readiness()
         if database is not None:
@@ -709,6 +741,7 @@ def create_operations_router(
             "loops": _camel_loops(loop_snapshot()),
             "retention": _retention_json(retention_sweeps_from(loop_snapshot())),
             "series": signals["series"],
+            "support": await _support_json(session_factory),
         }
 
     @router.get("/api/admin/metrics/events")

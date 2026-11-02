@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
+from app.services.supporter import renewing_subscriptions
 from app.services.telemetry import database_operation_of, telemetry
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
 from app.db import init_db, maintenance_engine
@@ -275,6 +276,9 @@ class AccountDeletionResult:
     #: so the caller can tell them their lists moved. Never the deleted
     #: identities themselves - their sockets are already being closed.
     friends_notified: tuple[str, ...] = ()
+    #: What would keep charging a deleted account. The caller cancels them after
+    #: the commit: a provider call has no place inside this transaction.
+    subscriptions_to_cancel: tuple[str, ...] = ()
 
 
 def _entity_id(value: str | UUID) -> UUID:
@@ -1847,6 +1851,7 @@ async def anonymize_account(
             # Who bought a supporter pass goes; what was bought stays, because the
             # provider keeps the invoice and a later refund still has to find its
             # order. `ON DELETE SET NULL` cannot do this: the account row stays.
+            subscriptions_to_cancel = await renewing_subscriptions(session, identity_ids)
             await session.execute(
                 update(SupportPurchase)
                 .where(SupportPurchase.user_id.in_(identity_ids))
@@ -2214,6 +2219,7 @@ async def anonymize_account(
                 identities_anonymized=len(identity_ids),
                 sessions_revoked=int(sessions.rowcount or 0),
                 friends_notified=tuple(sorted(friends_of)),
+                subscriptions_to_cancel=subscriptions_to_cancel,
             )
 
 
