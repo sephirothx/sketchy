@@ -622,7 +622,20 @@ REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
 WARNING_KINDS = ("warning", "avatar_removal")
 # A supporter's two-tone name (#1476). `users.name_style` holds a key, and each
 # client draws it; a hex cannot say two colours and stay readable on both themes.
-NAME_STYLES = ("sunset", "ocean", "aurora", "ember", "berry", "meadow")
+NAME_STYLES = (
+    "sunset",
+    "ocean",
+    "aurora",
+    "ember",
+    "berry",
+    "meadow",
+    "twilight",
+    "galaxy",
+    "glacier",
+    "lagoon",
+    "orchid",
+    "silver",
+)
 # What sold a supporter pass, and what a row of its ledger records (#1472).
 class SupportProvider(StrEnum):
     PADDLE = "paddle"

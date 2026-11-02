@@ -537,6 +537,12 @@ const NAME_STYLE_LABELS: Record<string, () => string> = {
   ember: () => ui.support.styleEmber,
   berry: () => ui.support.styleBerry,
   meadow: () => ui.support.styleMeadow,
+  twilight: () => ui.support.styleTwilight,
+  galaxy: () => ui.support.styleGalaxy,
+  glacier: () => ui.support.styleGlacier,
+  lagoon: () => ui.support.styleLagoon,
+  orchid: () => ui.support.styleOrchid,
+  silver: () => ui.support.styleSilver,
 };
 
 /** Styles A: a row under the colour swatches (#1476). Only where a pass is for

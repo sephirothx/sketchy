@@ -20,7 +20,22 @@ down_revision: str | Sequence[str] | None = "8b0c1d2e3f4a"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_CHECK = "name_style IN ('sunset', 'ocean', 'aurora', 'ember', 'berry', 'meadow')"
+_CHECK = (
+    "name_style IN ("
+    "'sunset', "
+    "'ocean', "
+    "'aurora', "
+    "'ember', "
+    "'berry', "
+    "'meadow', "
+    "'twilight', "
+    "'galaxy', "
+    "'glacier', "
+    "'lagoon', "
+    "'orchid', "
+    "'silver'"
+    ")"
+)
 
 
 def upgrade() -> None:

@@ -66,7 +66,20 @@ export async function sendToCheckout(getUrl: () => Promise<string>, seated: bool
   }
 }
 
-export const NAME_STYLES = ["sunset", "ocean", "aurora", "ember", "berry", "meadow"] as const;
+export const NAME_STYLES = [
+  "sunset",
+  "ocean",
+  "aurora",
+  "ember",
+  "berry",
+  "meadow",
+  "twilight",
+  "galaxy",
+  "glacier",
+  "lagoon",
+  "orchid",
+  "silver",
+] as const;
 
 export function setAccountNameStyle(nameStyle: string | null): Promise<AuthUser> {
   return apiRequest<AuthUser>("/api/auth/name-style", { method: "POST", body: { nameStyle } });

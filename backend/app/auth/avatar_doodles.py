@@ -52,8 +52,6 @@ DOODLES: tuple[str, ...] = (
 SUPPORTER_DOODLES: tuple[str, ...] = (
     "whale",
     "octopus",
-    "snail",
-    "bee",
     "hedgehog",
     "dino",
     "unicorn",

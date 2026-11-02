@@ -89,13 +89,13 @@
 }
 
 .name-style-berry {
-  --name-style-from: #be185d;
-  --name-style-to: #6d28d9;
+  --name-style-from: #9d174d;
+  --name-style-to: #4338ca;
 }
 
 [data-theme="dark"] .name-style-berry {
   --name-style-from: #f472b6;
-  --name-style-to: #a78bfa;
+  --name-style-to: #818cf8;
 }
 
 .name-style-meadow {
@@ -106,4 +106,64 @@
 [data-theme="dark"] .name-style-meadow {
   --name-style-from: #a3e635;
   --name-style-to: #2dd4bf;
+}
+
+.name-style-twilight {
+  --name-style-from: #4338ca;
+  --name-style-to: #a21caf;
+}
+
+[data-theme="dark"] .name-style-twilight {
+  --name-style-from: #a5b4fc;
+  --name-style-to: #f0abfc;
+}
+
+.name-style-galaxy {
+  --name-style-from: #6d28d9;
+  --name-style-to: #1d4ed8;
+}
+
+[data-theme="dark"] .name-style-galaxy {
+  --name-style-from: #c084fc;
+  --name-style-to: #60a5fa;
+}
+
+.name-style-glacier {
+  --name-style-from: #0369a1;
+  --name-style-to: #4f46e5;
+}
+
+[data-theme="dark"] .name-style-glacier {
+  --name-style-from: #7dd3fc;
+  --name-style-to: #a5b4fc;
+}
+
+.name-style-lagoon {
+  --name-style-from: #1d4ed8;
+  --name-style-to: #047857;
+}
+
+[data-theme="dark"] .name-style-lagoon {
+  --name-style-from: #60a5fa;
+  --name-style-to: #34d399;
+}
+
+.name-style-orchid {
+  --name-style-from: #a21caf;
+  --name-style-to: #be123c;
+}
+
+[data-theme="dark"] .name-style-orchid {
+  --name-style-from: #e879f9;
+  --name-style-to: #fd8a9b;
+}
+
+.name-style-silver {
+  --name-style-from: #334155;
+  --name-style-to: #526077;
+}
+
+[data-theme="dark"] .name-style-silver {
+  --name-style-from: #e2e8f0;
+  --name-style-to: #94a3b8;
 }

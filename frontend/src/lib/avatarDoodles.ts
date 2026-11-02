@@ -45,8 +45,6 @@ export const DOODLES = [
 export const SUPPORTER_DOODLES = [
   "whale",
   "octopus",
-  "snail",
-  "bee",
   "hedgehog",
   "dino",
   "unicorn",

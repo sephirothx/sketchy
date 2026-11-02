@@ -281,9 +281,20 @@ class NameColorBody(ControlFreeModel):
 class NameStyleBody(ControlFreeModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    name_style: Literal["sunset", "ocean", "aurora", "ember", "berry", "meadow"] | None = Field(
-        alias="nameStyle"
-    )
+    name_style: Literal[
+        "sunset",
+        "ocean",
+        "aurora",
+        "ember",
+        "berry",
+        "meadow",
+        "twilight",
+        "galaxy",
+        "glacier",
+        "lagoon",
+        "orchid",
+        "silver",
+    ] | None = Field(alias="nameStyle")
 
 
 class ChangePasswordBody(ControlFreeModel):
