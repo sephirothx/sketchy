@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
@@ -31,6 +33,7 @@ from app.support.providers import (
     Cancellation,
     BadSignature,
     PaddleProvider,
+    ProviderRefused,
     ProviderUnavailable,
     StubProvider,
     parse_paddle_event,
@@ -622,6 +625,64 @@ async def test_paddle_checkout_sends_the_account_in_custom_data_and_the_extra_on
     assert sent["payload"]["items"][0] == {"price_id": "pri_year", "quantity": 1}
     assert sent["payload"]["items"][1]["price"]["unit_price"]["amount"] == "500"
     assert sent["payload"]["checkout"]["url"] == "https://pay.example.test/"
+
+
+def _paddle_answering(monkeypatch, answers):
+    """A Paddle that answers each call in turn, with an exception or a body."""
+    calls: list[tuple] = []
+
+    async def fake_call(self, method, path, payload=None):
+        calls.append((method, path, payload))
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(PaddleProvider, "_call", fake_call)
+    return PaddleProvider(SupportConfig(provider="paddle", webhook_secret="s")), calls
+
+
+async def test_cancelling_what_paddle_already_cancelled_succeeds(monkeypatch):
+    provider, calls = _paddle_answering(
+        monkeypatch, [ProviderRefused("400"), {"data": {"status": "canceled"}}]
+    )
+    assert (await provider.cancel_at_period_end("sub_1")).subscription_id == "sub_1"
+    assert [call[0] for call in calls] == ["POST", "GET"]
+
+
+async def test_a_paused_subscription_is_cancelled_at_once(monkeypatch):
+    provider, calls = _paddle_answering(
+        monkeypatch, [ProviderRefused("400"), {"data": {"status": "paused"}}, {"data": {}}]
+    )
+    await provider.cancel_at_period_end("sub_1")
+    assert calls[-1][2] == {"effective_from": "immediately"}
+
+
+async def test_a_real_refusal_to_cancel_still_fails(monkeypatch):
+    provider, _ = _paddle_answering(
+        monkeypatch, [ProviderRefused("400"), {"data": {"status": "active"}}]
+    )
+    with pytest.raises(ProviderRefused):
+        await provider.cancel_at_period_end("sub_1")
+
+
+async def test_paddle_tells_a_no_from_an_outage(monkeypatch):
+    provider = PaddleProvider(SupportConfig(provider="paddle", webhook_secret="s"))
+
+    def answering(code):
+        def urlopen(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, code, "no", {}, None)
+
+        return urlopen
+
+    monkeypatch.setattr(urllib.request, "urlopen", answering(400))
+    with pytest.raises(ProviderRefused):
+        await provider._call("GET", "/subscriptions/sub_1")
+    for code in (429, 503):
+        monkeypatch.setattr(urllib.request, "urlopen", answering(code))
+        with pytest.raises(ProviderUnavailable) as caught:
+            await provider._call("GET", "/subscriptions/sub_1")
+        assert not isinstance(caught.value, ProviderRefused)
 
 
 def test_production_refuses_a_tier_that_could_give_passes_away():

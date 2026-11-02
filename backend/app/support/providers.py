@@ -46,6 +46,11 @@ class ProviderUnavailable(Exception):
     """The provider could not be reached, or refused what we asked."""
 
 
+class ProviderRefused(ProviderUnavailable):
+    """It answered, and the answer was no: asking again will not change it. Anything
+    else may have worked, or may yet."""
+
+
 @dataclass(frozen=True)
 class ProviderEvent:
     """What a webhook said, in our words. Carries nothing about the buyer but
@@ -255,6 +260,16 @@ class PaddleProvider:
 
         try:
             return await asyncio.to_thread(send)
+        except urllib.error.HTTPError as error:
+            logger.warning(
+                "support_provider_call_failed %s %s: %s",
+                method,
+                path.partition("?")[0],
+                error.code,
+            )
+            if 400 <= error.code < 500 and error.code != 429:
+                raise ProviderRefused(str(error.code)) from error
+            raise ProviderUnavailable(str(error.code)) from error
         # OSError covers URLError and timeouts; HTTPException a connection that
         # dropped mid-response. Either way the provider did not answer.
         except (OSError, http.client.HTTPException, ValueError) as error:
@@ -308,11 +323,24 @@ class PaddleProvider:
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation:
         quoted = urllib.parse.quote(subscription_id, safe="")
-        response = await self._call(
-            "POST",
-            f"/subscriptions/{quoted}/cancel",
-            {"effective_from": "next_billing_period"},
-        )
+        try:
+            response = await self._call(
+                "POST",
+                f"/subscriptions/{quoted}/cancel",
+                {"effective_from": "next_billing_period"},
+            )
+        except ProviderRefused:
+            # Already over, when a webhook saying so was lost: that is what was
+            # asked for, and retrying it would fail for ever. And a paused one has
+            # no next period to stop at.
+            response = await self._call("GET", f"/subscriptions/{quoted}")
+            status = (response.get("data") or {}).get("status")
+            if status == "paused":
+                response = await self._call(
+                    "POST", f"/subscriptions/{quoted}/cancel", {"effective_from": "immediately"}
+                )
+            elif status != "canceled":
+                raise
         return Cancellation(
             subscription_id=subscription_id,
             email=await self._email_of((response.get("data") or {}).get("customer_id")),
