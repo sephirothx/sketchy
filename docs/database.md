@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`9c1d2e3f4a5b_support_pitch.py` (#1475). Both this line and the table
+`8b0c1d2e3f4a_support_gifts.py` (#1540). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -795,7 +795,7 @@ cd backend && .venv/bin/python -m app.auth.account_data --limit 25
 ```
 
 Format v1 exports expire after seven days. The document contains the owner's account
-fields, the supporter pass's facts (`support`: each purchase, and each refund or chargeback of an order they bought), linked guest identities, session metadata, game seats, drawn turns, correct
+fields, the supporter pass's facts (`support`: each purchase, and each refund or chargeback of an order they bought, with the giver's id unless they asked not to be named; `supportGiftsGiven`: each gift they gave), linked guest identities, session metadata, game seats, drawn turns, correct
 guesses, prompt lists with their working copies and live and pending editions (schema 16,
 #1362), the lists it starred, unexpired authored retained
 messages, submitted evidence, blocks, presets, account-event metadata, and its inbox as
@@ -886,7 +886,9 @@ What a provider told us about a supporter pass, one row per event (#1472). `id` 
 `user_id` (→ `users`, `SET NULL`, nullable) · `provider` (`paddle \| stub`,
 `ck_support_purchases_provider`) · `provider_event_id` · `provider_order_id` (the
 transaction; on a cancellation, the subscription) · `provider_subscription_id` (what renews
-it; none on a lifetime pass) · `owner_deleted_at` (when deletion cleared `user_id`, the only way to tell how long a renewal nobody owns has been owed a stop) · `kind`
+it; none on a lifetime pass or a gift) · `gifted_by_user_id` (→ `users`, `SET NULL`: who paid,
+when `user_id` was given it, so status, the mark and the refund rule need no change) ·
+`gift_anonymous` · `owner_deleted_at` (when deletion cleared `user_id`, the only way to tell how long a renewal nobody owns has been owed a stop) · `kind`
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
@@ -910,7 +912,7 @@ landed first still wins, and a renewal is one more row with its own period. `/ap
 reads it as subqueries on its settings statement, so it adds none (R-PLAT-17).
 
 Append-only by grant (`APPEND_ONLY_TABLES` in [`db/roles.py`](../backend/app/db/roles.py)),
-with one column-level exception: `UPDATE (user_id, owner_deleted_at)`, because deletion tombstones the
+with one column-level exception: `UPDATE (user_id, gifted_by_user_id, owner_deleted_at)`, because deletion tombstones the
 `users` row and so `ON DELETE SET NULL` never fires. There is no raw payload column; a
 provider's payload carries the buyer's email. The erasure barrier does not apply, since
 nothing here writes a name, text or pixels. A writer MUST still not name a deleted account:
@@ -921,9 +923,9 @@ the webhook reads the account's state first, and a late renewal or refund names 
 foreign key) · `params` (JSON / `JSONB`) · `created_at` · `read_at`, with
 `ck_inbox_entries_kind` (`warning`, `drawing_shared`, `friend_request`,
 `friend_accepted`, `game_invite`, `reports_reviewed`, `role`, `supporter_started`,
-`supporter_ending`), (the two `supporter_*` kinds name their `support_purchases` row as the subject and read
+`supporter_ending`, `supporter_gifted`), (`supporter_started` and `supporter_ending` name their `support_purchases` row as the subject and read
 what they say from it, so a later cancellation or refund changes or removes them; `supporter_started`
-is written with the fact, and `supporter_ending` by the hourly `supporter_ending_notices` sweep,
+and `supporter_gifted` are written with the fact, and `supporter_ending` by the hourly `supporter_ending_notices` sweep,
 which pushes nothing, so it arrives on the next read),
 `ix_inbox_entries_user_created` on (`user_id`, `created_at`) for the newest-first page,
 `ix_inbox_entries_created_at` for the sweep, the partial `ix_inbox_entries_user_unread`
@@ -3540,7 +3542,7 @@ property was only a convention of the code:
 | Role | Used by | May |
 | --- | --- | --- |
 | `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
-| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events`, `score_events` and `support_purchases` (plus `UPDATE (user_id)` on the last, which deletion clears), only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events`, `score_events` and `support_purchases` (plus `UPDATE (user_id, gifted_by_user_id)` on the last, which deletion clears), only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
 | `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
 
 The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the

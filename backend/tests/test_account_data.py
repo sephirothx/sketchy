@@ -341,6 +341,21 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                         currency="EUR",
                     )
                 )
+            # A gift they gave, under another account's name.
+            session.add(
+                SupportPurchase(
+                    user_id=other_row.id,
+                    gifted_by_user_id=owner_row.id,
+                    provider="stub",
+                    provider_event_id="gift-from-the-owner",
+                    provider_order_id="gift-from-the-owner",
+                    kind="purchase",
+                    period_start=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                    period_end=datetime(2027, 11, 1, tzinfo=timezone.utc),
+                    amount_minor=1900,
+                    currency="EUR",
+                )
+            )
             # A refund that landed knowing nobody is still theirs to see.
             session.add(
                 SupportPurchase(
@@ -720,6 +735,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         ("purchase", "order-of-the-owner", 1900),
         ("refund", "order-of-the-owner", 1900),
     ]
+
+    assert [gift["orderId"] for gift in artifact["supportGiftsGiven"]] == ["gift-from-the-owner"]
+    assert artifact["supportGiftsGiven"][0]["recipientUserId"] == str(other_row.id)
 
     contract = json.loads(
         (REPO_ROOT / "fixtures" / "account_data_export_v19_fields.json").read_text(

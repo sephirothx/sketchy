@@ -129,7 +129,8 @@ from app.domain_values import (
 # `soloBests`, #1434) - without the turn,
 # which would name a stranger's drawing the player saw only anonymously. To 19
 # when the supporter pass's facts joined it (`support`) and settings gained
-# `showSupporterMark` and `supporterNudgeDismissed` (#1472, #1475).
+# `showSupporterMark` and `supporterNudgeDismissed`, and gifts
+# (`supportGiftsGiven`, #1472, #1475, #1540).
 EXPORT_SCHEMA_VERSION = 19
 
 # Events that name the requester only as their **target** and are exported:
@@ -1531,7 +1532,30 @@ async def _write_export_artifact(
             "amountMinor": fact.amount_minor,
             "currency": fact.currency,
             "orderId": fact.provider_order_id,
+            # Who gave it, unless they asked not to be named (#1540).
+            "giftedByUserId": (
+                None
+                if fact.gift_anonymous or fact.gifted_by_user_id is None
+                else str(fact.gifted_by_user_id)
+            ),
             "createdAt": _timestamp(fact.created_at),
+        },
+    )
+    writer.key("supportGiftsGiven")
+    await _write_rows(
+        writer,
+        session,
+        select(SupportPurchase)
+        .where(SupportPurchase.gifted_by_user_id.in_(identity_ids))
+        .order_by(SupportPurchase.created_at, SupportPurchase.id),
+        lambda gift: {
+            "recipientUserId": str(gift.user_id) if gift.user_id else None,
+            "periodStart": _timestamp(gift.period_start),
+            "periodEnd": _timestamp(gift.period_end),
+            "amountMinor": gift.amount_minor,
+            "currency": gift.currency,
+            "orderId": gift.provider_order_id,
+            "anonymous": gift.gift_anonymous,
         },
     )
     writer.key("exportRequests")
@@ -1857,6 +1881,11 @@ async def anonymize_account(
                 update(SupportPurchase)
                 .where(SupportPurchase.user_id.in_(identity_ids))
                 .values(user_id=None, owner_deleted_at=deleted_at)
+            )
+            await session.execute(
+                update(SupportPurchase)
+                .where(SupportPurchase.gifted_by_user_id.in_(identity_ids))
+                .values(gifted_by_user_id=None)
             )
             # Every drawing row this erasure writes, locked before any row that
             # hangs off one is touched, in one ascending statement: its own

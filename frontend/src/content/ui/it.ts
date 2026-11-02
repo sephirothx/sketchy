@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Hai già un pass sostenitore.",
   support_unavailable: "Non è stato possibile aprire il pagamento. Non è stato addebitato nulla. Riprova.",
   support_cancel_failed: "Non è stato possibile fermare il rinnovo, quindi è ancora attivo. Riprova.",
+  support_gift_refused: "Questo giocatore non può ricevere un regalo.",
   identity_unavailable: "Sketchy non è riuscito a confermare chi sei. Ricarica e riprova.",
 
   // Rooms
@@ -441,7 +442,16 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const IT: Catalogue = {
   supporterMark: { label: "Sostenitore" },
   support: {
+    giftActionFor: (p: { name: string }) => `Regala un pass a ${p.name}`,
     markNotSaved: "Non è stato possibile salvare. Riprova.",
+    giftAction: "Regala un pass",
+    giftCancel: "Annulla",
+    giftTitle: (p: { name: string }) => `Regala a ${p.name} un anno di pass sostenitore`,
+    giftPrice: (p: { price: string }) => `${p.price}, una tantum.`,
+    giftTerms: (p: { name: string }) => `Non si rinnova mai e non addebita nulla a ${p.name}. Se ${p.name} è già sostenitore, l'anno inizia alla fine del suo pass.`,
+    giftAnonymous: (p: { name: string }) => `Non mostrare il mio nome a ${p.name}`,
+    inboxGifted: (p: { date: string }) => `Qualcuno ti ha regalato un anno di pass sostenitore. Il tuo pass dura fino al ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} ti ha regalato un anno di pass sostenitore. Il tuo pass dura fino al ${p.date}.`,
     title: "Sostieni Sketchy",
     introLead: "Sketchy è gestito da un solo sviluppatore, senza pubblicità e senza pay-to-win.",
     introPass: "Un pass sostenitore aiuta a tenerlo in vita e include qualche piccolo extra come ringraziamento.",

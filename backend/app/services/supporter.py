@@ -9,9 +9,10 @@ step with the ledger (R-SUP-01).
 """
 from __future__ import annotations
 
+import calendar
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -26,7 +27,7 @@ from app.auth.bans import active_ban_filter
 from app.db.models import InboxEntry, SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
 from app.support.config import support_config
-from app.support.providers import ProviderEvent
+from app.support.providers import PRODUCT_GIFT, ProviderEvent
 
 
 @dataclass(frozen=True)
@@ -377,6 +378,8 @@ async def record_support_fact(
     period_start: datetime | None = None,
     period_end: datetime | None = None,
     provider_subscription_id: str | None = None,
+    gifted_by_user_id: UUID | None = None,
+    gift_anonymous: bool = False,
 ) -> bool:
     """Record one provider event; False if it was already recorded.
 
@@ -401,6 +404,8 @@ async def record_support_fact(
             period_start=period_start,
             period_end=period_end,
             provider_subscription_id=provider_subscription_id,
+            gifted_by_user_id=gifted_by_user_id,
+            gift_anonymous=gift_anonymous,
         )
         .on_conflict_do_nothing(index_elements=["provider", "provider_event_id"])
     )
@@ -468,6 +473,8 @@ async def apply_provider_event(
         if known is None:
             return False, None
     user_id = await _attributed_account(session, event)
+    if event.product == PRODUCT_GIFT and event.kind == SupportPurchaseKind.PURCHASE:
+        event = await _with_gift_period(session, event, user_id)
     recorded = await record_support_fact(
         session,
         provider=provider,
@@ -480,8 +487,49 @@ async def apply_provider_event(
         currency=event.currency,
         period_start=event.period_start,
         period_end=event.period_end,
+        gifted_by_user_id=await _gift_giver(session, event),
+        gift_anonymous=event.gift_anonymous,
     )
     return recorded, user_id
+
+
+GIFT_MONTHS = 12
+
+
+def months_later(moment: datetime, months: int) -> datetime:
+    index = moment.month - 1 + months
+    year = moment.year + index // 12
+    month = index % 12 + 1
+    return moment.replace(
+        year=year, month=month, day=min(moment.day, calendar.monthrange(year, month)[1])
+    )
+
+
+async def _with_gift_period(
+    session: AsyncSession, event: ProviderEvent, user_id: UUID | None
+) -> ProviderEvent:
+    """A gift starts when the recipient's time ends, so nothing is wasted (#1540)."""
+    start = event.period_start or datetime.now(timezone.utc)
+    if user_id is not None:
+        _, _, until, _ = supporter_status_columns(user_id, start)
+        latest = await session.scalar(select(until))
+        if latest is not None and latest > start:
+            start = latest
+    return replace(event, period_start=start, period_end=months_later(start, GIFT_MONTHS))
+
+
+async def _gift_giver(session: AsyncSession, event: ProviderEvent) -> UUID | None:
+    """The giver, if they still have an account to name."""
+    if not event.giver_id:
+        return None
+    try:
+        giver = UUID(event.giver_id)
+    except ValueError:
+        return None
+    account = await session.get(User, giver, with_for_update={"read": True})
+    if account is None or account.state != AccountState.REGISTERED.value:
+        return None
+    return giver
 
 
 ENDING_NOTICE = timedelta(days=14)

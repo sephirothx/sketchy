@@ -8,6 +8,7 @@ export type SupportProduct = "year" | "lifetime";
 export interface SupportPlans {
   year: { price: string };
   lifetime: { price: string };
+  gift: { price: string };
   maxExtraMinor: number;
   tipUrl: string | null;
 }
@@ -32,6 +33,19 @@ export async function startCheckout(product: SupportProduct, extraMinor: number)
   const { url } = await apiRequest<{ url: string }>("/api/support/checkout", {
     method: "POST",
     body: { product, extraMinor },
+  });
+  return url;
+}
+
+/** Twelve months for somebody else, one charge, never renewing (#1540). */
+export async function startGift(
+  recipientId: string,
+  anonymous: boolean,
+  extraMinor: number,
+): Promise<string> {
+  const { url } = await apiRequest<{ url: string }>("/api/support/gift", {
+    method: "POST",
+    body: { recipientId, anonymous, extraMinor },
   });
   return url;
 }

@@ -30,6 +30,7 @@ from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
 from app.request_text import ControlFreeModel
+from app.services.friends import pair_is_blocked
 from app.services.inbox import add_entry
 from app.services.supporter import (
     apply_provider_event,
@@ -42,6 +43,7 @@ from app.services.supporter import (
 from app.support.cancellation import cancel_quietly, cancel_subscription
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
 from app.support.providers import (
+    PRODUCT_GIFT,
     cancellation_event,
     PRODUCT_LIFETIME,
     SIGNATURE_HEADER,
@@ -81,6 +83,14 @@ class CheckoutBody(ControlFreeModel):
     model_config = ConfigDict(populate_by_name=True)
 
     product: Literal["year", "lifetime"]
+    extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
+
+
+class GiftBody(ControlFreeModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    recipient_id: UUID = Field(alias="recipientId")
+    anonymous: bool = False
     extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
 
 
@@ -162,6 +172,18 @@ async def _tell_started(
             SupportPurchase.provider_event_id == event.event_id,
         )
     )
+    if event.product == PRODUCT_GIFT:
+        row = await session.get(SupportPurchase, purchase_id)
+        named = None if row is None or row.gift_anonymous else row.gifted_by_user_id
+        return await add_entry(
+            session,
+            user_id=user_id,
+            kind="supporter_gifted",
+            subject_id=named,
+            # Named by giver, so a second gift from them comes back to the top.
+            renew=named is not None,
+            params={"purchase": str(purchase_id)},
+        )
     # The subject is the row: the entry reads what it says from there (R-INBOX-05).
     return await add_entry(session, user_id=user_id, kind="supporter_started", subject_id=purchase_id)
 
@@ -212,6 +234,7 @@ def create_support_router(
         return {
             "year": {"price": config.year_label},
             "lifetime": {"price": config.lifetime_label},
+            "gift": {"price": config.gift_label},
             "maxExtraMinor": MAX_EXTRA_MINOR,
             "tipUrl": config.tip_url or None,
         }
@@ -316,6 +339,43 @@ def create_support_router(
             return Response(status_code=500)
         return JSONResponse({"ok": True})
 
+    @router.post("/gift")
+    async def gift(body: GiftBody, request: Request) -> dict:
+        """Twelve months for somebody else, one charge, never renewing (#1540).
+
+        One refusal for every reason: a blocked pair, a guest and a lifetime pass
+        all read the same, so this cannot find out who holds a pass or who has
+        blocked whom.
+        """
+        giver = await account(request)
+        throttle(checkout_limiter, str(giver.id))
+        throttle(checkout_address_limiter, getattr(request.state, "client_ip_hash", None))
+        async with session_factory() as session:
+            recipient = await session.get(User, body.recipient_id)
+            refused = (
+                recipient is None
+                or recipient.id == giver.id
+                or recipient.state != AccountState.REGISTERED.value
+                or await pair_is_blocked(session, giver.id, recipient.id)
+            )
+            if not refused:
+                status = await supporter_status(session, recipient.id)
+                refused = status.active and status.until is None
+        if refused:
+            raise Refusal(409, ErrorCode.SUPPORT_GIFT_REFUSED)
+        try:
+            url = await provider.create_checkout(
+                product=PRODUCT_GIFT,
+                account_id=str(recipient.id),
+                extra_minor=body.extra_minor,
+                base_url=public_base_url(),
+                giver_id=str(giver.id),
+                gift_anonymous=body.anonymous,
+            )
+        except ProviderUnavailable as error:
+            raise Refusal(502, ErrorCode.SUPPORT_UNAVAILABLE) from error
+        return {"url": url}
+
     @router.post("/webhooks/{provider_name}")
     async def webhook(provider_name: str, request: Request):
         if provider_name != provider.name:
@@ -399,7 +459,7 @@ def create_support_router(
             if read is None:
                 raise Refusal(404, ErrorCode.SUPPORT_UNAVAILABLE)
             return HTMLResponse(
-                STUB_PAGE.format(product=html.escape(read[0]), token=html.escape(token))
+                STUB_PAGE.format(product=html.escape(read["product"]), token=html.escape(token))
             )
 
         @router.post("/stub/pay")
@@ -410,9 +470,7 @@ def create_support_router(
             if read is None:
                 raise Refusal(404, ErrorCode.SUPPORT_UNAVAILABLE)
             now = datetime.now(timezone.utc)
-            body = stub.paid_event(
-                product=read[0], account_id=read[1], extra_minor=read[2], now=now
-            )
+            body = stub.paid_event(**read, now=now)
             await receive_webhook(
                 body,
                 {SIGNATURE_HEADER: signature_header(config.webhook_secret, body, now)},

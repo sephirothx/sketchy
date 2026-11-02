@@ -11,8 +11,9 @@ append-only property was a convention of the code. Three roles instead:
 - `sketchy_app` - the web process and operator commands - reads and writes
   rows and nothing else: no DDL, no `TRUNCATE`, no `TRIGGER`, and only
   `INSERT` and `SELECT` on the ledgers, `audit_events`, `score_events` and
-  `support_purchases` - the last with one column besides, `user_id`, which
-  deletion clears because the account row it names is tombstoned, not removed;
+  `support_purchases` - the last with two columns besides, `user_id` and
+  `gifted_by_user_id`, which deletion clears because the account row they name
+  is tombstoned, not removed;
 - `sketchy_monitor` holds `pg_monitor` and reads no table
   (`ops/postgres/init.sql`, #889).
 
@@ -35,7 +36,7 @@ MONITOR_ROLE = "sketchy_monitor"
 
 # Append-only by grant, not only by convention: the application may add to
 # them and read them, and nothing it runs can rewrite or remove a row. The one
-# exception is `support_purchases.user_id`, below.
+# exception is who `support_purchases` names, below.
 APPEND_ONLY_TABLES = ("audit_events", "score_events", "support_purchases")
 ROW_PRIVILEGES = "SELECT, INSERT, UPDATE, DELETE"
 
@@ -70,7 +71,7 @@ def grant_statements(app_role: str = APP_ROLE) -> tuple[str, ...]:
         f"REVOKE UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES ON {ledgers} FROM {app_role}",
         # After the revoke, which takes column grants with it: deleting an account
         # clears who bought, and nothing can rewrite what was bought.
-        f"GRANT UPDATE (user_id, owner_deleted_at) ON support_purchases TO {app_role}",
+        f"GRANT UPDATE (user_id, gifted_by_user_id, owner_deleted_at) ON support_purchases TO {app_role}",
         # The revision check reads it; only the migration writes it.
         f"REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON alembic_version FROM {app_role}",
     )

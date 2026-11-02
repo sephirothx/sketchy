@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Tu as déjà un pass de soutien.",
   support_unavailable: "Le paiement est injoignable. Rien n'a été prélevé. Réessaie.",
   support_cancel_failed: "Le renouvellement n'a pas pu être arrêté, il reste donc actif. Réessaie.",
+  support_gift_refused: "Ce joueur ne peut pas recevoir de cadeau.",
   identity_unavailable: "Sketchy n’a pas pu confirmer qui tu es. Recharge et réessaie.",
 
   // Rooms
@@ -441,7 +442,16 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const FR: Catalogue = {
   supporterMark: { label: "Soutien" },
   support: {
+    giftActionFor: (p: { name: string }) => `Offrir un pass à ${p.name}`,
     markNotSaved: "Impossible d'enregistrer. Réessaie.",
+    giftAction: "Offrir un pass",
+    giftCancel: "Annuler",
+    giftTitle: (p: { name: string }) => `Offre à ${p.name} un an de pass de soutien`,
+    giftPrice: (p: { price: string }) => `${p.price}, une seule fois.`,
+    giftTerms: (p: { name: string }) => `Il ne se renouvelle jamais et ne coûte rien à ${p.name}. Si ${p.name} a déjà un pass, l'année commence à la fin de celui-ci.`,
+    giftAnonymous: (p: { name: string }) => `Ne pas montrer mon nom à ${p.name}`,
+    inboxGifted: (p: { date: string }) => `Quelqu'un t'a offert un an de pass de soutien. Ton pass court jusqu'au ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} t'a offert un an de pass de soutien. Ton pass court jusqu'au ${p.date}.`,
     title: "Soutenir Sketchy",
     introLead: "Sketchy est géré par un seul développeur, sans publicité et sans pay-to-win.",
     introPass: "Un pass de soutien aide à le faire vivre et offre quelques petits extras en guise de remerciement.",

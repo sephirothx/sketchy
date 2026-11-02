@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Masz już przepustkę wspierającego.",
   support_unavailable: "Nie udało się otworzyć płatności. Nic nie zostało pobrane. Spróbuj ponownie.",
   support_cancel_failed: "Nie udało się zatrzymać odnowienia, więc nadal jest włączone. Spróbuj ponownie.",
+  support_gift_refused: "Ten gracz nie może otrzymać prezentu.",
   identity_unavailable: "Nie udało się potwierdzić, kim jesteś. Odśwież stronę i spróbuj ponownie.",
 
   // Rooms
@@ -441,7 +442,16 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const PL: Catalogue = {
   supporterMark: { label: "Wspierający" },
   support: {
+    giftActionFor: (p: { name: string }) => `Podaruj przepustkę: ${p.name}`,
     markNotSaved: "Nie udało się zapisać. Spróbuj ponownie.",
+    giftAction: "Podaruj przepustkę",
+    giftCancel: "Anuluj",
+    giftTitle: (p: { name: string }) => `Podaruj ${p.name} rok przepustki wspierającego`,
+    giftPrice: (p: { price: string }) => `${p.price}, jednorazowo.`,
+    giftTerms: (p: { name: string }) => `Nigdy się nie odnawia i nic nie kosztuje ${p.name}. Jeśli ${p.name} już wspiera, rok zacznie się po końcu obecnej przepustki.`,
+    giftAnonymous: (p: { name: string }) => `Nie pokazuj mojej nazwy ${p.name}`,
+    inboxGifted: (p: { date: string }) => `Ktoś podarował Ci rok przepustki wspierającego. Przepustka działa do ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} podarował(a) Ci rok przepustki wspierającego. Przepustka działa do ${p.date}.`,
     title: "Wesprzyj Sketchy",
     introLead: "Sketchy prowadzi jeden deweloper, bez reklam i bez pay-to-win.",
     introPass: "Przepustka wspierającego pomaga utrzymać grę i daje kilka drobnych dodatków w podziękowaniu.",

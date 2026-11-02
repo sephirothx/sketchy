@@ -72,6 +72,7 @@ export function DeckIcon(p: IconProps) {
 export function QrIcon(p: IconProps) { return <IconBase {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3" /><path d="M21 14v.01" /><path d="M14 21h7" /><path d="M21 17v4" /></IconBase>; }
 export function LinkIcon(p: IconProps) { return <IconBase {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></IconBase>; }
 export function StarIcon(p: IconProps) { return <IconBase {...p}><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z" /></IconBase>; }
+export function GiftIcon(p: IconProps) { return <IconBase {...p}><rect x="3" y="8" width="18" height="5" rx="1" /><path d="M5 13v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" /><path d="M12 8v13" /><path d="M12 8S10.5 3.5 8 3.5a2.2 2.2 0 0 0 0 4.5h4ZM12 8s1.5-4.5 4-4.5a2.2 2.2 0 0 1 0 4.5h-4Z" /></IconBase>; }
 export function HeartIcon(p: IconProps) { return <IconBase {...p}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" /></IconBase>; }
 export function EyeIcon(p: IconProps) { return <IconBase {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></IconBase>; }
 export function PencilIcon(p: IconProps) { return <IconBase {...p}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></IconBase>; }

@@ -67,7 +67,9 @@ async def test_the_application_role_cannot_truncate_alter_or_rewrite_the_ledgers
             )
             assert await connection.scalar(text("SELECT count(*) FROM audit_events")) >= 1
             # Deleting an account clears who bought a pass, and only that.
-            await connection.execute(text("UPDATE support_purchases SET user_id = NULL"))
+            await connection.execute(
+                text("UPDATE support_purchases SET user_id = NULL, gifted_by_user_id = NULL")
+            )
         await verify_least_privilege(engine)
     finally:
         await engine.dispose()

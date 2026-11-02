@@ -2385,6 +2385,7 @@
    "eventType",
    "expiresAt",
    "extraPromptLanguages",
+   "giftedByUserId",
    "imageBase64",
    "isActive",
    "keyBindings",
@@ -2402,6 +2403,7 @@
    "promptListId",
    "promptListName",
    "readAt",
+   "recipientUserId",
    "reportDetails",
    "reportedAt",
    "requestedByMe",
@@ -3086,7 +3088,7 @@
    "displayName"
   ]
  },
- "protocolVersion": 72,
+ "protocolVersion": 73,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -3245,6 +3247,7 @@
    "support_already_active",
    "support_unavailable",
    "support_cancel_failed",
+   "support_gift_refused",
    "solo_pool_empty",
    "solo_date_out_of_range",
    "no_such_daily",

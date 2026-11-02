@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import calendar
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -24,20 +23,11 @@ from app.domain_values import (
     SupportPurchaseKind,
     UserRole,
 )
-from app.services.supporter import record_support_fact
+from app.services.supporter import months_later, record_support_fact
 
 
 class SupportGrantError(RuntimeError):
     """Raised when a grant cannot be made."""
-
-
-def _months_later(moment: datetime, months: int) -> datetime:
-    index = moment.month - 1 + months
-    year = moment.year + index // 12
-    month = index % 12 + 1
-    return moment.replace(
-        year=year, month=month, day=min(moment.day, calendar.monthrange(year, month)[1])
-    )
 
 
 async def _registered(session: AsyncSession, username: str) -> User:
@@ -84,7 +74,7 @@ async def grant_pass(
                 amount_minor=0,
                 currency="EUR",
                 period_start=start,
-                period_end=_months_later(start, months) if months else None,
+                period_end=months_later(start, months) if months else None,
             )
             session.add(
                 AuditEvent(

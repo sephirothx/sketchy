@@ -297,6 +297,20 @@ div.support-plan {
   font-size: 14px;
 }
 
+.support-gift-terms {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.support-gift-terms strong {
+  color: var(--ink);
+}
+
+.support-gift-actions {
+  justify-content: flex-end;
+}
+
 @media (max-width: 640px) {
   .support-plans {
     flex-direction: column;

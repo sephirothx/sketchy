@@ -172,8 +172,9 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
 
     people_ids = {
         e.subject_id
-        for kind in ("friend_request", "friend_accepted", "game_invite")
+        for kind in ("friend_request", "friend_accepted", "game_invite", "supporter_gifted")
         for e in by_kind.get(kind, [])
+        if e.subject_id is not None
     }
     people = (
         {
@@ -191,7 +192,8 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             e.subject_id
             for kind in ("supporter_started", "supporter_ending")
             for e in by_kind.get(kind, [])
-        },
+        }
+        | {UUID(e.params["purchase"]) for e in by_kind.get("supporter_gifted", [])},
     )
     friendships = {}
     pairs = {
@@ -287,6 +289,15 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             if fact is None:
                 continue
             body["until"], body["renews"] = fact
+        elif entry.kind == "supporter_gifted":
+            # The subject is the giver, so the row it is about is in params.
+            fact = passes.get(UUID(entry.params["purchase"]))
+            if fact is None:
+                continue
+            body["until"] = fact[0]
+            # No subject when the giver asked not to be named, and none left
+            # once they have deleted their account.
+            body["person"] = _person(people.get(entry.subject_id))
         elif entry.kind == "role":
             owner = owners.get(entry.user_id)
             role = entry.params.get("role")

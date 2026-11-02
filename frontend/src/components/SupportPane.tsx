@@ -5,8 +5,6 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { formatDate } from "../lib/clock";
 import { refusalText } from "../lib/refusals";
 import {
-  extraMinorFrom,
-  formatEuros,
   isLifetime,
   startCheckout,
   type SupportPlans,
@@ -14,12 +12,11 @@ import {
 } from "../lib/support";
 import { useAuthStore } from "../store/authStore";
 import { useSupportStore } from "../store/supportStore";
+import { ExtraChoice } from "./ExtraChoice";
 import { CheckIcon } from "./icons";
 import { TipLink } from "./TipLink";
 import { SupporterMark } from "./ui/SupporterMark";
 import "../styles/lazy/support.css";
-
-const EXTRA_CHIPS = [500, 1000, 2000];
 
 function Perks() {
   const perks = [ui.support.perkMark, ui.support.perkLooks, ui.support.perkSolo];
@@ -96,15 +93,12 @@ function Checkout({ plans }: { plans: SupportPlans }) {
   const showMark = useSupportStore((state) => state.showMark);
   const setShowMark = useSupportStore((state) => state.setShowMark);
   const [product, setProduct] = useState<SupportProduct>("year");
-  const [extra, setExtra] = useState<number | "other">(0);
-  const [typed, setTyped] = useState("");
+  const [extraMinor, setExtraMinor] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Follows the account until touched: it may arrive after this mounts.
   const [chosenMark, setChosenMark] = useState<boolean | null>(null);
   const wantsMark = chosenMark ?? showMark;
-
-  const extraMinor = extra === "other" ? extraMinorFrom(typed, plans.maxExtraMinor) : extra;
 
   const pay = async () => {
     setBusy(true);
@@ -118,18 +112,6 @@ function Checkout({ plans }: { plans: SupportPlans }) {
       setBusy(false);
     }
   };
-
-  const chip = (value: number | "other", label: string) => (
-    <button
-      key={label}
-      type="button"
-      className={`support-chip${extra === value ? " is-selected" : ""}`}
-      aria-pressed={extra === value}
-      onClick={() => setExtra(value)}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <>
@@ -149,27 +131,7 @@ function Checkout({ plans }: { plans: SupportPlans }) {
           onSelect={() => setProduct("lifetime")}
         />
       </div>
-      <div className="support-extra">
-        <p>
-          <strong>{ui.support.extraAsk}</strong>
-          {product === "year" && <span> {ui.support.extraNote}</span>}
-        </p>
-        <div className="support-chips">
-          {chip(0, ui.support.extraNone)}
-          {EXTRA_CHIPS.map((value) => chip(value, `+${formatEuros(value)}`))}
-          {chip("other", ui.support.extraOther)}
-        </div>
-        {extra === "other" && (
-          <input
-            className="support-extra-input"
-            inputMode="decimal"
-            aria-label={ui.support.extraOtherLabel}
-            placeholder="€"
-            value={typed}
-            onChange={(event) => setTyped(event.target.value)}
-          />
-        )}
-      </div>
+      <ExtraChoice renews={product === "year"} maxExtraMinor={plans.maxExtraMinor} onChange={setExtraMinor} />
       <label className="support-mark-choice">
         <input
           type="checkbox"
