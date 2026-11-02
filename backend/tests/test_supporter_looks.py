@@ -16,13 +16,13 @@ from app.auth.account_data import anonymize_account
 from app.auth.avatars import SupporterOnly
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import SupportPurchase, User
+from app.db.models import User
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import choose_doodle
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
 from app.support.providers import signature_header
 
-from tests.dbfixtures import create_test_db
+from tests.dbfixtures import create_test_db, lapse_passes
 
 STUB = SupportConfig(provider="stub", webhook_secret=STUB_WEBHOOK_SECRET)
 NOW = datetime.now(timezone.utc)
@@ -97,17 +97,7 @@ async def _style(http, style):
 
 
 async def _lapse(factory, user_id: UUID) -> None:
-    async with factory() as session:
-        async with session.begin():
-            row = await session.scalar(
-                SupportPurchase.__table__.select().where(SupportPurchase.user_id == user_id)
-            )
-            assert row is not None
-            await session.execute(
-                SupportPurchase.__table__.update()
-                .where(SupportPurchase.user_id == user_id)
-                .values(period_end=NOW - timedelta(hours=1))
-            )
+    await lapse_passes(factory, user_id, NOW - timedelta(hours=1))
 
 
 def test_a_new_account_never_draws_a_supporter_doodle():
