@@ -27,6 +27,7 @@ from app.auth.avatars import avatar_url
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
 from app.repositories.interfaces import GameHistoryRepository
+from app.services.supporter import supporter_marks
 from app.services.friends import (
     REGISTER_FIRST,
     FriendService,
@@ -86,7 +87,9 @@ class FriendBody(ControlFreeModel):
     user_id: UUID = Field(alias="userId")
 
 
-def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
+def _person_payload(
+    row: Friendship, person: User, viewer_id: UUID, marks: set[str]
+) -> dict:
     """One entry, from the reading account's point of view.
 
     `requestedByMe` rather than a requester id: which of the two asked is a
@@ -98,6 +101,7 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
         "displayName": person.display_name,
         "nameColor": person.name_color,
         "avatarUrl": avatar_url(None if person.is_anonymous else person.avatar_key),
+        "supporterMark": str(person.id) in marks,
         "isAnonymous": person.is_anonymous,
         "status": row.status,
         "requestedByMe": row.requested_by_id == viewer_id,
@@ -121,8 +125,11 @@ def create_friends_router(
         an entry in its inbox (#1436, R-FRIEND-14), not a list here."""
         me = await current_account(request)
         listing = await friend_service.listing(me.id)
+        people = [person.id for rows in listing.values() for _, person in rows]
+        async with session_factory() as session:
+            marks = await supporter_marks(session, people)
         return {
-            key: [_person_payload(row, person, me.id) for row, person in rows]
+            key: [_person_payload(row, person, me.id, marks) for row, person in rows]
             for key, rows in listing.items()
         }
 
@@ -220,6 +227,8 @@ def create_recent_players_router(
             since=datetime.now(timezone.utc) - RECENT_PLAYERS_WINDOW,
             limit=RECENT_PLAYERS_LIMIT,
         )
+        async with session_factory() as session:
+            marks = await supporter_marks(session, [person.user_id for person in found])
         return {
             "players": [
                 {
@@ -227,6 +236,7 @@ def create_recent_players_router(
                     "displayName": person.display_name,
                     "nameColor": person.name_color,
                     "avatarUrl": avatar_url(person.avatar_key),
+                    "supporterMark": person.user_id in marks,
                     "lastPlayedAt": person.last_played_at.isoformat(),
                 }
                 for person in found

@@ -1216,7 +1216,7 @@ presence news, and somebody signing in must not re-send the rooms.
 
 ```jsonc
 { "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
-  "avatarUrl": "…" | null, "isAnonymous": false, "status": "lobby" | "playing" }
+  "avatarUrl": "…" | null, "supporterMark": false, "isAnonymous": false, "status": "lobby" | "playing" }
 ```
 
 This and the friend payloads above are the ones that carry an account id,
@@ -2391,7 +2391,7 @@ reloaded rather than served an older contract.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `isAnonymous`, `createdAt`, plus `isOnline` (the presence registry's answer now) and `lastSeenAt` (when the account's last socket closed; `null` for one that never connected). Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me`. Beside `user` and `stats`, `playLanguages` (#1212): the account's play languages, the default first and then the others in the player's order; `[]` for a guest, whose languages live in its browser, and for an account with no stored settings |
+| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `supporterMark`, `isAnonymous`, `createdAt`, plus `isOnline` (the presence registry's answer now) and `lastSeenAt` (when the account's last socket closed; `null` for one that never connected). Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me`. Beside `user` and `stats`, `playLanguages` (#1212): the account's play languages, the default first and then the others in the player's order; `[]` for a guest, whose languages live in its browser, and for an account with no stored settings |
 | `GET` | `/api/users/{user_id}/games` | `?includeAbandoned=true` to include games that stopped. Which games are on the page depends on who asks (R-HIST-25): a game from a public room is listed for anyone, a game from a private room only for a caller who sat in it. Each summary carries `visibility` (`public \| private`), frozen from the room when the game was saved; `hasMore` is answered from the games the caller may see |
 | `GET` | `/api/games/{game_id}` | Participant-only detail: exact rule snapshot, turns, outcomes. Not the prompt offers or the score ledger, which the page never read: for a 16-seat, 10-round game they were half of a 1.54 MB response and of the load behind it, one participant could spend a quarter of the loop at the route's 120 a minute (#1254). A player's own seats' score events are in their export, and the offers on the turns they drew. Encoded once, as the response, rather than walked by FastAPI's encoder. A turn's `drawingStatus` is the stored drawing's status, or `removed` when an administrator erased it (R-MOD-22), which the history says as *Removed by moderation* rather than *erased* |
 | `GET` | `/api/games/{game_id}/turns/{turn_id}/drawing` | Participants only. **Every refusal is a 404**, so it never reveals whether a game exists. The bytes in the current wire format (`application/octet-stream`), `Cache-Control: private, no-cache` and a weak `ETag` of the form `W/"<stored sha256>-w<CANVAS_HISTORY_VERSION>"` — the stored checksum *and* the wire version the decoders answer in, because a new wire version changes the bytes served without changing the bytes stored (R-HIST-18), and weak because the same bytes go out gzipped or not. A matching `If-None-Match` (weak comparison; a list, the strong form, or `*`) is answered **304** with no body, from the metadata alone — the blob is neither read nor decoded — and only after the same participant and availability query as the drawing itself: a remembered tag from a stranger, or for an erased drawing, is a 404 like any other refusal (#604). `no-cache` rather than a lifetime so an erased drawing stops being shown at the next open, not when an hour runs out |
@@ -2476,6 +2476,12 @@ panel from spoiling the drawing.
 | `GET` | `/api/solo/serves/{serve_id}/drawing` | The bytes through the **fourth door** (R-SOLO-04): its own query — the caller's serve, the drawing still servable (R-SOLO-02) — with the participant route's `Cache-Control: private, no-cache`, `ETag` and `304` (R-HIST-24), and the same `404` for every refusal, signed out included |
 
 ### Supporter pass — [`backend/app/api/support.py`](../backend/app/api/support.py)
+
+`supporterMark` travels beside `avatarUrl` on every live identity: `room_state.players`, the
+public roster, `turn_ended`, `game_ended`, the lobby presence list, friends, recent players and
+the public profile (R-SUP-10). It is already combined with the owner's choice and with
+suspension. The whole `room_state` is broadcast (N-14), so it costs 22 uncompressed bytes per
+seat: 2,518 → 2,694 B at 8 seats, in `benchmarks/room_state_deltas.py`.
 
 Mounted only when `SUPPORT_PROVIDER` is set (R-SUP-08). A webhook needs no exemption from
 `origin_policy.py`: a provider's request carries no `Origin` and no `Referer`, which #465
@@ -2743,7 +2749,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (70) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (71) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

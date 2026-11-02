@@ -225,6 +225,24 @@ interface GameStore {
 /** The highlights with the "most reacted" card replaced where it stands,
     appended when it first appears, or removed - the server's
     `refresh_reaction_highlight`, applied to the card it sent (#871). */
+/** The recap on screen keeps its own copy of each seat, and a heart hidden or
+refunded reaches the room as a room state (R-SUP-10). */
+function withCurrentMarks<T extends { playerId: string; supporterMark?: boolean }>(
+  scores: T[] | null,
+  players: { playerId: string; supporterMark?: boolean }[],
+): T[] | null {
+  if (!scores) return scores;
+  const current = new Map(players.map((player) => [player.playerId, Boolean(player.supporterMark)]));
+  const stale = (score: T) => {
+    const mark = current.get(score.playerId);
+    return mark !== undefined && mark !== Boolean(score.supporterMark);
+  };
+  if (!scores.some(stale)) return scores;
+  return scores.map((score) =>
+    stale(score) ? { ...score, supporterMark: current.get(score.playerId) } : score,
+  );
+}
+
 function withMostReacted(highlights: GameHighlight[], card: GameHighlight | null): GameHighlight[] {
   const position = highlights.findIndex((item) => item.kind === "most_reacted_drawing");
   if (card === null) return position < 0 ? highlights : highlights.filter((_, index) => index !== position);
@@ -363,6 +381,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       promptLanguage: payload.promptLanguage ?? "en",
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
+      finalScores: withCurrentMarks(state.finalScores, payload.players),
       // The recap is not in the room state (#871); it arrives with
       // `game_ended` or `last_game` and stays until a game starts - or until
       // this is a different room: an entry that does not leave first moves

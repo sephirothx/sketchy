@@ -439,6 +439,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 };
 
 export const ES: Catalogue = {
+  supporterMark: { label: "Mecenas" },
   refusals: REFUSALS,
   announcements: ANNOUNCEMENTS,
 

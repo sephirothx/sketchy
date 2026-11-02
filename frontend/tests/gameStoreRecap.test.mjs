@@ -100,3 +100,25 @@ test("a drawing an administrator erased leaves the recap, and what was about it 
   assert.equal(after.drawingShares.t1, undefined);
   assert.deepEqual(after.gameHighlights, [], "the most-reacted card went with its drawing");
 });
+
+test("a heart hidden or refunded leaves the recap on screen", () => {
+  const store = useGameStore.getState();
+  store.reset();
+  store.setRoomState(roomState("first", "waiting"));
+  store.applyLastGame({
+    ...recap,
+    scores: [
+      { playerId: "p1", nickname: "Ann", score: 300, supporterMark: true },
+      { playerId: "gone", nickname: "Bo", score: 200, supporterMark: true },
+    ],
+  });
+  const players = [{ playerId: "p1", nickname: "Ann", supporterMark: true }];
+  const before = useGameStore.getState().finalScores;
+  store.setRoomState({ ...roomState("first", "waiting"), players });
+  assert.equal(useGameStore.getState().finalScores, before, "nothing changed, nothing redraws");
+
+  store.setRoomState({ ...roomState("first", "waiting"), players: [{ playerId: "p1", nickname: "Ann" }] });
+  const after = useGameStore.getState().finalScores;
+  assert.equal(after[0].supporterMark, false);
+  assert.equal(after[1].supporterMark, true, "a seat no longer in the room stays as it was");
+});

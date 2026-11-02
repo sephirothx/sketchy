@@ -327,6 +327,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
                 "avatarUrl": avatar_url(player.avatar_key),
+                "supporterMark": player.supporter_mark,
                 "isAnonymous": player.is_anonymous,
                 "seconds": guess_seconds(game, player.id),
             }
@@ -342,6 +343,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
                 "avatarUrl": avatar_url(player.avatar_key),
+                "supporterMark": player.supporter_mark,
                 "isAnonymous": player.is_anonymous,
                 "score": totals[player.id],
                 "delta": deltas[player.id],

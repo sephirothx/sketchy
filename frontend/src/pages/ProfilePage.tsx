@@ -59,6 +59,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PlayLanguageFlags } from "../components/PlayLanguageFlags";
 import "../styles/lazy/profile.css";
+import { SupporterMark } from "../components/ui/SupporterMark";
 
 /** A game's prompt source mode, named the way the glossary names it. */
 function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
@@ -842,6 +843,7 @@ function ProfileView({ userId }: { userId: string }) {
                     isAnonymous={subject.isAnonymous}
                   />
                 </h1>
+                {subject.supporterMark && <SupporterMark size={20} />}
                 {/* Beside the name rather than in it: the heading stays the
                     player's name for a screen reader (#1212). */}
                 <PlayLanguageFlags languages={playLanguages} />

@@ -68,6 +68,9 @@ class UserData:
     # role: nothing authorizes anything from it, and it is here so the client
     # can show what is outstanding (R-AUTH-20).
     pending_role: str | None = None
+    # Whether others see a supporter mark. Only reads that ask for it fill it in:
+    # most need the account, not this (#1474).
+    supporter_mark: bool = False
 
 
 @dataclass(frozen=True)

@@ -20,6 +20,7 @@ export interface FriendEntry {
   displayName: string;
   nameColor: string | null;
   avatarUrl: string | null;
+  supporterMark?: boolean;
   isAnonymous: boolean;
   status: FriendshipStatus;
   /** Which of the two asked. The server sends a boolean, not an id. */
@@ -51,6 +52,7 @@ function parseEntry(value: unknown): FriendEntry | null {
     displayName: row.displayName,
     nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
     avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
+    supporterMark: row.supporterMark === true,
     isAnonymous: row.isAnonymous === true,
     status: row.status,
     requestedByMe: row.requestedByMe === true,
@@ -282,6 +284,7 @@ export interface RecentPlayer {
   displayName: string;
   nameColor: string | null;
   avatarUrl: string | null;
+  supporterMark?: boolean;
   lastPlayedAt: string;
 }
 
@@ -300,6 +303,7 @@ export function parseRecentPlayers(payload: unknown): RecentPlayer[] {
         displayName: row.displayName,
         nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
         avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
+        supporterMark: row.supporterMark === true,
         lastPlayedAt: typeof row.lastPlayedAt === "string" ? row.lastPlayedAt : "",
       },
     ];

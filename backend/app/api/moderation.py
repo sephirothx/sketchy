@@ -35,6 +35,7 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.api.gallery import gallery_entry_payload
+from app.services.supporter import active_supporter_ids
 from app.api.profiles import serve_drawing
 from app.repositories.solo import identity_ids as solo_identity_ids
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
@@ -382,6 +383,7 @@ async def _reported_player_context(
     users = (
         await session.scalars(select(User).where(User.id.in_(user_ids)))
     ).all()
+    supporters = await active_supporter_ids(session, user_ids)
     report_totals = dict(
         (
             await session.execute(
@@ -429,6 +431,9 @@ async def _reported_player_context(
             "priorReports": max(0, report_totals.get(user.id, 0) - 1),
             "priorWarnings": warning_totals.get(user.id, 0),
             "activeSuspension": user.id in suspended,
+            # Shown with the account, to the moderator alone, and it decides
+            # nothing (R-SUP-11). A public payload hides the mark instead.
+            "supporter": user.id in supporters,
         }
         for user in users
     }

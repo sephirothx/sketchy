@@ -215,6 +215,7 @@ def test_the_payload_carries_no_room_identifier():
         "displayName",
         "nameColor",
         "avatarUrl",
+        "supporterMark",
         "isAnonymous",
         "status",
     }
@@ -330,11 +331,11 @@ class StubUserRepo:
         self._hang = hang
         self.reads = 0
 
-    async def get_by_id(self, user_id):
+    async def get_seat_account(self, user_id):
         self.reads += 1
         if self._hang:
             await asyncio.sleep(3600)
-        return self._users.get(user_id)
+        return self._users.get(user_id), False
 
 
 class StubUser:
@@ -344,6 +345,7 @@ class StubUser:
         self.name_color = None if guest else "#4f9"
         self.is_anonymous = guest
         self.avatar_key = None
+        self.supporter_mark = False
 
 
 async def test_warming_reads_once_and_then_answers_from_memory():
@@ -588,7 +590,7 @@ def test_a_ceiling_that_is_not_a_positive_number_falls_back(caplog):
 
 async def test_a_repository_that_raises_leaves_the_row_out():
     class BrokenRepo:
-        async def get_by_id(self, user_id):
+        async def get_seat_account(self, user_id):
             raise RuntimeError("the database is down")
 
     cache = PresenceIdentityCache(BrokenRepo())
@@ -753,8 +755,8 @@ class AliasingRepo(StubUserRepo):
         super().__init__(users)
         self._aliases = aliases or {}
 
-    async def get_by_id(self, user_id):
-        return await super().get_by_id(self._aliases.get(user_id, user_id))
+    async def get_seat_account(self, user_id):
+        return await super().get_seat_account(self._aliases.get(user_id, user_id))
 
 
 async def test_warming_an_aliased_id_does_not_spin_for_ever():

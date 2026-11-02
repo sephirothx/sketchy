@@ -85,6 +85,7 @@
   --focus-ring: var(--primary);
 
   /* marker orange — game moments, timers, celebration */
+  --supporter-mark: #db2777;
   --warm: #e8703a;
   --warm-soft: #fbeadf;
   --warm-ink: #ab501c;
@@ -254,6 +255,7 @@
   --primary-edge-soft: rgba(102, 108, 228, 0.5);
   --focus-ring: color-mix(in srgb, var(--primary) 70%, #ffffff);
 
+  --supporter-mark: #f472b6;
   --warm: #ee7e48;
   --warm-soft: rgba(238, 126, 72, 0.15);
   --warm-ink: #fdba74;

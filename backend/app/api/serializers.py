@@ -54,7 +54,7 @@ def user_payload(user: UserData) -> dict:
     }
 
 
-def public_user_payload(user: UserData, *, online: bool) -> dict:
+def public_user_payload(user: UserData, *, online: bool, supporter_mark: bool = False) -> dict:
     """The account as anyone may see it: what a seat in a room already shows.
 
     Deliberately not `user_payload` (#469). That one is the caller's own
@@ -71,6 +71,7 @@ def public_user_payload(user: UserData, *, online: bool) -> dict:
         "nameColor": user.name_color,
         "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
         "isAnonymous": user.is_anonymous,
+        "supporterMark": supporter_mark,
         "createdAt": _timestamp(user.created_at),
         "isOnline": online,
         "lastSeenAt": _timestamp(user.last_seen_at),

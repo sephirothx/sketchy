@@ -25,6 +25,7 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
 import { useSettingsStore } from "../store/settingsStore";
 import { EmptyState } from "./ui/EmptyState";
+import { SupporterMark } from "./ui/SupporterMark";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
@@ -201,6 +202,9 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     </span>
                   </LobbyPlayerMenu>
                 )}
+                {/* Beside the name, not in it: a long name's ellipsis must not
+                    take the heart with it. */}
+                {player.supporterMark && <SupporterMark size={12} />}
 
                 <span className="online-player-actions">
                   {/* Only a friend gets a way in, and only when there is

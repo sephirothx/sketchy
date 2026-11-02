@@ -6,6 +6,8 @@ export interface PlayerInfo {
   nameColor?: string;
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
+  /** Already combined with the owner's choice to show it (#1474). */
+  supporterMark?: boolean;
   /** Guests render in grey italics; the flag is what drives that styling. */
   isAnonymous?: boolean;
   score: number;
@@ -327,6 +329,8 @@ export interface ChatMessage {
   nameColor?: string;
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
+  /** Already combined with the owner's choice to show it (#1474). */
+  supporterMark?: boolean;
   isAnonymous?: boolean;
   /** What a player typed. Absent on a room-authored line, which carries a
       `code` instead so each client can write it in its own language
@@ -350,6 +354,8 @@ export interface ScoreEntry {
   nameColor?: string;
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
+  /** Already combined with the owner's choice to show it (#1474). */
+  supporterMark?: boolean;
   isAnonymous?: boolean;
   score: number;
 }
@@ -442,6 +448,7 @@ export interface TurnEndedPayload {
     nameColor?: string;
     /** The uploaded picture, content-addressed; absent for guests and initials. */
     avatarUrl?: string | null;
+    supporterMark?: boolean;
     isAnonymous?: boolean;
     seconds: number;
   }[];
@@ -503,6 +510,8 @@ export interface HighlightName {
   nameColor?: string;
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
+  /** Already combined with the owner's choice to show it (#1474). */
+  supporterMark?: boolean;
   isAnonymous?: boolean;
 }
 

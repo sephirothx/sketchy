@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.runtime_metrics import metrics
+from app.services.supporter import supporter_mark_column
 from app.services.telemetry import database_operation_of, telemetry
 from app.db import read_session
 from app.db.roles import SEEDED_TABLES
@@ -1901,7 +1902,9 @@ class SqlAlchemyUserRepository(UserRepository):
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return None, None
-        async with self._session_factory() as session:
+        # One statement, so one round trip: the handshake's reconnect herd and
+        # the public profile read through here too.
+        async with read_session(self._session_factory) as session:
             canonical = func.coalesce(
                 select(IdentityAlias.target_user_id)
                 .where(IdentityAlias.source_user_id == db_user_id)
@@ -1910,15 +1913,21 @@ class SqlAlchemyUserRepository(UserRepository):
             )
             row = (
                 await session.execute(
-                    select(User, UserSettings.colorblind_safe_colors)
+                    select(
+                        User,
+                        UserSettings.colorblind_safe_colors,
+                        # On this statement rather than after it (#980): the
+                        # seat needs it, and a registered entry is timed.
+                        supporter_mark_column(User.id, datetime.now(timezone.utc)),
+                    )
                     .outerjoin(UserSettings, UserSettings.user_id == User.id)
                     .where(User.id == canonical)
                 )
             ).one_or_none()
         if row is None:
             return None, None
-        user, colorblind = row
-        return _to_user_data(user), bool(colorblind)
+        user, colorblind, mark = row
+        return replace(_to_user_data(user), supporter_mark=bool(mark)), bool(colorblind)
 
     async def get_by_username(self, username: str) -> UserData | None:
         clean = username.strip()

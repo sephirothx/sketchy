@@ -451,6 +451,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 };
 
 export const EN = {
+  supporterMark: { label: "Supporter" },
   refusals: REFUSALS,
   announcements: ANNOUNCEMENTS,
 

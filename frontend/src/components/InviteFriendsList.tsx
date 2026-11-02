@@ -10,6 +10,7 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ui } from "../content/ui/index.ts";
 import { refusalText } from "../lib/refusals.ts";
+import { SupporterMark } from "./ui/SupporterMark";
 
 /** Friends who are online, on the card whose whole job is getting people in.
 
@@ -71,6 +72,7 @@ export function InviteFriendsList() {
               size={26}
             />
             <span className="waiting-invite-friend-name">{friend.displayName}</span>
+            {friend.supporterMark && <SupporterMark size={12} />}
             {invited.has(friend.userId) ? (
               <span className="waiting-invite-friend-sent">{ui.inviteFriendsList.invited}</span>
             ) : (

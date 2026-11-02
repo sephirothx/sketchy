@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import parse_qs
@@ -127,7 +128,10 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
 
 
 def create_support_router(
-    session_factory: async_sessionmaker[AsyncSession], config: SupportConfig
+    session_factory: async_sessionmaker[AsyncSession],
+    config: SupportConfig,
+    *,
+    on_supporter_mark_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/support")
     provider: Provider = provider_for(config)
@@ -215,7 +219,14 @@ def create_support_router(
             logger.exception("support_webhook_failed")
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
-        if not await cancel_quietly(session_factory, provider, to_stop):
+        stopped = await cancel_quietly(session_factory, provider, to_stop)
+        if recorded and user_id and on_supporter_mark_changed:
+            # A heart appears, or a refund takes it, in the rooms they sit in.
+            try:
+                await on_supporter_mark_changed(str(user_id))
+            except Exception:
+                logger.warning("supporter_mark_push_failed", exc_info=True)
+        if not stopped:
             # The fact stands; this asks the provider to come back for the rest.
             support_signals.saw(ERROR, now)
             return Response(status_code=500)

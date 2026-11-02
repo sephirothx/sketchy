@@ -12,6 +12,7 @@ import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import { ui } from "../content/ui/index.ts";
 import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 import { fill } from "../content/ui/slots.tsx";
+import { SupporterMark } from "./ui/SupporterMark";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
@@ -168,6 +169,7 @@ export function GameEndOverlay({
                     >
                       {entry.nickname}
                     </span>
+                    {entry.supporterMark && <SupporterMark />}
                     {entry.playerId === myPlayerId && <span className="game-end-you">{ui.gameEndOverlay.you}</span>}
                     {friendSeats.has(entry.playerId) && (
                       <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>
@@ -196,6 +198,7 @@ export function GameEndOverlay({
                   />
                   <span className="game-end-standing-name">
                     <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>
+                    {score.supporterMark && <SupporterMark />}
                     {score.playerId === myPlayerId ? <span className="game-end-you">{ui.gameEndOverlay.you}</span> : null}
                     {friendSeats.has(score.playerId) && (
                       <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>

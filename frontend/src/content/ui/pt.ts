@@ -439,6 +439,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 };
 
 export const PT: Catalogue = {
+  supporterMark: { label: "Apoiante" },
   refusals: REFUSALS,
   announcements: ANNOUNCEMENTS,
 
