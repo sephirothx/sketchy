@@ -1902,7 +1902,9 @@ class SqlAlchemyUserRepository(UserRepository):
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return None, None
-        async with self._session_factory() as session:
+        # One statement, so one round trip: the handshake's reconnect herd and
+        # the public profile read through here too.
+        async with read_session(self._session_factory) as session:
             canonical = func.coalesce(
                 select(IdentityAlias.target_user_id)
                 .where(IdentityAlias.source_user_id == db_user_id)

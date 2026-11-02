@@ -2816,7 +2816,8 @@
   "rooms:last_game_payload": [
    "isPublic",
    "scoringMode",
-   "seatTokens"
+   "seatTokens",
+   "supporterMark"
   ],
   "rooms:metadata": [
    "actionCount",

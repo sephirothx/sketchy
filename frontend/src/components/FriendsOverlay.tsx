@@ -317,8 +317,8 @@ function FriendsSection({
               style={entry.nameColor ? { color: entry.nameColor } : undefined}
             >
               {entry.displayName}
-              {entry.supporterMark && <SupporterMark />}
             </span>
+            {entry.supporterMark && <SupporterMark />}
             <span className="friends-row-actions">{renderActions(entry)}</span>
           </li>
         ))}
@@ -358,6 +358,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
             >
               {player.displayName}
             </span>
+            {player.supporterMark && <SupporterMark />}
             <span className="friends-row-actions">
               <FriendButton
                 action="add"

@@ -1140,8 +1140,8 @@ async def _refresh_seat_identity(
     if ctx.user_repo is None or not player.user_id or not player.is_anonymous:
         return
     try:
-        account = await _bounded(
-            ctx.user_repo.get_by_id(player.user_id), "refreshing a seat's identity"
+        account, _ = await _bounded(
+            ctx.user_repo.get_seat_account(player.user_id), "refreshing a seat's identity"
         )
     except EntryTimedOut:
         # The seat keeps the name it has. Worth less than the entry it would
@@ -1152,6 +1152,7 @@ async def _refresh_seat_identity(
     player.nickname = account.username
     player.is_anonymous = False
     player.avatar_key = account.avatar_key
+    player.supporter_mark = account.supporter_mark
     player.name_color = (
         normalize_name_color(account.name_color)
         or normalize_name_color(name_color)

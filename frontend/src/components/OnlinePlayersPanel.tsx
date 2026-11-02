@@ -165,7 +165,6 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     }
                   >
                     {player.displayName}
-                    {player.supporterMark && <SupporterMark size={12} />}
                   </span>
                 ) : (
                   <LobbyPlayerMenu
@@ -200,10 +199,12 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                       style={player.nameColor ? { color: player.nameColor } : undefined}
                     >
                       {player.displayName}
-                      {player.supporterMark && <SupporterMark size={12} />}
                     </span>
                   </LobbyPlayerMenu>
                 )}
+                {/* Beside the name, not in it: a long name's ellipsis must not
+                    take the heart with it. */}
+                {player.supporterMark && <SupporterMark size={12} />}
 
                 <span className="online-player-actions">
                   {/* Only a friend gets a way in, and only when there is

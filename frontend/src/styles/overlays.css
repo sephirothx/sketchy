@@ -186,6 +186,21 @@
   display: block;
 }
 
+/* A heart stays on the name's line, and the name gives way to it. */
+.waiting-roster-name:has(> .supporter-mark) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.waiting-roster-name:has(> .supporter-mark) > .colored-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
+}
+
 .game-end-you {
   color: var(--faint);
   font-size: 11px;

@@ -599,7 +599,7 @@ class PresenceIdentityCache:
         if user is None:
             return
         # Stored under the key that was *asked for*, not the one the record
-        # came back with. `get_by_id` resolves an identity alias, so a merged
+        # came back with. The read resolves an identity alias, so a merged
         # guest's id reads back as the account it was merged into - and a
         # cache keyed by the answer would never satisfy the question. The tick
         # would ask again every second, for as long as that socket stayed

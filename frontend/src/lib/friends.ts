@@ -284,6 +284,7 @@ export interface RecentPlayer {
   displayName: string;
   nameColor: string | null;
   avatarUrl: string | null;
+  supporterMark?: boolean;
   lastPlayedAt: string;
 }
 
@@ -302,6 +303,7 @@ export function parseRecentPlayers(payload: unknown): RecentPlayer[] {
         displayName: row.displayName,
         nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
         avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
+        supporterMark: row.supporterMark === true,
         lastPlayedAt: typeof row.lastPlayedAt === "string" ? row.lastPlayedAt : "",
       },
     ];

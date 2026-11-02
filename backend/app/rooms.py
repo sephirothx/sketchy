@@ -668,7 +668,17 @@ class Room:
         if self.state != "waiting" or not self.last_game_scores:
             return None
         return {
-            "scores": self.last_game_scores,
+            # The mark as it stands now, not as the game froze it: hidden or
+            # refunded since, it must not come back through the recap (R-SUP-10).
+            # A seat that has left shows none.
+            "scores": [
+                {
+                    **entry,
+                    "supporterMark": (seat := self.players.get(entry["playerId"])) is not None
+                    and seat.supporter_mark,
+                }
+                for entry in self.last_game_scores
+            ],
             "scoringMode": self.last_game_scoring_mode or self.scoring_mode,
             "highlights": self.last_game_highlights,
             "drawings": self.drawing_recap_metadata(),

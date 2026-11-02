@@ -489,7 +489,7 @@ def create_profile_router(
         stats = await user_repo.get_stats(user_id)
         return {
             # Presence is keyed by the canonical account, which is what
-            # `get_by_id` resolved a merged guest's id to.
+            # the read resolved a merged guest's id to.
             "user": public_user_payload(
                 user, online=is_online(user.id), supporter_mark=user.supporter_mark
             ),
