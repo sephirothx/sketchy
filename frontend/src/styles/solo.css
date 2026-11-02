@@ -915,3 +915,21 @@
    so no ring. */
 .solo-verdict:focus,
 .solo-verdict-text:focus { outline: none; }
+
+/* A door that comes with the supporter pass (#1477): the pitch, never an error. */
+.solo-run-perk,
+.solo-archive-locked {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--warm-ink);
+}
+
+.solo-archive-locked {
+  display: block;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}

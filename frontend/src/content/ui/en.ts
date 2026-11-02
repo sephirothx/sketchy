@@ -455,6 +455,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const EN = {
   supporterMark: { label: "Supporter" },
   support: {
+    soloPerk: "Supporter perk",
+    soloArchiveLocked: "Every past Daily comes with a supporter pass.",
     giftThanks: "Your gift is on its way. It's live as soon as the payment is confirmed.",
     styleSunset: "Sunset",
     styleOcean: "Ocean",

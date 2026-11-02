@@ -26,11 +26,13 @@ import {
   UndoIcon,
   UserIcon,
   XIcon,
+  LockIcon,
 } from "../components/icons";
 import { EmptyState } from "../components/ui/EmptyState";
 import { soloCopyFor } from "../content/solo/index.ts";
 import { intlLocale } from "../content/ui/format.ts";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { usePublicPath } from "../hooks/usePublicPath";
 import { ApiError } from "../lib/api";
@@ -478,6 +480,7 @@ function SoloHome({
                 run={summary?.activeRuns.find((active) => active.length === length) ?? null}
                 best={summary?.bests[lengthKey(length)]}
                 disabled={busy || summary === null}
+                locked={length === null && summary?.doors?.freeUnlimited === false}
                 onStart={() => onFree(length)}
                 onContinue={onContinue}
               />
@@ -485,6 +488,7 @@ function SoloHome({
           </section>
         </div>
         <SoloCalendar
+          archiveLocked={summary?.doors?.archive === false}
           today={today}
           todayHasDaily={summary === null ? null : summary.today.state !== "unavailable"}
           stats={summary?.stats ?? null}
@@ -659,6 +663,7 @@ function FreeRunRow({
   run,
   best,
   disabled,
+  locked,
   onStart,
   onContinue,
 }: {
@@ -666,10 +671,13 @@ function FreeRunRow({
   run: SoloActiveRun | null;
   best: number | undefined;
   disabled: boolean;
+  /** This door needs a pass. A run already in play is still theirs to finish. */
+  locked: boolean;
   onStart: () => void;
   onContinue: (runId: string) => void;
 }) {
   const key = lengthKey(length);
+  const openSettings = useOpenSettings();
   // Starting over ends the run in play: a 5 or 10 counts for nothing, so it
   // is asked first rather than lost to a tap beside Continue. Asked about
   // one run: if that run goes meanwhile, so does the question.
@@ -682,6 +690,11 @@ function FreeRunRow({
       <div className="solo-run-body">
         <div className="solo-run-title">
           <h3>{lengthName(length)}</h3>
+          {locked && !run && (
+            <span className="solo-run-perk" data-testid="solo-perk-endless">
+              <LockIcon size={12} /> {ui.support.soloPerk}
+            </span>
+          )}
           {run && (
             <span className="solo-run-progress" data-testid={`solo-run-progress-${key}`}>
               {length === null
@@ -703,8 +716,18 @@ function FreeRunRow({
         )}
       </div>
       <div className="solo-run-actions">
-        {run ? (
+        {locked && !run ? (
+          <button
+            type="button"
+            className="btn btn-secondary solo-run-main"
+            data-testid="solo-see-pass"
+            onClick={() => openSettings("support")}
+          >
+            {ui.support.seePass}
+          </button>
+        ) : run ? (
           <>
+            {!locked && (
             <button
               type="button"
               className="btn btn-secondary btn-icon"
@@ -716,6 +739,7 @@ function FreeRunRow({
             >
               <UndoIcon size={18} />
             </button>
+            )}
             <button
               type="button"
               className="btn btn-primary solo-run-main"
@@ -817,6 +841,7 @@ function shiftMonth(month: string, by: number): string {
  * them came to.
  */
 function SoloCalendar({
+  archiveLocked,
   today,
   todayHasDaily,
   stats,
@@ -824,6 +849,7 @@ function SoloCalendar({
   onPast,
   onReview,
 }: {
+  archiveLocked: boolean;
   today: string;
   /** From the summary, which picks today's Daily: the month may not know of
       it yet, before anybody has opened it. Null until the summary is here. */
@@ -833,6 +859,7 @@ function SoloCalendar({
   onPast: (date: string) => void;
   onReview: (date: string, result: SoloDailyResult) => void;
 }) {
+  const openSettings = useOpenSettings();
   // The month looked at, for the today it was picked on: a new day can be a
   // new month, and the calendar follows the player's today back to it.
   const [picked, setPicked] = useState(() => ({ today, month: monthOf(today) }));
@@ -992,6 +1019,14 @@ function SoloCalendar({
             <dd>{formatNumber(stats.longestStreak)}</dd>
           </div>
         </dl>
+      )}
+      {archiveLocked && (
+        <p className="solo-archive-locked" data-testid="solo-archive-locked">
+          <LockIcon size={12} /> {ui.support.soloArchiveLocked}{" "}
+          <button type="button" className="inline-link" onClick={() => openSettings("support")}>
+            {ui.support.seePass}
+          </button>
+        </p>
       )}
     </section>
   );

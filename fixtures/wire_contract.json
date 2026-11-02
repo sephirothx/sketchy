@@ -2153,6 +2153,7 @@
    "pendingRole"
   ],
   "api.solo:create_solo_router": [
+   "freeUnlimited",
    "heldUntil",
    "inGallery",
    "myReaction",
@@ -2178,6 +2179,9 @@
    "inGallery",
    "shareWithdrawn",
    "sharedByMe"
+  ],
+  "api.solo:summary": [
+   "freeUnlimited"
   ],
   "api.solo:write_reaction": [
    "myReaction",
@@ -3100,7 +3104,7 @@
    "displayName"
   ]
  },
- "protocolVersion": 74,
+ "protocolVersion": 75,
  "refusal": {
   "codes": [
    "invalid_payload",

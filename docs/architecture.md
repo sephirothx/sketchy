@@ -2075,7 +2075,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/support/signals.py`](../backend/app/support/signals.py) | What the webhook route has seen, for the operator (#1473). |
 | [`app/api/support.py`](../backend/app/api/support.py) | The supporter pass's REST surface: checkout, webhook, cancel (#1473). |
 | [`app/services/supporter.py`](../backend/app/services/supporter.py) | Supporter status, derived from the purchase ledger and never stored (#1472). |
-| [`app/services/solo_access.py`](../backend/app/services/solo_access.py) | Who may open which of Solo's doors (#1434): the one gate, in one place. |
+| [`app/services/solo_access.py`](../backend/app/services/solo_access.py) | Who may open which of Solo's doors (#1434, #1477): the one gate, in one place. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |
 | [`app/handlers/connection.py`](../backend/app/handlers/connection.py) | Socket.IO handlers for the connection domain. |

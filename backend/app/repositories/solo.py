@@ -1256,8 +1256,7 @@ class SoloRepository:
         raise SoloRefused("conflict")
 
     async def daily_finished(self, user_id: str, day: date) -> bool:
-        """Whether the player finished `day`'s Daily: a review, then, which
-        opens whatever the archive door says (#1496 review)."""
+        """Whether the player finished `day`'s Daily: a review, then."""
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
             completed = await session.scalar(
@@ -1266,6 +1265,20 @@ class SoloRepository:
                 )
             )
         return completed is not None
+
+    async def daily_started(self, user_id: str, day: date) -> bool:
+        """Whether the player has a result for `day`'s Daily, finished or not.
+        Finished, it is a review; unfinished, it is theirs to finish. Either way
+        it opens whatever the archive door says (#1496 review, R-SUP-18)."""
+        async with self._session_factory() as session:
+            player = (await identity_ids(session, UUID(user_id)))[0]
+            # The run exists from the first open; the result from the first answer.
+            started = await session.scalar(
+                select(SoloRun.id)
+                .where(SoloRun.user_id == player, SoloRun.daily_date == day)
+                .limit(1)
+            )
+        return started is not None
 
     async def _sync_daily_serves(
         self,
@@ -1489,6 +1502,16 @@ class SoloRepository:
                     )
                 ).all()
             }
+            begun = set(
+                (
+                    await session.scalars(
+                        select(SoloRun.daily_date).where(
+                            SoloRun.user_id == player,
+                            SoloRun.daily_date.between(first, last),
+                        )
+                    )
+                ).all()
+            )
             # The player's first Daily played on its own date: one played late
             # from the archive must not turn the weeks before it into days
             # they let pass (#1496 review). Any first one, if none was.
@@ -1532,7 +1555,17 @@ class SoloRepository:
                 {
                     "date": day.isoformat(),
                     "daily": day in had,
-                    "open": archive and day in had and day < ended_before and day not in held,
+                    # Started and unfinished stays open with the archive shut: a
+                    # run begun before a pass ended is finished (R-SUP-18).
+                    "open": day in had
+                    and day < ended_before
+                    and (
+                        (archive and day not in held)
+                        or (
+                            day in begun
+                            and (result is None or result.completed_at is None)
+                        )
+                    ),
                     "result": daily_result_payload(result) if result is not None else None,
                 }
             )
