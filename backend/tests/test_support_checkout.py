@@ -748,11 +748,19 @@ async def test_a_lapsed_year_can_buy_again_once_the_old_one_is_stopped(site, mon
     async def down(self, subscription_id):
         raise ProviderUnavailable("down")
 
-    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    async def healthy(self, subscription_id):
+        return False
+
+    monkeypatch.setattr(StubProvider, "stop_if_unpaid", down)
     # Never two charges for the same months: nothing to pay until it stops.
     refused = await http.post("/api/support/checkout", json={"product": "year"})
     assert refused.status_code == 502
     assert refused.json()["errorCode"] == "support_cancel_failed"
+    # Paid, with its webhook still on the way: not stopped, and no second year.
+    monkeypatch.setattr(StubProvider, "stop_if_unpaid", healthy)
+    late = await http.post("/api/support/checkout", json={"product": "year"})
+    assert late.status_code == 409
+    assert "cancel:sub_1" not in {row.provider_event_id for row in await _rows(factory)}
     monkeypatch.undo()
     assert (await http.post("/api/support/checkout", json={"product": "year"})).status_code == 200
     assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
@@ -917,6 +925,17 @@ async def test_a_paused_subscription_is_cancelled_at_once(monkeypatch):
     assert calls[-1][2] == {"effective_from": "immediately"}
 
 
+async def test_only_an_unpaid_subscription_is_stopped_at_once(monkeypatch):
+    for status, answer in (("past_due", True), ("paused", True), ("canceled", True), ("active", False)):
+        provider, calls = _paddle_answering(monkeypatch, [{"data": {"status": status}}, {"data": {}}])
+        assert await provider.stop_if_unpaid("sub_1") is answer
+        stopped = [call for call in calls if call[0] == "POST"]
+        if status in ("past_due", "paused"):
+            assert stopped[0][2] == {"effective_from": "immediately"}
+        else:
+            assert stopped == []
+
+
 async def test_a_real_refusal_to_cancel_still_fails(monkeypatch):
     provider, _ = _paddle_answering(
         monkeypatch, [ProviderRefused("400"), {"data": {"status": "active"}}]
@@ -937,7 +956,7 @@ async def test_paddle_tells_a_no_from_an_outage(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", answering(400))
     with pytest.raises(ProviderRefused):
         await provider._call("GET", "/subscriptions/sub_1")
-    for code in (429, 503):
+    for code in (408, 409, 429, 503):
         monkeypatch.setattr(urllib.request, "urlopen", answering(code))
         with pytest.raises(ProviderUnavailable) as caught:
             await provider._call("GET", "/subscriptions/sub_1")

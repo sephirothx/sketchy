@@ -42,6 +42,7 @@ from app.services.supporter import (
 from app.support.cancellation import cancel_quietly, cancel_subscription
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
 from app.support.providers import (
+    cancellation_event,
     PRODUCT_LIFETIME,
     SIGNATURE_HEADER,
     BadSignature,
@@ -235,16 +236,21 @@ def create_support_router(
         if lifetime or (status.active and status.renews and body.product != PRODUCT_LIFETIME):
             raise Refusal(409, ErrorCode.SUPPORT_ALREADY_ACTIVE)
         if status.renews and not status.active:
-            # A year that ran out unpaid can still be collected: stopped first, or
-            # this would be a second charge for the same months. And a player with no
-            # pass must never be told they already hold one.
+            # Out of paid time, with a subscription still on the books. Paddle knows
+            # which kind: unpaid, it could still collect, so it stops first or this is
+            # a second charge for the same months, and a player with no pass must not
+            # be told they hold one. Healthy, its renewal's webhook is on its way.
             async with session_factory() as session:
                 lapsed = await renewing_subscriptions(session, [user.id])
             try:
                 for subscription_id in lapsed:
-                    await cancel_subscription(
-                        session_factory, provider, subscription_id, user_id=user.id, notify=False
-                    )
+                    if not await provider.stop_if_unpaid(subscription_id):
+                        raise Refusal(409, ErrorCode.SUPPORT_ALREADY_ACTIVE)
+                    async with session_factory() as session:
+                        async with session.begin():
+                            await apply_provider_event(
+                                session, provider.name, cancellation_event(subscription_id)
+                            )
             except ProviderUnavailable as error:
                 raise Refusal(502, ErrorCode.SUPPORT_CANCEL_FAILED) from error
         try:
