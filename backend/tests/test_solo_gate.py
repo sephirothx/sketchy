@@ -11,6 +11,7 @@ from app.db.models import SoloDailySet, SupportPurchase, generate_uuid
 from app.services.solo_access import SUPPORTER_DOORS, free_run_door, solo_door_open
 
 from tests import test_solo_daily
+from tests.dbfixtures import lapse_passes
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
 from tests.test_solo_archive import PAST, TODAY, _candidates, _noon, _settle_all, env  # noqa: F401
@@ -43,13 +44,7 @@ async def _pass(factory, user_id, *, end=NOW + timedelta(days=30)):
 
 
 async def _lapse(factory, user_id):
-    async with factory() as session:
-        async with session.begin():
-            await session.execute(
-                update(SupportPurchase)
-                .where(SupportPurchase.user_id == user_id)
-                .values(period_end=NOW - timedelta(minutes=1))
-            )
+    await lapse_passes(factory, user_id, NOW - timedelta(minutes=1))
 
 
 async def _me(http):
