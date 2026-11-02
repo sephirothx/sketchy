@@ -74,6 +74,24 @@ function PlanCard({
   );
 }
 
+/** What a pass costs, for a guest: nothing here can be chosen until there is an
+account to put it on (R-SUP-02). */
+function PlanPrices({ plans }: { plans: SupportPlans }) {
+  const card = (title: string, price: string, note: string) => (
+    <div className="support-plan">
+      <span className="support-plan-title">{title}</span>
+      <span className="support-plan-price">{price}</span>
+      <span className="support-plan-note">{note}</span>
+    </div>
+  );
+  return (
+    <div className="support-plans">
+      {card(ui.support.planYear, plans.year.price, ui.support.yearNote)}
+      {card(ui.support.planLifetime, plans.lifetime.price, ui.support.lifetimeNote)}
+    </div>
+  );
+}
+
 function Checkout({ plans }: { plans: SupportPlans }) {
   const showMark = useSupportStore((state) => state.showMark);
   const setShowMark = useSupportStore((state) => state.setShowMark);
@@ -258,14 +276,17 @@ export function SupportPane() {
       {isRegistered ? (
         <Checkout plans={plans} />
       ) : (
-        <div className="support-account">
-          <p>{ui.support.needAccount}</p>
-          {/* Not a link: leaving this overlay's page would unmount a room the
-              guest is seated in, without leaving it (R-UX-15). */}
-          <button type="button" className="btn btn-primary" onClick={() => openSettings("account")}>
-            {ui.support.createAccount}
-          </button>
-        </div>
+        <>
+          <PlanPrices plans={plans} />
+          <div className="support-account">
+            <p>{ui.support.needAccount}</p>
+            {/* Not a link: leaving this overlay's page would unmount a room the
+                guest is seated in, without leaving it (R-UX-15). */}
+            <button type="button" className="btn btn-primary" onClick={() => openSettings("account")}>
+              {ui.support.createAccount}
+            </button>
+          </div>
+        </>
       )}
     </Pitch>
   );

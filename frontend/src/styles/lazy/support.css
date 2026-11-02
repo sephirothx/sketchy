@@ -71,6 +71,10 @@
   cursor: pointer;
 }
 
+div.support-plan {
+  cursor: default;
+}
+
 .support-plan.is-selected {
   border-color: var(--primary);
   background: var(--primary-soft);

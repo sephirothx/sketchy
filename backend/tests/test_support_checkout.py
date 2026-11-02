@@ -311,13 +311,17 @@ async def test_a_signed_in_cancel_mails_a_confirmation(site):
     ]
 
 
-async def test_the_signed_out_form_answers_the_same_whatever_it_finds(site):
+async def test_the_signed_out_form_answers_the_same_whatever_it_finds(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)
     await _post(http, _paid("e1", "o1", user_id))
     http.cookies.clear()
-    named = await http.post("/api/support/cancel/request", json={"identifier": "marta"})
-    nobody = await http.post("/api/support/cancel/request", json={"identifier": "nobody"})
+    async def known(self, email):
+        return ("sub_1",) if email == "m@example.test" else ()
+
+    monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
+    named = await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
+    nobody = await http.post("/api/support/cancel/request", json={"email": "n@example.test"})
     assert named.status_code == nobody.status_code == 200
     assert named.json() == nobody.json()
     async with factory() as session:
@@ -498,7 +502,7 @@ async def test_a_failed_cancel_says_the_renewal_is_still_on(site, monkeypatch):
         assert (await supporter_status(session, user_id)).renews
     # The signed-out form says nothing either way.
     http.cookies.clear()
-    assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 200
+    assert (await http.post("/api/support/cancel/request", json={"email": "m@example.test"})).status_code == 200
 
 
 async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site, monkeypatch):
@@ -520,10 +524,10 @@ async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site,
     monkeypatch.setattr(StubProvider, "cancel_at_period_end", counted)
     monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
     http.cookies.clear()
-    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
     # Sending it again cancels nothing, and so mails nobody.
-    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
 
 
@@ -739,6 +743,17 @@ async def test_a_webhook_recording_the_stop_first_does_not_lose_the_mail(site, m
     assert len(mail) == 1
     # Asked again, nothing renews and nobody is mailed twice.
     assert (await http.post("/api/support/cancel")).status_code == 200
+
+
+async def test_a_public_username_stops_nothing_at_the_signed_out_form(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    http.cookies.clear()
+    assert (await http.post("/api/support/cancel/request", json={"email": "marta"})).status_code == 200
+    assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 422
+    async with factory() as session:
+        assert (await supporter_status(session, user_id)).renews
 
 
 def test_signature_checks_are_exact():

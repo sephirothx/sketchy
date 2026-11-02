@@ -54,4 +54,6 @@ async def test_a_guest_cannot_reach_checkout():
         pane = page.get_by_test_id("support-pane")
         await pane.get_by_text("You need an account to get a pass.").wait_for()
         assert await pane.get_by_role("button", name="Continue to checkout").count() == 0
+        # The price is known before signing up.
+        await pane.get_by_text("Lifetime").wait_for()
         await browser.close()

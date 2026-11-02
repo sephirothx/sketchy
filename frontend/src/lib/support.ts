@@ -40,8 +40,8 @@ export function cancelRenewal(): Promise<SupporterStatus> {
   return apiRequest<SupporterStatus>("/api/support/cancel", { method: "POST" });
 }
 
-export async function requestCancellation(identifier: string): Promise<void> {
-  await apiRequest("/api/support/cancel/request", { method: "POST", body: { identifier } });
+export async function requestCancellation(email: string): Promise<void> {
+  await apiRequest("/api/support/cancel/request", { method: "POST", body: { email } });
 }
 
 export function isLifetime(status: SupporterStatus | null): boolean {

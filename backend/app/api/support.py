@@ -83,8 +83,9 @@ class CheckoutBody(ControlFreeModel):
 
 
 class CancelRequestBody(ControlFreeModel):
-    # A username or the e-mail the provider has: §312k asks for no login.
-    identifier: str = Field(min_length=1, max_length=254)
+    # The e-mail the provider has: §312k asks for no login. Never a username, which
+    # is public and would let anybody stop anybody's renewal.
+    email: str = Field(min_length=1, max_length=254)
 
 
 async def _subscriptions_to_stop(
@@ -314,30 +315,16 @@ def create_support_router(
             status = await supporter_status(session, user.id)
         return status.payload()
 
-    async def carry_out_cancel_request(identifier: str) -> None:
+    async def carry_out_cancel_request(email: str) -> None:
         """After the answer has gone: what it found must not show in how long it
         took, or in whether the provider happened to be up (R-SUP-09). So a failure
         cannot reach the person who asked, and is left for the operator."""
         try:
-            if "@" in identifier:
-                named = await provider.subscriptions_of_email(identifier)
-                async with session_factory() as session:
-                    owners = await unstopped_owners(session, named)
-            else:
-                async with session_factory() as session:
-                    user_id = await session.scalar(
-                        select(User.id).where(
-                            func.lower(User.username) == identifier.lower(),
-                            User.state == AccountState.REGISTERED.value,
-                        )
-                    )
-                    owners = (
-                        dict.fromkeys(await renewing_subscriptions(session, [user_id]), user_id)
-                        if user_id is not None
-                        else {}
-                    )
+            named = await provider.subscriptions_of_email(email)
+            async with session_factory() as session:
+                owners = await unstopped_owners(session, named)
         except Exception:
-            # Nothing safe to name: the identifier may be the buyer's address.
+            # Nothing safe to name: this is the buyer's address.
             logger.error("support_cancel_request_lookup_failed", exc_info=True)
             return
         for subscription_id, owner in owners.items():
@@ -373,7 +360,7 @@ def create_support_router(
         """Signed out (§312k). The answer is the same whatever matched, so the
         form cannot be used to find out who holds a pass."""
         throttle(cancel_limiter, getattr(request.state, "client_ip_hash", None))
-        tasks.add_task(carry_out_cancel_request, body.identifier.strip())
+        tasks.add_task(carry_out_cancel_request, body.email.strip())
         return {"ok": True}
 
     if isinstance(provider, StubProvider):

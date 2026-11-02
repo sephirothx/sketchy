@@ -59,7 +59,7 @@ function SignedIn() {
 }
 
 function SignedOut() {
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ function SignedOut() {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    void requestCancellation(identifier)
+    void requestCancellation(email)
       .then(() => setDone(true))
       .catch((failure) => setError(refusalText(failure, ui.support.cancelFailed)))
       .finally(() => setBusy(false));
@@ -79,13 +79,15 @@ function SignedOut() {
     <form onSubmit={submit} className="support-cancel-form">
       <p>{ui.support.cancelSignedOut}</p>
       <label>
-        {ui.support.cancelIdentifier}
+        {ui.support.cancelEmail}
         <input
           className="input-field"
+          type="email"
+          autoComplete="email"
           required
           maxLength={254}
-          value={identifier}
-          onChange={(event) => setIdentifier(event.target.value)}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
         />
       </label>
       {error && (
@@ -93,7 +95,7 @@ function SignedOut() {
           {error}
         </p>
       )}
-      <button type="submit" className="btn btn-danger" disabled={busy || !identifier.trim()}>
+      <button type="submit" className="btn btn-danger" disabled={busy || !email.trim()}>
         {ui.support.cancelRenewal}
       </button>
     </form>
