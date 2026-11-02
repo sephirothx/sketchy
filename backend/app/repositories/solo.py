@@ -1269,14 +1269,16 @@ class SoloRepository:
     async def daily_started(self, user_id: str, day: date) -> bool:
         """Whether the player has a result for `day`'s Daily, finished or not.
         Finished, it is a review; unfinished, it is theirs to finish. Either way
-        it opens whatever the archive door says (#1496 review, R-SUP-18)."""
+        it opens whatever the archive door says (#1496 review, R-SUP-18). Merely
+        opened is not started: the run exists from the first open, the result from
+        the first answer, and a supporter opening every past date before a pass
+        ended would otherwise keep them all."""
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
-            # The run exists from the first open; the result from the first answer.
             started = await session.scalar(
-                select(SoloRun.id)
-                .where(SoloRun.user_id == player, SoloRun.daily_date == day)
-                .limit(1)
+                select(SoloDailyResult.daily_date).where(
+                    SoloDailyResult.user_id == player, SoloDailyResult.daily_date == day
+                )
             )
         return started is not None
 
@@ -1469,16 +1471,18 @@ class SoloRepository:
         A date is open once it has ended everywhere: the player's yesterday
         may still be somebody's today, and played from here it would count
         toward a streak the archive promises it never does (#1496 review).
-        `archive` is the gate's say (R-SOLO-09): closed, nothing is. Open,
-        `earliest` is the first Daily there was, which the calendar can go
-        back to though the player never played it."""
+        `archive` is the gate's say (R-SOLO-09): closed, only a Daily the player
+        started and has not finished is, since a lapse takes nothing begun
+        (R-SUP-18). Open, `earliest` is the first Daily there was, which the
+        calendar can go back to though the player never played it. Either way a
+        date sharing a concept with a Daily open now is held back: the door would
+        refuse it."""
         # `daily_release_at(d) <= now` is `d < (now - DAY_EDGE).date()`.
         ended_before = (now - DAY_EDGE).date()
         last = min(today, _month_end(first))
-        if archive:
-            # Which past dates are held depends on the open Dailies' concepts:
-            # picked first, as before a free run serves.
-            await ensure_open_dailies(self._session_factory, now)
+        # Which past dates are held depends on the open Dailies' concepts:
+        # picked first, as before a free run serves.
+        await ensure_open_dailies(self._session_factory, now)
         async with self._session_factory() as session:
             player = (await identity_ids(session, UUID(user_id)))[0]
             had = set(
@@ -1502,16 +1506,6 @@ class SoloRepository:
                     )
                 ).all()
             }
-            begun = set(
-                (
-                    await session.scalars(
-                        select(SoloRun.daily_date).where(
-                            SoloRun.user_id == player,
-                            SoloRun.daily_date.between(first, last),
-                        )
-                    )
-                ).all()
-            )
             # The player's first Daily played on its own date: one played late
             # from the archive must not turn the weeks before it into days
             # they let pass (#1496 review). Any first one, if none was.
@@ -1525,12 +1519,8 @@ class SoloRepository:
                     SoloDailyResult.user_id == player
                 )
             )
-            held = (
-                await _dates_sharing_open_concepts(
-                    session, [day for day in had if day < ended_before], now
-                )
-                if archive
-                else set()
+            held = await _dates_sharing_open_concepts(
+                session, [day for day in had if day < ended_before], now
             )
             # How far back the calendar goes: with the archive open, to the
             # first Daily there was, every one of them playable; closed, to
@@ -1559,13 +1549,8 @@ class SoloRepository:
                     # run begun before a pass ended is finished (R-SUP-18).
                     "open": day in had
                     and day < ended_before
-                    and (
-                        (archive and day not in held)
-                        or (
-                            day in begun
-                            and (result is None or result.completed_at is None)
-                        )
-                    ),
+                    and day not in held
+                    and (archive or (result is not None and result.completed_at is None)),
                     "result": daily_result_payload(result) if result is not None else None,
                 }
             )

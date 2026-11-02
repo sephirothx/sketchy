@@ -331,7 +331,7 @@ export const LEGAL_NL: LegalDocuments = {
           "Paddle, onze wederverkoper, is de verkoper: Paddle neemt de betaling aan, rekent eventuele belasting en stuurt je betaalbewijs, onder eigen voorwaarden.",
           "Een jaarpas wordt elk jaar verlengd tot je opzegt. Je kunt altijd opzeggen op /support/cancel, ingelogd of niet: de pas loopt door tot het einde van de al betaalde tijd en je krijgt een bevestiging per e-mail.",
           "Als consument kun je binnen veertien dagen na aankoop herroepen en krijg je het ongebruikte deel terug. Vraag dit aan via je betaalbewijs van Paddle.",
-          "Als een pas eindigt, verdwijnen het teken en de extra Solo, en blijven de gekozen stijlen en doodles. Een terugbetaling of chargeback beëindigt hem meteen en neemt ook die keuzes terug. Een schorsing wordt niet terugbetaald. Je account verwijderen stopt elke verlenging. Een fooi op Ko-fi is een cadeau en bevat geen pas.",
+          "Als een pas eindigt, verdwijnen het teken en de extra Solo, al kun je een begonnen ronde nog afmaken, en blijven de gekozen stijlen en doodles. Een terugbetaling of chargeback beëindigt hem meteen en neemt ook die keuzes terug. Een schorsing wordt niet terugbetaald. Je account verwijderen stopt elke verlenging. Een fooi op Ko-fi is een cadeau en bevat geen pas.",
           "Je kunt een andere speler twaalf maanden geven: één afschrijving, geen verlenging en geen kosten voor die speler. Ze beginnen als de huidige tijd eindigt, en een lopende verlenging wacht tot het cadeau eindigt en gaat daarna door, zodat die speler niet voor dezelfde maanden betaalt. Die speler kan de verlenging altijd opzeggen.",
         ],
       },

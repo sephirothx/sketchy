@@ -7,12 +7,13 @@ from uuid import UUID
 import pytest
 from sqlalchemy import update
 
-from app.db.models import SupportPurchase, generate_uuid
+from app.db.models import SoloDailySet, SupportPurchase, generate_uuid
 from app.services.solo_access import SUPPORTER_DOORS, free_run_door, solo_door_open
 
+from tests import test_solo_daily
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
-from tests.test_solo_archive import PAST, TODAY, _candidates, _noon, env  # noqa: F401
+from tests.test_solo_archive import PAST, TODAY, _candidates, _noon, _settle_all, env  # noqa: F401
 
 NOW = datetime.now(timezone.utc)
 
@@ -117,7 +118,10 @@ async def test_a_past_daily_started_before_a_lapse_stays_open(env):  # noqa: F81
     fan = await player(users, factory, "Fan")
     await _pass(factory, UUID(fan.id))
     await sign_in_as(http, factory, fan.id)
-    assert (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).status_code == 200
+    run = (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).json()
+    await _settle_all(http, run["serves"][:1], outcome="given_up")
+    # Opened and never answered is not started.
+    assert (await http.post(f"/api/solo/daily/{older.isoformat()}")).status_code == 200
     await _lapse(factory, UUID(fan.id))
     assert (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).status_code == 200
     refused = await http.post(f"/api/solo/daily/{older.isoformat()}")
@@ -131,6 +135,36 @@ async def test_a_past_daily_started_before_a_lapse_stays_open(env):  # noqa: F81
     assert days[PAST.isoformat()]["open"] is True
     if older.isoformat() in days:
         assert days[older.isoformat()]["open"] is False
+
+
+async def test_a_started_daily_held_back_is_not_offered_after_a_lapse(env):  # noqa: F811
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "OnTime")
+    await solo.open_daily(other.id, PAST, now=_noon(PAST))
+    fan = await player(users, factory, "Fan")
+    await _pass(factory, UUID(fan.id))
+    await sign_in_as(http, factory, fan.id)
+    run = (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).json()
+    await _settle_all(http, run["serves"][:1], outcome="given_up")
+    await _lapse(factory, UUID(fan.id))
+    # Today's Daily takes one of its concepts: the door would answer 409.
+    await solo.open_daily(other.id, TODAY, now=NOW)
+    past_concept = (await test_solo_daily._set(factory, PAST))[0].concept_id
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(SoloDailySet)
+            .where(SoloDailySet.daily_date == TODAY, SoloDailySet.position == 1)
+            .values(concept_id=past_concept)
+        )
+    month = (
+        await http.get(
+            f"/api/solo/daily/month?today={TODAY.isoformat()}&month={PAST.isoformat()[:7]}"
+        )
+    ).json()
+    day = next(day for day in month["days"] if day["date"] == PAST.isoformat())
+    assert day["open"] is False
+    assert (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).status_code == 409
 
 
 async def test_with_no_provider_every_door_stays_open(env, monkeypatch):  # noqa: F811

@@ -121,10 +121,11 @@ keyboard that takes half the screen, and one thumb.
   The **Daily** is five drawings, the same for everybody in every language, picked from
   drawings that most of their room could name, easiest first; it rolls over at your own
   midnight, is resumed rather than restarted, keeps its progress if you leave it half
-  played, and can be copied as a row of squares; a past day in its calendar can be played
-  too - a missed one late, an unfinished one finished - and a finished one reviewed, its
-  five drawings with what each was. A **Free run** is **Quick** (5 drawings),
-  **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
+  played, and can be copied as a row of squares; with a supporter pass a past day in its
+  calendar can be played too - a missed one late, an unfinished one finished - and a finished
+  one, pass or not, reviewed, its five drawings with what each was. A **Free run** is **Quick**
+  (5 drawings), **Classic** (10) or, with a pass, **Endless**, which ends at the first miss.
+  A pass that ends never cuts short what was begun. One of each can be in
   play at once, each with how far it got and its own **Continue** or **Start over**. A
   personal best is kept for each length, and a streak of days in a row, its flame
   growing at a week, a month and a year; a calendar shows
@@ -2834,8 +2835,8 @@ includes the saved configuration and archive state.
 ### Solo
 
 1. **Solo** (`/solo`, from the lobby's **Solo** button or the header): choose the
-   **Daily** or a **Free run**: **Quick** (5 drawings), **Classic** (10) or **Endless**. A
-   run left half-way waits in its row with **Continue**; **Start over** begins that
+   **Daily** or a **Free run**: **Quick** (5 drawings), **Classic** (10) or, with a
+   supporter pass, **Endless**. A run left half-way waits in its row with **Continue**; **Start over** begins that
    length again. A guest is asked to create an account first.
 2. Each drawing replays over 20 seconds inside a 30-second clock; the last ten seconds show
    it finished. Type guesses as in a room: a wrong one is not a miss, and a near one says

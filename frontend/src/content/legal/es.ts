@@ -323,7 +323,7 @@ export const LEGAL_ES: LegalDocuments = {
           "Paddle, nuestro revendedor, es el vendedor: se encarga del pago, cobra los impuestos que correspondan y envía tu recibo, según sus propios términos.",
           "Un pase anual se renueva cada año hasta que lo canceles. Puedes cancelarlo en cualquier momento en /support/cancel, con o sin sesión: el pase dura hasta el final del tiempo ya pagado y recibes una confirmación por correo.",
           "Si eres consumidor, puedes desistir en los catorce días siguientes a la compra y recuperar la parte que no hayas usado. Solicítalo a través de tu recibo de Paddle.",
-          "Cuando un pase termina, la marca y el Solo adicional desaparecen, y los estilos y garabatos que elegiste se quedan. Un reembolso o una devolución del cargo lo termina de inmediato y retira también esas elecciones. Una suspensión no se reembolsa. Eliminar tu cuenta detiene cualquier renovación. Una propina en Ko-fi es un regalo y no incluye ningún pase.",
+          "Cuando un pase termina, la marca y el Solo adicional desaparecen, aunque puedes terminar una partida ya empezada, y los estilos y garabatos que elegiste se quedan. Un reembolso o una devolución del cargo lo termina de inmediato y retira también esas elecciones. Una suspensión no se reembolsa. Eliminar tu cuenta detiene cualquier renovación. Una propina en Ko-fi es un regalo y no incluye ningún pase.",
           "Puedes regalar doce meses a otro jugador: un solo cargo, sin renovación y sin cargo para esa persona. Empiezan cuando termine su tiempo actual y, si su pase iba a renovarse, esa renovación espera a que termine el regalo y luego continúa, para que no pague los mismos meses. Puede cancelarla en cualquier momento.",
         ],
       },

@@ -422,6 +422,11 @@ async def test_a_missed_daily_is_played_from_the_calendar_and_then_reviewed():
             await page.goto(BASE_URL)
             await use_guest_name(page, username.capitalize())
             await register_account(page, username)
+            # The archive comes with the pass (R-SUP-18).
+            checkout = await page.request.post(f"{BASE_URL}/api/support/checkout", data={"product": "year"})
+            await page.goto((await checkout.json())["url"])
+            await page.get_by_role("button", name="Pay").click()
+            await page.get_by_test_id("support-thanks").get_by_text("Thank you").wait_for()
             await page.goto(f"{BASE_URL}/solo")
             # A new player's calendar reaches back to the first Daily there was.
             await show_month(page, day)
