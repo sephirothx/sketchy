@@ -73,6 +73,10 @@ async def env(monkeypatch):
     async def legal():
         return {"contactAddress": "privacy@sketchy.example.org"}
 
+    @app.get("/api/support/plans")
+    async def support_plans():
+        return {"year": {"price": "€19"}}
+
     clients: list[AsyncClient] = []
 
     def new_client() -> AsyncClient:
@@ -742,6 +746,8 @@ async def test_a_suspended_account_can_still_read_where_to_write(env):
 
     assert legal.status_code == 200
     assert legal.json()["contactAddress"] == "privacy@sketchy.example.org"
+    # The cancel page asks this before it shows its form (R-SUP-09).
+    assert (await target_http.get("/api/support/plans")).status_code == 200
 
 
 async def test_a_revocation_after_the_ban_ends_the_escape_hatch(env):

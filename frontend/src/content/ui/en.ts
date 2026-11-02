@@ -507,6 +507,8 @@ export const EN = {
     thanksTitle: (p: { name: string }) => `Thank you, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Your pass stops renewing. It stays active until ${p.date}, and a confirmation goes out by e-mail.`,
     cancelDone: (p: { date: string }) => `Done. Your pass stays active until ${p.date}.`,
+    cancelBodyLapsed: "Your renewal stops, and a confirmation goes out by e-mail.",
+    cancelDoneLapsed: "Done. Your renewal is stopped.",
     inboxStarted: (p: { date: string }) => `Your supporter pass is active until ${p.date}. Thank you!`,
     inboxEnding: (p: { date: string }) => `Your supporter pass ends on ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Your supporter pass renews on ${p.date}.`,

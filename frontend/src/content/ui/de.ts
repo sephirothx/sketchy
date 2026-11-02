@@ -495,6 +495,8 @@ export const DE: Catalogue = {
     thanksTitle: (p: { name: string }) => `Danke, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Dein Pass verlängert sich nicht mehr. Er bleibt bis ${p.date} aktiv, und eine Bestätigung kommt per E-Mail.`,
     cancelDone: (p: { date: string }) => `Erledigt. Dein Pass bleibt bis ${p.date} aktiv.`,
+    cancelBodyLapsed: "Die Verlängerung endet, und eine Bestätigung kommt per E-Mail.",
+    cancelDoneLapsed: "Erledigt. Die Verlängerung ist beendet.",
     inboxStarted: (p: { date: string }) => `Dein Unterstützerpass ist bis ${p.date} aktiv. Danke!`,
     inboxEnding: (p: { date: string }) => `Dein Unterstützerpass endet am ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Dein Unterstützerpass verlängert sich am ${p.date}.`,

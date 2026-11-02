@@ -495,6 +495,8 @@ export const IT: Catalogue = {
     thanksTitle: (p: { name: string }) => `Grazie, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Il tuo pass non si rinnova più. Resta attivo fino al ${p.date} e una conferma arriva via e-mail.`,
     cancelDone: (p: { date: string }) => `Fatto. Il tuo pass resta attivo fino al ${p.date}.`,
+    cancelBodyLapsed: "Il rinnovo si ferma e una conferma arriva via e-mail.",
+    cancelDoneLapsed: "Fatto. Il rinnovo è fermato.",
     inboxStarted: (p: { date: string }) => `Il tuo pass sostenitore è attivo fino al ${p.date}. Grazie!`,
     inboxEnding: (p: { date: string }) => `Il tuo pass sostenitore termina il ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Il tuo pass sostenitore si rinnova il ${p.date}.`,

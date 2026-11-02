@@ -2490,7 +2490,7 @@ admits by design.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/support/plans` | Public: a guest sees the pitch too. `{year: {price}, lifetime: {price}, maxExtraMinor, tipUrl}`. A `404` is how the page learns there is no tier. |
-| `GET` | `/api/support/status` | The caller's own pass, `{active, until, renews}`, for the pages that open after a checkout. |
+| `GET` | `/api/support/status` | The caller's own pass, `{active, until, renews}` (`renews`: a subscription we have not stopped can still charge, even with no pass active), for the pages that open after a checkout. |
 | `POST` | `/api/support/checkout` | `{product: "year" \| "lifetime", extraMinor?: 0–50000}` → `{url}`, where to send the buyer. The account goes in the provider's custom data, never a query string. Refused `403 account_required` with `action: "support"` for a guest (R-SUP-02), `409 support_already_active` for a lifetime holder or on a second year while one renews, `502 support_unavailable` when the provider fails. |
 | `POST` | `/api/support/webhooks/{provider}` | Signature-verified, unauthenticated (R-SUP-07). `401` for a bad or older-than-five-minutes signature. `200` for a new fact, one already seen, or a kind not acted on, so the provider never retries forever. `500` when the fact could not be written, or a renewal it must stop could not be stopped, so it does retry: a retry finds a duplicate fact and tries the renewal again. |
 | `POST` | `/api/support/cancel` | Signed in, one click: the renewal stops and the time already paid stands. → `{active, until, renews}`, or `502 support_cancel_failed`, which says the renewal is still on. A suspended player may reach this and the form (R-SUP-09). |

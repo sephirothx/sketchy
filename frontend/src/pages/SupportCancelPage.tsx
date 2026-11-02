@@ -26,11 +26,15 @@ function SignedIn() {
 
   const until = status?.until ? formatDate(new Date(status.until)) : "";
   if (!loaded) return null;
-  if (done) return <p role="status">{ui.support.cancelDone({ date: until })}</p>;
+  if (done) {
+    return (
+      <p role="status">{until ? ui.support.cancelDone({ date: until }) : ui.support.cancelDoneLapsed}</p>
+    );
+  }
   if (!status?.renews) return <p>{ui.support.cancelNothing}</p>;
   return (
     <>
-      <p>{ui.support.cancelBody({ date: until })}</p>
+      <p>{until ? ui.support.cancelBody({ date: until }) : ui.support.cancelBodyLapsed}</p>
       {error && (
         <p className="auth-error" role="alert">
           {error}

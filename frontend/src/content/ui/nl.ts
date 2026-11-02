@@ -495,6 +495,8 @@ export const NL: Catalogue = {
     thanksTitle: (p: { name: string }) => `Bedankt, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Je pas wordt niet meer verlengd. Hij blijft actief tot ${p.date} en er volgt een bevestiging per e-mail.`,
     cancelDone: (p: { date: string }) => `Klaar. Je pas blijft actief tot ${p.date}.`,
+    cancelBodyLapsed: "De verlenging stopt en er volgt een bevestiging per e-mail.",
+    cancelDoneLapsed: "Klaar. De verlenging is gestopt.",
     inboxStarted: (p: { date: string }) => `Je supporterspas is actief tot ${p.date}. Bedankt!`,
     inboxEnding: (p: { date: string }) => `Je supporterspas eindigt op ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Je supporterspas wordt verlengd op ${p.date}.`,

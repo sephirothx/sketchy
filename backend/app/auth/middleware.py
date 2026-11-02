@@ -220,6 +220,8 @@ class SessionAuthMiddleware:
             # Stopping a renewal (R-SUP-09): a suspension is not refunded, and
             # it must not also hold a suspended player to the next charge.
             or path.startswith("/api/support/cancel")
+            # What tells the cancel page this deployment sells a pass at all.
+            or path == "/api/support/plans"
             # The drawings the suspension notice is about: the refusal below
             # names them, and this is the one path that can hand them over.
             # One per report the decision covered (#620), so the path names

@@ -495,6 +495,8 @@ export const ES: Catalogue = {
     thanksTitle: (p: { name: string }) => `¡Gracias, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Tu pase deja de renovarse. Sigue activo hasta el ${p.date} y se envía una confirmación por correo.`,
     cancelDone: (p: { date: string }) => `Hecho. Tu pase sigue activo hasta el ${p.date}.`,
+    cancelBodyLapsed: "La renovación se detiene y se envía una confirmación por correo.",
+    cancelDoneLapsed: "Hecho. La renovación está detenida.",
     inboxStarted: (p: { date: string }) => `Tu pase de apoyo está activo hasta el ${p.date}. ¡Gracias!`,
     inboxEnding: (p: { date: string }) => `Tu pase de apoyo termina el ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Tu pase de apoyo se renueva el ${p.date}.`,

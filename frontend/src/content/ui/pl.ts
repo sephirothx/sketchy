@@ -495,6 +495,8 @@ export const PL: Catalogue = {
     thanksTitle: (p: { name: string }) => `Dziękuję, ${p.name}!`,
     cancelBody: (p: { date: string }) => `Przepustka przestanie się odnawiać. Pozostaje aktywna do ${p.date}, a potwierdzenie przyjdzie e-mailem.`,
     cancelDone: (p: { date: string }) => `Gotowe. Przepustka pozostaje aktywna do ${p.date}.`,
+    cancelBodyLapsed: "Odnowienie zostanie zatrzymane, a potwierdzenie przyjdzie e-mailem.",
+    cancelDoneLapsed: "Gotowe. Odnowienie jest zatrzymane.",
     inboxStarted: (p: { date: string }) => `Twoja przepustka jest aktywna do ${p.date}. Dziękuję!`,
     inboxEnding: (p: { date: string }) => `Twoja przepustka kończy się ${p.date}.`,
     inboxRenewing: (p: { date: string }) => `Twoja przepustka odnowi się ${p.date}.`,

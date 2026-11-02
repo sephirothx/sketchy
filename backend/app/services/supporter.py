@@ -35,7 +35,9 @@ class SupporterStatus:
     # When the last known period ends. None while inactive, and on a lifetime
     # pass, which has no end to name.
     until: datetime | None = None
-    # A subscription will charge again at `until`. False once told not to.
+    # A subscription we have not stopped can still charge: while the pass runs, at
+    # `until`; a period past and unpaid may still be collected, so it can be cancelled
+    # whether or not a pass is active. False once told not to.
     renews: bool = False
 
     @classmethod
@@ -44,9 +46,9 @@ class SupporterStatus:
     ) -> "SupporterStatus":
         """Read the values `supporter_status_columns` selected."""
         if not active:
-            return cls()
+            return cls(renews=renews)
         if lifetime:
-            return cls(active=True)
+            return cls(active=True, renews=renews)
         return cls(active=True, until=until, renews=renews)
 
     def payload(self) -> dict:
@@ -109,7 +111,6 @@ def supporter_status_columns(
         select(SupportPurchase.id)
         .where(
             *kept,
-            SupportPurchase.period_end > now,
             SupportPurchase.provider_subscription_id.is_not(None),
             ~_stopped(SupportPurchase.provider_subscription_id),
         )

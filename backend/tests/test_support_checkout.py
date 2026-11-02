@@ -704,6 +704,20 @@ async def test_with_nothing_on_sale_the_sweep_does_nothing(site, monkeypatch):
     assert await stop_renewals_nothing_pays_for(factory) == 0
 
 
+async def test_a_period_past_and_unstopped_can_still_be_cancelled(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    later = datetime.now(timezone.utc) + timedelta(days=800)
+    async with factory() as session:
+        lapsed = await supporter_status(session, user_id, now=later)
+    # No pass, but Paddle may still collect it, so the page must offer the stop.
+    assert not lapsed.active and lapsed.renews
+    assert (await http.post("/api/support/cancel")).status_code == 200
+    async with factory() as session:
+        assert not (await supporter_status(session, user_id, now=later)).renews
+
+
 async def test_a_year_arriving_after_the_lifetime_pass_is_stopped(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)

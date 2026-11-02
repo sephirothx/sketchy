@@ -135,7 +135,7 @@ test("a malformed drawing on a refusal is dropped rather than rendered", () => {
 
 
 test("a suspended player can read the documents however the address is written", () => {
-  for (const path of ["/privacy", "/terms", "/rules", "/privacy/", "/Terms//", "/RULES"]) {
+  for (const path of ["/privacy", "/terms", "/rules", "/privacy/", "/Terms//", "/RULES", "/support/cancel"]) {
     assert.equal(readableWhileSuspended(path), true, path);
   }
   for (const path of ["/", "/lobby", "/privacy/extra", "/rulesx", "/gallery"]) {

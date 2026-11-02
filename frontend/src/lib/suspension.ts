@@ -41,11 +41,13 @@ type Listener = (suspension: Suspension) => void;
 const listeners = new Set<Listener>();
 let latest: Suspension | null = null;
 
-const READABLE_WHILE_SUSPENDED = new Set(["/privacy", "/terms", "/rules"]);
+const READABLE_WHILE_SUSPENDED = new Set(["/privacy", "/terms", "/rules", "/support/cancel"]);
 
 /** Whether *pathname* is one of the pages a suspended player may still read
 (#1417, R-RULES-04): the terms and the privacy notice say how to download or
-delete their data, and the rules say what a decision's category means. Read
+delete their data, and the rules say what a decision's category means. The
+cancel page because a suspension is not refunded, and must not also hold them
+to the next charge (R-SUP-09): it needs nothing the suspension refuses. Read
 as the router and the server read it - any case, trailing slashes or not -
 so `/privacy/` is the same page as `/privacy`. */
 export function readableWhileSuspended(pathname: string): boolean {
