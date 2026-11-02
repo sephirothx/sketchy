@@ -8,6 +8,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { fetchSupporterStatus } from "../lib/support";
 import { useAuthStore } from "../store/authStore";
 import { useSupportStore } from "../store/supportStore";
+import { NotFoundPage } from "./NotFoundPage";
 import "../styles/lazy/support.css";
 
 const POLL_MS = 2000;
@@ -23,7 +24,17 @@ export function SupportThanksPage() {
   const [confirmed, setConfirmed] = useState(false);
   const [gaveUp, setGaveUp] = useState(false);
 
+  const hasResolved = useAuthStore((state) => state.hasResolved);
+  const registered = Boolean(user && !user.isAnonymous);
+  const plans = useSupportStore((state) => state.plans);
+  const loadPlans = useSupportStore((state) => state.loadPlans);
   useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
+
+  useEffect(() => {
+    // Only an account can hold a pass, and only a deployment that sells one.
+    if (!hasResolved || !registered) return;
     let stopped = false;
     let timer = 0;
     let tries = 0;
@@ -48,7 +59,10 @@ export function SupportThanksPage() {
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [hasResolved, registered, refresh]);
+
+  // Nothing here on a deployment that sells nothing (R-SUP-08).
+  if (plans === null) return <NotFoundPage />;
 
   return (
     <div className="support-page">

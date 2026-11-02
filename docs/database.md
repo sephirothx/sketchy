@@ -921,7 +921,10 @@ the webhook reads the account's state first, and a late renewal or refund names 
 foreign key) · `params` (JSON / `JSONB`) · `created_at` · `read_at`, with
 `ck_inbox_entries_kind` (`warning`, `drawing_shared`, `friend_request`,
 `friend_accepted`, `game_invite`, `reports_reviewed`, `role`, `supporter_started`,
-`supporter_ending`),
+`supporter_ending`), (the two `supporter_*` kinds name their `support_purchases` row as the subject and read
+what they say from it, so a later cancellation or refund changes or removes them; `supporter_started`
+is written with the fact, and `supporter_ending` by the hourly `supporter_ending_notices` sweep,
+which pushes nothing, so it arrives on the next read),
 `ix_inbox_entries_user_created` on (`user_id`, `created_at`) for the newest-first page,
 `ix_inbox_entries_created_at` for the sweep, the partial `ix_inbox_entries_user_unread`
 on `user_id` `WHERE read_at IS NULL` for the bell's count, and the partial unique

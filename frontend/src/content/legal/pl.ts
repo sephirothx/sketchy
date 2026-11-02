@@ -147,7 +147,7 @@ export const LEGAL_PL: LegalDocuments = {
             "czytają też zgłoszenia błędów i mogą sprawdzić konto oraz jego " +
             "ostatnią aktywność, gdy coś pójdzie nie tak.",
           "Dane są przekazywane władzom tylko wtedy, gdy wymaga tego prawo.",
-          "Jeśli kupujesz przepustkę wspierającego, sprzedaje ją i przyjmuje płatność Paddle, nasz sprzedawca. Sketchy wysyła do Paddle identyfikator Twojego konta i język oraz przechowuje to, co Paddle zgłasza: numer zamówienia, okres, kwotę i walutę. Twoja karta i adres rozliczeniowy trafiają do Paddle i nigdy do Sketchy. Paddle przetwarza je zgodnie z własną informacją o prywatności.",
+          "Jeśli kupujesz przepustkę wspierającego, sprzedaje ją i przyjmuje płatność Paddle, nasz sprzedawca. Sketchy wysyła do Paddle identyfikator Twojego konta oraz przechowuje to, co Paddle zgłasza: numer zamówienia, okres, kwotę i walutę. Twoja karta i adres rozliczeniowy trafiają do Paddle i nigdy do Sketchy. Paddle przetwarza je zgodnie z własną informacją o prywatności.",
           "Jeśli zatrzymujesz odnowienie bez logowania, wpisany adres e-mail jest przekazywany do Paddle, aby znaleźć przepustkę. Link do napiwku otwiera Ko-fi, osobny serwis: Sketchy nie wysyła tam nic o Tobie, a tym, co tam wpiszesz, zajmuje się Ko-fi.",
         ],
       },

@@ -55,6 +55,15 @@ export function extraMinorFrom(typed: string, maxExtraMinor: number): number {
   return Math.min(Math.round(value * 100), maxExtraMinor);
 }
 
+/** `€5` or `5 €`, as the page's language writes it. */
+export function formatEuros(minor: number): string {
+  return new Intl.NumberFormat(document.documentElement.lang || undefined, {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(minor / 100);
+}
+
 /** The host a tip link goes to, said beside it because it leaves this site. */
 export function tipHost(url: string): string | null {
   try {

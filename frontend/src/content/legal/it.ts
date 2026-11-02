@@ -149,7 +149,7 @@ export const LEGAL_IT: LegalDocuments = {
             "storto.",
           "I dati vengono forniti alle autorità solo quando la legge lo " +
             "richiede.",
-          "Se acquisti un pass sostenitore, a venderlo e a incassare il pagamento è Paddle, il nostro rivenditore. Sketchy invia a Paddle l'id del tuo account e la tua lingua e conserva ciò che Paddle comunica: numero d'ordine, periodo, importo e valuta. La tua carta e il tuo indirizzo di fatturazione vanno a Paddle e non arrivano mai a Sketchy. Paddle li tratta secondo la propria informativa sulla privacy.",
+          "Se acquisti un pass sostenitore, a venderlo e a incassare il pagamento è Paddle, il nostro rivenditore. Sketchy invia a Paddle l'id del tuo account e conserva ciò che Paddle comunica: numero d'ordine, periodo, importo e valuta. La tua carta e il tuo indirizzo di fatturazione vanno a Paddle e non arrivano mai a Sketchy. Paddle li tratta secondo la propria informativa sulla privacy.",
           "Se fermi un rinnovo senza accedere, l'e-mail che scrivi viene passata a Paddle per trovare il pass. Il link per la mancia apre Ko-fi, un sito separato: Sketchy non gli invia nulla su di te, e ciò che inserisci lì è gestito da Ko-fi.",
         ],
       },

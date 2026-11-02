@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { apiRequest } from "../lib/api";
+import { ApiError, apiRequest } from "../lib/api";
 import {
   fetchSupportPlans,
   fetchSupporterStatus,
@@ -38,10 +38,10 @@ export const useSupportStore = create<SupportState>((set, get) => ({
     if (get().plans !== undefined) return;
     try {
       set({ plans: await fetchSupportPlans() });
-    } catch {
-      // A 404 is a deployment with no tier; anything else hides the pitch for
-      // this page load rather than showing one that cannot be bought.
-      set({ plans: null });
+    } catch (error) {
+      // A 404 is a deployment with no tier, and that is an answer. Anything else
+      // is not: the next place that wants the plans asks again.
+      if (error instanceof ApiError && error.status === 404) set({ plans: null });
     }
   },
   applyAccount: (status, settings) => {

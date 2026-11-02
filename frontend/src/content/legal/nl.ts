@@ -149,7 +149,7 @@ export const LEGAL_NL: LegalDocuments = {
             "recente activiteit ervan opzoeken als er iets misgaat.",
           "Gegevens worden alleen aan autoriteiten gegeven als de wet dat " +
             "vereist.",
-          "Als je een supporterspas koopt, verkoopt Paddle, onze wederverkoper, die en neemt de betaling aan. Sketchy stuurt Paddle je account-id en je taal, en bewaart wat Paddle terugmeldt: het bestelnummer, de periode, het bedrag en de valuta. Je kaart en factuuradres gaan naar Paddle en bereiken Sketchy nooit. Paddle verwerkt ze volgens zijn eigen privacyverklaring.",
+          "Als je een supporterspas koopt, verkoopt Paddle, onze wederverkoper, die en neemt de betaling aan. Sketchy stuurt Paddle je account-id en bewaart wat Paddle terugmeldt: het bestelnummer, de periode, het bedrag en de valuta. Je kaart en factuuradres gaan naar Paddle en bereiken Sketchy nooit. Paddle verwerkt ze volgens zijn eigen privacyverklaring.",
           "Als je een verlenging stopt zonder in te loggen, wordt het e-mailadres dat je invult aan Paddle doorgegeven om de pas te vinden. De fooilink opent Ko-fi, een aparte site: Sketchy stuurt die niets over jou, en wat je daar invult, verwerkt Ko-fi.",
         ],
       },

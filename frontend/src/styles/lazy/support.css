@@ -149,6 +149,18 @@
   color: var(--primary-ink);
 }
 
+.support-extra-input,
+.support-cancel-form input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+}
+
 .support-extra-input {
   max-width: 120px;
 }

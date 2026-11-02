@@ -118,6 +118,22 @@ def supporter_status_columns(
     return active, lifetime, until, renews
 
 
+def _not_reversed(purchase: type[SupportPurchase] = SupportPurchase) -> ColumnElement:
+    """This purchase's order has no refund or chargeback, under any account."""
+    reversal = aliased(SupportPurchase)
+    return ~(
+        select(reversal.id)
+        .where(
+            reversal.provider == purchase.provider,
+            reversal.provider_order_id == purchase.provider_order_id,
+            reversal.kind.in_(
+                (SupportPurchaseKind.REFUND.value, SupportPurchaseKind.CHARGEBACK.value)
+            ),
+        )
+        .exists()
+    )
+
+
 def _stopped(subscription_id: ColumnElement) -> ColumnElement:
     """Whether a cancellation names this subscription."""
     stop = aliased(SupportPurchase)
@@ -496,13 +512,7 @@ async def tell_ending_supporters(
     async with session_factory() as session:
         async with session.begin():
             rows = await session.execute(
-                select(
-                    SupportPurchase.id,
-                    SupportPurchase.user_id,
-                    SupportPurchase.period_end,
-                    SupportPurchase.provider_subscription_id,
-                    _stopped(SupportPurchase.provider_subscription_id),
-                )
+                select(SupportPurchase.id, SupportPurchase.user_id)
                 .where(
                     SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
                     SupportPurchase.user_id.is_not(None),
@@ -528,6 +538,8 @@ async def tell_ending_supporters(
                             later.period_end.is_(None),
                             later.period_end > SupportPurchase.period_end,
                         ),
+                        # Refunded time extends nothing.
+                        _not_reversed(later),
                     )
                     .exists(),
                     ~select(told_entry.id)
@@ -539,16 +551,12 @@ async def tell_ending_supporters(
                 )
                 .limit(ENDING_BATCH)
             )
-            for purchase_id, user_id, period_end, subscription_id, stopped in rows.all():
+            for purchase_id, user_id in rows.all():
                 if await add_entry(
                     session,
                     user_id=user_id,
                     kind="supporter_ending",
                     subject_id=purchase_id,
-                    params={
-                        "until": period_end.isoformat(),
-                        "renews": bool(subscription_id) and not stopped,
-                    },
                 ):
                     told += 1
     return SweepReport(
@@ -560,6 +568,33 @@ async def tell_ending_supporters(
         # Everything due was told in this run, unless the batch ran out.
         oldest_overdue_seconds=0.0,
     )
+
+
+async def pass_facts(
+    session: AsyncSession, purchase_ids: Iterable[UUID]
+) -> dict[UUID, tuple[str | None, bool]]:
+    """What the inbox should say about these purchases now: `(until, renews)`.
+
+    A purchase whose order was reversed is left out, and its entry with it.
+    """
+    ids = set(purchase_ids)
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(
+            SupportPurchase.id,
+            SupportPurchase.period_end,
+            SupportPurchase.provider_subscription_id,
+            _stopped(SupportPurchase.provider_subscription_id),
+        ).where(SupportPurchase.id.in_(ids), _not_reversed())
+    )
+    return {
+        purchase_id: (
+            period_end.isoformat() if period_end else None,
+            bool(subscription_id) and not stopped,
+        )
+        for purchase_id, period_end, subscription_id, stopped in rows.all()
+    }
 
 
 async def active_supporters(session: AsyncSession, *, now: datetime | None = None) -> int:

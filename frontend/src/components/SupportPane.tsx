@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 
 import { ui } from "../content/ui/index.ts";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { formatDate } from "../lib/clock";
 import { refusalText } from "../lib/refusals";
 import {
   extraMinorFrom,
+  formatEuros,
   isLifetime,
   startCheckout,
   type SupportPlans,
@@ -81,7 +82,9 @@ function Checkout({ plans }: { plans: SupportPlans }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wantsMark, setWantsMark] = useState(showMark);
+  // Follows the account until touched: it may arrive after this mounts.
+  const [chosenMark, setChosenMark] = useState<boolean | null>(null);
+  const wantsMark = chosenMark ?? showMark;
 
   const extraMinor = extra === "other" ? extraMinorFrom(typed, plans.maxExtraMinor) : extra;
 
@@ -135,12 +138,12 @@ function Checkout({ plans }: { plans: SupportPlans }) {
         </p>
         <div className="support-chips">
           {chip(0, ui.support.extraNone)}
-          {EXTRA_CHIPS.map((value) => chip(value, `+€${value / 100}`))}
+          {EXTRA_CHIPS.map((value) => chip(value, `+${formatEuros(value)}`))}
           {chip("other", ui.support.extraOther)}
         </div>
         {extra === "other" && (
           <input
-            className="input-field support-extra-input"
+            className="support-extra-input"
             inputMode="decimal"
             aria-label={ui.support.extraOtherLabel}
             placeholder="€"
@@ -153,7 +156,7 @@ function Checkout({ plans }: { plans: SupportPlans }) {
         <input
           type="checkbox"
           checked={wantsMark}
-          onChange={(event) => setWantsMark(event.target.checked)}
+          onChange={(event) => setChosenMark(event.target.checked)}
         />
         <span>
           <strong>{ui.support.showMark}</strong>
@@ -179,6 +182,7 @@ function SupporterView() {
   const status = useSupportStore((state) => state.status);
   const showMark = useSupportStore((state) => state.showMark);
   const setShowMark = useSupportStore((state) => state.setShowMark);
+  const [saveFailed, setSaveFailed] = useState(false);
   const until = status?.until ? formatDate(new Date(status.until)) : null;
   const line = isLifetime(status)
     ? ui.support.lifetimePass
@@ -199,18 +203,32 @@ function SupporterView() {
         <input
           type="checkbox"
           checked={showMark}
-          onChange={(event) => void setShowMark(event.target.checked).catch(() => undefined)}
+          onChange={(event) => {
+            setSaveFailed(false);
+            void setShowMark(event.target.checked).catch(() => setSaveFailed(true));
+          }}
         />
         <span>
           <strong>{ui.support.showMark}</strong>
           <small>{ui.support.showMarkOff}</small>
         </span>
       </label>
+      {saveFailed && (
+        <p className="auth-error" role="alert">
+          {ui.support.markNotSaved}
+        </p>
+      )}
       <div className="support-links">
+        {/* A new tab, because this overlay can be open over a room in play. */}
         {status?.renews && (
-          <Link className="support-cancel-link" to="/support/cancel">
+          <a
+            className="support-cancel-link"
+            href="/support/cancel"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {ui.support.cancelRenewal}
-          </Link>
+          </a>
         )}
         <small>{ui.support.receipts}</small>
       </div>
@@ -226,13 +244,14 @@ export function SupportPane() {
   const status = useSupportStore((state) => state.status);
   const refresh = useSupportStore((state) => state.refresh);
   const isRegistered = Boolean(user && !user.isAnonymous);
+  const openSettings = useOpenSettings();
 
   useEffect(() => {
     if (isRegistered) void refresh();
   }, [isRegistered, refresh]);
 
   if (!plans) return null;
-  const body = status?.active ? (
+  const body = isRegistered && status?.active ? (
     <SupporterView />
   ) : (
     <Pitch>
@@ -241,9 +260,11 @@ export function SupportPane() {
       ) : (
         <div className="support-account">
           <p>{ui.support.needAccount}</p>
-          <Link className="btn btn-primary" to="/settings/account">
+          {/* Not a link: leaving this overlay's page would unmount a room the
+              guest is seated in, without leaving it (R-UX-15). */}
+          <button type="button" className="btn btn-primary" onClick={() => openSettings("account")}>
             {ui.support.createAccount}
-          </Link>
+          </button>
         </div>
       )}
     </Pitch>

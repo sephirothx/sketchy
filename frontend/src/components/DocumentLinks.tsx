@@ -20,6 +20,7 @@ export function DocumentLinks({ current }: { current: Document }) {
   ];
   const others = all.filter((entry) => entry.document !== current);
   const publicPath = usePublicPath();
+  const hasPlans = useSupportStore((state) => Boolean(state.plans));
   const tipUrl = useSupportStore((state) => state.plans?.tipUrl);
   const loadPlans = useSupportStore((state) => state.loadPlans);
   useEffect(() => {
@@ -33,6 +34,12 @@ export function DocumentLinks({ current }: { current: Document }) {
           <Link to={publicPath(entry.to)}>{entry.label}</Link>
         </span>
       ))}
+      {hasPlans && (
+        <span>
+          <span aria-hidden="true"> · </span>
+          <Link to="/support/cancel">{ui.support.cancelRenewal}</Link>
+        </span>
+      )}
       {tipUrl && (
         <span>
           <span aria-hidden="true"> · </span>

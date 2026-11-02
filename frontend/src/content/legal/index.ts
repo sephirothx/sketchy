@@ -45,7 +45,7 @@ date cannot go stale by being forgotten. A change to a translation alone
 leaves both as they are - it says the same thing better. */
 export const LEGAL_REVISION = {
   date: "2026-11-02",
-  reference: "fdaf12300ffd115c0502d9425c1d1b476581496771f071ab44dfae6983f7bc64",
+  reference: "548c069c4d78380b1b28f0f3e9f8a0be90b06b74ba51e320c0472fe430df903a",
 } as const;
 
 /** The public history of the documents in *locale*, every change with its

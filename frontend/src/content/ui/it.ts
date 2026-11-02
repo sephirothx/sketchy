@@ -441,6 +441,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const IT: Catalogue = {
   supporterMark: { label: "Sostenitore" },
   support: {
+    markNotSaved: "Non è stato possibile salvare. Riprova.",
     title: "Sostieni Sketchy",
     introLead: "Sketchy è gestito da un solo sviluppatore, senza pubblicità e senza pay-to-win.",
     introPass: "Un pass sostenitore aiuta a tenerlo in vita e include qualche piccolo extra come ringraziamento.",

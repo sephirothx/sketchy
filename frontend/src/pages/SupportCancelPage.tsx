@@ -9,6 +9,7 @@ import { refusalText } from "../lib/refusals";
 import { cancelRenewal, requestCancellation } from "../lib/support";
 import { useAuthStore } from "../store/authStore";
 import { useSupportStore } from "../store/supportStore";
+import { NotFoundPage } from "./NotFoundPage";
 import "../styles/lazy/support.css";
 
 function SignedIn() {
@@ -16,13 +17,15 @@ function SignedIn() {
   const refresh = useSupportStore((state) => state.refresh);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void refresh();
+    void refresh().finally(() => setLoaded(true));
   }, [refresh]);
 
   const until = status?.until ? formatDate(new Date(status.until)) : "";
+  if (!loaded) return null;
   if (done) return <p role="status">{ui.support.cancelDone({ date: until })}</p>;
   if (!status?.renews) return <p>{ui.support.cancelNothing}</p>;
   return (
@@ -102,13 +105,21 @@ in, no login signed out. */
 export function SupportCancelPage() {
   useDocumentTitle(ui.support.cancelTitle);
   const user = useAuthStore((state) => state.user);
+  const hasResolved = useAuthStore((state) => state.hasResolved);
   const registered = Boolean(user && !user.isAnonymous);
+  const plans = useSupportStore((state) => state.plans);
+  const loadPlans = useSupportStore((state) => state.loadPlans);
+  useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
+  // Nothing here on a deployment that sells nothing (R-SUP-08).
+  if (plans === null) return <NotFoundPage />;
   return (
     <div className="support-page">
       <AppHeader />
       <main className="surface-card support-page-card" data-testid="support-cancel">
         <h1>{ui.support.cancelTitle}</h1>
-        {registered ? <SignedIn /> : <SignedOut />}
+        {hasResolved && (registered ? <SignedIn /> : <SignedOut />)}
         <Link to="/">{ui.support.backToLobby}</Link>
       </main>
     </div>

@@ -151,7 +151,7 @@ export const LEGAL_DE: LegalDocuments = {
             "ein Konto und seine jüngste Aktivität nachschlagen, wenn etwas " +
             "schiefgeht.",
           "An Behörden werden Daten nur herausgegeben, wo das Gesetz es verlangt.",
-          "Wenn du einen Unterstützerpass kaufst, verkauft ihn Paddle, unser Wiederverkäufer, und nimmt die Zahlung entgegen. Sketchy sendet Paddle deine Konto-ID und deine Sprache und speichert, was Paddle zurückmeldet: Bestellnummer, Zeitraum, Betrag und Währung. Deine Karte und deine Rechnungsadresse gehen an Paddle und erreichen Sketchy nie. Paddle verarbeitet sie nach seiner eigenen Datenschutzerklärung.",
+          "Wenn du einen Unterstützerpass kaufst, verkauft ihn Paddle, unser Wiederverkäufer, und nimmt die Zahlung entgegen. Sketchy sendet Paddle deine Konto-ID und speichert, was Paddle zurückmeldet: Bestellnummer, Zeitraum, Betrag und Währung. Deine Karte und deine Rechnungsadresse gehen an Paddle und erreichen Sketchy nie. Paddle verarbeitet sie nach seiner eigenen Datenschutzerklärung.",
           "Wenn du eine Verlängerung ohne Anmeldung stoppst, wird die eingegebene E-Mail-Adresse an Paddle weitergegeben, um den Pass zu finden. Der Trinkgeld-Link öffnet Ko-fi, eine eigene Website: Sketchy sendet dorthin nichts über dich, und was du dort eingibst, verarbeitet Ko-fi.",
         ],
       },

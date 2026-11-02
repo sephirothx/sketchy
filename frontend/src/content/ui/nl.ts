@@ -441,6 +441,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const NL: Catalogue = {
   supporterMark: { label: "Supporter" },
   support: {
+    markNotSaved: "Dat kon niet worden opgeslagen. Probeer het opnieuw.",
     title: "Steun Sketchy",
     introLead: "Sketchy wordt gerund door één ontwikkelaar, zonder advertenties en zonder pay-to-win.",
     introPass: "Een supporterspas helpt het draaiende te houden en komt met een paar kleine extra's als bedankje.",

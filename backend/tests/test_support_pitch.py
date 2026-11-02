@@ -103,7 +103,6 @@ async def test_a_pass_starting_is_told_once_and_a_renewal_is_not_news(site):
     await _paid(http, "e2", "o2", user_id, end=end + timedelta(days=365))
     entries = await _entries(factory, "supporter_started")
     assert len(entries) == 1
-    assert entries[0].params["renews"] is True
     listing = (await http.get("/api/inbox")).json()
     shown = [entry for entry in listing["entries"] if entry["kind"] == "supporter_started"]
     assert shown[0]["until"] == end.isoformat() and shown[0]["renews"] is True
@@ -114,8 +113,10 @@ async def test_a_lifetime_pass_is_told_with_no_end(site):
     user_id = await _register(http)
     end = datetime.now(timezone.utc)
     await _paid(http, "e1", "o1", user_id, end=end, subscription=None, product="lifetime")
-    entries = await _entries(factory, "supporter_started")
-    assert entries[0].params == {"until": None, "renews": False}
+    assert len(await _entries(factory, "supporter_started")) == 1
+    listing = (await http.get("/api/inbox")).json()
+    shown = [entry for entry in listing["entries"] if entry["kind"] == "supporter_started"]
+    assert shown[0]["until"] is None and shown[0]["renews"] is False
 
 
 async def test_the_sweep_tells_once_fourteen_days_before_the_end(site):
@@ -127,8 +128,15 @@ async def test_the_sweep_tells_once_fourteen_days_before_the_end(site):
     soon = now + timedelta(days=7)
     assert await tell_ending_supporters(factory, now=soon) == 1
     assert await tell_ending_supporters(factory, now=soon) == 0
-    entries = await _entries(factory, "supporter_ending")
-    assert len(entries) == 1 and entries[0].params["renews"] is True
+    assert len(await _entries(factory, "supporter_ending")) == 1
+    listing = (await http.get("/api/inbox")).json()
+    shown = [entry for entry in listing["entries"] if entry["kind"] == "supporter_ending"]
+    assert shown[0]["renews"] is True
+    # Cancelled since: the same entry now says it ends (R-INBOX-05).
+    await http.post("/api/support/cancel")
+    listing = (await http.get("/api/inbox")).json()
+    shown = [entry for entry in listing["entries"] if entry["kind"] == "supporter_ending"]
+    assert shown[0]["renews"] is False
 
 
 async def test_the_sweep_says_a_cancelled_pass_ends(site):
@@ -138,8 +146,9 @@ async def test_the_sweep_says_a_cancelled_pass_ends(site):
     await _paid(http, "e1", "o1", user_id, end=now + timedelta(days=10))
     await http.post("/api/support/cancel")
     await tell_ending_supporters(factory, now=now)
-    entries = await _entries(factory, "supporter_ending")
-    assert entries[0].params["renews"] is False
+    listing = (await http.get("/api/inbox")).json()
+    shown = [entry for entry in listing["entries"] if entry["kind"] == "supporter_ending"]
+    assert shown[0]["renews"] is False
 
 
 async def test_the_sweep_skips_a_period_something_later_extends(site):
@@ -149,6 +158,39 @@ async def test_the_sweep_skips_a_period_something_later_extends(site):
     await _paid(http, "e1", "o1", user_id, end=now + timedelta(days=10))
     await _paid(http, "e2", "o2", user_id, end=now + timedelta(days=375))
     assert await tell_ending_supporters(factory, now=now) == 0
+
+
+async def test_a_refund_takes_the_entry_with_it_and_refunded_time_extends_nothing(site):
+    http, factory = site
+    user_id = await _register(http)
+    now = datetime.now(timezone.utc)
+    await _paid(http, "e1", "o1", user_id, end=now + timedelta(days=10))
+    await _paid(http, "e2", "o2", user_id, end=now + timedelta(days=375), subscription="sub_2")
+    body = json.dumps(
+        {
+            "event_id": "r1",
+            "event_type": "adjustment.updated",
+            "data": {
+                "action": "refund",
+                "status": "approved",
+                "transaction_id": "o2",
+                "totals": {"total": "1900"},
+            },
+        }
+    ).encode()
+    await http.post(
+        "/api/support/webhooks/stub",
+        content=body,
+        headers={
+            "Paddle-Signature": signature_header(
+                STUB_WEBHOOK_SECRET, body, datetime.now(timezone.utc)
+            )
+        },
+    )
+    assert await tell_ending_supporters(factory, now=now) == 1
+    listing = (await http.get("/api/inbox")).json()
+    started = [entry for entry in listing["entries"] if entry["kind"] == "supporter_started"]
+    assert len(started) == 1 and started[0]["until"] == (now + timedelta(days=10)).isoformat()
 
 
 async def test_the_nudge_stays_closed_on_the_account(site):

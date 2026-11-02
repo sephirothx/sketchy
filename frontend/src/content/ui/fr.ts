@@ -441,6 +441,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const FR: Catalogue = {
   supporterMark: { label: "Soutien" },
   support: {
+    markNotSaved: "Impossible d'enregistrer. Réessaie.",
     title: "Soutenir Sketchy",
     introLead: "Sketchy est géré par un seul développeur, sans publicité et sans pay-to-win.",
     introPass: "Un pass de soutien aide à le faire vivre et offre quelques petits extras en guise de remerciement.",
@@ -478,7 +479,7 @@ export const FR: Catalogue = {
     confirmingTitle: "Confirmation de ton paiement en cours",
     confirmingBody: "Cela prend généralement quelques secondes.",
     confirmingSlow: "Cela prend plus de temps que d'habitude. Ton pass apparaîtra dans les réglages une fois confirmé, et tu peux quitter cette page.",
-    backToLobby: "Retour au salon",
+    backToLobby: "Retour au hall",
     cancelTitle: "Annule ton renouvellement",
     cancelNothing: "Tu n'as aucun renouvellement à annuler.",
     cancelSignedOut: "Pas besoin de te connecter. Indique à qui est le pass : son renouvellement s'arrête et une confirmation part par e-mail.",

@@ -153,7 +153,7 @@ export const LEGAL_FR: LegalDocuments = {
             "va pas.",
           "Les données ne sont transmises aux autorités que lorsque la loi " +
             "l'exige.",
-          "Si tu achètes un pass de soutien, c'est Paddle, notre revendeur, qui le vend et encaisse le paiement. Sketchy envoie à Paddle l'identifiant de ton compte et ta langue, et conserve ce que Paddle lui renvoie : le numéro de commande, la période, le montant et la devise. Ta carte et ton adresse de facturation vont à Paddle et n'arrivent jamais à Sketchy. Paddle les traite selon sa propre politique de confidentialité.",
+          "Si tu achètes un pass de soutien, c'est Paddle, notre revendeur, qui le vend et encaisse le paiement. Sketchy envoie à Paddle l'identifiant de ton compte et conserve ce que Paddle lui renvoie : le numéro de commande, la période, le montant et la devise. Ta carte et ton adresse de facturation vont à Paddle et n'arrivent jamais à Sketchy. Paddle les traite selon sa propre politique de confidentialité.",
           "Si tu arrêtes un renouvellement sans te connecter, l'adresse e-mail saisie est transmise à Paddle pour retrouver le pass. Le lien de pourboire ouvre Ko-fi, un site distinct : Sketchy ne lui envoie rien sur toi, et ce que tu y saisis relève de Ko-fi.",
         ],
       },

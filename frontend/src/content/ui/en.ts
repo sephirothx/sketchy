@@ -453,6 +453,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const EN = {
   supporterMark: { label: "Supporter" },
   support: {
+    markNotSaved: "That could not be saved. Please try again.",
     title: "Support Sketchy",
     introLead: "Sketchy is run by a single developer, with no ads and no pay-to-win.",
     introPass: "A supporter pass helps keep it running, and comes with a few small extras as a thank-you.",

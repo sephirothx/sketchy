@@ -143,7 +143,7 @@ export const LEGAL_PT: LegalDocuments = {
             "administradores também leem os relatórios de erros e podem " +
             "consultar uma conta e a sua atividade recente quando algo corre mal.",
           "Os dados só são entregues às autoridades quando a lei o exige.",
-          "Se comprares um passe de apoiante, quem o vende e recebe o pagamento é a Paddle, o nosso revendedor. O Sketchy envia à Paddle o id da tua conta e o teu idioma e guarda o que a Paddle comunica: o número da encomenda, o período, o valor e a moeda. O teu cartão e a tua morada de faturação vão para a Paddle e nunca chegam ao Sketchy. A Paddle trata-os segundo a sua própria política de privacidade.",
+          "Se comprares um passe de apoiante, quem o vende e recebe o pagamento é a Paddle, o nosso revendedor. O Sketchy envia à Paddle o id da tua conta e guarda o que a Paddle comunica: o número da encomenda, o período, o valor e a moeda. O teu cartão e a tua morada de faturação vão para a Paddle e nunca chegam ao Sketchy. A Paddle trata-os segundo a sua própria política de privacidade.",
           "Se parares uma renovação sem iniciar sessão, o e-mail que escreves é passado à Paddle para encontrar o passe. A ligação de gorjeta abre o Ko-fi, um site à parte: o Sketchy não lhe envia nada sobre ti, e o que escreveres lá é tratado pelo Ko-fi.",
         ],
       },

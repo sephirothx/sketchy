@@ -147,7 +147,7 @@ export const LEGAL_EN: LegalDocuments = {
             "Administrators also read bug reports, and can look up an account " +
             "and its recent activity when something goes wrong.",
           "Data is given to authorities only where the law requires it.",
-          "If you buy a supporter pass, Paddle, our reseller, sells it and takes the payment. Sketchy sends Paddle your account id and the language you use, and keeps what Paddle reports back: the order number, the period, the amount and the currency. Your card and billing address go to Paddle and never reach Sketchy. Paddle handles them under its own privacy notice.",
+          "If you buy a supporter pass, Paddle, our reseller, sells it and takes the payment. Sketchy sends Paddle your account id, and keeps what Paddle reports back: the order number, the period, the amount and the currency. Your card and billing address go to Paddle and never reach Sketchy. Paddle handles them under its own privacy notice.",
           "If you stop a renewal without signing in, the e-mail address you type is passed to Paddle to find the pass. The tip link opens Ko-fi, a separate site: Sketchy sends it nothing about you, and what you enter there is Ko-fi's to handle.",
         ],
       },

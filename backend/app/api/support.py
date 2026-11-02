@@ -145,15 +145,17 @@ async def _tell_started(
         )
         if periods and periods > 1:
             return False
-    return await add_entry(
-        session,
-        user_id=user_id,
-        kind="supporter_started",
-        params={
-            "until": event.period_end.isoformat() if event.period_end else None,
-            "renews": bool(event.subscription_id),
-        },
+    # A refund can land first: there is no pass to announce.
+    if await order_was_reversed(session, event.order_id):
+        return False
+    purchase_id = await session.scalar(
+        select(SupportPurchase.id).where(
+            SupportPurchase.provider == provider_name,
+            SupportPurchase.provider_event_id == event.event_id,
+        )
     )
+    # The subject is the row: the entry reads what it says from there (R-INBOX-05).
+    return await add_entry(session, user_id=user_id, kind="supporter_started", subject_id=purchase_id)
 
 
 def create_support_router(

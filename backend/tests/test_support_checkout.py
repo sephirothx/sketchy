@@ -871,6 +871,22 @@ def test_production_refuses_a_tier_that_could_give_passes_away():
         validate_support_configuration({**production, "SUPPORT_PROVIDER": "paddle"})
     with pytest.raises(RuntimeError, match="must be one of"):
         validate_support_configuration({"SUPPORT_PROVIDER": "lemonsqueezy"})
+    with pytest.raises(RuntimeError, match="https"):
+        validate_support_configuration(
+            {"SUPPORT_PROVIDER": "stub", "SUPPORT_TIP_URL": "javascript:alert(1)"}
+        )
+    validate_support_configuration(
+        {
+            **production,
+            "SUPPORT_PROVIDER": "paddle",
+            "SUPPORT_WEBHOOK_SECRET": "s",
+            "SUPPORT_API_KEY": "k",
+            "SUPPORT_PRICE_YEAR": "pri_y",
+            "SUPPORT_PRICE_LIFETIME": "pri_l",
+            "SUPPORT_EXTRA_PRODUCT_ID": "pro_e",
+            "SUPPORT_TIP_URL": "https://ko-fi.com/sketchy",
+        }
+    )
     validate_support_configuration({**production})
     validate_support_configuration({"SUPPORT_PROVIDER": "stub"})
     assert support_config({}) is None
