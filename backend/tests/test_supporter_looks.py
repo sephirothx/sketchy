@@ -153,6 +153,29 @@ async def test_a_lapse_keeps_the_choices_and_stops_new_ones(site):
         await choose_doodle(factory, user_id=user_id, name=SUPPORTER_DOODLES[1])
 
 
+async def test_a_save_in_flight_cannot_undo_a_refund(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _buy(http, user_id)
+    await _style(http, "ocean")
+    real = SqlAlchemyUserRepository.get_by_id
+    armed = [True]
+
+    async def refund_after_the_read(self, wanted):
+        user = await real(self, wanted)
+        if armed:
+            armed.clear()
+            await _refund(http)
+        return user
+
+    monkeypatch.setattr(SqlAlchemyUserRepository, "get_by_id", refund_after_the_read)
+    # The account it read still wears Ocean, so this looked like no new choice.
+    response = await _style(http, "ocean")
+    assert response.status_code == 403 and response.json()["errorCode"] == "supporter_only"
+    async with factory() as session:
+        assert (await session.get(User, user_id)).name_style is None
+
+
 async def test_a_refund_puts_the_account_back_on_defaults(site):
     http, factory = site
     user_id = await _register(http)

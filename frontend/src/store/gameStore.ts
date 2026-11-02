@@ -225,22 +225,30 @@ interface GameStore {
 /** The highlights with the "most reacted" card replaced where it stands,
     appended when it first appears, or removed - the server's
     `refresh_reaction_highlight`, applied to the card it sent (#871). */
-/** The recap on screen keeps its own copy of each seat, and a heart hidden or
-refunded reaches the room as a room state (R-SUP-10). */
-function withCurrentMarks<T extends { playerId: string; supporterMark?: boolean }>(
+/** The recap on screen keeps its own copy of each seat, and a heart or a name style
+hidden or refunded reaches the room as a room state (R-SUP-10, R-SUP-17). */
+function withCurrentLooks<
+  T extends { playerId: string; supporterMark?: boolean; nameStyle?: string | null },
+>(
   scores: T[] | null,
-  players: { playerId: string; supporterMark?: boolean }[],
+  players: { playerId: string; supporterMark?: boolean; nameStyle?: string | null }[],
 ): T[] | null {
   if (!scores) return scores;
-  const current = new Map(players.map((player) => [player.playerId, Boolean(player.supporterMark)]));
+  const seats = new Map(players.map((player) => [player.playerId, player]));
   const stale = (score: T) => {
-    const mark = current.get(score.playerId);
-    return mark !== undefined && mark !== Boolean(score.supporterMark);
+    const seat = seats.get(score.playerId);
+    return (
+      seat !== undefined &&
+      (Boolean(seat.supporterMark) !== Boolean(score.supporterMark) ||
+        (seat.nameStyle ?? null) !== (score.nameStyle ?? null))
+    );
   };
   if (!scores.some(stale)) return scores;
-  return scores.map((score) =>
-    stale(score) ? { ...score, supporterMark: current.get(score.playerId) } : score,
-  );
+  return scores.map((score) => {
+    if (!stale(score)) return score;
+    const seat = seats.get(score.playerId);
+    return { ...score, supporterMark: Boolean(seat?.supporterMark), nameStyle: seat?.nameStyle ?? null };
+  });
 }
 
 function withMostReacted(highlights: GameHighlight[], card: GameHighlight | null): GameHighlight[] {
@@ -381,7 +389,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       promptLanguage: payload.promptLanguage ?? "en",
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
-      finalScores: withCurrentMarks(state.finalScores, payload.players),
+      finalScores: withCurrentLooks(state.finalScores, payload.players),
       // The recap is not in the room state (#871); it arrives with
       // `game_ended` or `last_game` and stays until a game starts - or until
       // this is a different room: an entry that does not leave first moves

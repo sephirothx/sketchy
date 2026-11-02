@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ConfigDict, Field
-from sqlalchemy import update
+from sqlalchemy import select
 
 from app.db.models import User
 from app.request_text import ControlFreeModel
@@ -1046,15 +1046,18 @@ def create_auth_router(
             )
         async with session_factory() as session:
             async with session.begin():
-                if body.name_style is not None and body.name_style != user.name_style:
+                # Held through the write: read before this, a refund or a deletion
+                # landing in between would be undone by re-picking what it cleared.
+                account = await session.scalar(
+                    select(User).where(User.id == UUID(user.id)).with_for_update()
+                )
+                if account is None or account.state != AccountState.REGISTERED.value:
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
+                if body.name_style is not None and body.name_style != account.name_style:
                     status = await supporter_status(session, UUID(user.id))
                     if not status.active:
                         raise Refusal(403, ErrorCode.SUPPORTER_ONLY)
-                await session.execute(
-                    update(User)
-                    .where(User.id == UUID(user.id))
-                    .values(name_style=body.name_style)
-                )
+                account.name_style = body.name_style
         if on_supporter_look_changed is not None:
             try:
                 await on_supporter_look_changed(user.id)
