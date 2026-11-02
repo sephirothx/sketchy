@@ -29,7 +29,7 @@ from uuid import UUID
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.telemetry import database_operation_of, telemetry
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
@@ -1498,12 +1498,26 @@ async def _write_export_artifact(
         },
     )
     # The account's own ledger rows: the money it paid and got back (R-SUP-04).
+    # Including a reversal of an order of theirs that names nobody, because one
+    # can land before its purchase: status counts it, so the export must show it.
+    own_order = aliased(SupportPurchase)
     writer.key("support")
     await _write_rows(
         writer,
         session,
         select(SupportPurchase)
-        .where(SupportPurchase.user_id.in_(identity_ids))
+        .where(
+            or_(
+                SupportPurchase.user_id.in_(identity_ids),
+                select(own_order.id)
+                .where(
+                    own_order.user_id.in_(identity_ids),
+                    own_order.provider == SupportPurchase.provider,
+                    own_order.provider_order_id == SupportPurchase.provider_order_id,
+                )
+                .exists(),
+            )
+        )
         .order_by(SupportPurchase.created_at, SupportPurchase.id),
         lambda fact: {
             "kind": fact.kind,

@@ -206,7 +206,7 @@ async def create_test_db(
         # schema intact so tests exercise Alembic's output, while isolating
         # tests by removing application rows in dependency order - as the
         # owner when the suite runs as the application role (#896), which
-        # may not delete from the two append-only ledgers.
+        # may not delete from the append-only ledgers.
         owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
         if owner_url:
             assert_disposable(owner_url)

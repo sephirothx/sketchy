@@ -34,7 +34,8 @@ APP_ROLE = "sketchy_app"
 MONITOR_ROLE = "sketchy_monitor"
 
 # Append-only by grant, not only by convention: the application may add to
-# them and read them, and nothing it runs can rewrite or remove a row.
+# them and read them, and nothing it runs can rewrite or remove a row. The one
+# exception is `support_purchases.user_id`, below.
 APPEND_ONLY_TABLES = ("audit_events", "score_events", "support_purchases")
 ROW_PRIVILEGES = "SELECT, INSERT, UPDATE, DELETE"
 

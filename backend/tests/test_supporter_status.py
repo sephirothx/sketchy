@@ -188,10 +188,10 @@ async def test_the_row_refuses_what_no_writer_produces(db, values):
         "period_end": NOW + YEAR,
         "amount_minor": 1900,
         "currency": "EUR",
-        **values,
     }
-    if fields["kind"] != "purchase":
-        fields = {"period_start": None, "period_end": None, **fields, **values}
+    if values.get("kind") in ("refund", "chargeback"):
+        fields |= {"period_start": None, "period_end": None}
+    fields |= values
     async with db() as session:
         with pytest.raises(IntegrityError):
             async with session.begin():

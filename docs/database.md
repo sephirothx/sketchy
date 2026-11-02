@@ -794,7 +794,7 @@ cd backend && .venv/bin/python -m app.auth.account_data --limit 25
 ```
 
 Format v1 exports expire after seven days. The document contains the owner's account
-fields, linked guest identities, session metadata, game seats, drawn turns, correct
+fields, the supporter pass's facts (`support`: each purchase, and each refund or chargeback of an order they bought), linked guest identities, session metadata, game seats, drawn turns, correct
 guesses, prompt lists with their working copies and live and pending editions (schema 16,
 #1362), the lists it starred, unexpired authored retained
 messages, submitted evidence, blocks, presets, account-event metadata, and its inbox as
@@ -901,7 +901,8 @@ Append-only by grant (`APPEND_ONLY_TABLES` in [`db/roles.py`](../backend/app/db/
 with one column-level exception: `UPDATE (user_id)`, because deletion tombstones the
 `users` row and so `ON DELETE SET NULL` never fires. There is no raw payload column; a
 provider's payload carries the buyer's email. The erasure barrier does not apply, since
-nothing here writes a name, text or pixels.
+nothing here writes a name, text or pixels. A writer MUST still not name a deleted account:
+the webhook reads the account's state first, and a late renewal or refund names nobody.
 
 ### `inbox_entries`
 `id` · `user_id` (→ `users`, **CASCADE**, NOT NULL) · `kind` · `subject_id` (nullable, no
@@ -3521,7 +3522,7 @@ property was only a convention of the code:
 | Role | Used by | May |
 | --- | --- | --- |
 | `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
-| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events`, `score_events` and `support_purchases` (plus `UPDATE (user_id)` on the last, which deletion clears), only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
 | `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
 
 The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the
@@ -3538,7 +3539,7 @@ tables or may create in the schema (one query beside the revision check), and th
 migration command refuses to fall back to `DATABASE_URL`. CI runs the suite as
 `sketchy_app` against a schema `sketchy_owner` migrated (`TEST_OWNER_DATABASE_URL`), and
 `tests/test_database_roles.py` proves the application role cannot `TRUNCATE`, `ALTER`,
-create a table, rewrite either ledger or disable the trigger.
+create a table, rewrite a ledger or disable the trigger.
 
 ### Adding a table or column
 

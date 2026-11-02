@@ -341,6 +341,18 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                         currency="EUR",
                     )
                 )
+            # A refund that landed knowing nobody is still theirs to see.
+            session.add(
+                SupportPurchase(
+                    user_id=None,
+                    provider="stub",
+                    provider_event_id="refund-naming-nobody",
+                    provider_order_id="order-of-the-owner",
+                    kind="refund",
+                    amount_minor=1900,
+                    currency="EUR",
+                )
+            )
             session.add(
                 PlayerReport(
                     id=submitted_report_id,
@@ -705,7 +717,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["soloBests"] == [{"length": "5", "best": 1240, "achievedAt": daily["startedAt"]}]
 
     assert [(fact["kind"], fact["orderId"], fact["amountMinor"]) for fact in artifact["support"]] == [
-        ("purchase", "order-of-the-owner", 1900)
+        ("purchase", "order-of-the-owner", 1900),
+        ("refund", "order-of-the-owner", 1900),
     ]
 
     contract = json.loads(
