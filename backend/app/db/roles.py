@@ -70,7 +70,7 @@ def grant_statements(app_role: str = APP_ROLE) -> tuple[str, ...]:
         f"REVOKE UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES ON {ledgers} FROM {app_role}",
         # After the revoke, which takes column grants with it: deleting an account
         # clears who bought, and nothing can rewrite what was bought.
-        f"GRANT UPDATE (user_id) ON support_purchases TO {app_role}",
+        f"GRANT UPDATE (user_id, owner_deleted_at) ON support_purchases TO {app_role}",
         # The revision check reads it; only the migration writes it.
         f"REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON alembic_version FROM {app_role}",
     )

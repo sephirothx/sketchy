@@ -177,43 +177,68 @@ def _order_reversed(purchase) -> ColumnElement:
     )
 
 
-async def renewals_nothing_pays_for(session: AsyncSession, *, limit: int) -> tuple[str, ...]:
-    """Subscriptions that can still charge and must not (R-SUP-09): the account is
-    gone, the order was refunded, or a lifetime pass replaced them. Read from the facts,
-    so a stop that failed needs nothing written down to be tried again."""
+async def renewals_nothing_pays_for(session: AsyncSession) -> list[tuple[str, datetime]]:
+    """Subscriptions that can still charge and must not (R-SUP-09), each with when it
+    came due, oldest first: the account is gone, the order was refunded, or a lifetime
+    pass replaced them. Read from the facts, so a stop that failed needs nothing written
+    down to be tried again, and a sweep behind on them can say by how much.
+    """
     named = aliased(SupportPurchase)
+    reversal = aliased(SupportPurchase)
     lifetime = aliased(SupportPurchase)
-    rows = await session.scalars(
-        select(SupportPurchase.provider_subscription_id)
+    ownerless = and_(
+        SupportPurchase.user_id.is_(None),
+        ~select(named.id)
         .where(
+            named.provider_subscription_id == SupportPurchase.provider_subscription_id,
+            named.user_id.is_not(None),
+        )
+        .exists(),
+    )
+    reversed_at = (
+        select(func.min(reversal.created_at))
+        .where(
+            reversal.provider == SupportPurchase.provider,
+            reversal.provider_order_id == SupportPurchase.provider_order_id,
+            reversal.kind.in_(
+                (SupportPurchaseKind.REFUND.value, SupportPurchaseKind.CHARGEBACK.value)
+            ),
+        )
+        .scalar_subquery()
+    )
+    replaced_at = (
+        select(func.min(lifetime.created_at))
+        .where(
+            lifetime.user_id == SupportPurchase.user_id,
+            lifetime.kind == SupportPurchaseKind.PURCHASE.value,
+            lifetime.period_end.is_(None),
+            ~_order_reversed(lifetime),
+        )
+        .scalar_subquery()
+    )
+    rows = await session.execute(
+        select(
+            SupportPurchase.provider_subscription_id,
+            ownerless,
+            func.coalesce(SupportPurchase.owner_deleted_at, SupportPurchase.created_at),
+            reversed_at,
+            replaced_at,
+        ).where(
             SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
             SupportPurchase.provider_subscription_id.is_not(None),
             ~_stopped(SupportPurchase.provider_subscription_id),
-            or_(
-                and_(
-                    SupportPurchase.user_id.is_(None),
-                    ~select(named.id)
-                    .where(
-                        named.provider_subscription_id == SupportPurchase.provider_subscription_id,
-                        named.user_id.is_not(None),
-                    )
-                    .exists(),
-                ),
-                _order_reversed(SupportPurchase),
-                select(lifetime.id)
-                .where(
-                    lifetime.user_id == SupportPurchase.user_id,
-                    lifetime.kind == SupportPurchaseKind.PURCHASE.value,
-                    lifetime.period_end.is_(None),
-                    ~_order_reversed(lifetime),
-                )
-                .exists(),
-            ),
+            or_(ownerless, _order_reversed(SupportPurchase), replaced_at.is_not(None)),
         )
-        .distinct()
-        .limit(limit)
     )
-    return tuple(rows.all())
+    due: dict[str, datetime] = {}
+    for subscription_id, gone, gone_at, reversed_on, replaced_on in rows.all():
+        for moment in (gone_at if gone else None, reversed_on, replaced_on):
+            if moment is None:
+                continue
+            moment = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+            if subscription_id not in due or moment < due[subscription_id]:
+                due[subscription_id] = moment
+    return sorted(due.items(), key=lambda item: item[1])
 
 
 async def order_was_reversed(session: AsyncSession, order_id: str) -> bool:

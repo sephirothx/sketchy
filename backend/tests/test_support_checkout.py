@@ -23,13 +23,15 @@ from app.api.support import (
     create_support_router,
 )
 from app.auth.account_data import anonymize_account
+from app.auth.retention import Sweep, run_retention_sweeps
+from app.services.sweeps import SweepBudget
 from app.support.cancellation import stop_renewals_nothing_pays_for
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import AuditEvent, EmailOutboxEntry, SupportPurchase, User
 from app.deployment import validate_support_configuration
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
-from app.services.supporter import active_supporters, supporter_status
+from app.services.supporter import active_supporters, renewals_nothing_pays_for, supporter_status
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig, support_config
 from app.support.grant import SupportGrantError, grant_pass
 from app.support.providers import (
@@ -610,6 +612,83 @@ async def test_a_refund_whose_stop_ran_out_of_retries_is_stopped_later(site, mon
     monkeypatch.undo()
     monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
     assert await stop_renewals_nothing_pays_for(factory) == 1
+
+
+async def _orphans(http, factory, count: int) -> None:
+    for index in range(count):
+        http.cookies.clear()
+        user_id = await _register(http, f"Gone{index}")
+        await _post(http, _paid(f"e{index}", f"o{index}", user_id, subscription=f"sub_{index}"))
+        await anonymize_account(factory, user_id=user_id)
+
+
+async def test_the_sweep_keeps_to_its_budget_and_says_what_is_left(site, monkeypatch):
+    http, factory = site
+    await _orphans(http, factory, 3)
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+    calls: list[str] = []
+    real = StubProvider.cancel_at_period_end
+
+    async def slow(self, subscription_id):
+        calls.append(subscription_id)
+        await asyncio.sleep(0.03)
+        return await real(self, subscription_id)
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", slow)
+    # Out of time after one, though it may have three.
+    short = await stop_renewals_nothing_pays_for(
+        factory, budget=SweepBudget(rows=3, batch=1, seconds=0.01)
+    )
+    assert len(calls) == 1 and short.exhausted and short.backlog == 2
+    # And no more rows than it is allowed.
+    calls.clear()
+    one = await stop_renewals_nothing_pays_for(
+        factory, budget=SweepBudget(rows=1, batch=1, seconds=60)
+    )
+    assert len(calls) == 1 and one.exhausted and one.backlog == 1
+
+
+async def test_a_stop_that_keeps_failing_shows_as_failed_and_late(site, monkeypatch):
+    http, factory = site
+    await _orphans(http, factory, 1)
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    fresh = await run_retention_sweeps(
+        factory, sweeps=(Sweep("unpaid_for_renewals", stop_renewals_nothing_pays_for),)
+    )
+    entry = fresh["unpaid_for_renewals"]
+    assert entry["failed"] is True and entry["failures_total"] == 1
+    assert entry["backlog"] == 1 and entry["breached"] is False
+
+    async def seven_hours_on(session_factory, *, budget=None):
+        return await stop_renewals_nothing_pays_for(
+            session_factory,
+            budget=budget,
+            now=datetime.now(timezone.utc) + timedelta(hours=7),
+        )
+
+    later = await run_retention_sweeps(
+        factory, sweeps=(Sweep("unpaid_for_renewals", seven_hours_on),)
+    )
+    entry = later["unpaid_for_renewals"]
+    assert entry["breached"] is True and entry["oldest_overdue_seconds"] > 6 * 3600
+
+
+async def test_a_renewal_owed_a_stop_counts_from_when_it_came_due(site, monkeypatch):
+    """Not from when it was bought: a year old by then, it would read as long overdue."""
+    http, factory = site
+    user_id = await _register(http)
+    long_ago = datetime.now(timezone.utc) - timedelta(days=300)
+    await _post(http, _paid("e1", "o1", user_id))
+    await anonymize_account(factory, user_id=user_id)
+    async with factory() as session:
+        [(subscription_id, due)] = await renewals_nothing_pays_for(session)
+    assert subscription_id == "sub_1" and due > long_ago
+    assert (datetime.now(timezone.utc) - due).total_seconds() < 60
 
 
 async def test_with_nothing_on_sale_the_sweep_does_nothing(site, monkeypatch):

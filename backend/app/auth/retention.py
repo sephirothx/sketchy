@@ -673,9 +673,15 @@ async def run_retention_sweeps(
             continue
         described = _describe(report)
         counters.removed += int(described.get("rows") or 0)
+        # A sweep that calls something else can return its account and still have
+        # failed at what it was for: the iteration failed, and its lateness still counts.
+        fell_short = bool(described.get("failed_attempts"))
+        if fell_short:
+            failed = True
+            counters.failures += 1
         described = {
             **described,
-            "failed": False,
+            "failed": fell_short,
             # Decided here and carried, rather than worked out again by each
             # reader: whether a table is past its SLA is a policy question
             # with one answer, and two surfaces deciding it separately is how

@@ -885,7 +885,7 @@ What a provider told us about a supporter pass, one row per event (#1472). `id` 
 `user_id` (→ `users`, `SET NULL`, nullable) · `provider` (`paddle \| stub`,
 `ck_support_purchases_provider`) · `provider_event_id` · `provider_order_id` (the
 transaction; on a cancellation, the subscription) · `provider_subscription_id` (what renews
-it; none on a lifetime pass) · `kind`
+it; none on a lifetime pass) · `owner_deleted_at` (when deletion cleared `user_id`, the only way to tell how long a renewal nobody owns has been owed a stop) · `kind`
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
@@ -909,7 +909,7 @@ landed first still wins, and a renewal is one more row with its own period. `/ap
 reads it as subqueries on its settings statement, so it adds none (R-PLAT-17).
 
 Append-only by grant (`APPEND_ONLY_TABLES` in [`db/roles.py`](../backend/app/db/roles.py)),
-with one column-level exception: `UPDATE (user_id)`, because deletion tombstones the
+with one column-level exception: `UPDATE (user_id, owner_deleted_at)`, because deletion tombstones the
 `users` row and so `ON DELETE SET NULL` never fires. There is no raw payload column; a
 provider's payload carries the buyer's email. The erasure barrier does not apply, since
 nothing here writes a name, text or pixels. A writer MUST still not name a deleted account:
@@ -3024,7 +3024,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Data | Retention | Deletion SLA | Exempt | Mechanism | Sweep |
 | --- | --- | --- | --- | --- | --- |
 | Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block | — |
-| Renewals nothing pays for | Stopped, not removed: an account gone, an order refunded, or a lifetime pass on top | 6 h | Nothing is removed | A provider call per subscription, up to 20 a run; what still fails comes up next run | `unpaid_for_renewals` |
+| Renewals nothing pays for | Stopped, not removed: an account gone, an order refunded, or a lifetime pass on top | 6 h | Nothing is removed | A provider call per subscription, within the sweep's row and time budget and at most 20 a run. Late from when it came due: the deletion, the refund or the lifetime pass. What fails counts as a failed attempt on the loop's health and comes up next run | `unpaid_for_renewals` |
 | Supporter pass facts (`support_purchases`) | Indefinite: the provider keeps the invoice, and a later refund has to find its order | — | — | Never removed; `user_id` is nulled when the account is deleted | — |
 | Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |

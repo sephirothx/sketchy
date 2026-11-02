@@ -895,6 +895,9 @@ class SupportPurchase(Base):
     provider_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
     # What renews this purchase, if anything. A lifetime pass has none.
     provider_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # When deletion cleared `user_id`: how long a renewal nobody owns has been owed a
+    # stop, which nothing else on the row can say.
+    owner_deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     period_start: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     # Null on a purchase: a lifetime pass.

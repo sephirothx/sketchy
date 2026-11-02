@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from app.auth.mail import queue_email
 from app.db.models import EmailOutboxEntry, User, UserSettings
 from app.domain_values import EmailTemplate
 from app.services.supporter import apply_provider_event, renewals_nothing_pays_for
+from app.services.sweeps import SweepBudget, SweepReport
 from app.support.config import support_config
 from app.support.providers import Provider, cancellation_event, provider_for
 
@@ -104,33 +105,48 @@ async def stop_renewals_nothing_pays_for(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     now: datetime | None = None,
-    budget=None,
+    budget: SweepBudget | None = None,
 ):
     """Try again what could not be stopped when it should have been: an outage during
     an account's deletion, or a webhook whose retries ran out. Nothing else comes back
-    to these. A retention-loop sweep, so it runs hourly and reports like one, and
-    removes nothing. What still fails is logged and comes up again next time.
+    to these. A retention-loop sweep, so it runs hourly and reports like one, and removes
+    nothing. What still fails is logged, counted as a failed attempt so the loop's health
+    says so, and comes up again next time, its lateness measured from when it came due.
     """
-    from app.services.sweeps import SweepReport
-
     started = time.monotonic()
+    moment = now or datetime.now(timezone.utc)
     config = support_config()
-    subscriptions: tuple[str, ...] = ()
-    if config is not None:
-        async with session_factory() as session:
-            subscriptions = await renewals_nothing_pays_for(session, limit=STOP_BATCH)
-    stopped = 0
-    if config is not None:
-        provider = provider_for(config)
-        for subscription_id in subscriptions:
-            if await cancel_quietly(session_factory, provider, (subscription_id,)):
-                stopped += 1
+    if config is None:
+        return SweepReport(0, name="unpaid_for_renewals", oldest_overdue_seconds=0.0, backlog=0)
+    async with session_factory() as session:
+        due = await renewals_nothing_pays_for(session)
+    provider = provider_for(config)
+    allowance = min(STOP_BATCH, budget.rows) if budget is not None else STOP_BATCH
+    attempted = stopped = 0
+    for subscription_id, _ in due[:allowance]:
+        # Before each, since one call can take the provider's whole timeout, and the
+        # sweeps after this one are waiting.
+        if (
+            budget is not None
+            and attempted
+            and time.monotonic() - started >= budget.seconds
+        ):
+            break
+        attempted += 1
+        if await cancel_quietly(session_factory, provider, (subscription_id,)):
+            stopped += 1
+    async with session_factory() as session:
+        left = await renewals_nothing_pays_for(session)
     return SweepReport(
         stopped,
         name="unpaid_for_renewals",
-        batches=1,
+        batches=1 if attempted else 0,
         seconds=time.monotonic() - started,
-        exhausted=len(subscriptions) >= STOP_BATCH,
-        oldest_overdue_seconds=0.0,
+        exhausted=attempted < len(due),
+        oldest_overdue_seconds=(
+            max(0.0, (moment - left[0][1]).total_seconds()) if left else 0.0
+        ),
+        backlog=len(left),
+        detail={"failed_attempts": attempted - stopped},
     )
 

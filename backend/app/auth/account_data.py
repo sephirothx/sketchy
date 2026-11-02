@@ -1855,7 +1855,7 @@ async def anonymize_account(
             await session.execute(
                 update(SupportPurchase)
                 .where(SupportPurchase.user_id.in_(identity_ids))
-                .values(user_id=None)
+                .values(user_id=None, owner_deleted_at=deleted_at)
             )
             # Every drawing row this erasure writes, locked before any row that
             # hangs off one is touched, in one ascending statement: its own

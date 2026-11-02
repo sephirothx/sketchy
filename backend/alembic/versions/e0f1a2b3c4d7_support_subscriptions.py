@@ -37,6 +37,10 @@ def upgrade() -> None:
         "support_purchases",
         sa.Column("provider_subscription_id", sa.String(128), nullable=True),
     )
+    op.add_column(
+        "support_purchases",
+        sa.Column("owner_deleted_at", sa.DateTime(timezone=True), nullable=True),
+    )
     op.create_index(
         "ix_support_purchases_subscription",
         "support_purchases",
@@ -61,4 +65,5 @@ def downgrade() -> None:
     _swap_check("support_purchases", "ck_support_purchases_kind", f"kind IN ({_KINDS})")
     op.drop_index("ix_support_purchases_subscription", table_name="support_purchases")
     with op.batch_alter_table("support_purchases") as batch:
+        batch.drop_column("owner_deleted_at")
         batch.drop_column("provider_subscription_id")
