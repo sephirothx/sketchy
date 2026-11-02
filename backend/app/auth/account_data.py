@@ -30,6 +30,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.services.supporter import renewing_subscriptions
 from app.services.telemetry import database_operation_of, telemetry
@@ -2244,6 +2245,9 @@ async def anonymize_account(
                 identity.display_name = DELETED_DISPLAY_NAME
                 identity.name_color = None
                 identity.name_style = None
+                # Written whatever was read: on SQLite, which ignores the lock above, a
+                # save in flight can commit what this read as nothing to clear.
+                flag_modified(identity, "name_style")
                 identity.avatar_key = None
                 identity.avatar_upload_blocked_until = None
                 identity.role = UserRole.USER.value

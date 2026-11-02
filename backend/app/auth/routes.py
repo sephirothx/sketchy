@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.models import User
 from app.request_text import ControlFreeModel
@@ -1046,18 +1046,32 @@ def create_auth_router(
             )
         async with session_factory() as session:
             async with session.begin():
-                # Held through the write: read before this, a refund or a deletion
-                # landing in between would be undone by re-picking what it cleared.
-                account = await session.scalar(
-                    select(User).where(User.id == UUID(user.id)).with_for_update()
+                # A write first, holding the row on PostgreSQL and the database on
+                # SQLite, which ignores FOR UPDATE. Read before this, a refund or a
+                # deletion landing in between would be undone by re-picking what it
+                # cleared, or be written onto an erased account.
+                held = await session.execute(
+                    update(User)
+                    .where(
+                        User.id == UUID(user.id),
+                        User.state == AccountState.REGISTERED.value,
+                    )
+                    .values(name_style=User.name_style)
                 )
-                if account is None or account.state != AccountState.REGISTERED.value:
+                if held.rowcount != 1:
                     raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-                if body.name_style is not None and body.name_style != account.name_style:
+                worn = await session.scalar(
+                    select(User.name_style).where(User.id == UUID(user.id))
+                )
+                if body.name_style is not None and body.name_style != worn:
                     status = await supporter_status(session, UUID(user.id))
                     if not status.active:
                         raise Refusal(403, ErrorCode.SUPPORTER_ONLY)
-                account.name_style = body.name_style
+                await session.execute(
+                    update(User)
+                    .where(User.id == UUID(user.id))
+                    .values(name_style=body.name_style)
+                )
         if on_supporter_look_changed is not None:
             try:
                 await on_supporter_look_changed(user.id)

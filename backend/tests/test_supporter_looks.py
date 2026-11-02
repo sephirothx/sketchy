@@ -1,22 +1,26 @@
 """Supporter doodles and name styles: who may choose, what a lapse and a refund do (#1476)."""
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.errors import install_refusal_handler
 from app.api.support import create_support_router
 from app.auth.avatar_doodles import DOODLES, SUPPORTER_DOODLES, doodle_key, doodle_name, random_doodle_key
+from app.auth import routes as routes_module
 from app.auth.account_data import anonymize_account
 from app.auth.avatars import SupporterOnly
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import User
+from app.db.models import Base, User
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import choose_doodle
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
@@ -33,6 +37,29 @@ async def site(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "supporter-looks-test-secret")
     monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
     factory, engine = await create_test_db()
+    app = FastAPI()
+    install_refusal_handler(app)
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(create_support_router(factory, STUB))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        yield http, factory
+    await engine.dispose()
+
+
+@pytest.fixture
+async def racing_site(tmp_path, monkeypatch):
+    """Where two transactions can really overlap: PostgreSQL, or a SQLite file, since
+    an in-memory database hands every session the same connection."""
+    monkeypatch.setenv("IP_HASH_SECRET", "supporter-looks-test-secret")
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+    if os.environ.get("TEST_DATABASE_URL"):
+        factory, engine = await create_test_db()
+    else:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'looks.db'}")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all, checkfirst=False)
+        factory = async_sessionmaker(engine, expire_on_commit=False)
     app = FastAPI()
     install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
@@ -172,6 +199,48 @@ async def test_a_save_in_flight_cannot_undo_a_refund(site, monkeypatch):
     # The account it read still wears Ocean, so this looked like no new choice.
     response = await _style(http, "ocean")
     assert response.status_code == 403 and response.json()["errorCode"] == "supporter_only"
+    async with factory() as session:
+        assert (await session.get(User, user_id)).name_style is None
+
+
+async def test_a_refund_during_a_save_is_not_undone(racing_site, monkeypatch):
+    http, factory = racing_site
+    user_id = await _register(http)
+    await _buy(http, user_id)
+    await _style(http, "ocean")
+    real = routes_module.supporter_status
+    refunding: list[asyncio.Task] = []
+
+    async def refund_meanwhile(session, wanted, **kwargs):
+        if not refunding:
+            refunding.append(asyncio.create_task(_refund(http)))
+            await asyncio.sleep(0.05)
+        return await real(session, wanted, **kwargs)
+
+    monkeypatch.setattr(routes_module, "supporter_status", refund_meanwhile)
+    # Past the check, and the refund must wait for it, then clear what it chose.
+    assert (await _style(http, "berry")).status_code == 200
+    await refunding[0]
+    async with factory() as session:
+        assert (await session.get(User, user_id)).name_style is None
+
+
+async def test_a_deletion_during_a_save_is_not_written_over(racing_site, monkeypatch):
+    http, factory = racing_site
+    user_id = await _register(http)
+    await _buy(http, user_id)
+    real = routes_module.supporter_status
+    deleting: list[asyncio.Task] = []
+
+    async def delete_meanwhile(session, wanted, **kwargs):
+        if not deleting:
+            deleting.append(asyncio.create_task(anonymize_account(factory, user_id=user_id)))
+            await asyncio.sleep(0.05)
+        return await real(session, wanted, **kwargs)
+
+    monkeypatch.setattr(routes_module, "supporter_status", delete_meanwhile)
+    await _style(http, "berry")
+    await deleting[0]
     async with factory() as session:
         assert (await session.get(User, user_id)).name_style is None
 
