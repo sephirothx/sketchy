@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.api.friends import ACCOUNT_REQUIRED_HEADER
 from app.auth.rate_limit import RateLimiter
-from app.db.models import AuditEvent, User, generate_uuid
+from app.db.models import AuditEvent, SupportPurchase, User, generate_uuid
 from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
@@ -101,10 +101,28 @@ async def _subscriptions_to_stop(
         or await order_was_reversed(session, event.order_id)
     ):
         return (event.subscription_id,)
+    if event.subscription_id:
+        # A year's webhook can arrive after the lifetime pass bought on top of it,
+        # with nothing left to stop it. And a renewal has nothing to add to one.
+        status = await supporter_status(session, user_id)
+        if status.active and status.until is None:
+            return (event.subscription_id,)
     if event.product == PRODUCT_LIFETIME:
         # The lifetime pass replaces the year it was bought on top of.
         return await renewing_subscriptions(session, [user_id])
     return ()
+
+
+async def _fact_exists(session: AsyncSession, provider_name: str, event: ProviderEvent) -> bool:
+    return (
+        await session.scalar(
+            select(SupportPurchase.id).where(
+                SupportPurchase.provider == provider_name,
+                SupportPurchase.provider_event_id == event.event_id,
+            )
+        )
+        is not None
+    )
 
 
 def create_support_router(
@@ -179,14 +197,23 @@ def create_support_router(
                         session, provider.name, event
                     )
                     to_stop: tuple[str, ...] = ()
-                    if recorded:
-                        to_stop = await _subscriptions_to_stop(session, event, user_id)
+                    # A retry finds a duplicate, and is the only second chance a
+                    # failed cancellation gets. Nothing written means not ours.
+                    if recorded or await _fact_exists(session, provider.name, event):
+                        to_stop = tuple(
+                            await unstopped_owners(
+                                session, await _subscriptions_to_stop(session, event, user_id)
+                            )
+                        )
         except Exception:
             support_signals.saw(ERROR, now)
             logger.exception("support_webhook_failed")
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
-        await cancel_quietly(session_factory, provider, to_stop)
+        if not await cancel_quietly(session_factory, provider, to_stop):
+            # The fact stands; this asks the provider to come back for the rest.
+            support_signals.saw(ERROR, now)
+            return Response(status_code=500)
         return JSONResponse({"ok": True})
 
     @router.post("/webhooks/{provider_name}")

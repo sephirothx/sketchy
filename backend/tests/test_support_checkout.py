@@ -28,6 +28,7 @@ from app.services.supporter import active_supporters, supporter_status
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig, support_config
 from app.support.grant import SupportGrantError, grant_pass
 from app.support.providers import (
+    Cancellation,
     BadSignature,
     PaddleProvider,
     ProviderUnavailable,
@@ -455,8 +456,22 @@ async def test_a_failing_provider_does_not_undo_a_recorded_webhook(site, monkeyp
         "adjustment.updated",
         {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
     )
-    assert (await _post(http, refund)).status_code == 200
+    # The fact stands, and the provider is asked to come back for the rest.
+    assert (await _post(http, refund)).status_code == 500
     assert "e2" in {row.provider_event_id for row in await _rows(factory)}
+    monkeypatch.undo()
+    assert (await _post(http, refund)).status_code == 200
+    assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
+    # Once stopped, a further delivery has nothing to ask of the provider.
+    calls: list[str] = []
+
+    async def counted(self, subscription_id):
+        calls.append(subscription_id)
+        raise AssertionError("already stopped")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", counted)
+    assert (await _post(http, refund)).status_code == 200
+    assert calls == []
 
 
 async def test_a_failed_cancel_says_the_renewal_is_still_on(site, monkeypatch):
@@ -502,6 +517,47 @@ async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site,
     # Sending it again cancels nothing, and so mails nobody.
     await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
+
+
+async def test_a_year_arriving_after_the_lifetime_pass_is_stopped(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    lifetime = _event(
+        "e1",
+        "transaction.completed",
+        {
+            "id": "o1",
+            "currency_code": "EUR",
+            "billed_at": datetime.now(timezone.utc).isoformat(),
+            "custom_data": {"account_id": str(user_id), "product": "lifetime"},
+            "details": {"totals": {"total": "6900"}},
+        },
+    )
+    assert (await _post(http, lifetime)).status_code == 200
+    assert (await _post(http, _paid("e2", "o2", user_id))).status_code == 200
+    assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
+
+
+async def test_a_webhook_recording_the_stop_first_does_not_lose_the_mail(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+
+    async def webhook_first(self, subscription_id):
+        await _post(http, _event("cancel-hook", "subscription.canceled", {"id": subscription_id}))
+        return Cancellation(subscription_id=subscription_id, email="m@example.test")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", webhook_first)
+    assert (await http.post("/api/support/cancel")).status_code == 200
+    async with factory() as session:
+        mail = (
+            await session.scalars(
+                select(EmailOutboxEntry).where(EmailOutboxEntry.template == "support_cancelled")
+            )
+        ).all()
+    assert len(mail) == 1
+    # Asked again, nothing renews and nobody is mailed twice.
+    assert (await http.post("/api/support/cancel")).status_code == 200
 
 
 def test_signature_checks_are_exact():
