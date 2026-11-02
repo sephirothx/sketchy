@@ -189,6 +189,8 @@ def create_solo_router(
     async def get_run(run_id: str, request: Request):
         user = await account(request)
         throttle(serve_limiter, user)
+        if await solo.unstarted_past_daily(str(user.id), now=now(), run_id=run_id):
+            await open_door(user, "archive")
         try:
             return run_payload(await solo.get_run(str(user.id), run_id))
         except SoloRefused as error:
@@ -216,6 +218,8 @@ def create_solo_router(
         up, or timed out. Recorded once; the server derives the points."""
         user = await account(request)
         throttle(serve_limiter, user)
+        if await solo.unstarted_past_daily(str(user.id), now=now(), serve_id=serve_id):
+            await open_door(user, "archive")
         try:
             serve, run = await solo.settle(
                 str(user.id), serve_id, outcome=body.outcome, seconds=body.seconds, now=now()

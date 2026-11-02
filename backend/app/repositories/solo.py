@@ -1282,6 +1282,42 @@ class SoloRepository:
             )
         return started is not None
 
+    async def unstarted_past_daily(
+        self,
+        user_id: str,
+        *,
+        now: datetime,
+        run_id: str | None = None,
+        serve_id: str | None = None,
+    ) -> bool:
+        """Whether this run or serve is a past Daily with nothing answered: to begin
+        it is the archive door's, whichever id it is reached by. Opening one creates
+        all five serves, so a saved id would otherwise begin it after a pass ended,
+        and its first answer would make it started (R-SUP-18). False for what does
+        not exist or is not theirs: the read behind this answers that."""
+        run = _optional_uuid(run_id) if run_id is not None else None
+        serve = _optional_uuid(serve_id) if serve_id is not None else None
+        if run is None and serve is None:
+            return False
+        async with self._session_factory() as session:
+            player = (await identity_ids(session, UUID(user_id)))[0]
+            query = select(SoloRun.daily_date).where(SoloRun.user_id == player)
+            query = (
+                query.where(SoloRun.id == run)
+                if run is not None
+                else query.join(SoloServe, SoloServe.run_id == SoloRun.id).where(SoloServe.id == serve)
+            )
+            day = await session.scalar(query)
+            # `daily_release_at(d) <= now` is `d < (now - DAY_EDGE).date()`.
+            if day is None or day >= (now - DAY_EDGE).date():
+                return False
+            answered = await session.scalar(
+                select(SoloDailyResult.daily_date).where(
+                    SoloDailyResult.user_id == player, SoloDailyResult.daily_date == day
+                )
+            )
+        return answered is None
+
     async def _sync_daily_serves(
         self,
         session: AsyncSession,

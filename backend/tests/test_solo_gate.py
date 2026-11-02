@@ -132,6 +132,43 @@ async def test_a_past_daily_started_before_a_lapse_stays_open(env):  # noqa: F81
         assert days[older.isoformat()]["open"] is False
 
 
+async def test_saved_ids_cannot_begin_a_past_daily_after_a_lapse(env):  # noqa: F811
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "OnTime")
+    await solo.open_daily(other.id, PAST, now=_noon(PAST))
+    fan = await player(users, factory, "Fan")
+    await _pass(factory, UUID(fan.id))
+    await sign_in_as(http, factory, fan.id)
+    run = (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).json()
+    await _lapse(factory, UUID(fan.id))
+    first = run["serves"][0]["serveId"]
+    answer = await http.post(
+        f"/api/solo/serves/{first}/result", json={"outcome": "given_up", "seconds": 5}
+    )
+    assert answer.status_code == 403 and answer.json()["errorCode"] == "supporter_only"
+    read = await http.get(f"/api/solo/runs/{run['runId']}")
+    assert read.status_code == 403 and read.json()["errorCode"] == "supporter_only"
+    # And it did not make the date a started one.
+    assert (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).status_code == 403
+
+
+async def test_a_past_daily_begun_with_a_pass_is_finished_after_a_lapse(env):  # noqa: F811
+    http, users, history, solo, factory = env
+    await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "OnTime")
+    await solo.open_daily(other.id, PAST, now=_noon(PAST))
+    fan = await player(users, factory, "Fan")
+    await _pass(factory, UUID(fan.id))
+    await sign_in_as(http, factory, fan.id)
+    run = (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).json()
+    await _settle_all(http, run["serves"][:1], outcome="given_up")
+    await _lapse(factory, UUID(fan.id))
+    assert (await http.get(f"/api/solo/runs/{run['runId']}")).status_code == 200
+    await _settle_all(http, run["serves"][1:], outcome="given_up")
+    assert (await http.get(f"/api/solo/runs/{run['runId']}")).status_code == 200
+
+
 async def test_a_started_daily_held_back_is_not_offered_after_a_lapse(env):  # noqa: F811
     http, users, history, solo, factory = env
     # Five for the past date and five for each date open now: up to three of them,
