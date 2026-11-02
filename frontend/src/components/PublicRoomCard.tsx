@@ -8,11 +8,13 @@ import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from
 import type { RoomSummary } from "../types";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
+import { SupporterMark } from "./ui/SupporterMark";
 
 interface RosterEntry {
   nickname: string;
   nameColor?: string;
   avatarUrl?: string | null;
+  supporterMark?: boolean;
   isAnonymous?: boolean;
   isHost?: boolean;
 }
@@ -128,6 +130,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
               >
                 {player.nickname}
               </span>
+              {player.supporterMark && <SupporterMark size={11} />}
               {player.isHost && <span className="visually-hidden">{ui.publicRoomCard.host}</span>}
             </li>
           ))}

@@ -1,6 +1,8 @@
 """Registered-account preferences shared across devices."""
 from __future__ import annotations
 
+import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -29,6 +31,8 @@ from app.domain_values import (
     INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
 )
+
+logger = logging.getLogger(__name__)
 
 
 KEY_BINDING_ACTIONS = (
@@ -448,6 +452,8 @@ def _hold_play_languages(settings: UserSettings, changes: dict) -> None:
 
 def create_user_settings_router(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    on_supporter_mark_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/settings")
 
@@ -469,9 +475,17 @@ def create_user_settings_router(
     @router.patch("")
     async def patch_settings(body: UserSettingsPatch, request: Request):
         try:
-            return await patch_user_settings(
+            settings = await patch_user_settings(
                 session_factory, user_id=user_id(request), values=body
             )
+            if body.show_supporter_mark is not None and on_supporter_mark_changed:
+                # Best effort, after the commit: the choice is saved either way,
+                # and the next seat reads it.
+                try:
+                    await on_supporter_mark_changed(user_id(request))
+                except Exception:
+                    logger.warning("supporter_mark_push_failed", exc_info=True)
+            return settings
         except UserSettingsError as error:
             raise Refusal(403, ErrorCode.SETTING_REFUSED, str(error)) from error
         except PlayLanguagesRefused as error:

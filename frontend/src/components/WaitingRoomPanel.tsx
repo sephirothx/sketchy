@@ -21,6 +21,7 @@ import type { ColorMode, DrawingToolGroup, HintMode, PlayerInfo, RoomLanguage, S
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/toolbar.css";
+import { SupporterMark } from "./ui/SupporterMark";
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -164,6 +165,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           >
             {player.nickname}
           </span>
+          {player.supporterMark && <SupporterMark />}
           {player.playerId === myPlayerId && (
             <span className="visually-hidden">{ui.waitingRoomPanel.you}</span>
           )}

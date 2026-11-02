@@ -483,14 +483,16 @@ def create_profile_router(
         a number the owner decided is not sensitive.
         """
         throttle(request)
-        user = await user_repo.get_by_id(user_id)
+        user, _ = await user_repo.get_seat_account(user_id)
         if user is None:
             raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
         stats = await user_repo.get_stats(user_id)
         return {
             # Presence is keyed by the canonical account, which is what
             # `get_by_id` resolved a merged guest's id to.
-            "user": public_user_payload(user, online=is_online(user.id)),
+            "user": public_user_payload(
+                user, online=is_online(user.id), supporter_mark=user.supporter_mark
+            ),
             "stats": stats_payload(stats),
             # The languages they play in, the default first (#1212): public
             # like the rest of a profile, since it says what rooms a player

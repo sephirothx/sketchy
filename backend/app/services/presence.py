@@ -111,6 +111,7 @@ class PresenceIdentity:
     name_color: str | None
     is_anonymous: bool
     avatar_key: str | None = None
+    supporter_mark: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +124,7 @@ class PresenceEntry:
     is_anonymous: bool
     status: str
     avatar_key: str | None = None
+    supporter_mark: bool = False
 
     def payload(self) -> dict:
         """The wire shape.
@@ -139,6 +141,7 @@ class PresenceEntry:
             "displayName": self.display_name,
             "nameColor": self.name_color,
             "avatarUrl": avatar_url(self.avatar_key),
+            "supporterMark": self.supporter_mark,
             "isAnonymous": self.is_anonymous,
             "status": self.status,
         }
@@ -498,6 +501,7 @@ def build_snapshot(
                 is_anonymous=identity.is_anonymous,
                 status=STATUS_PLAYING if user_id in seated else STATUS_LOBBY,
                 avatar_key=identity.avatar_key,
+                supporter_mark=identity.supporter_mark,
             )
         )
     entries.sort(key=sort_key)
@@ -579,8 +583,8 @@ class PresenceIdentityCache:
             self._identities.move_to_end(user_id)
             return
         try:
-            user = await asyncio.wait_for(
-                self._user_repo.get_by_id(user_id), timeout=IDENTITY_TIMEOUT_SECONDS
+            user, _ = await asyncio.wait_for(
+                self._user_repo.get_seat_account(user_id), timeout=IDENTITY_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError:
             logger.warning(
@@ -607,6 +611,7 @@ class PresenceIdentityCache:
                 name_color=user.name_color,
                 is_anonymous=user.is_anonymous,
                 avatar_key=None if user.is_anonymous else user.avatar_key,
+                supporter_mark=user.supporter_mark,
             ),
             key=user_id,
         )

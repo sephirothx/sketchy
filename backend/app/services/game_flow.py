@@ -2053,6 +2053,7 @@ class GameFlowService:
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
                     "avatarUrl": avatar_url(p.avatar_key),
+                    "supporterMark": p.supporter_mark,
                     "isAnonymous": p.is_anonymous,
                     "score": room.standing_score(p, carried),
                 }

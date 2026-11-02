@@ -87,6 +87,8 @@ export interface ReportedPlayerContext {
   priorReports: number;
   priorWarnings: number;
   activeSuspension: boolean;
+  /** Holds a supporter pass, shown or hidden. Never decides anything (R-SUP-11). */
+  supporter?: boolean;
 }
 
 /** Where a complaint happened, and so which incident it belongs to.

@@ -23,6 +23,7 @@ import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { refusalText } from "../lib/refusals.ts";
 import "../styles/lazy/player-list.css";
+import { SupporterMark } from "./ui/SupporterMark";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -249,6 +250,7 @@ export function PlayerList({
                   nameColor={p.nameColor}
                   isAnonymous={p.isAnonymous}
                 />
+                {p.supporterMark && <SupporterMark />}
                 {/* The ring, the crown and the friend mark are on the
                     avatar (#574, R-FRIEND-13); these say the same things
                     where a screen reader reads the name. */}

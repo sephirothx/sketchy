@@ -14,6 +14,7 @@ export interface PublicProfile {
   displayName: string;
   nameColor: string | null;
   avatarUrl: string | null;
+  supporterMark?: boolean;
   isAnonymous: boolean;
   createdAt: string | null;
   /** The presence registry's answer at the time of the request. */

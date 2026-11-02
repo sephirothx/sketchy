@@ -14,15 +14,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, and_, false, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import func
 
-from app.db.models import SupportPurchase, User
+from app.auth.bans import active_ban_filter
+from app.db.models import SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
+from app.support.config import support_config
 from app.support.providers import ProviderEvent
 
 
@@ -275,6 +277,61 @@ async def renewing_subscriptions(
         .distinct()
     )
     return tuple(rows.all())
+
+
+def supporter_mark_column(user_id: UUID | ColumnElement, now: datetime) -> ColumnElement:
+    """Whether other players see this account's mark (#1474).
+
+    Combined here, on the server, so no client ever receives a mark its owner
+    hid: a supporter who hid it is the same on the wire as anybody else. Hidden
+    while suspended too, because a suspended account is not there to be thanked.
+    With no provider there is no tier, and this asks the database nothing.
+    """
+    if support_config() is None:
+        return false()
+    active = supporter_status_columns(user_id, now)[0]
+    # Aliased, because the seat read has `user_settings` in its own FROM and a
+    # subquery on the same name would correlate to it and lose its own.
+    settings = aliased(UserSettings)
+    hidden = (
+        select(settings.user_id)
+        .where(settings.user_id == user_id, settings.show_supporter_mark.is_(False))
+        .exists()
+    )
+    suspended = (
+        select(UserBan.id).where(UserBan.user_id == user_id, *active_ban_filter(now)).exists()
+    )
+    return and_(active, ~hidden, ~suspended)
+
+
+async def supporter_marks(
+    session: AsyncSession, user_ids: Iterable[UUID | str], *, now: datetime | None = None
+) -> set[str]:
+    """Which of these accounts show a mark, for a list that has already read them."""
+    ids = {UUID(str(user_id)) for user_id in user_ids}
+    if not ids or support_config() is None:
+        return set()
+    rows = await session.scalars(
+        select(User.id).where(
+            User.id.in_(ids),
+            supporter_mark_column(User.id, now or datetime.now(timezone.utc)),
+        )
+    )
+    return {str(user_id) for user_id in rows.all()}
+
+
+async def active_supporter_ids(
+    session: AsyncSession, user_ids: Iterable[UUID], *, now: datetime | None = None
+) -> set[UUID]:
+    """Who holds a pass, shown or hidden: the moderator's view, and nobody else's."""
+    ids = set(user_ids)
+    if not ids or support_config() is None:
+        return set()
+    moment = now or datetime.now(timezone.utc)
+    rows = await session.scalars(
+        select(User.id).where(User.id.in_(ids), supporter_status_columns(User.id, moment)[0])
+    )
+    return set(rows.all())
 
 
 async def supporter_status(

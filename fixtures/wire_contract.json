@@ -1621,6 +1621,7 @@
    "nameColor",
    "requestedByMe",
    "respondedAt",
+   "supporterMark",
    "userId"
   ],
   "api.friends:create_recent_players_router": [
@@ -1628,6 +1629,7 @@
    "displayName",
    "lastPlayedAt",
    "nameColor",
+   "supporterMark",
    "userId"
   ],
   "api.friends:recent_players": [
@@ -1635,6 +1637,7 @@
    "displayName",
    "lastPlayedAt",
    "nameColor",
+   "supporterMark",
    "userId"
   ],
   "api.gallery:create_gallery_router": [
@@ -2121,7 +2124,8 @@
    "isAnonymous",
    "isOnline",
    "lastSeenAt",
-   "nameColor"
+   "nameColor",
+   "supporterMark"
   ],
   "api.serializers:stats_payload": [
    "averageScore",
@@ -2764,6 +2768,7 @@
    "newRank",
    "playerId",
    "previousRank",
+   "supporterMark",
    "turnId"
   ],
   "presenters:turn_payload": [
@@ -2799,7 +2804,8 @@
    "isHost",
    "isSpectator",
    "nameColor",
-   "playerId"
+   "playerId",
+   "supporterMark"
   ],
   "rooms:drawing_reactions_for": [
    "playerId"
@@ -2842,7 +2848,8 @@
    "avatarUrl",
    "isAnonymous",
    "isHost",
-   "nameColor"
+   "nameColor",
+   "supporterMark"
   ],
   "rooms:to_public_summary": [
    "allowedTools",
@@ -2908,7 +2915,8 @@
    "avatarUrl",
    "isAnonymous",
    "nameColor",
-   "playerId"
+   "playerId",
+   "supporterMark"
   ],
   "services.game_flow:_runner": [
    "maskedPrompt",
@@ -2980,6 +2988,7 @@
    "isAnonymous",
    "nameColor",
    "onlineCount",
+   "supporterMark",
    "userId"
   ],
   "services.queue_depths:as_json": [
@@ -3066,7 +3075,7 @@
    "displayName"
   ]
  },
- "protocolVersion": 70,
+ "protocolVersion": 71,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -25,6 +25,7 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
 import { useSettingsStore } from "../store/settingsStore";
 import { EmptyState } from "./ui/EmptyState";
+import { SupporterMark } from "./ui/SupporterMark";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
@@ -164,6 +165,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     }
                   >
                     {player.displayName}
+                    {player.supporterMark && <SupporterMark size={12} />}
                   </span>
                 ) : (
                   <LobbyPlayerMenu
@@ -198,6 +200,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                       style={player.nameColor ? { color: player.nameColor } : undefined}
                     >
                       {player.displayName}
+                      {player.supporterMark && <SupporterMark size={12} />}
                     </span>
                   </LobbyPlayerMenu>
                 )}

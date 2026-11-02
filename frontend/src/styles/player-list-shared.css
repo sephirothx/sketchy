@@ -10,3 +10,19 @@
   padding: 8px 10px;
   resize: vertical;
 }
+
+/* The heart after a supporter's name (#1474). Pink rather than the warm orange,
+   which misses 3:1 on paper; chosen on meaning and legibility, since nothing
+   shows any colour sells more passes. */
+.supporter-mark {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  margin-left: 4px;
+  vertical-align: -0.1em;
+}
+
+.supporter-mark svg {
+  display: block;
+  fill: var(--supporter-mark);
+}

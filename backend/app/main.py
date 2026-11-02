@@ -53,6 +53,7 @@ from app.api.user_settings import create_user_settings_router
 from app.api.solo import create_solo_router
 from app.api.support import create_support_router
 from app.domain_values import SUPPORT_PROVIDERS
+from app.services.supporter import supporter_marks
 from app.support.config import support_config
 from app.api.friends import create_friends_router, create_recent_players_router
 from app.api.user_blocks import create_user_blocks_router
@@ -1237,7 +1238,27 @@ api.include_router(
 api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )
-api.include_router(create_user_settings_router(async_session_factory))
+async def refresh_supporter_mark_on_live_surfaces(user_id: str) -> None:
+    """A heart gained, hidden or refunded reaches the seats and lobby showing it."""
+    forget_presence_identity(user_id)
+    async with async_session_factory() as session:
+        shown = user_id in await supporter_marks(session, [user_id])
+    for room in list(room_manager.rooms.values()):
+        changed = False
+        for player in room.players.values():
+            if player.user_id == user_id and player.supporter_mark != shown:
+                player.supporter_mark = shown
+                changed = True
+        if changed:
+            await handler_context.game_flow._emit_room_state(room)
+
+
+api.include_router(
+    create_user_settings_router(
+        async_session_factory,
+        on_supporter_mark_changed=refresh_supporter_mark_on_live_surfaces,
+    )
+)
 api.include_router(
     create_solo_router(
         async_session_factory,
@@ -1263,7 +1284,13 @@ api.include_router(
 # one is left for `validate_support_configuration` to refuse at startup by name.
 _support = support_config()
 if _support is not None and _support.provider in SUPPORT_PROVIDERS:
-    api.include_router(create_support_router(async_session_factory, _support))
+    api.include_router(
+        create_support_router(
+            async_session_factory,
+            _support,
+            on_supporter_mark_changed=refresh_supporter_mark_on_live_surfaces,
+        )
+    )
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:
     """A changed picture reaches the seats and the lobby that show it.
 

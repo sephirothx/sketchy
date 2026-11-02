@@ -1275,6 +1275,12 @@ export function ModerationPage() {
                             : "None"}
                         </strong>
                       </div>
+                      {playerCase.reportedPlayer.supporter && (
+                        <div className="mod-context-row">
+                          <span>Supporter pass</span>
+                          <strong>Active</strong>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <p className="mod-case-details">

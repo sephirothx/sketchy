@@ -23,6 +23,7 @@ import { KeyIcon, PlusIcon, UsersIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/friends.css";
 import "../styles/lazy/settings.css";
+import { SupporterMark } from "./ui/SupporterMark";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 
@@ -316,6 +317,7 @@ function FriendsSection({
               style={entry.nameColor ? { color: entry.nameColor } : undefined}
             >
               {entry.displayName}
+              {entry.supporterMark && <SupporterMark />}
             </span>
             <span className="friends-row-actions">{renderActions(entry)}</span>
           </li>

@@ -198,6 +198,7 @@ async def test_the_public_profile_is_the_presentation_a_seat_already_shows(env):
         "nameColor",
         "avatarUrl",
         "isAnonymous",
+        "supporterMark",
         "createdAt",
         "isOnline",
         "lastSeenAt",

@@ -25,6 +25,8 @@ class PlayerIdentity:
     colorblind_safe_colors: bool = False
     # The account's uploaded picture (#573); never set for a guest.
     avatar_key: str | None = None
+    # Already combined with the owner's choice to show it (#1474).
+    supporter_mark: bool = False
 
 
 class IdentityError(ValueError):
@@ -75,6 +77,7 @@ async def resolve_identity(
             is_anonymous=False,
             name_color=user.name_color,
             avatar_key=None if user.is_anonymous else user.avatar_key,
+            supporter_mark=user.supporter_mark,
             colorblind_safe_colors=(
                 stored_colorblind
                 if stored_colorblind is not None
