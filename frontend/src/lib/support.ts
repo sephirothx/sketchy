@@ -50,6 +50,21 @@ export async function startGift(
   return url;
 }
 
+/** Go to the provider's checkout. Over a room in play it opens a new tab, because
+leaving this page would drop a seat without leaving the room (R-UX-15). Opened
+before the wait, or a browser takes it for a popup. */
+export async function sendToCheckout(getUrl: () => Promise<string>, seated: boolean): Promise<void> {
+  const tab = seated ? window.open("", "_blank") : null;
+  try {
+    const url = await getUrl();
+    if (tab) tab.location.href = url;
+    else window.location.assign(url);
+  } catch (failure) {
+    tab?.close();
+    throw failure;
+  }
+}
+
 export function cancelRenewal(): Promise<SupporterStatus> {
   return apiRequest<SupporterStatus>("/api/support/cancel", { method: "POST" });
 }

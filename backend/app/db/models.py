@@ -924,6 +924,11 @@ class SupportPurchase(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
 
+    @property
+    def is_gift(self) -> bool:
+        """Somebody else paid for this row."""
+        return self.gift_anonymous or self.gifted_by_user_id is not None
+
 
 class AuditEvent(Base):
     """Append-only record of security- and moderation-sensitive actions."""

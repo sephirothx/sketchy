@@ -900,7 +900,7 @@ function ProfileView({ userId }: { userId: string }) {
             {mayGift && supportPlans && (
               <button
                 type="button"
-                className="btn btn-secondary btn-compact"
+                className="btn btn-secondary btn-compact profile-gift"
                 onClick={() => setGiftingPass(true)}
               >
                 <GiftIcon size={16} /> {ui.support.giftAction}

@@ -149,6 +149,7 @@ export const LEGAL_PL: LegalDocuments = {
           "Dane są przekazywane władzom tylko wtedy, gdy wymaga tego prawo.",
           "Jeśli kupujesz przepustkę wspierającego, sprzedaje ją i przyjmuje płatność Paddle, nasz sprzedawca. Sketchy wysyła do Paddle identyfikator Twojego konta oraz przechowuje to, co Paddle zgłasza: numer zamówienia, okres, kwotę i walutę. Twoja karta i adres rozliczeniowy trafiają do Paddle i nigdy do Sketchy. Paddle przetwarza je zgodnie z własną informacją o prywatności.",
           "Jeśli zatrzymujesz odnowienie bez logowania, wpisany adres e-mail jest przekazywany do Paddle, aby znaleźć przepustkę. Link do napiwku otwiera Ko-fi, osobny serwis: Sketchy nie wysyła tam nic o Tobie, a tym, co tam wpiszesz, zajmuje się Ko-fi.",
+          "Jeśli podarujesz przepustkę, Sketchy wysyła do Paddle identyfikator Twojego konta i odbiorcy oraz przechowuje, kto ją podarował. Odbiorca dowie się, że to Ty, chyba że poprosisz o niepodawanie nazwy.",
         ],
       },
       {
@@ -327,6 +328,7 @@ export const LEGAL_PL: LegalDocuments = {
           "Przepustka roczna odnawia się co rok, dopóki jej nie anulujesz. Możesz ją anulować w każdej chwili na /support/cancel, zalogowany lub nie: przepustka działa do końca opłaconego okresu, a potwierdzenie przychodzi e-mailem.",
           "Jeśli jesteś konsumentem, możesz odstąpić od umowy w ciągu czternastu dni od zakupu i odzyskać niewykorzystaną część. Zgłoś to przez potwierdzenie od Paddle.",
           "Gdy przepustka się kończy, znak i dodatkowe Solo znikają, a wybrane style i doodle zostają. Zwrot lub obciążenie zwrotne kończy ją od razu i cofa też te wybory. Zawieszenie nie podlega zwrotowi. Usunięcie konta zatrzymuje każde odnowienie. Napiwek na Ko-fi jest prezentem i nie obejmuje przepustki.",
+          "Możesz podarować innemu graczowi dwanaście miesięcy: jedno obciążenie, bez odnawiania i bez kosztów dla niego. Zaczynają się po końcu jego obecnego okresu, a jeśli jego przepustka miała się odnowić, odnowienie zostaje zatrzymane, aby nie płacił za te same miesiące.",
         ],
       },
       {

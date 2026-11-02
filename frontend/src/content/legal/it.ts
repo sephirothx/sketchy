@@ -151,6 +151,7 @@ export const LEGAL_IT: LegalDocuments = {
             "richiede.",
           "Se acquisti un pass sostenitore, a venderlo e a incassare il pagamento è Paddle, il nostro rivenditore. Sketchy invia a Paddle l'id del tuo account e conserva ciò che Paddle comunica: numero d'ordine, periodo, importo e valuta. La tua carta e il tuo indirizzo di fatturazione vanno a Paddle e non arrivano mai a Sketchy. Paddle li tratta secondo la propria informativa sulla privacy.",
           "Se fermi un rinnovo senza accedere, l'e-mail che scrivi viene passata a Paddle per trovare il pass. Il link per la mancia apre Ko-fi, un sito separato: Sketchy non gli invia nulla su di te, e ciò che inserisci lì è gestito da Ko-fi.",
+          "Se regali un pass, Sketchy invia a Paddle l'id del tuo account e quello del destinatario e conserva chi l'ha regalato. Il destinatario saprà che sei stato tu, a meno che tu non chieda di non essere nominato.",
         ],
       },
       {
@@ -333,6 +334,7 @@ export const LEGAL_IT: LegalDocuments = {
           "Un pass annuale si rinnova ogni anno finché non lo annulli. Puoi annullarlo in qualsiasi momento su /support/cancel, con o senza accesso: il pass dura fino alla fine del periodo già pagato e ricevi una conferma via e-mail.",
           "Se sei un consumatore, puoi recedere entro quattordici giorni dall'acquisto e riavere la parte non utilizzata. Chiedilo tramite la ricevuta di Paddle.",
           "Quando un pass termina, il segno e il Solo aggiuntivo vengono meno, mentre gli stili e gli scarabocchi scelti restano. Un rimborso o uno storno lo termina subito e ritira anche queste scelte. Una sospensione non viene rimborsata. Eliminare l'account ferma ogni rinnovo. Una mancia su Ko-fi è un regalo e non include alcun pass.",
+          "Puoi regalare dodici mesi a un altro giocatore: un solo addebito, nessun rinnovo e nessun costo per lui. Iniziano alla fine del suo periodo attuale e, se il suo pass doveva rinnovarsi, il rinnovo si ferma, così non paga gli stessi mesi.",
         ],
       },
       {

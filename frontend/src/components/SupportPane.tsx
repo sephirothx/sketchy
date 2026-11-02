@@ -6,11 +6,13 @@ import { formatDate } from "../lib/clock";
 import { refusalText } from "../lib/refusals";
 import {
   isLifetime,
+  sendToCheckout,
   startCheckout,
   type SupportPlans,
   type SupportProduct,
 } from "../lib/support";
 import { useAuthStore } from "../store/authStore";
+import { useGameStore } from "../store/gameStore";
 import { useSupportStore } from "../store/supportStore";
 import { ExtraChoice } from "./ExtraChoice";
 import { CheckIcon } from "./icons";
@@ -92,6 +94,7 @@ function PlanPrices({ plans }: { plans: SupportPlans }) {
 function Checkout({ plans }: { plans: SupportPlans }) {
   const showMark = useSupportStore((state) => state.showMark);
   const setShowMark = useSupportStore((state) => state.setShowMark);
+  const seated = useGameStore((state) => Boolean(state.roomId));
   const [product, setProduct] = useState<SupportProduct>("year");
   const [extraMinor, setExtraMinor] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -106,7 +109,8 @@ function Checkout({ plans }: { plans: SupportPlans }) {
     try {
       if (wantsMark !== showMark) await setShowMark(wantsMark);
       // A navigation, not a frame: nothing of the provider's runs here (R-PLAT-20).
-      window.location.assign(await startCheckout(product, extraMinor));
+      await sendToCheckout(() => startCheckout(product, extraMinor), seated);
+      if (seated) setBusy(false);
     } catch (failure) {
       setError(refusalText(failure, ui.support.checkoutFailed));
       setBusy(false);

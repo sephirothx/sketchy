@@ -472,6 +472,15 @@ async def apply_provider_event(
         )
         if known is None:
             return False, None
+    if event.product == PRODUCT_GIFT and event.account_id:
+        # Written first, because the read below only shares it: two gifts landing
+        # together must not both read the same last period and overlap.
+        try:
+            await session.execute(
+                select(User.id).where(User.id == UUID(event.account_id)).with_for_update()
+            )
+        except ValueError:
+            pass
     user_id = await _attributed_account(session, event)
     if event.product == PRODUCT_GIFT and event.kind == SupportPurchaseKind.PURCHASE:
         event = await _with_gift_period(session, event, user_id)

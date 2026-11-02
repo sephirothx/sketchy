@@ -923,3 +923,21 @@
   font-size: 12.5px;
   color: var(--muted);
 }
+
+/* On a phone the gift button takes its own line, so it can't push the name, the
+   flags or the header off the screen. */
+@media (max-width: 640px) {
+  .profile-identity:has(.profile-gift) {
+    flex-wrap: wrap;
+  }
+
+  .profile-gift {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .profile-identity:has(.profile-gift) .profile-identity-text {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

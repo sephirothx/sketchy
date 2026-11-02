@@ -149,6 +149,7 @@ export const LEGAL_EN: LegalDocuments = {
           "Data is given to authorities only where the law requires it.",
           "If you buy a supporter pass, Paddle, our reseller, sells it and takes the payment. Sketchy sends Paddle your account id, and keeps what Paddle reports back: the order number, the period, the amount and the currency. Your card and billing address go to Paddle and never reach Sketchy. Paddle handles them under its own privacy notice.",
           "If you stop a renewal without signing in, the e-mail address you type is passed to Paddle to find the pass. The tip link opens Ko-fi, a separate site: Sketchy sends it nothing about you, and what you enter there is Ko-fi's to handle.",
+          "If you gift a pass, Sketchy sends Paddle your account id and the recipient's, and keeps who gave it. The recipient is told it was you unless you ask not to be named.",
         ],
       },
       {
@@ -325,6 +326,7 @@ export const LEGAL_EN: LegalDocuments = {
           "A yearly pass renews each year until you cancel. You can cancel at any time at /support/cancel, signed in or not: the pass runs until the end of the time already paid for, and you get a confirmation by e-mail.",
           "If you are a consumer, you can withdraw within fourteen days of buying and get back the part you have not used. Ask through your receipt from Paddle.",
           "When a pass ends, the mark and the extra Solo go, and the styles and doodles you chose stay. A refund or a chargeback ends it at once and takes those choices back too. A suspension is not refunded. Deleting your account stops any renewal. A tip on Ko-fi is a gift and includes no pass.",
+          "You can give another player twelve months: one charge, never renewing, and it puts no charge on them. It starts when their current time ends, and if their pass was set to renew, that renewal stops, so they are not charged for the same months.",
         ],
       },
       {

@@ -80,6 +80,11 @@ async def _webhook(http, event: str, data: dict):
     )
 
 
+async def _event_ids(factory) -> set[str]:
+    async with factory() as session:
+        return set((await session.scalars(select(SupportPurchase.provider_event_id))).all())
+
+
 async def _gift(http, recipient: UUID, **extra):
     return await http.post("/api/support/gift", json={"recipientId": str(recipient), **extra})
 
@@ -103,7 +108,8 @@ async def test_a_gift_makes_the_recipient_a_supporter_and_names_the_giver(site):
     giver = await _register(http, "Marta")
     response = await _gift(http, recipient)
     assert response.status_code == 200
-    assert (await _pay_stub(http, response.json()["url"])).status_code == 303
+    paid = await _pay_stub(http, response.json()["url"])
+    assert paid.status_code == 303 and paid.headers["location"] == "/support/thanks?gift=1"
     async with factory() as session:
         status = await supporter_status(session, recipient)
         assert not (await supporter_status(session, giver)).active
@@ -165,6 +171,9 @@ async def test_a_gift_to_an_active_supporter_starts_when_their_time_ends(site):
     assert gift.period_start == end
     assert gift.period_end.year == end.year + 1
     assert status.until == gift.period_end
+    # Left to renew, it would charge for the months the gift just paid for.
+    assert status.renews is False
+    assert "cancel:sub_1" in await _event_ids(factory)
 
 
 async def test_a_lifetime_holder_a_blocked_pair_and_oneself_read_the_same(site):
@@ -246,3 +255,5 @@ async def test_deleting_the_giver_keeps_the_gift_and_forgets_who(site):
         row = await session.scalar(select(SupportPurchase))
         assert row.gifted_by_user_id is None and row.user_id == recipient
         assert (await supporter_status(session, recipient)).active
+    # And the recipient's notice no longer names them.
+    assert (await _inbox(factory, recipient))[0].subject_id is None

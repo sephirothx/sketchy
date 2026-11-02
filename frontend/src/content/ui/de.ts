@@ -442,6 +442,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const DE: Catalogue = {
   supporterMark: { label: "Unterstützer" },
   support: {
+    giftThanks: "Dein Geschenk ist unterwegs. Es gilt, sobald die Zahlung bestätigt ist.",
     giftActionFor: (p: { name: string }) => `${p.name} einen Pass schenken`,
     markNotSaved: "Das konnte nicht gespeichert werden. Bitte versuch es noch einmal.",
     giftAction: "Pass schenken",

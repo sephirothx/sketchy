@@ -333,6 +333,7 @@
     "support[].amountMinor",
     "support[].createdAt",
     "support[].currency",
+    "support[].gift",
     "support[].giftedByUserId",
     "support[].kind",
     "support[].orderId",

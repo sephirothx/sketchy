@@ -983,6 +983,7 @@ def test_production_refuses_a_tier_that_could_give_passes_away():
             "SUPPORT_API_KEY": "k",
             "SUPPORT_PRICE_YEAR": "pri_y",
             "SUPPORT_PRICE_LIFETIME": "pri_l",
+            "SUPPORT_PRICE_GIFT": "pri_g",
             "SUPPORT_EXTRA_PRODUCT_ID": "pro_e",
             "SUPPORT_TIP_URL": "https://ko-fi.com/sketchy",
         }

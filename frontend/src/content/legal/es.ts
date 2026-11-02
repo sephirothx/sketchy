@@ -144,6 +144,7 @@ export const LEGAL_ES: LegalDocuments = {
           "Los datos solo se entregan a las autoridades cuando la ley lo exige.",
           "Si compras un pase de apoyo, lo vende Paddle, nuestro revendedor, y se encarga del pago. Sketchy envía a Paddle el identificador de tu cuenta y guarda lo que Paddle le comunica: el número de pedido, el periodo, el importe y la moneda. Tu tarjeta y tu dirección de facturación van a Paddle y nunca llegan a Sketchy. Paddle las trata según su propio aviso de privacidad.",
           "Si detienes una renovación sin iniciar sesión, el correo que escribes se pasa a Paddle para encontrar el pase. El enlace de propinas abre Ko-fi, un sitio aparte: Sketchy no le envía nada sobre ti, y lo que escribas allí lo trata Ko-fi.",
+          "Si regalas un pase, Sketchy envía a Paddle el identificador de tu cuenta y el de quien lo recibe, y guarda quién lo regaló. A quien lo recibe se le dice que fuiste tú, salvo que pidas no aparecer.",
         ],
       },
       {
@@ -323,6 +324,7 @@ export const LEGAL_ES: LegalDocuments = {
           "Un pase anual se renueva cada año hasta que lo canceles. Puedes cancelarlo en cualquier momento en /support/cancel, con o sin sesión: el pase dura hasta el final del tiempo ya pagado y recibes una confirmación por correo.",
           "Si eres consumidor, puedes desistir en los catorce días siguientes a la compra y recuperar la parte que no hayas usado. Solicítalo a través de tu recibo de Paddle.",
           "Cuando un pase termina, la marca y el Solo adicional desaparecen, y los estilos y garabatos que elegiste se quedan. Un reembolso o una devolución del cargo lo termina de inmediato y retira también esas elecciones. Una suspensión no se reembolsa. Eliminar tu cuenta detiene cualquier renovación. Una propina en Ko-fi es un regalo y no incluye ningún pase.",
+          "Puedes regalar doce meses a otro jugador: un solo cargo, sin renovación y sin cargo para esa persona. Empiezan cuando termine su tiempo actual y, si su pase iba a renovarse, esa renovación se detiene para que no pague los mismos meses.",
         ],
       },
       {

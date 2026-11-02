@@ -32,9 +32,13 @@ export function SupportThanksPage() {
     void loadPlans();
   }, [loadPlans]);
 
+  // Only what to say: a giver has no pass of their own to wait for. The pass
+  // itself is still only ever read from the server.
+  const isGift = new URLSearchParams(window.location.search).has("gift");
+
   useEffect(() => {
     // Only an account can hold a pass, and only a deployment that sells one.
-    if (!hasResolved || !registered) return;
+    if (!hasResolved || !registered || isGift) return;
     let stopped = false;
     let timer = 0;
     let tries = 0;
@@ -59,7 +63,7 @@ export function SupportThanksPage() {
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [hasResolved, registered, refresh]);
+  }, [hasResolved, registered, isGift, refresh]);
 
   // Nothing here on a deployment that sells nothing (R-SUP-08).
   if (plans === null) return <NotFoundPage />;
@@ -68,7 +72,13 @@ export function SupportThanksPage() {
     <div className="support-page">
       <AppHeader />
       <main className="surface-card support-page-card" data-testid="support-thanks">
-        {confirmed ? (
+        {isGift ? (
+          <>
+            <SupporterMark size={40} />
+            <h1>{ui.support.thanksDocumentTitle}</h1>
+            <p>{ui.support.giftThanks}</p>
+          </>
+        ) : confirmed ? (
           <>
             <SupporterMark size={40} />
             <h1>{ui.support.thanksTitle({ name: user?.displayName ?? "" })}</h1>

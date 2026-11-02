@@ -442,6 +442,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const PT: Catalogue = {
   supporterMark: { label: "Apoiante" },
   support: {
+    giftThanks: "A tua oferta vai a caminho. Fica ativa assim que o pagamento for confirmado.",
     giftActionFor: (p: { name: string }) => `Oferecer um passe a ${p.name}`,
     markNotSaved: "Não foi possível guardar. Tenta novamente.",
     giftAction: "Oferecer um passe",

@@ -454,6 +454,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const EN = {
   supporterMark: { label: "Supporter" },
   support: {
+    giftThanks: "Your gift is on its way. It's live as soon as the payment is confirmed.",
     giftActionFor: (p: { name: string }) => `Gift ${p.name} a pass`,
     markNotSaved: "That could not be saved. Please try again.",
     giftAction: "Gift a pass",

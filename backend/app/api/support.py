@@ -128,8 +128,10 @@ async def _subscriptions_to_stop(
         status = await supporter_status(session, user_id)
         if status.active and status.until is None:
             return (event.subscription_id,)
-    if event.product == PRODUCT_LIFETIME:
-        # The lifetime pass replaces the year it was bought on top of.
+    if event.product in (PRODUCT_LIFETIME, PRODUCT_GIFT):
+        # The lifetime pass replaces the year it was bought on top of. And a gift
+        # starts when that year ends: left to renew, Paddle would charge the
+        # recipient for the same twelve months the gift just paid for.
         return await renewing_subscriptions(session, [user_id])
     return ()
 
@@ -475,6 +477,8 @@ def create_support_router(
                 body,
                 {SIGNATURE_HEADER: signature_header(config.webhook_secret, body, now)},
             )
-            return RedirectResponse("/support/thanks", status_code=303)
+            # A giver has no pass to wait for: the page thanks them for the gift.
+            gift = "?gift=1" if read["product"] == PRODUCT_GIFT else ""
+            return RedirectResponse(f"/support/thanks{gift}", status_code=303)
 
     return router

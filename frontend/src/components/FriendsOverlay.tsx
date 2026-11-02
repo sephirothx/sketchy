@@ -27,6 +27,7 @@ import { SupporterMark } from "./ui/SupporterMark";
 import { useSupportStore } from "../store/supportStore";
 import { GiftPassDialog } from "./GiftPassDialog";
 import { GiftIcon } from "./icons";
+import { useGameStore } from "../store/gameStore";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 
@@ -53,6 +54,7 @@ type Confirming =
 
 export function FriendsOverlay() {
   const [gifting, setGifting] = useState<FriendEntry | null>(null);
+  const seated = useGameStore((state) => Boolean(state.roomId));
   const supportPlans = useSupportStore((state) => state.plans);
   const loadSupportPlans = useSupportStore((state) => state.loadPlans);
   useEffect(() => {
@@ -227,7 +229,9 @@ export function FriendsOverlay() {
                 testId="friends-accepted"
                 renderActions={(entry) => (
                   <>
-                    {supportPlans && (
+                    {/* Friends also opens over a room, and a gift is never offered
+                        in one (R-SUP-16). */}
+                    {supportPlans && !seated && (
                       <button
                         type="button"
                         className="btn btn-ghost btn-compact friends-gift"

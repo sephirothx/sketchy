@@ -1503,7 +1503,8 @@ async def _write_export_artifact(
             "achievedAt": _timestamp(best.achieved_at),
         },
     )
-    # The account's own ledger rows: the money it paid and got back (R-SUP-04).
+    # The account's own ledger rows: the money it paid and got back, and the time
+    # it was given (R-SUP-04).
     # Including a reversal of an order of theirs that names nobody, because one
     # can land before its purchase: status counts it, so the export must show it.
     own_order = aliased(SupportPurchase)
@@ -1529,9 +1530,11 @@ async def _write_export_artifact(
             "kind": fact.kind,
             "periodStart": _timestamp(fact.period_start),
             "periodEnd": _timestamp(fact.period_end),
-            "amountMinor": fact.amount_minor,
-            "currency": fact.currency,
-            "orderId": fact.provider_order_id,
+            # What somebody else paid is theirs: a gift shows its period alone.
+            "amountMinor": None if fact.is_gift else fact.amount_minor,
+            "currency": None if fact.is_gift else fact.currency,
+            "orderId": None if fact.is_gift else fact.provider_order_id,
+            "gift": fact.is_gift,
             # Who gave it, unless they asked not to be named (#1540).
             "giftedByUserId": (
                 None
@@ -2053,6 +2056,15 @@ async def anonymize_account(
                 session,
                 kinds=("friend_request", "friend_accepted", "game_invite"),
                 subject_ids=list(identity_ids),
+            )
+            # A gift they gave stands, and now names nobody.
+            await session.execute(
+                update(InboxEntry)
+                .where(
+                    InboxEntry.kind == "supporter_gifted",
+                    InboxEntry.subject_id.in_(identity_ids),
+                )
+                .values(subject_id=None)
             )
             await session.execute(
                 delete(UserWarning).where(UserWarning.user_id.in_(identity_ids))
