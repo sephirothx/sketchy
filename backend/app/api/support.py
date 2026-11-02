@@ -6,6 +6,7 @@ which #465 admits by design. Its proof is the signature.
 """
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 from datetime import datetime, timezone
@@ -130,6 +131,10 @@ def create_support_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/support")
     provider: Provider = provider_for(config)
+    # A year and the lifetime pass on top of it, or a purchase and its refund, in two
+    # transactions at once could each miss the other and stop nothing, and both answer
+    # 200. One worker, so one at a time in this process is all that takes.
+    webhook_turns = asyncio.Lock()
 
     async def account(request: Request) -> User:
         value = getattr(request.state, "user_id", None)
@@ -191,7 +196,7 @@ def create_support_router(
             support_signals.saw(IGNORED, now)
             return JSONResponse({"ok": True})
         try:
-            async with session_factory() as session:
+            async with webhook_turns, session_factory() as session:
                 async with session.begin():
                     recorded, user_id = await apply_provider_event(
                         session, provider.name, event

@@ -6,6 +6,8 @@ can say "ends" instead of "renews", and owes a confirmation by mail (§312k).
 from __future__ import annotations
 
 import logging
+import time
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,10 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.auth.mail import queue_email
 from app.db.models import EmailOutboxEntry, User, UserSettings
 from app.domain_values import EmailTemplate
-from app.services.supporter import apply_provider_event
-from app.support.providers import Provider, cancellation_event
+from app.services.supporter import apply_provider_event, renewals_nothing_pays_for
+from app.support.config import support_config
+from app.support.providers import Provider, cancellation_event, provider_for
 
 logger = logging.getLogger(__name__)
+
+# Each is a call to the provider, so an outage should not make one sweep take long.
+STOP_BATCH = 20
 
 
 async def cancel_subscription(
@@ -92,3 +98,39 @@ async def cancel_quietly(
                 "support_subscription_not_cancelled %s", subscription_id, exc_info=True
             )
     return stopped
+
+
+async def stop_renewals_nothing_pays_for(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget=None,
+):
+    """Try again what could not be stopped when it should have been: an outage during
+    an account's deletion, or a webhook whose retries ran out. Nothing else comes back
+    to these. A retention-loop sweep, so it runs hourly and reports like one, and
+    removes nothing. What still fails is logged and comes up again next time.
+    """
+    from app.services.sweeps import SweepReport
+
+    started = time.monotonic()
+    config = support_config()
+    subscriptions: tuple[str, ...] = ()
+    if config is not None:
+        async with session_factory() as session:
+            subscriptions = await renewals_nothing_pays_for(session, limit=STOP_BATCH)
+    stopped = 0
+    if config is not None:
+        provider = provider_for(config)
+        for subscription_id in subscriptions:
+            if await cancel_quietly(session_factory, provider, (subscription_id,)):
+                stopped += 1
+    return SweepReport(
+        stopped,
+        name="unpaid_for_renewals",
+        batches=1,
+        seconds=time.monotonic() - started,
+        exhausted=len(subscriptions) >= STOP_BATCH,
+        oldest_overdue_seconds=0.0,
+    )
+

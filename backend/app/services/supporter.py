@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, or_, select
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -162,6 +162,60 @@ async def unstopped_owners(
     return owners
 
 
+def _order_reversed(purchase) -> ColumnElement:
+    reversal = aliased(SupportPurchase)
+    return (
+        select(reversal.id)
+        .where(
+            reversal.provider == purchase.provider,
+            reversal.provider_order_id == purchase.provider_order_id,
+            reversal.kind.in_(
+                (SupportPurchaseKind.REFUND.value, SupportPurchaseKind.CHARGEBACK.value)
+            ),
+        )
+        .exists()
+    )
+
+
+async def renewals_nothing_pays_for(session: AsyncSession, *, limit: int) -> tuple[str, ...]:
+    """Subscriptions that can still charge and must not (R-SUP-09): the account is
+    gone, the order was refunded, or a lifetime pass replaced them. Read from the facts,
+    so a stop that failed needs nothing written down to be tried again."""
+    named = aliased(SupportPurchase)
+    lifetime = aliased(SupportPurchase)
+    rows = await session.scalars(
+        select(SupportPurchase.provider_subscription_id)
+        .where(
+            SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            SupportPurchase.provider_subscription_id.is_not(None),
+            ~_stopped(SupportPurchase.provider_subscription_id),
+            or_(
+                and_(
+                    SupportPurchase.user_id.is_(None),
+                    ~select(named.id)
+                    .where(
+                        named.provider_subscription_id == SupportPurchase.provider_subscription_id,
+                        named.user_id.is_not(None),
+                    )
+                    .exists(),
+                ),
+                _order_reversed(SupportPurchase),
+                select(lifetime.id)
+                .where(
+                    lifetime.user_id == SupportPurchase.user_id,
+                    lifetime.kind == SupportPurchaseKind.PURCHASE.value,
+                    lifetime.period_end.is_(None),
+                    ~_order_reversed(lifetime),
+                )
+                .exists(),
+            ),
+        )
+        .distinct()
+        .limit(limit)
+    )
+    return tuple(rows.all())
+
+
 async def order_was_reversed(session: AsyncSession, order_id: str) -> bool:
     return (
         await session.scalar(
@@ -296,9 +350,12 @@ async def apply_provider_event(
     business, nor this code's to cancel.
     """
     if event.kind == SupportPurchaseKind.PURCHASE and not event.account_id:
+        # A purchase, and nothing less: a refund or a cancellation of something else
+        # the account sells is recorded too, and must not make its purchase ours.
         known = await session.scalar(
             select(SupportPurchase.id)
             .where(
+                SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
                 or_(
                     SupportPurchase.provider_order_id == event.order_id,
                     SupportPurchase.provider_subscription_id == event.subscription_id,

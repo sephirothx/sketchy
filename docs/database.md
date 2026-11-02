@@ -3024,6 +3024,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Data | Retention | Deletion SLA | Exempt | Mechanism | Sweep |
 | --- | --- | --- | --- | --- | --- |
 | Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block | — |
+| Renewals nothing pays for | Stopped, not removed: an account gone, an order refunded, or a lifetime pass on top | 6 h | Nothing is removed | A provider call per subscription, up to 20 a run; what still fails comes up next run | `unpaid_for_renewals` |
 | Supporter pass facts (`support_purchases`) | Indefinite: the provider keeps the invoice, and a later refund has to find its order | — | — | Never removed; `user_id` is nulled when the account is deleted | — |
 | Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |

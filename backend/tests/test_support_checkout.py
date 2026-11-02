@@ -1,6 +1,7 @@
 """The supporter pass's money path: checkout, signed webhook, cancel, grant (#1473)."""
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.error
 import urllib.request
@@ -14,6 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.api.errors import install_refusal_handler
+from app.api import support as support_api
 from app.api.support import (
     cancel_limiter,
     checkout_address_limiter,
@@ -21,6 +23,7 @@ from app.api.support import (
     create_support_router,
 )
 from app.auth.account_data import anonymize_account
+from app.support.cancellation import stop_renewals_nothing_pays_for
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import AuditEvent, EmailOutboxEntry, SupportPurchase, User
@@ -520,6 +523,102 @@ async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site,
     # Sending it again cancels nothing, and so mails nobody.
     await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
+
+
+async def test_a_refund_of_something_else_does_not_make_its_purchase_ours(site, monkeypatch):
+    http, factory = site
+    calls: list[str] = []
+
+    async def counted(self, subscription_id):
+        calls.append(subscription_id)
+        return Cancellation(subscription_id=subscription_id)
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", counted)
+    refund = _event(
+        "e1",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "other", "totals": {"total": "500"}},
+    )
+    assert (await _post(http, refund)).status_code == 200
+    assert (await _post(http, _paid("e2", "other", None, subscription="sub_other_product"))).status_code == 200
+    assert calls == []
+    assert "e2" not in {row.provider_event_id for row in await _rows(factory)}
+
+
+async def test_webhooks_are_handled_one_at_a_time(site, monkeypatch):
+    http, _ = site
+    user_id = await _register(http)
+    real = support_api.apply_provider_event
+    inside = [0]
+    most = [0]
+
+    async def counted(session, provider, event):
+        inside[0] += 1
+        most[0] = max(most[0], inside[0])
+        await asyncio.sleep(0.01)
+        try:
+            return await real(session, provider, event)
+        finally:
+            inside[0] -= 1
+
+    monkeypatch.setattr(support_api, "apply_provider_event", counted)
+    await asyncio.gather(
+        _post(http, _paid("e1", "o1", user_id)), _post(http, _paid("e2", "o2", user_id))
+    )
+    assert most[0] == 1
+
+
+async def test_a_renewal_whose_account_went_during_an_outage_is_stopped_later(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    http.cookies.clear()
+    healthy = await _register(http, "Healthy")
+    await _post(http, _paid("e2", "o2", healthy, subscription="sub_2"))
+    # What an outage leaves: the account erased, its subscription still running.
+    await anonymize_account(factory, user_id=user_id)
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    assert await stop_renewals_nothing_pays_for(factory) == 0
+    monkeypatch.undo()
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+    assert await stop_renewals_nothing_pays_for(factory) == 1
+    stopped = {row.provider_event_id for row in await _rows(factory)}
+    assert "cancel:sub_1" in stopped and "cancel:sub_2" not in stopped
+    assert await stop_renewals_nothing_pays_for(factory) == 0
+
+
+async def test_a_refund_whose_stop_ran_out_of_retries_is_stopped_later(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", down)
+    refund = _event(
+        "e2",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "1900"}},
+    )
+    assert (await _post(http, refund)).status_code == 500
+    monkeypatch.undo()
+    monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
+    assert await stop_renewals_nothing_pays_for(factory) == 1
+
+
+async def test_with_nothing_on_sale_the_sweep_does_nothing(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    await anonymize_account(factory, user_id=user_id)
+    monkeypatch.delenv("SUPPORT_PROVIDER", raising=False)
+    assert await stop_renewals_nothing_pays_for(factory) == 0
 
 
 async def test_a_year_arriving_after_the_lifetime_pass_is_stopped(site, monkeypatch):
