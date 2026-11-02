@@ -329,9 +329,16 @@ function Row({ entry, onClose }: { entry: InboxEntry; onClose: () => void }) {
       tone = "is-primary";
       icon = <GiftIcon size={18} />;
       const date = entry.until ? formatDate(new Date(entry.until)) : "";
-      text = entry.person
+      const given = entry.person
         ? fill(ui.support.inboxGiftedBy({ date }), { name: <Name person={entry.person} /> })
         : ui.support.inboxGifted({ date });
+      text = entry.renews ? (
+        <>
+          {given} {ui.support.inboxGiftRenews}
+        </>
+      ) : (
+        given
+      );
       actions = (
         <button
           type="button"

@@ -49,7 +49,7 @@ from app.refusals import ErrorCode
 from app.repositories.sqlalchemy import _identity_ids
 from app.request_text import ControlFreeModel
 from app.services.friends import friendship_key
-from app.services.supporter import pass_facts
+from app.services.supporter import pass_facts, renewing_subscriptions
 from app.services.inbox import mark_read
 
 #: Entries per read. The bell's panel shows the newest; the rest are a page
@@ -195,6 +195,10 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
         }
         | {UUID(e.params["purchase"]) for e in by_kind.get("supporter_gifted", [])},
     )
+    gifted = by_kind.get("supporter_gifted", [])
+    recipient_renews = bool(
+        gifted and await renewing_subscriptions(session, [gifted[0].user_id])
+    )
     friendships = {}
     pairs = {
         friendship_key(e.user_id, e.subject_id)
@@ -295,6 +299,7 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             if fact is None:
                 continue
             body["until"] = fact[0]
+            body["renews"] = recipient_renews
             # No subject when the giver asked not to be named, and none left
             # once they have deleted their account.
             body["person"] = _person(people.get(entry.subject_id))

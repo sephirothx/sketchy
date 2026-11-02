@@ -497,6 +497,7 @@ export const IT: Catalogue = {
     cancelEmail: "L'e-mail con cui hai pagato",
     cancelRequested: "Se corrisponde a un pass, il rinnovo è fermato e la conferma è in arrivo.",
     nudge: "Ti piace Sketchy? I sostenitori lo mantengono gratis per tutti.",
+    inboxGiftRenews: "Il tuo rinnovo aspetta fino ad allora e poi riprende.",
     seePass: "Vedi il pass",
     dismissNudge: "Non mostrare più",
     inboxStartedLifetime: "Il tuo pass sostenitore a vita è attivo. Grazie!",

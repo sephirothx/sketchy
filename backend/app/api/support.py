@@ -40,7 +40,7 @@ from app.services.supporter import (
     supporter_status,
     unstopped_owners,
 )
-from app.support.cancellation import cancel_quietly, cancel_subscription
+from app.support.cancellation import cancel_quietly, cancel_subscription, postpone_renewals
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
 from app.support.providers import (
     PRODUCT_GIFT,
@@ -128,10 +128,8 @@ async def _subscriptions_to_stop(
         status = await supporter_status(session, user_id)
         if status.active and status.until is None:
             return (event.subscription_id,)
-    if event.product in (PRODUCT_LIFETIME, PRODUCT_GIFT):
-        # The lifetime pass replaces the year it was bought on top of. And a gift
-        # starts when that year ends: left to renew, Paddle would charge the
-        # recipient for the same twelve months the gift just paid for.
+    if event.product == PRODUCT_LIFETIME:
+        # The lifetime pass replaces the year it was bought on top of.
         return await renewing_subscriptions(session, [user_id])
     return ()
 
@@ -146,6 +144,30 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
         )
         is not None
     )
+
+
+async def _renewals_to_postpone(
+    session: AsyncSession, provider_name: str, event: ProviderEvent, user_id: UUID | None
+) -> tuple[tuple[str, ...], datetime | None]:
+    """What a gift pushes back, and until when. It starts when the recipient's year
+    ends: left alone, Paddle would charge them for the same twelve months."""
+    if (
+        event.kind != SupportPurchaseKind.PURCHASE
+        or event.product != PRODUCT_GIFT
+        or user_id is None
+        # A refund can land first: there are no months to wait for.
+        or await order_was_reversed(session, event.order_id)
+    ):
+        return (), None
+    until = await session.scalar(
+        select(SupportPurchase.period_end).where(
+            SupportPurchase.provider == provider_name,
+            SupportPurchase.provider_event_id == event.event_id,
+        )
+    )
+    if until is None:
+        return (), None
+    return await renewing_subscriptions(session, [user_id]), until
 
 
 async def _tell_started(
@@ -307,6 +329,8 @@ def create_support_router(
                         session, provider.name, event
                     )
                     to_stop: tuple[str, ...] = ()
+                    to_postpone: tuple[str, ...] = ()
+                    postponed_until: datetime | None = None
                     told = False
                     # A retry finds a duplicate, and is the only second chance a
                     # failed cancellation gets. Nothing written means not ours.
@@ -317,6 +341,9 @@ def create_support_router(
                             )
                         )
                     if recorded:
+                        to_postpone, postponed_until = await _renewals_to_postpone(
+                            session, provider.name, event, user_id
+                        )
                         told = await _tell_started(session, provider.name, event, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
@@ -324,6 +351,8 @@ def create_support_router(
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
         stopped = await cancel_quietly(session_factory, provider, to_stop)
+        if to_postpone and postponed_until is not None:
+            await postpone_renewals(session_factory, provider, to_postpone, postponed_until)
         if told and user_id and on_inbox_changed:
             try:
                 await on_inbox_changed(str(user_id))

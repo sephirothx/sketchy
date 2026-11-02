@@ -497,6 +497,7 @@ export const PL: Catalogue = {
     cancelEmail: "E-mail użyty do płatności",
     cancelRequested: "Jeśli to pasuje do przepustki, odnowienie zostało zatrzymane, a potwierdzenie jest w drodze.",
     nudge: "Lubisz Sketchy? Wspierający utrzymują je za darmo dla wszystkich.",
+    inboxGiftRenews: "Odnowienie poczeka do tego dnia, a potem będzie działać dalej.",
     seePass: "Zobacz przepustkę",
     dismissNudge: "Nie pokazuj ponownie",
     inboxStartedLifetime: "Twoja dożywotnia przepustka jest aktywna. Dziękuję!",

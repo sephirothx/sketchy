@@ -497,6 +497,7 @@ export const DE: Catalogue = {
     cancelEmail: "Die E-Mail, mit der du bezahlt hast",
     cancelRequested: "Falls das zu einem Pass passt, ist die Verlängerung gestoppt, und eine Bestätigung ist unterwegs.",
     nudge: "Gefällt dir Sketchy? Unterstützer halten es für alle kostenlos.",
+    inboxGiftRenews: "Deine Verlängerung wartet bis dahin und läuft danach weiter.",
     seePass: "Zum Pass",
     dismissNudge: "Nicht mehr anzeigen",
     inboxStartedLifetime: "Dein lebenslanger Unterstützerpass ist aktiv. Danke!",

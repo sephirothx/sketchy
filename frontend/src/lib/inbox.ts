@@ -57,6 +57,8 @@ export type InboxEntry =
   | (EntryBase & {
       kind: "supporter_gifted";
       until: string | null;
+      /** Their own renewal waits for the gift to end, and then carries on. */
+      renews: boolean;
       /** Null when the giver asked not to be named, or has left. */
       person: InboxPerson | null;
     })
@@ -165,7 +167,7 @@ export function parseInboxEntry(value: unknown): InboxEntry | null {
       return { ...base, kind: "reports_reviewed", count };
     }
     case "supporter_gifted":
-      return { ...base, kind: "supporter_gifted", until: text(row.until), person: person(row.person) };
+      return { ...base, kind: "supporter_gifted", until: text(row.until), renews: row.renews === true, person: person(row.person) };
     case "supporter_started":
     case "supporter_ending":
       return { ...base, kind: row.kind, until: text(row.until), renews: row.renews === true };

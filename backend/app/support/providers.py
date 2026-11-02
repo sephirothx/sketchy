@@ -109,6 +109,10 @@ class Provider(Protocol):
         one: its renewal has been paid, or is about to be."""
         ...
 
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        """Charge next at `when`, and nothing for the change. Raises ProviderUnavailable."""
+        ...
+
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]: ...
 
 
@@ -390,6 +394,18 @@ class PaddleProvider:
             return True
         return False
 
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        # Refused for a subscription past due or within 30 minutes of renewing.
+        quoted = urllib.parse.quote(subscription_id, safe="")
+        await self._call(
+            "PATCH",
+            f"/subscriptions/{quoted}",
+            {
+                "next_billed_at": when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "proration_billing_mode": "do_not_bill",
+            },
+        )
+
     async def _email_of(self, customer_id: object) -> str | None:
         """Best effort: the cancellation has happened whether or not this works."""
         if not isinstance(customer_id, str):
@@ -521,6 +537,9 @@ class StubProvider:
 
     async def stop_if_unpaid(self, subscription_id: str) -> bool:
         return True
+
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        return None
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         return ()

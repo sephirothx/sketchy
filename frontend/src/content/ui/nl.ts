@@ -497,6 +497,7 @@ export const NL: Catalogue = {
     cancelEmail: "Het e-mailadres waarmee je betaalde",
     cancelRequested: "Als dit bij een pas hoort, is de verlenging gestopt en is er een bevestiging onderweg.",
     nudge: "Vind je Sketchy leuk? Supporters houden het gratis voor iedereen.",
+    inboxGiftRenews: "Je verlenging wacht tot dan en gaat daarna door.",
     seePass: "Bekijk de pas",
     dismissNudge: "Niet meer tonen",
     inboxStartedLifetime: "Je levenslange supporterspas is actief. Bedankt!",

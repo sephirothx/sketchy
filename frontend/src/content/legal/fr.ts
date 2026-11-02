@@ -340,7 +340,7 @@ export const LEGAL_FR: LegalDocuments = {
           "Un pass annuel se renouvelle chaque année jusqu'à ce que tu l'annules. Tu peux l'annuler à tout moment sur /support/cancel, connecté ou non : le pass court jusqu'à la fin de la période déjà payée et tu reçois une confirmation par e-mail.",
           "Si tu es un consommateur, tu peux te rétracter dans les quatorze jours suivant l'achat et récupérer la partie non utilisée. Fais-en la demande via ton reçu de Paddle.",
           "Quand un pass prend fin, la marque et le Solo supplémentaire disparaissent, et les styles et griffonnages choisis restent. Un remboursement ou une contestation de paiement y met fin aussitôt et retire aussi ces choix. Une suspension n'est pas remboursée. Supprimer ton compte arrête tout renouvellement. Un pourboire sur Ko-fi est un cadeau et n'inclut aucun pass.",
-          "Tu peux offrir douze mois à un autre joueur : un seul prélèvement, sans renouvellement et sans frais pour lui. Ils commencent à la fin de sa période en cours et, si son pass devait se renouveler, ce renouvellement s'arrête pour qu'il ne paie pas les mêmes mois.",
+          "Tu peux offrir douze mois à un autre joueur : un seul prélèvement, sans renouvellement et sans frais pour lui. Ils commencent à la fin de sa période en cours et, si son pass devait se renouveler, ce renouvellement attend la fin du cadeau puis reprend, pour qu'il ne paie pas les mêmes mois. Il peut l'annuler à tout moment.",
         ],
       },
       {

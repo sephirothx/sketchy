@@ -326,7 +326,7 @@ export const LEGAL_EN: LegalDocuments = {
           "A yearly pass renews each year until you cancel. You can cancel at any time at /support/cancel, signed in or not: the pass runs until the end of the time already paid for, and you get a confirmation by e-mail.",
           "If you are a consumer, you can withdraw within fourteen days of buying and get back the part you have not used. Ask through your receipt from Paddle.",
           "When a pass ends, the mark and the extra Solo go, and the styles and doodles you chose stay. A refund or a chargeback ends it at once and takes those choices back too. A suspension is not refunded. Deleting your account stops any renewal. A tip on Ko-fi is a gift and includes no pass.",
-          "You can give another player twelve months: one charge, never renewing, and it puts no charge on them. It starts when their current time ends, and if their pass was set to renew, that renewal stops, so they are not charged for the same months.",
+          "You can give another player twelve months: one charge, never renewing, and it puts no charge on them. It starts when their current time ends, and if their pass was set to renew, that renewal waits until the gift ends and then carries on, so they are not charged for the same months. They can still cancel it at any time.",
         ],
       },
       {

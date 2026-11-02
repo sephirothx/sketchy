@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.api.errors import install_refusal_handler
-from app.api.inbox import create_inbox_router
+from app.api.inbox import create_inbox_router, inbox_payload
 from app.api.support import (
     checkout_address_limiter,
     checkout_limiter,
@@ -24,7 +24,7 @@ from app.db.models import InboxEntry, SupportPurchase, UserBlock
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.supporter import supporter_status
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
-from app.support.providers import signature_header
+from app.support.providers import ProviderUnavailable, StubProvider, signature_header
 
 from tests.dbfixtures import create_test_db
 
@@ -140,7 +140,13 @@ async def test_an_anonymous_gift_names_nobody_to_the_recipient(site):
     assert len(gifted) == 1 and gifted[0]["person"] is None
 
 
-async def test_a_gift_to_an_active_supporter_starts_when_their_time_ends(site):
+async def test_a_gift_to_an_active_supporter_starts_when_their_time_ends(site, monkeypatch):
+    moved = []
+
+    async def move(self, subscription_id, when):
+        moved.append((subscription_id, when))
+
+    monkeypatch.setattr(StubProvider, "move_renewal", move)
     http, factory = site
     recipient = await _register(http, "Bruno")
     now = datetime.now(timezone.utc)
@@ -171,9 +177,60 @@ async def test_a_gift_to_an_active_supporter_starts_when_their_time_ends(site):
     assert gift.period_start == end
     assert gift.period_end.year == end.year + 1
     assert status.until == gift.period_end
-    # Left to renew, it would charge for the months the gift just paid for.
+    # Stopped, the pass would quietly end with the gift. Left alone, it would charge
+    # for the months the gift just paid for. So it waits, and carries on.
+    assert moved == [("sub_1", gift.period_end)]
+    assert status.renews is True
+    assert "cancel:sub_1" not in await _event_ids(factory)
+    told = (await inbox_payload(factory, str(recipient)))["entries"]
+    assert next(e for e in told if e["kind"] == "supporter_gifted")["renews"] is True
+
+
+async def test_a_renewal_paddle_will_not_move_stops_instead(site, monkeypatch):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    await _webhook(
+        http,
+        "e1",
+        {
+            "id": "o1",
+            "subscription_id": "sub_1",
+            "currency_code": "EUR",
+            "billed_at": datetime.now(timezone.utc).isoformat(),
+            "billing_period": {
+                "starts_at": datetime.now(timezone.utc).isoformat(),
+                "ends_at": (datetime.now(timezone.utc) + timedelta(days=100)).isoformat(),
+            },
+            "custom_data": {"account_id": str(recipient), "product": "year"},
+            "details": {"totals": {"total": "1900"}},
+        },
+    )
+
+    async def refused(self, subscription_id, when):
+        raise ProviderUnavailable("HTTPError")
+
+    monkeypatch.setattr(StubProvider, "move_renewal", refused)
+    await _register(http, "Marta")
+    response = await _gift(http, recipient)
+    await _pay_stub(http, response.json()["url"])
+    async with factory() as session:
+        status = await supporter_status(session, recipient)
     assert status.renews is False
     assert "cancel:sub_1" in await _event_ids(factory)
+
+
+async def test_a_gift_with_no_renewal_moves_nothing(site, monkeypatch):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    moved = []
+
+    async def move(self, subscription_id, when):
+        moved.append(subscription_id)
+
+    monkeypatch.setattr(StubProvider, "move_renewal", move)
+    await _register(http, "Marta")
+    await _pay_stub(http, (await _gift(http, recipient)).json()["url"])
+    assert moved == []
 
 
 async def test_a_lifetime_holder_a_blocked_pair_and_oneself_read_the_same(site):

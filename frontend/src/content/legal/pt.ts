@@ -326,7 +326,7 @@ export const LEGAL_PT: LegalDocuments = {
           "Um passe anual renova todos os anos até cancelares. Podes cancelar a qualquer momento em /support/cancel, com ou sem sessão: o passe dura até ao fim do tempo já pago e recebes uma confirmação por e-mail.",
           "Se fores consumidor, podes desistir nos catorze dias seguintes à compra e receber de volta a parte que não usaste. Pede-o através do teu recibo da Paddle.",
           "Quando um passe termina, a marca e o Solo adicional desaparecem, e os estilos e rabiscos que escolheste ficam. Um reembolso ou um estorno termina-o de imediato e retira também essas escolhas. Uma suspensão não é reembolsada. Apagar a tua conta para qualquer renovação. Uma gorjeta no Ko-fi é uma oferta e não inclui nenhum passe.",
-          "Podes oferecer doze meses a outro jogador: uma única cobrança, sem renovação e sem custos para essa pessoa. Começam quando o tempo atual dela terminar e, se o passe dela fosse renovar, essa renovação para, para que não pague os mesmos meses.",
+          "Podes oferecer doze meses a outro jogador: uma única cobrança, sem renovação e sem custos para essa pessoa. Começam quando o tempo atual dela terminar e, se o passe dela fosse renovar, essa renovação espera pelo fim da oferta e depois continua, para que não pague os mesmos meses. Pode cancelá-la a qualquer momento.",
         ],
       },
       {

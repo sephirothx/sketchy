@@ -963,6 +963,26 @@ async def test_paddle_tells_a_no_from_an_outage(monkeypatch):
         assert not isinstance(caught.value, ProviderRefused)
 
 
+async def test_paddle_moves_a_renewal_with_no_charge(monkeypatch):
+    sent: dict = {}
+
+    async def fake_call(self, method, path, payload=None):
+        sent.update(method=method, path=path, payload=payload)
+        return {"data": {}}
+
+    monkeypatch.setattr(PaddleProvider, "_call", fake_call)
+    provider = PaddleProvider(SupportConfig(provider="paddle", webhook_secret="s"))
+    await provider.move_renewal("sub/1", datetime(2028, 3, 4, 5, 6, 7, tzinfo=timezone.utc))
+    assert sent == {
+        "method": "PATCH",
+        "path": "/subscriptions/sub%2F1",
+        "payload": {
+            "next_billed_at": "2028-03-04T05:06:07Z",
+            "proration_billing_mode": "do_not_bill",
+        },
+    }
+
+
 def test_production_refuses_a_tier_that_could_give_passes_away():
     production = {"SKETCHY_ENV": "production"}
     with pytest.raises(RuntimeError, match="stub"):

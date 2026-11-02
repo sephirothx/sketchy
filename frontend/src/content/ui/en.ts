@@ -509,6 +509,7 @@ export const EN = {
     cancelEmail: "The e-mail you paid with",
     cancelRequested: "If that matches a pass, its renewal is stopped and a confirmation is on its way.",
     nudge: "Like Sketchy? Supporters keep it free for everyone.",
+    inboxGiftRenews: "Your renewal waits until then, and carries on after.",
     seePass: "See the pass",
     dismissNudge: "Don't show this again",
     inboxStartedLifetime: "Your lifetime supporter pass is active. Thank you!",

@@ -150,3 +150,20 @@ async def stop_renewals_nothing_pays_for(
         detail={"failed_attempts": attempted - stopped},
     )
 
+
+
+async def postpone_renewals(
+    session_factory: async_sessionmaker[AsyncSession],
+    provider: Provider,
+    subscription_ids: tuple[str, ...],
+    until: datetime,
+) -> None:
+    """A gift's months are paid for, so a renewal waits for them to end. Where the
+    provider will not move it, it stops: a pass that ends can be bought again, and a
+    charge for months already given cannot be taken back here."""
+    for subscription_id in subscription_ids:
+        try:
+            await provider.move_renewal(subscription_id, until)
+        except Exception:
+            logger.warning("support_renewal_not_moved %s", subscription_id, exc_info=True)
+            await cancel_quietly(session_factory, provider, (subscription_id,))
