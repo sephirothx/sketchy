@@ -419,6 +419,19 @@ def create_solo_router(
             raise Refusal(
                 429, ErrorCode.TOO_MANY_REQUESTS, "Too many requests. Please wait and try again."
             )
+        # A past Daily with nothing answered is the archive door's, here as on its run
+        # and its first result, or saved IDs would stockpile it (R-SUP-18). This route's
+        # every refusal is the same 404, and that covers a 304 too.
+        if await solo.unstarted_past_daily(user_id, now=now(), serve_id=serve_id):
+            async with session_factory() as session:
+                user = await session.get(User, UUID(user_id))
+            if user is None or not solo_door_open(
+                state=user.state,
+                is_anonymous=user.is_anonymous,
+                door="archive",
+                perks=await has_perks(user),
+            ):
+                raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         return await serve_drawing(
             request,
             serve_id,

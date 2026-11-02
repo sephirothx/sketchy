@@ -149,6 +149,8 @@ async def test_saved_ids_cannot_begin_a_past_daily_after_a_lapse(env):  # noqa: 
     assert answer.status_code == 403 and answer.json()["errorCode"] == "supporter_only"
     read = await http.get(f"/api/solo/runs/{run['runId']}")
     assert read.status_code == 403 and read.json()["errorCode"] == "supporter_only"
+    drawing = await http.get(f"/api/solo/serves/{first}/drawing")
+    assert drawing.status_code == 404 and drawing.json()["errorCode"] == "no_such_drawing"
     # And it did not make the date a started one.
     assert (await http.post(f"/api/solo/daily/{PAST.isoformat()}")).status_code == 403
 
@@ -165,6 +167,8 @@ async def test_a_past_daily_begun_with_a_pass_is_finished_after_a_lapse(env):  #
     await _settle_all(http, run["serves"][:1], outcome="given_up")
     await _lapse(factory, UUID(fan.id))
     assert (await http.get(f"/api/solo/runs/{run['runId']}")).status_code == 200
+    # Begun with a pass, so its drawings stay, the unanswered ones too.
+    assert (await http.get(f"/api/solo/serves/{run['serves'][1]['serveId']}/drawing")).status_code == 200
     await _settle_all(http, run["serves"][1:], outcome="given_up")
     assert (await http.get(f"/api/solo/runs/{run['runId']}")).status_code == 200
 
