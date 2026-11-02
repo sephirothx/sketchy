@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`8b0c1d2e3f4a_support_gifts.py` (#1540). Both this line and the table
+`7a9b0c1d2e3f_name_styles.py` (#1476). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -271,6 +271,7 @@ One row per player identity, guest or registered.
 | `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
 | `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
 | `display_name` VARCHAR(32) | |
+| `name_style` | A supporter's two-tone name, a key from a closed list (`ck_users_name_style`). Beside `name_color`, which stays the fallback (R-SUP-17) |
 | `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp`, `.png` or `.jpg`, R-AVA-03), `doodle:<name>` for one of the deployment's own doodles (nothing else is stored for one; a claim assigns a random one, R-AVA-09), or null for the initial |
 | `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |

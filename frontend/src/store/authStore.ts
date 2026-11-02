@@ -42,6 +42,8 @@ export interface AuthUser {
   nameInUse?: boolean;
   /** With a provider configured, a registered account's own pass (#1472). */
   supporter?: SupporterStatus;
+  /** The two-tone name they wear (#1476); `nameColor` stays the fallback. */
+  nameStyle?: string | null;
 }
 
 /** Thrown when an action needs a name and the draft cannot supply one. */

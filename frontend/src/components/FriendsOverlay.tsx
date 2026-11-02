@@ -28,6 +28,7 @@ import { useSupportStore } from "../store/supportStore";
 import { GiftPassDialog } from "./GiftPassDialog";
 import { GiftIcon } from "./icons";
 import { useGameStore } from "../store/gameStore";
+import { nameStyleClass } from "../lib/playerName";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 
@@ -346,7 +347,7 @@ function FriendsSection({
               size={32}
             />
             <span
-              className="friends-row-name"
+              className={`friends-row-name ${nameStyleClass(entry.nameStyle) ?? ""}`}
               style={entry.nameColor ? { color: entry.nameColor } : undefined}
             >
               {entry.displayName}
@@ -386,7 +387,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
               size={32}
             />
             <span
-              className="friends-row-name"
+              className={`friends-row-name ${nameStyleClass(player.nameStyle) ?? ""}`}
               style={player.nameColor ? { color: player.nameColor } : undefined}
             >
               {player.displayName}

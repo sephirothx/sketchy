@@ -22,6 +22,7 @@ export interface OnlinePlayer {
   nameColor: string | null;
   avatarUrl: string | null;
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous: boolean;
   status: PresenceStatus;
 }
@@ -80,6 +81,7 @@ export function parsePlayer(value: unknown): OnlinePlayer | null {
     nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
     avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
     supporterMark: row.supporterMark === true,
+    nameStyle: typeof row.nameStyle === "string" ? row.nameStyle : null,
     isAnonymous: row.isAnonymous === true,
     status: row.status,
   };

@@ -2054,6 +2054,7 @@ class GameFlowService:
                     "nameColor": p.name_color,
                     "avatarUrl": avatar_url(p.avatar_key),
                     "supporterMark": p.supporter_mark,
+                    "nameStyle": p.name_style,
                     "isAnonymous": p.is_anonymous,
                     "score": room.standing_score(p, carried),
                 }

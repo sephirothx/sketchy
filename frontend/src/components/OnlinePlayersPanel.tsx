@@ -26,6 +26,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { useSettingsStore } from "../store/settingsStore";
 import { EmptyState } from "./ui/EmptyState";
 import { SupporterMark } from "./ui/SupporterMark";
+import { nameStyleClass } from "../lib/playerName";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
@@ -195,7 +196,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     }
                   >
                     <span
-                      className="online-player-name"
+                      className={`online-player-name ${nameStyleClass(player.nameStyle) ?? ""}`}
                       style={player.nameColor ? { color: player.nameColor } : undefined}
                     >
                       {player.displayName}

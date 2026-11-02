@@ -1144,3 +1144,36 @@
     width: 100%;
   }
 }
+
+/* Styles A: a supporter's name styles, under the colour swatches (#1476). */
+.settings-name-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-name-styles-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.settings-name-styles small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.name-style-swatch {
+  background-image: linear-gradient(135deg, var(--name-style-from), var(--name-style-to));
+}
+
+.name-style-none {
+  background: var(--well);
+}
+
+.doodle-picker-heading {
+  margin: 0 0 6px;
+}
+
+.doodle-picker-hint {
+  margin: 0 0 8px;
+}

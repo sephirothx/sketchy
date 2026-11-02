@@ -26,3 +26,78 @@
   display: block;
   fill: var(--supporter-mark);
 }
+
+/* A supporter's two-tone name (#1476). The fill colour beats the inline name
+   colour, which stays underneath as the fallback. Per theme, because one pair
+   cannot read on both; colour-safe mode paints none of it. */
+.name-style {
+  background-image: linear-gradient(90deg, var(--name-style-from), var(--name-style-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+:root[data-color-safe] .name-style {
+  background-image: none;
+  -webkit-text-fill-color: currentcolor;
+}
+
+.name-style-sunset {
+  --name-style-from: #c2410c;
+  --name-style-to: #be185d;
+}
+
+[data-theme="dark"] .name-style-sunset {
+  --name-style-from: #fb923c;
+  --name-style-to: #f472b6;
+}
+
+.name-style-ocean {
+  --name-style-from: #0e7490;
+  --name-style-to: #1d4ed8;
+}
+
+[data-theme="dark"] .name-style-ocean {
+  --name-style-from: #22d3ee;
+  --name-style-to: #60a5fa;
+}
+
+.name-style-aurora {
+  --name-style-from: #15803d;
+  --name-style-to: #6d28d9;
+}
+
+[data-theme="dark"] .name-style-aurora {
+  --name-style-from: #4ade80;
+  --name-style-to: #a78bfa;
+}
+
+.name-style-ember {
+  --name-style-from: #b91c1c;
+  --name-style-to: #b45309;
+}
+
+[data-theme="dark"] .name-style-ember {
+  --name-style-from: #f87171;
+  --name-style-to: #fbbf24;
+}
+
+.name-style-berry {
+  --name-style-from: #be185d;
+  --name-style-to: #6d28d9;
+}
+
+[data-theme="dark"] .name-style-berry {
+  --name-style-from: #f472b6;
+  --name-style-to: #a78bfa;
+}
+
+.name-style-meadow {
+  --name-style-from: #4d7c0f;
+  --name-style-to: #0f766e;
+}
+
+[data-theme="dark"] .name-style-meadow {
+  --name-style-from: #a3e635;
+  --name-style-to: #2dd4bf;
+}

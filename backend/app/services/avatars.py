@@ -16,8 +16,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.inbox import add_entry
-from app.auth.avatar_doodles import DOODLES, doodle_key
+from app.services.supporter import supporter_status
+from app.auth.avatar_doodles import ALL_DOODLES, SUPPORTER_DOODLES, doodle_key
 from app.auth.avatars import (
+    SupporterOnly,
     avatar_reupload_block,
     AvatarError,
     avatar_key_for,
@@ -165,7 +167,7 @@ async def choose_doodle(
     this deployment made cannot be the picture that was removed. One picture
     per account still holds - an uploaded one goes, bytes and all.
     """
-    if name not in DOODLES:
+    if name not in ALL_DOODLES:
         raise AvatarError("No such doodle.")
     at = now or datetime.now(timezone.utc)
     key = doodle_key(name)
@@ -175,7 +177,12 @@ async def choose_doodle(
             user = await _registered(session, db_user_id)
             if user.avatar_key == key:
                 # Already worn: nothing changes, so nothing is written (#1241).
+                # A lapsed supporter keeps what they chose, so this comes first.
                 return key
+            if name in SUPPORTER_DOODLES and not (
+                await supporter_status(session, db_user_id, now=at)
+            ).active:
+                raise SupporterOnly("That doodle is for supporters.")
             await session.execute(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )

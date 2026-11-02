@@ -21,6 +21,7 @@ export interface FriendEntry {
   nameColor: string | null;
   avatarUrl: string | null;
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous: boolean;
   status: FriendshipStatus;
   /** Which of the two asked. The server sends a boolean, not an id. */
@@ -53,6 +54,7 @@ function parseEntry(value: unknown): FriendEntry | null {
     nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
     avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
     supporterMark: row.supporterMark === true,
+    nameStyle: typeof row.nameStyle === "string" ? row.nameStyle : null,
     isAnonymous: row.isAnonymous === true,
     status: row.status,
     requestedByMe: row.requestedByMe === true,
@@ -285,6 +287,7 @@ export interface RecentPlayer {
   nameColor: string | null;
   avatarUrl: string | null;
   supporterMark?: boolean;
+  nameStyle?: string | null;
   lastPlayedAt: string;
 }
 
@@ -304,6 +307,7 @@ export function parseRecentPlayers(payload: unknown): RecentPlayer[] {
         nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
         avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
         supporterMark: row.supporterMark === true,
+        nameStyle: typeof row.nameStyle === "string" ? row.nameStyle : null,
         lastPlayedAt: typeof row.lastPlayedAt === "string" ? row.lastPlayedAt : "",
       },
     ];

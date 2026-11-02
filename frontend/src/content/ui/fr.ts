@@ -151,6 +151,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_unavailable: "Le paiement est injoignable. Rien n'a été prélevé. Réessaie.",
   support_cancel_failed: "Le renouvellement n'a pas pu être arrêté, il reste donc actif. Réessaie.",
   support_gift_refused: "Ce joueur ne peut pas recevoir de cadeau.",
+  supporter_only: "C'est réservé aux soutiens.",
   identity_unavailable: "Sketchy n’a pas pu confirmer qui tu es. Recharge et réessaie.",
 
   // Rooms
@@ -443,6 +444,16 @@ export const FR: Catalogue = {
   supporterMark: { label: "Soutien" },
   support: {
     giftThanks: "Ton cadeau est en route. Il sera actif dès que le paiement sera confirmé.",
+    styleSunset: "Coucher de soleil",
+    styleOcean: "Océan",
+    styleAurora: "Aurore",
+    styleEmber: "Braise",
+    styleBerry: "Baie",
+    styleMeadow: "Prairie",
+    stylePlain: "Couleur simple",
+    stylesTitle: "Styles de nom de soutien",
+    doodlesTitle: "Griffonnages de soutien",
+    lockedHint: "Ils viennent avec un pass de soutien.",
     giftActionFor: (p: { name: string }) => `Offrir un pass à ${p.name}`,
     markNotSaved: "Impossible d'enregistrer. Réessaie.",
     giftAction: "Offrir un pass",
@@ -2162,6 +2173,18 @@ export const FR: Catalogue = {
   },
 
   avatarDoodles: {
+    whale: "Baleine",
+    octopus: "Pieuvre",
+    snail: "Escargot",
+    bee: "Abeille",
+    hedgehog: "Hérisson",
+    dino: "Dino",
+    unicorn: "Licorne",
+    planet: "Planète",
+    lighthouse: "Phare",
+    palette: "Palette",
+    cupcake: "Cupcake",
+    bunny: "Lapin",
     fox: "Renard",
     cat: "Chat",
     owl: "Hibou",

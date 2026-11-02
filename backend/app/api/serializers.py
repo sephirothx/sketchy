@@ -37,6 +37,7 @@ def user_payload(user: UserData) -> dict:
         "username": user.username,
         "displayName": user.display_name,
         "nameColor": user.name_color,
+        "nameStyle": user.name_style,
         "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
         "isAnonymous": user.is_anonymous,
         # The client needs this to decide whether to offer the operator and
@@ -72,6 +73,7 @@ def public_user_payload(user: UserData, *, online: bool, supporter_mark: bool = 
         "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
         "isAnonymous": user.is_anonymous,
         "supporterMark": supporter_mark,
+        "nameStyle": user.name_style,
         "createdAt": _timestamp(user.created_at),
         "isOnline": online,
         "lastSeenAt": _timestamp(user.last_seen_at),

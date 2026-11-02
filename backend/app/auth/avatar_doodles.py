@@ -47,6 +47,25 @@ DOODLES: tuple[str, ...] = (
 )
 
 
+# Supporter-only to choose (#1476), never handed out at random, and kept when a
+# pass lapses. In the sprite after the first list.
+SUPPORTER_DOODLES: tuple[str, ...] = (
+    "whale",
+    "octopus",
+    "snail",
+    "bee",
+    "hedgehog",
+    "dino",
+    "unicorn",
+    "planet",
+    "lighthouse",
+    "palette",
+    "cupcake",
+    "bunny",
+)
+ALL_DOODLES: tuple[str, ...] = (*DOODLES, *SUPPORTER_DOODLES)
+
+
 def doodle_key(name: str) -> str:
     return f"{DOODLE_KEY_PREFIX}{name}"
 
@@ -56,7 +75,7 @@ def doodle_name(key: str | None) -> str | None:
     if not key or not key.startswith(DOODLE_KEY_PREFIX):
         return None
     name = key[len(DOODLE_KEY_PREFIX):]
-    return name if name in DOODLES else None
+    return name if name in ALL_DOODLES else None
 
 
 def random_doodle_key() -> str:

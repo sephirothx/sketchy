@@ -8,7 +8,7 @@ import { InviteQrDialog } from "./InviteQrDialog";
 import { RoomFacts } from "./RoomFacts";
 import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { competitionRanks } from "../lib/standings";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { SpectatorPromotion } from "./SpectatorPromotion";
@@ -160,7 +160,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         />
         <span className="waiting-roster-name">
           <span
-            className={playerNameClass(player.isAnonymous)}
+            className={playerNameClass(player.isAnonymous, nameStyleClass(player.nameStyle))}
             style={playerNameStyle(player.nameColor, player.isAnonymous)}
           >
             {player.nickname}

@@ -27,7 +27,7 @@ from app.auth.avatars import avatar_url
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
 from app.repositories.interfaces import GameHistoryRepository
-from app.services.supporter import supporter_marks
+from app.services.supporter import name_styles_of, supporter_marks
 from app.services.friends import (
     REGISTER_FIRST,
     FriendService,
@@ -102,6 +102,7 @@ def _person_payload(
         "nameColor": person.name_color,
         "avatarUrl": avatar_url(None if person.is_anonymous else person.avatar_key),
         "supporterMark": str(person.id) in marks,
+        "nameStyle": person.name_style,
         "isAnonymous": person.is_anonymous,
         "status": row.status,
         "requestedByMe": row.requested_by_id == viewer_id,
@@ -229,6 +230,7 @@ def create_recent_players_router(
         )
         async with session_factory() as session:
             marks = await supporter_marks(session, [person.user_id for person in found])
+            styles = await name_styles_of(session, [person.user_id for person in found])
         return {
             "players": [
                 {
@@ -237,6 +239,7 @@ def create_recent_players_router(
                     "nameColor": person.name_color,
                     "avatarUrl": avatar_url(person.avatar_key),
                     "supporterMark": person.user_id in marks,
+                    "nameStyle": styles.get(person.user_id),
                     "lastPlayedAt": person.last_played_at.isoformat(),
                 }
                 for person in found

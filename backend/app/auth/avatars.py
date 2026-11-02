@@ -78,6 +78,11 @@ class AvatarError(ValueError):
     """An upload that is not an avatar this deployment takes."""
 
 
+class SupporterOnly(AvatarError):
+    """A supporter doodle, asked for by an account with no pass (#1476). The page
+    offers only what may be chosen, so this is a stale tab or a hand-made request."""
+
+
 def validate_avatar_key(value: str | None) -> str | None:
     """A stored key: the content address of an uploaded picture, or nothing."""
     if value is None:

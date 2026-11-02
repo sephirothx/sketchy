@@ -112,6 +112,7 @@ class PresenceIdentity:
     is_anonymous: bool
     avatar_key: str | None = None
     supporter_mark: bool = False
+    name_style: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +126,7 @@ class PresenceEntry:
     status: str
     avatar_key: str | None = None
     supporter_mark: bool = False
+    name_style: str | None = None
 
     def payload(self) -> dict:
         """The wire shape.
@@ -142,6 +144,7 @@ class PresenceEntry:
             "nameColor": self.name_color,
             "avatarUrl": avatar_url(self.avatar_key),
             "supporterMark": self.supporter_mark,
+            "nameStyle": self.name_style,
             "isAnonymous": self.is_anonymous,
             "status": self.status,
         }
@@ -502,6 +505,7 @@ def build_snapshot(
                 status=STATUS_PLAYING if user_id in seated else STATUS_LOBBY,
                 avatar_key=identity.avatar_key,
                 supporter_mark=identity.supporter_mark,
+                name_style=identity.name_style,
             )
         )
     entries.sort(key=sort_key)
@@ -612,6 +616,7 @@ class PresenceIdentityCache:
                 is_anonymous=user.is_anonymous,
                 avatar_key=None if user.is_anonymous else user.avatar_key,
                 supporter_mark=user.supporter_mark,
+                name_style=user.name_style,
             ),
             key=user_id,
         )

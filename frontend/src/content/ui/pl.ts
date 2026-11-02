@@ -151,6 +151,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_unavailable: "Nie udało się otworzyć płatności. Nic nie zostało pobrane. Spróbuj ponownie.",
   support_cancel_failed: "Nie udało się zatrzymać odnowienia, więc nadal jest włączone. Spróbuj ponownie.",
   support_gift_refused: "Ten gracz nie może otrzymać prezentu.",
+  supporter_only: "To dla wspierających.",
   identity_unavailable: "Nie udało się potwierdzić, kim jesteś. Odśwież stronę i spróbuj ponownie.",
 
   // Rooms
@@ -443,6 +444,16 @@ export const PL: Catalogue = {
   supporterMark: { label: "Wspierający" },
   support: {
     giftThanks: "Twój prezent jest w drodze. Zadziała, gdy płatność zostanie potwierdzona.",
+    styleSunset: "Zachód słońca",
+    styleOcean: "Ocean",
+    styleAurora: "Zorza",
+    styleEmber: "Żar",
+    styleBerry: "Jagoda",
+    styleMeadow: "Łąka",
+    stylePlain: "Zwykły kolor",
+    stylesTitle: "Style nazwy wspierających",
+    doodlesTitle: "Doodle wspierających",
+    lockedHint: "Są w przepustce wspierającego.",
     giftActionFor: (p: { name: string }) => `Podaruj przepustkę: ${p.name}`,
     markNotSaved: "Nie udało się zapisać. Spróbuj ponownie.",
     giftAction: "Podaruj przepustkę",
@@ -2168,6 +2179,18 @@ export const PL: Catalogue = {
   },
 
   avatarDoodles: {
+    whale: "Wieloryb",
+    octopus: "Ośmiornica",
+    snail: "Ślimak",
+    bee: "Pszczoła",
+    hedgehog: "Jeż",
+    dino: "Dino",
+    unicorn: "Jednorożec",
+    planet: "Planeta",
+    lighthouse: "Latarnia morska",
+    palette: "Paleta",
+    cupcake: "Babeczka",
+    bunny: "Króliczek",
     fox: "Lis",
     cat: "Kot",
     owl: "Sowa",

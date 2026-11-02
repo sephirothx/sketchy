@@ -8,6 +8,7 @@ export interface PlayerInfo {
   avatarUrl?: string | null;
   /** Already combined with the owner's choice to show it (#1474). */
   supporterMark?: boolean;
+  nameStyle?: string | null;
   /** Guests render in grey italics; the flag is what drives that styling. */
   isAnonymous?: boolean;
   score: number;
@@ -331,6 +332,7 @@ export interface ChatMessage {
   avatarUrl?: string | null;
   /** Already combined with the owner's choice to show it (#1474). */
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous?: boolean;
   /** What a player typed. Absent on a room-authored line, which carries a
       `code` instead so each client can write it in its own language
@@ -356,6 +358,7 @@ export interface ScoreEntry {
   avatarUrl?: string | null;
   /** Already combined with the owner's choice to show it (#1474). */
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous?: boolean;
   score: number;
 }
@@ -449,6 +452,7 @@ export interface TurnEndedPayload {
     /** The uploaded picture, content-addressed; absent for guests and initials. */
     avatarUrl?: string | null;
     supporterMark?: boolean;
+  nameStyle?: string | null;
     isAnonymous?: boolean;
     seconds: number;
   }[];
@@ -512,6 +516,7 @@ export interface HighlightName {
   avatarUrl?: string | null;
   /** Already combined with the owner's choice to show it (#1474). */
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous?: boolean;
 }
 
@@ -796,6 +801,7 @@ export type ErrorCode =
   | "support_unavailable"
   | "support_cancel_failed"
   | "support_gift_refused"
+  | "supporter_only"
   | "solo_pool_empty"
   | "solo_date_out_of_range"
   | "no_such_daily"

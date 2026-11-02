@@ -151,6 +151,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_unavailable: "De betaalpagina is niet bereikbaar. Er is niets afgeschreven. Probeer het opnieuw.",
   support_cancel_failed: "De verlenging kon niet worden gestopt en staat dus nog aan. Probeer het opnieuw.",
   support_gift_refused: "Deze speler kan geen cadeau ontvangen.",
+  supporter_only: "Dat is voor supporters.",
   identity_unavailable: "Sketchy kon niet bevestigen wie je bent. Herlaad en probeer het nog eens.",
 
   // Rooms
@@ -443,6 +444,16 @@ export const NL: Catalogue = {
   supporterMark: { label: "Supporter" },
   support: {
     giftThanks: "Je cadeau is onderweg. Het is actief zodra de betaling is bevestigd.",
+    styleSunset: "Zonsondergang",
+    styleOcean: "Oceaan",
+    styleAurora: "Poollicht",
+    styleEmber: "Gloed",
+    styleBerry: "Bes",
+    styleMeadow: "Weide",
+    stylePlain: "Gewone kleur",
+    stylesTitle: "Naamstijlen voor supporters",
+    doodlesTitle: "Doodles voor supporters",
+    lockedHint: "Deze horen bij een supporterspas.",
     giftActionFor: (p: { name: string }) => `Geef ${p.name} een pas cadeau`,
     markNotSaved: "Dat kon niet worden opgeslagen. Probeer het opnieuw.",
     giftAction: "Pas cadeau geven",
@@ -2160,6 +2171,18 @@ export const NL: Catalogue = {
   },
 
   avatarDoodles: {
+    whale: "Walvis",
+    octopus: "Octopus",
+    snail: "Slak",
+    bee: "Bij",
+    hedgehog: "Egel",
+    dino: "Dino",
+    unicorn: "Eenhoorn",
+    planet: "Planeet",
+    lighthouse: "Vuurtoren",
+    palette: "Palet",
+    cupcake: "Cupcake",
+    bunny: "Konijntje",
     fox: "Vos",
     cat: "Kat",
     owl: "Uil",

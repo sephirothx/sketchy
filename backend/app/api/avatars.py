@@ -26,6 +26,7 @@ from app.auth.avatars import (
     NOT_A_PICTURE,
     MAX_AVATAR_BYTES,
     AvatarError,
+    SupporterOnly,
     avatar_url,
 )
 from app.auth.avatar_doodles import DOODLES, doodle_key
@@ -171,6 +172,8 @@ def create_avatar_router(
                 request_id=request_id,
                 ip_hash=ip_hash,
             )
+        except SupporterOnly as error:
+            raise Refusal(403, ErrorCode.SUPPORTER_ONLY, str(error)) from error
         except AvatarError as error:
             # Only a modified client names a doodle the picker never offered.
             raise Refusal(400, ErrorCode.INVALID_PAYLOAD, str(error)) from error

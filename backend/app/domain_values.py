@@ -620,6 +620,9 @@ REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
 # so; a picture's removal restricts uploads and says for how long. They share
 # the machinery - shown once, acknowledged - and nothing else (R-AVA-08).
 WARNING_KINDS = ("warning", "avatar_removal")
+# A supporter's two-tone name (#1476). `users.name_style` holds a key, and each
+# client draws it; a hex cannot say two colours and stay readable on both themes.
+NAME_STYLES = ("sunset", "ocean", "aurora", "ember", "berry", "meadow")
 # What sold a supporter pass, and what a row of its ledger records (#1472).
 class SupportProvider(StrEnum):
     PADDLE = "paddle"

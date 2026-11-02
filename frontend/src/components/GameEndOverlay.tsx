@@ -3,7 +3,7 @@ import { useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import type { ScoreEntry, ScoringMode } from "../types";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { competitionRanks, winOutcome } from "../lib/standings";
 import { Avatar } from "./ui/Avatar";
 import { SectionLabel } from "./ui/Card";
@@ -180,7 +180,7 @@ export function GameEndOverlay({
                   />
                   <span className="game-end-podium-name">
                     <span
-                      className={playerNameClass(entry.isAnonymous)}
+                      className={playerNameClass(entry.isAnonymous, nameStyleClass(entry.nameStyle))}
                       style={playerNameStyle(entry.nameColor, entry.isAnonymous)}
                     >
                       {entry.nickname}
@@ -213,7 +213,7 @@ export function GameEndOverlay({
                     size={26}
                   />
                   <span className="game-end-standing-name">
-                    <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>
+                    <span className={playerNameClass(score.isAnonymous, nameStyleClass(score.nameStyle))} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>
                     {score.supporterMark && <SupporterMark />}
                     {score.playerId === myPlayerId ? <span className="game-end-you">{ui.gameEndOverlay.you}</span> : null}
                     {friendSeats.has(score.playerId) && (

@@ -1,3 +1,4 @@
+import type { AuthUser } from "../store/authStore";
 import { apiRequest } from "./api.ts";
 
 /** The supporter pass, as this page talks to it (#1475). Every route here is
@@ -63,6 +64,12 @@ export async function sendToCheckout(getUrl: () => Promise<string>, seated: bool
     tab?.close();
     throw failure;
   }
+}
+
+export const NAME_STYLES = ["sunset", "ocean", "aurora", "ember", "berry", "meadow"] as const;
+
+export function setAccountNameStyle(nameStyle: string | null): Promise<AuthUser> {
+  return apiRequest<AuthUser>("/api/auth/name-style", { method: "POST", body: { nameStyle } });
 }
 
 export function cancelRenewal(): Promise<SupporterStatus> {

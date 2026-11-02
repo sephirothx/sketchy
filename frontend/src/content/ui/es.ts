@@ -151,6 +151,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_unavailable: "No se pudo abrir el pago. No se ha cobrado nada. Inténtalo de nuevo.",
   support_cancel_failed: "No se pudo detener la renovación, así que sigue activa. Inténtalo de nuevo.",
   support_gift_refused: "Este jugador no puede recibir un regalo.",
+  supporter_only: "Eso es para quienes apoyan.",
   identity_unavailable: "Sketchy no pudo confirmar quién eres. Recarga e inténtalo de nuevo.",
 
   // Rooms
@@ -443,6 +444,16 @@ export const ES: Catalogue = {
   supporterMark: { label: "Mecenas" },
   support: {
     giftThanks: "Tu regalo va en camino. Se activa en cuanto se confirme el pago.",
+    styleSunset: "Atardecer",
+    styleOcean: "Océano",
+    styleAurora: "Aurora",
+    styleEmber: "Brasa",
+    styleBerry: "Baya",
+    styleMeadow: "Pradera",
+    stylePlain: "Color simple",
+    stylesTitle: "Estilos de nombre de apoyo",
+    doodlesTitle: "Garabatos de apoyo",
+    lockedHint: "Vienen con un pase de apoyo.",
     giftActionFor: (p: { name: string }) => `Regalar un pase a ${p.name}`,
     markNotSaved: "No se pudo guardar. Inténtalo de nuevo.",
     giftAction: "Regalar un pase",
@@ -2159,6 +2170,18 @@ export const ES: Catalogue = {
   },
 
   avatarDoodles: {
+    whale: "Ballena",
+    octopus: "Pulpo",
+    snail: "Caracol",
+    bee: "Abeja",
+    hedgehog: "Erizo",
+    dino: "Dino",
+    unicorn: "Unicornio",
+    planet: "Planeta",
+    lighthouse: "Faro",
+    palette: "Paleta",
+    cupcake: "Magdalena",
+    bunny: "Conejito",
     fox: "Zorro",
     cat: "Gato",
     owl: "Búho",

@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { gameLength, changedRoomRules } from "../lib/roomCardFacts";
 import { emitWithAck } from "../lib/socket";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
@@ -15,6 +15,7 @@ interface RosterEntry {
   nameColor?: string;
   avatarUrl?: string | null;
   supporterMark?: boolean;
+  nameStyle?: string | null;
   isAnonymous?: boolean;
   isHost?: boolean;
 }
@@ -125,7 +126,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
                 size={22}
               />
               <span
-                className={playerNameClass(player.isAnonymous)}
+                className={playerNameClass(player.isAnonymous, nameStyleClass(player.nameStyle))}
                 style={playerNameStyle(player.nameColor, player.isAnonymous)}
               >
                 {player.nickname}

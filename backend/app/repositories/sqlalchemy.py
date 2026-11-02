@@ -784,6 +784,7 @@ def _to_user_data(user: User) -> UserData:
         username=user.username,
         display_name=user.display_name,
         name_color=user.name_color,
+        name_style=user.name_style,
         avatar_key=user.avatar_key,
         is_anonymous=user.is_anonymous,
         state=user.state,

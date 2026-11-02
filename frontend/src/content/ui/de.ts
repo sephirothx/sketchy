@@ -151,6 +151,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_unavailable: "Die Kasse ist gerade nicht erreichbar. Es wurde nichts abgebucht. Bitte versuch es noch einmal.",
   support_cancel_failed: "Die Verlängerung konnte nicht gestoppt werden und läuft noch. Bitte versuch es noch einmal.",
   support_gift_refused: "Dieser Spieler kann kein Geschenk erhalten.",
+  supporter_only: "Das ist für Unterstützer.",
   identity_unavailable: "Sketchy konnte nicht bestätigen, wer du bist. Lade neu und versuch es noch einmal.",
 
   // Rooms
@@ -443,6 +444,16 @@ export const DE: Catalogue = {
   supporterMark: { label: "Unterstützer" },
   support: {
     giftThanks: "Dein Geschenk ist unterwegs. Es gilt, sobald die Zahlung bestätigt ist.",
+    styleSunset: "Sonnenuntergang",
+    styleOcean: "Ozean",
+    styleAurora: "Polarlicht",
+    styleEmber: "Glut",
+    styleBerry: "Beere",
+    styleMeadow: "Wiese",
+    stylePlain: "Einfache Farbe",
+    stylesTitle: "Unterstützer-Namensstile",
+    doodlesTitle: "Unterstützer-Doodles",
+    lockedHint: "Diese gehören zum Unterstützerpass.",
     giftActionFor: (p: { name: string }) => `${p.name} einen Pass schenken`,
     markNotSaved: "Das konnte nicht gespeichert werden. Bitte versuch es noch einmal.",
     giftAction: "Pass schenken",
@@ -2160,6 +2171,18 @@ export const DE: Catalogue = {
   },
 
   avatarDoodles: {
+    whale: "Wal",
+    octopus: "Oktopus",
+    snail: "Schnecke",
+    bee: "Biene",
+    hedgehog: "Igel",
+    dino: "Dino",
+    unicorn: "Einhorn",
+    planet: "Planet",
+    lighthouse: "Leuchtturm",
+    palette: "Palette",
+    cupcake: "Cupcake",
+    bunny: "Häschen",
     fox: "Fuchs",
     cat: "Katze",
     owl: "Eule",

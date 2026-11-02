@@ -2477,7 +2477,7 @@ panel from spoiling the drawing.
 
 ### Supporter pass — [`backend/app/api/support.py`](../backend/app/api/support.py)
 
-`supporterMark` travels beside `avatarUrl` on every live identity: `room_state.players`, the
+`supporterMark` and `nameStyle` travel beside `avatarUrl` on every live identity: `room_state.players`, the
 public roster, `turn_ended`, `game_ended`, the lobby presence list, friends, recent players and
 the public profile (R-SUP-10). It is already combined with the owner's choice and with
 suspension. The whole `room_state` is broadcast (N-14), so it costs 22 uncompressed bytes per
@@ -2493,6 +2493,7 @@ admits by design.
 | `GET` | `/api/support/status` | The caller's own pass, `{active, until, renews}` (`renews`: a subscription we have not stopped can still charge, even with no pass active), for the pages that open after a checkout. |
 | `POST` | `/api/support/checkout` | `{product: "year" \| "lifetime", extraMinor?: 0–50000}` → `{url}`, where to send the buyer. The account goes in the provider's custom data, never a query string. Refused `403 account_required` with `action: "support"` for a guest (R-SUP-02), `409 support_already_active` for a lifetime holder or on a second year while one renews, `502 support_unavailable` when the provider fails. |
 | `POST` | `/api/support/webhooks/{provider}` | Signature-verified, unauthenticated (R-SUP-07). `401` for a bad or older-than-five-minutes signature. `200` for a new fact, one already seen, or a kind not acted on, so the provider never retries forever. `500` when the fact could not be written, or a renewal it must stop could not be stopped, so it does retry: a retry finds a duplicate fact and tries the renewal again. |
+| `POST` | `/api/auth/name-style` | `{nameStyle: key \| null}` → the account. `null` goes back to the name colour and is always allowed; a key needs a pass in force, or `403 supporter_only` (R-SUP-17). Picking a supporter doodle refuses the same way. |
 | `POST` | `/api/support/gift` | `{recipientId, anonymous?, extraMinor?}` → `{url}`. Twelve months, one charge, never renewing (R-SUP-16). `409 support_gift_refused` for oneself, a blocked pair, an unknown or guest account or a lifetime pass, alike, so it cannot reveal which. `403 account_required` for a guest giver; `429` and `502` as for checkout. |
 | `POST` | `/api/support/cancel` | Signed in, one click: the renewal stops and the time already paid stands. → `{active, until, renews}`, or `502 support_cancel_failed`, which says the renewal is still on. A suspended player may reach this and the form (R-SUP-09). |
 | `POST` | `/api/support/cancel/request` | Signed out (§312k): `{email}`, the one the provider has. Never a username: it is public, and would let anybody stop anybody's renewal. Anything but one address is answered the same and never reaches the provider. Rate-limited, and answers `{ok: true}` before doing anything, so neither the answer nor the time it takes can reveal who holds a pass. A failure is left for the operator. |
@@ -2752,7 +2753,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (73) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (74) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

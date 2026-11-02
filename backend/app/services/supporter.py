@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import func
 
+from app.auth.avatar_doodles import SUPPORTER_DOODLES, doodle_name, random_doodle_key
 from app.auth.bans import active_ban_filter
 from app.db.models import InboxEntry, SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
@@ -339,6 +340,42 @@ async def supporter_marks(
         )
     )
     return {str(user_id) for user_id in rows.all()}
+
+
+async def name_styles_of(session: AsyncSession, user_ids: Iterable[UUID | str]) -> dict[str, str]:
+    """The styles these accounts wear, for a list read from frozen seats."""
+    ids = {UUID(str(user_id)) for user_id in user_ids}
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(User.id, User.name_style).where(User.id.in_(ids), User.name_style.is_not(None))
+    )
+    return {str(user_id): style for user_id, style in rows.all()}
+
+
+async def revert_supporter_choices(session: AsyncSession, user_id: UUID) -> None:
+    """A refund or chargeback takes back what the pass let them choose, in the same
+    transaction as the fact, or buy-choose-charge-back keeps the goods (R-SUP-17).
+    Only with no other purchase left standing: a lapse keeps them, and so does a
+    refund of one order while another still pays.
+    """
+    still_paid = await session.scalar(
+        select(SupportPurchase.id)
+        .where(
+            SupportPurchase.user_id == user_id,
+            SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            _not_reversed(),
+        )
+        .limit(1)
+    )
+    if still_paid is not None:
+        return
+    user = await session.get(User, user_id)
+    if user is None:
+        return
+    user.name_style = None
+    if doodle_name(user.avatar_key) in SUPPORTER_DOODLES:
+        user.avatar_key = random_doodle_key()
 
 
 async def active_supporter_ids(

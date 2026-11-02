@@ -17,7 +17,8 @@ import {
 } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useBackCloses } from "../hooks/useRoomHistory";
-import { fittedNameFontSize, playerNameClass, playerNameStyle } from "../lib/playerName";
+import { fittedNameFontSize, nameStyleClass,
+  playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -248,6 +249,7 @@ export function PlayerList({
                 <FittedPlayerName
                   nickname={p.nickname}
                   nameColor={p.nameColor}
+                  nameStyle={p.nameStyle}
                   isAnonymous={p.isAnonymous}
                 />
                 {p.supporterMark && <SupporterMark />}
@@ -313,15 +315,17 @@ function votePlayer(targetPlayerId: string, action: "kick" | "afk") {
 function FittedPlayerName({
   nickname,
   nameColor,
+  nameStyle,
   isAnonymous,
 }: {
   nickname: string;
   nameColor?: string;
+  nameStyle?: string | null;
   isAnonymous?: boolean;
 }) {
   return (
     <span
-      className={playerNameClass(isAnonymous)}
+      className={playerNameClass(isAnonymous, nameStyleClass(nameStyle))}
       style={playerNameStyle(nameColor, isAnonymous)}
       // Guests are visually distinct, so state it for screen readers too
       // rather than relying on the italics alone.
