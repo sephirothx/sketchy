@@ -147,10 +147,10 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
 
 
 async def _renewals_to_postpone(
-    session: AsyncSession, provider_name: str, event: ProviderEvent, user_id: UUID | None
-) -> tuple[tuple[str, ...], datetime | None]:
-    """What a gift pushes back, and until when. It starts when the recipient's year
-    ends: left alone, Paddle would charge them for the same twelve months."""
+    session: AsyncSession, event: ProviderEvent, user_id: UUID | None
+) -> tuple[str, ...]:
+    """What a gift pushes back. It starts when the recipient's year ends: left
+    alone, Paddle would charge them for the same twelve months."""
     if (
         event.kind != SupportPurchaseKind.PURCHASE
         or event.product != PRODUCT_GIFT
@@ -158,16 +158,8 @@ async def _renewals_to_postpone(
         # A refund can land first: there are no months to wait for.
         or await order_was_reversed(session, event.order_id)
     ):
-        return (), None
-    until = await session.scalar(
-        select(SupportPurchase.period_end).where(
-            SupportPurchase.provider == provider_name,
-            SupportPurchase.provider_event_id == event.event_id,
-        )
-    )
-    if until is None:
-        return (), None
-    return await renewing_subscriptions(session, [user_id]), until
+        return ()
+    return await renewing_subscriptions(session, [user_id])
 
 
 async def _tell_started(
@@ -330,7 +322,6 @@ def create_support_router(
                     )
                     to_stop: tuple[str, ...] = ()
                     to_postpone: tuple[str, ...] = ()
-                    postponed_until: datetime | None = None
                     told = False
                     # A retry finds a duplicate, and is the only second chance a
                     # failed cancellation gets. Nothing written means not ours.
@@ -341,9 +332,7 @@ def create_support_router(
                             )
                         )
                     if recorded:
-                        to_postpone, postponed_until = await _renewals_to_postpone(
-                            session, provider.name, event, user_id
-                        )
+                        to_postpone = await _renewals_to_postpone(session, event, user_id)
                         told = await _tell_started(session, provider.name, event, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
@@ -351,8 +340,13 @@ def create_support_router(
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
         stopped = await cancel_quietly(session_factory, provider, to_stop)
-        if to_postpone and postponed_until is not None:
-            await postpone_renewals(session_factory, provider, to_postpone, postponed_until)
+        if to_postpone:
+            # The account's last end, read now: two gifts landing together must not
+            # leave the renewal on the earlier one's.
+            async with session_factory() as session:
+                until = (await supporter_status(session, user_id)).until
+            if until is not None:
+                await postpone_renewals(session_factory, provider, to_postpone, until)
         if told and user_id and on_inbox_changed:
             try:
                 await on_inbox_changed(str(user_id))

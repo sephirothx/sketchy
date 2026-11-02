@@ -108,6 +108,8 @@ def supporter_status_columns(
         .where(*kept, SupportPurchase.period_end > now)
         .scalar_subquery()
     )
+    # Whatever period it is up to: a renewal a gift moved has no period of its own
+    # while the gift runs, and Paddle will still bill it (R-SUP-16).
     renews = (
         select(SupportPurchase.id)
         .where(
@@ -638,20 +640,34 @@ async def pass_facts(
     ids = set(purchase_ids)
     if not ids:
         return {}
+    # A gift has no subscription, but its owner's may be waiting for it to end.
+    owned = aliased(SupportPurchase)
+    owner_renews = (
+        select(owned.id)
+        .where(
+            owned.user_id == SupportPurchase.user_id,
+            owned.kind == SupportPurchaseKind.PURCHASE.value,
+            owned.provider_subscription_id.is_not(None),
+            ~_stopped(owned.provider_subscription_id),
+            _not_reversed(owned),
+        )
+        .exists()
+    )
     rows = await session.execute(
         select(
             SupportPurchase.id,
             SupportPurchase.period_end,
             SupportPurchase.provider_subscription_id,
             _stopped(SupportPurchase.provider_subscription_id),
+            owner_renews,
         ).where(SupportPurchase.id.in_(ids), _not_reversed())
     )
     return {
         purchase_id: (
             period_end.isoformat() if period_end else None,
-            bool(subscription_id) and not stopped,
+            not stopped if subscription_id else bool(waiting),
         )
-        for purchase_id, period_end, subscription_id, stopped in rows.all()
+        for purchase_id, period_end, subscription_id, stopped, waiting in rows.all()
     }
 
 

@@ -49,7 +49,7 @@ from app.refusals import ErrorCode
 from app.repositories.sqlalchemy import _identity_ids
 from app.request_text import ControlFreeModel
 from app.services.friends import friendship_key
-from app.services.supporter import pass_facts, renewing_subscriptions
+from app.services.supporter import pass_facts
 from app.services.inbox import mark_read
 
 #: Entries per read. The bell's panel shows the newest; the rest are a page
@@ -195,9 +195,15 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
         }
         | {UUID(e.params["purchase"]) for e in by_kind.get("supporter_gifted", [])},
     )
-    gifted = by_kind.get("supporter_gifted", [])
-    recipient_renews = bool(
-        gifted and await renewing_subscriptions(session, [gifted[0].user_id])
+    # Only the last gift's end is when a renewal waits for: an earlier one's date has
+    # been passed by, and one already over is waiting for nothing.
+    last_gift_end = max(
+        (
+            passes[UUID(e.params["purchase"])][0] or ""
+            for e in by_kind.get("supporter_gifted", [])
+            if UUID(e.params["purchase"]) in passes
+        ),
+        default="",
     )
     friendships = {}
     pairs = {
@@ -299,7 +305,11 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             if fact is None:
                 continue
             body["until"] = fact[0]
-            body["renews"] = recipient_renews
+            body["renews"] = (
+                fact[1]
+                and fact[0] == last_gift_end
+                and _aware(datetime.fromisoformat(last_gift_end)) > datetime.now(timezone.utc)
+            )
             # No subject when the giver asked not to be named, and none left
             # once they have deleted their account.
             body["person"] = _person(people.get(entry.subject_id))

@@ -22,7 +22,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import InboxEntry, SupportPurchase, UserBlock
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
-from app.services.supporter import supporter_status
+from app.services.supporter import pass_facts, supporter_status, tell_ending_supporters
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
 from app.support.providers import ProviderUnavailable, StubProvider, signature_header
 
@@ -182,8 +182,27 @@ async def test_a_gift_to_an_active_supporter_starts_when_their_time_ends(site, m
     assert moved == [("sub_1", gift.period_end)]
     assert status.renews is True
     assert "cancel:sub_1" not in await _event_ids(factory)
+    # Past their own year, only the gift's row is live, and Paddle will still bill.
+    during_gift = end + timedelta(days=30)
+    async with factory() as session:
+        waiting = await supporter_status(session, recipient, now=during_gift)
+    assert waiting.active and waiting.renews and waiting.until == gift.period_end
+    # So fourteen days before the gift ends is no "your pass ends".
+    assert await _ending_says_renews(factory, recipient, gift)
     told = (await inbox_payload(factory, str(recipient)))["entries"]
     assert next(e for e in told if e["kind"] == "supporter_gifted")["renews"] is True
+
+
+async def _ending_says_renews(factory, recipient, gift) -> bool:
+    await tell_ending_supporters(factory, now=gift.period_end - timedelta(days=13))
+    async with factory() as session:
+        entry = await session.scalar(
+            select(InboxEntry).where(
+                InboxEntry.user_id == recipient, InboxEntry.kind == "supporter_ending"
+            )
+        )
+        assert entry.subject_id == gift.id
+        return (await pass_facts(session, [gift.id]))[gift.id][1]
 
 
 async def test_a_renewal_paddle_will_not_move_stops_instead(site, monkeypatch):
@@ -217,6 +236,36 @@ async def test_a_renewal_paddle_will_not_move_stops_instead(site, monkeypatch):
         status = await supporter_status(session, recipient)
     assert status.renews is False
     assert "cancel:sub_1" in await _event_ids(factory)
+
+
+async def test_only_the_last_gift_says_the_renewal_waits_for_it(site):
+    http, factory = site
+    recipient = await _register(http, "Bruno")
+    now = datetime.now(timezone.utc)
+    await _webhook(
+        http,
+        "e1",
+        {
+            "id": "o1",
+            "currency_code": "EUR",
+            "subscription_id": "sub_1",
+            "custom_data": {"account_id": str(recipient), "product": "year"},
+            "billing_period": {
+                "starts_at": (now - timedelta(days=1)).isoformat(),
+                "ends_at": (now + timedelta(days=100)).isoformat(),
+            },
+            "details": {"totals": {"total": "1900"}},
+        },
+    )
+    await _register(http, "Marta")
+    await _pay_stub(http, (await _gift(http, recipient)).json()["url"])
+    await _register(http, "Carla")
+    await _pay_stub(http, (await _gift(http, recipient)).json()["url"])
+    told = (await inbox_payload(factory, str(recipient)))["entries"]
+    gifts = sorted(
+        (e for e in told if e["kind"] == "supporter_gifted"), key=lambda e: e["until"]
+    )
+    assert [gift["renews"] for gift in gifts] == [False, True]
 
 
 async def test_a_gift_with_no_renewal_moves_nothing(site, monkeypatch):
