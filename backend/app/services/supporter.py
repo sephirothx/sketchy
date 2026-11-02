@@ -633,6 +633,16 @@ async def tell_ending_supporters(
     )
 
 
+async def last_gift_end_of(session: AsyncSession, user_id: UUID) -> str | None:
+    """When the last gift still standing ends, as `pass_facts` writes it."""
+    end = await session.scalar(
+        select(func.max(SupportPurchase.period_end)).where(
+            SupportPurchase.user_id == user_id, SupportPurchase.is_gift, _not_reversed()
+        )
+    )
+    return end.isoformat() if end else None
+
+
 async def pass_facts(
     session: AsyncSession, purchase_ids: Iterable[UUID]
 ) -> dict[UUID, tuple[str | None, bool]]:

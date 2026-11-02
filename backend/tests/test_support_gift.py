@@ -272,6 +272,10 @@ async def test_only_the_last_gift_says_the_renewal_waits_for_it(site):
         (e for e in told if e["kind"] == "supporter_gifted"), key=lambda e: e["until"]
     )
     assert [gift["renews"] for gift in gifts] == [False, True]
+    # On a page of its own, the earlier one still knows it is not the last.
+    newest = next(e for e in told if e["until"] == gifts[1]["until"])
+    older = (await inbox_payload(factory, str(recipient), before=newest["id"]))["entries"]
+    assert [e["renews"] for e in older if e["kind"] == "supporter_gifted"] == [False]
 
 
 async def _year(http, recipient: UUID) -> None:
