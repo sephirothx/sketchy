@@ -129,7 +129,7 @@ from app.domain_values import (
 # `soloBests`, #1434) - without the turn,
 # which would name a stranger's drawing the player saw only anonymously. To 19
 # when the supporter pass's facts joined it (`support`) and settings gained
-# `showSupporterMark` (#1472).
+# `showSupporterMark` and `supporterNudgeDismissed` (#1472, #1475).
 EXPORT_SCHEMA_VERSION = 19
 
 # Events that name the requester only as their **target** and are exported:
@@ -1130,6 +1130,7 @@ async def _write_export_artifact(
             "locale": settings.locale,
             "soloOptOut": settings.solo_opt_out,
             "showSupporterMark": settings.show_supporter_mark,
+            "supporterNudgeDismissed": settings.supporter_nudge_dismissed,
             "createdAt": _timestamp(settings.created_at),
             "updatedAt": _timestamp(settings.updated_at),
         }

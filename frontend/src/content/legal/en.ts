@@ -147,6 +147,8 @@ export const LEGAL_EN: LegalDocuments = {
             "Administrators also read bug reports, and can look up an account " +
             "and its recent activity when something goes wrong.",
           "Data is given to authorities only where the law requires it.",
+          "If you buy a supporter pass, Paddle, our reseller, sells it and takes the payment. Sketchy sends Paddle your account id and the language you use, and keeps what Paddle reports back: the order number, the period, the amount and the currency. Your card and billing address go to Paddle and never reach Sketchy. Paddle handles them under its own privacy notice.",
+          "If you stop a renewal without signing in, the e-mail address you type is passed to Paddle to find the pass. The tip link opens Ko-fi, a separate site: Sketchy sends it nothing about you, and what you enter there is Ko-fi's to handle.",
         ],
       },
       {
@@ -312,6 +314,17 @@ export const LEGAL_EN: LegalDocuments = {
           "Sketchy is provided as it is, without any guarantee that it will " +
             "always be available, work without errors, or keep what you made " +
             "for ever. The operator may change it, pause it or close it.",
+        ],
+      },
+      {
+        id: "supporter-pass",
+        heading: "The supporter pass",
+        body: [
+          "A supporter pass pays for Sketchy. It gives you a mark beside your name, name styles and avatar doodles, and more of Solo. It gives no advantage in a game, has no cash value and cannot be transferred. A lifetime pass lasts for as long as Sketchy runs.",
+          "Paddle, our reseller, is the seller: it takes the payment, charges any tax and sends your receipt, under its own terms.",
+          "A yearly pass renews each year until you cancel. You can cancel at any time at /support/cancel, signed in or not: the pass runs until the end of the time already paid for, and you get a confirmation by e-mail.",
+          "If you are a consumer, you can withdraw within fourteen days of buying and get back the part you have not used. Ask through your receipt from Paddle.",
+          "When a pass ends, the mark and the extra Solo go, and the styles and doodles you chose stay. A refund or a chargeback ends it at once and takes those choices back too. A suspension is not refunded. Deleting your account stops any renewal. A tip on Ko-fi is a gift and includes no pass.",
         ],
       },
       {

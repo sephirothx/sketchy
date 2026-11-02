@@ -56,6 +56,8 @@ import { fill } from "../content/ui/slots.tsx";
 import { MINIMUM_AGE } from "../lib/minimumAge.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { AvatarPicture } from "./ui/AvatarPicture";
+import { useSupportStore } from "../store/supportStore";
+import { SupporterMark } from "./ui/SupporterMark";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
@@ -118,6 +120,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   const openOverlay = useOpenOverlay();
   const waiting = useFriendsStore((state) => waitingRequestCount(state.lists));
   const user = useAuthStore((s) => s.user);
+  const ownMark = useSupportStore((s) => Boolean(s.status?.active && s.showMark));
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
   const logout = useAuthStore((s) => s.logout);
@@ -231,6 +234,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         {!compact && (
           <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
         )}
+        {!isGuest && ownMark && <SupporterMark size={12} />}
         {/* The button's own label already says the name is not saved, so the
             dot stays silent to a screen reader; the title is for a pointer. */}
         {isGuest && (

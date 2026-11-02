@@ -2178,6 +2178,14 @@
    "myReaction",
    "reactionCounts"
   ],
+  "api.support:create_support_router": [
+   "maxExtraMinor",
+   "tipUrl"
+  ],
+  "api.support:plans": [
+   "maxExtraMinor",
+   "tipUrl"
+  ],
   "api.user_blocks:_block_payload": [
    "createdAt",
    "displayName",
@@ -2197,6 +2205,7 @@
    "showSupporterMark",
    "soloOptOut",
    "soundEffects",
+   "supporterNudgeDismissed",
    "timeFormat",
    "updatedAt"
   ],
@@ -2411,6 +2420,7 @@
    "startedAt",
    "startedOnDate",
    "subjectId",
+   "supporterNudgeDismissed",
    "timeFormat",
    "updatedAt",
    "userId"
@@ -3076,7 +3086,7 @@
    "displayName"
   ]
  },
- "protocolVersion": 71,
+ "protocolVersion": 72,
  "refusal": {
   "codes": [
    "invalid_payload",

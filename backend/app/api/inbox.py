@@ -270,6 +270,9 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             body["expiresAt"] = entry.params.get("expiresAt")
         elif entry.kind == "reports_reviewed":
             body["count"] = int(entry.params.get("count", 1))
+        elif entry.kind in ("supporter_started", "supporter_ending"):
+            body["until"] = entry.params.get("until")
+            body["renews"] = bool(entry.params.get("renews"))
         elif entry.kind == "role":
             owner = owners.get(entry.user_id)
             role = entry.params.get("role")

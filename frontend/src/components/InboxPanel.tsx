@@ -13,6 +13,7 @@ import {
   SendIcon,
   UserIcon,
   UsersIcon,
+  HeartIcon,
 } from "./icons";
 import { useFriendInviteAnswer } from "../hooks/useFriendInviteAnswer";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
@@ -28,6 +29,7 @@ import { useFavoritesStore } from "../store/favoritesStore";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/inbox.css";
+import { formatDate } from "../lib/clock";
 
 interface InboxPanelProps {
   /** A sheet on a phone, a panel under the bell elsewhere. */
@@ -322,6 +324,31 @@ function Row({ entry, onClose }: { entry: InboxEntry; onClose: () => void }) {
       // to the day only so that it sorts.
       meta = "";
       break;
+    case "supporter_started":
+    case "supporter_ending": {
+      tone = "is-primary";
+      icon = <HeartIcon size={18} />;
+      const date = entry.until ? formatDate(new Date(entry.until)) : "";
+      if (entry.kind === "supporter_started") {
+        text = entry.until ? ui.support.inboxStarted({ date }) : ui.support.inboxStartedLifetime;
+      } else {
+        text = entry.renews ? ui.support.inboxRenewing({ date }) : ui.support.inboxEnding({ date });
+      }
+      actions = (
+        <button
+          type="button"
+          className="inbox-link"
+          onClick={() => {
+            read();
+            onClose();
+            openSettings("support");
+          }}
+        >
+          {ui.support.seePass}
+        </button>
+      );
+      break;
+    }
     case "role": {
       tone = "is-primary";
       icon = <CrownIcon size={18} />;

@@ -348,6 +348,8 @@ def validate_support_configuration(environ: Mapping[str, str] | None = None) -> 
         raise RuntimeError(
             f"SUPPORT_PROVIDER is {config.provider!r}; it must be one of {SUPPORT_PROVIDERS}."
         )
+    if config.tip_url and not config.tip_url.startswith("https://"):
+        raise RuntimeError("SUPPORT_TIP_URL must be an https:// link.")
     if not is_production(values):
         return
     if config.provider == SupportProvider.STUB.value:

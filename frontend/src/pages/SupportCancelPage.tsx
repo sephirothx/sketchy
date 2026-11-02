@@ -1,0 +1,116 @@
+import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+
+import { AppHeader } from "../components/AppHeader";
+import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { formatDate } from "../lib/clock";
+import { refusalText } from "../lib/refusals";
+import { cancelRenewal, requestCancellation } from "../lib/support";
+import { useAuthStore } from "../store/authStore";
+import { useSupportStore } from "../store/supportStore";
+import "../styles/lazy/support.css";
+
+function SignedIn() {
+  const status = useSupportStore((state) => state.status);
+  const refresh = useSupportStore((state) => state.refresh);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const until = status?.until ? formatDate(new Date(status.until)) : "";
+  if (done) return <p role="status">{ui.support.cancelDone({ date: until })}</p>;
+  if (!status?.renews) return <p>{ui.support.cancelNothing}</p>;
+  return (
+    <>
+      <p>{ui.support.cancelBody({ date: until })}</p>
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        className="btn btn-danger"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          void cancelRenewal()
+            .then(() => {
+              setDone(true);
+              return refresh();
+            })
+            .catch((failure) => setError(refusalText(failure, ui.support.cancelFailed)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {ui.support.cancelRenewal}
+      </button>
+    </>
+  );
+}
+
+function SignedOut() {
+  const [identifier, setIdentifier] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    void requestCancellation(identifier)
+      .then(() => setDone(true))
+      .catch((failure) => setError(refusalText(failure, ui.support.cancelFailed)))
+      .finally(() => setBusy(false));
+  };
+
+  if (done) return <p role="status">{ui.support.cancelRequested}</p>;
+  return (
+    <form onSubmit={submit} className="support-cancel-form">
+      <p>{ui.support.cancelSignedOut}</p>
+      <label>
+        {ui.support.cancelIdentifier}
+        <input
+          className="input-field"
+          required
+          maxLength={254}
+          value={identifier}
+          onChange={(event) => setIdentifier(event.target.value)}
+        />
+      </label>
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="submit" className="btn btn-danger" disabled={busy || !identifier.trim()}>
+        {ui.support.cancelRenewal}
+      </button>
+    </form>
+  );
+}
+
+/** Stopping a renewal on this site (R-SUP-09, Germany's §312k): one click signed
+in, no login signed out. */
+export function SupportCancelPage() {
+  useDocumentTitle(ui.support.cancelTitle);
+  const user = useAuthStore((state) => state.user);
+  const registered = Boolean(user && !user.isAnonymous);
+  return (
+    <div className="support-page">
+      <AppHeader />
+      <main className="surface-card support-page-card" data-testid="support-cancel">
+        <h1>{ui.support.cancelTitle}</h1>
+        {registered ? <SignedIn /> : <SignedOut />}
+        <Link to="/">{ui.support.backToLobby}</Link>
+      </main>
+    </div>
+  );
+}

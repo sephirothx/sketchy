@@ -151,6 +151,8 @@ export const LEGAL_DE: LegalDocuments = {
             "ein Konto und seine jüngste Aktivität nachschlagen, wenn etwas " +
             "schiefgeht.",
           "An Behörden werden Daten nur herausgegeben, wo das Gesetz es verlangt.",
+          "Wenn du einen Unterstützerpass kaufst, verkauft ihn Paddle, unser Wiederverkäufer, und nimmt die Zahlung entgegen. Sketchy sendet Paddle deine Konto-ID und deine Sprache und speichert, was Paddle zurückmeldet: Bestellnummer, Zeitraum, Betrag und Währung. Deine Karte und deine Rechnungsadresse gehen an Paddle und erreichen Sketchy nie. Paddle verarbeitet sie nach seiner eigenen Datenschutzerklärung.",
+          "Wenn du eine Verlängerung ohne Anmeldung stoppst, wird die eingegebene E-Mail-Adresse an Paddle weitergegeben, um den Pass zu finden. Der Trinkgeld-Link öffnet Ko-fi, eine eigene Website: Sketchy sendet dorthin nichts über dich, und was du dort eingibst, verarbeitet Ko-fi.",
         ],
       },
       {
@@ -323,6 +325,17 @@ export const LEGAL_DE: LegalDocuments = {
             "es immer verfügbar ist, fehlerfrei funktioniert oder das, was du " +
             "gemacht hast, für immer behält. Der Betreiber kann es ändern, " +
             "pausieren oder einstellen.",
+        ],
+      },
+      {
+        id: "supporter-pass",
+        heading: "Der Unterstützerpass",
+        body: [
+          "Ein Unterstützerpass finanziert Sketchy. Du bekommst ein Zeichen neben deinem Namen, Namensstile und Avatar-Doodles sowie mehr Solo. Er bringt keinen Vorteil im Spiel, hat keinen Geldwert und ist nicht übertragbar. Ein lebenslanger Pass gilt, solange Sketchy läuft.",
+          "Paddle, unser Wiederverkäufer, ist der Verkäufer: Paddle nimmt die Zahlung entgegen, berechnet etwaige Steuern und sendet deine Quittung, nach eigenen Bedingungen.",
+          "Ein Jahrespass verlängert sich jedes Jahr, bis du kündigst. Du kannst jederzeit unter /support/cancel kündigen, angemeldet oder nicht: Der Pass läuft bis zum Ende der bereits bezahlten Zeit, und du erhältst eine Bestätigung per E-Mail.",
+          "Als Verbraucher kannst du innerhalb von vierzehn Tagen nach dem Kauf widerrufen und bekommst den nicht genutzten Teil zurück. Wende dich dazu über deine Quittung an Paddle.",
+          "Endet ein Pass, entfallen das Zeichen und das zusätzliche Solo; die gewählten Stile und Doodles bleiben. Eine Erstattung oder Rückbuchung beendet ihn sofort und nimmt auch diese Auswahl zurück. Eine Sperre wird nicht erstattet. Das Löschen deines Kontos stoppt jede Verlängerung. Ein Trinkgeld auf Ko-fi ist ein Geschenk und enthält keinen Pass.",
         ],
       },
       {

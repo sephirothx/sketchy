@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 
 import { ui } from "../content/ui/index.ts";
 import { usePublicPath } from "../hooks/usePublicPath";
+import { useEffect } from "react";
+import { useSupportStore } from "../store/supportStore";
 
 type Document = "rules" | "terms" | "privacy";
 
@@ -18,6 +20,11 @@ export function DocumentLinks({ current }: { current: Document }) {
   ];
   const others = all.filter((entry) => entry.document !== current);
   const publicPath = usePublicPath();
+  const tipUrl = useSupportStore((state) => state.plans?.tipUrl);
+  const loadPlans = useSupportStore((state) => state.loadPlans);
+  useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
   return (
     <p className="document-links">
       {others.map((entry, index) => (
@@ -26,6 +33,14 @@ export function DocumentLinks({ current }: { current: Document }) {
           <Link to={publicPath(entry.to)}>{entry.label}</Link>
         </span>
       ))}
+      {tipUrl && (
+        <span>
+          <span aria-hidden="true"> · </span>
+          <a href={tipUrl} target="_blank" rel="noopener noreferrer">
+            {ui.support.tipLabel}
+          </a>
+        </span>
+      )}
     </p>
   );
 }

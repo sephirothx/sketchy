@@ -27,6 +27,7 @@ export type TermsSectionId =
   | "content"
   | "moderation"
   | "availability"
+  | "supporter-pass"
   | "liability"
   | "leaving"
   | "law"

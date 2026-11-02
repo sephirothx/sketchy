@@ -89,6 +89,7 @@ import {
   UserIcon,
   VolumeIcon,
   XIcon,
+  HeartIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { apiRequest } from "../lib/api.ts";
@@ -99,6 +100,8 @@ import { interfaceLocale, ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 import { ModalHeader } from "./ui/ModalShell";
+import { SupportPane } from "./SupportPane";
+import { useSupportStore } from "../store/supportStore";
 import "../styles/lazy/settings.css";
 import "../styles/lazy/toolbar.css";
 
@@ -109,6 +112,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   get appearance() { return ui.settingsOverlay.appearance; },
   get sound() { return ui.settingsOverlay.soundEffects2; },
   get shortcuts() { return ui.settingsOverlay.shortcuts; },
+  get support() { return ui.support.title; },
 };
 
 const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
@@ -116,6 +120,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   appearance: <SunIcon size={16} />,
   sound: <VolumeIcon size={16} />,
   shortcuts: <KeyboardIcon size={16} />,
+  support: <HeartIcon size={16} />,
 };
 
 /** The palette, with a name a screen reader can say instead of a hex. */
@@ -1403,9 +1408,15 @@ export function SettingsOverlay() {
   // later does not swap the pane - and a half-typed name - out from under
   // the player.
   const hasFinePointer = useMediaQuery("(pointer: fine)");
-  const sections: readonly SettingsSection[] = hasFinePointer
-    ? SETTINGS_SECTIONS
-    : SETTINGS_SECTIONS.filter((id) => id !== "shortcuts");
+  // Support only where something is for sale: the plans answer that (R-SUP-08).
+  const plans = useSupportStore((state) => state.plans);
+  const loadPlans = useSupportStore((state) => state.loadPlans);
+  useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
+  const sections: readonly SettingsSection[] = SETTINGS_SECTIONS.filter(
+    (id) => (id !== "shortcuts" || hasFinePointer) && (id !== "support" || Boolean(plans)),
+  );
   const requested = sectionFromPath(location.pathname);
   const section = sections.includes(requested) ? requested : DEFAULT_SETTINGS_SECTION;
   useEffect(() => {
@@ -1518,6 +1529,7 @@ export function SettingsOverlay() {
             {section === "appearance" && <AppearancePane />}
             {section === "sound" && <SoundPane />}
             {section === "shortcuts" && <ShortcutsPane />}
+            {section === "support" && <SupportPane />}
           </div>
         </div>
       </div>

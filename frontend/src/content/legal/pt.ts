@@ -143,6 +143,8 @@ export const LEGAL_PT: LegalDocuments = {
             "administradores também leem os relatórios de erros e podem " +
             "consultar uma conta e a sua atividade recente quando algo corre mal.",
           "Os dados só são entregues às autoridades quando a lei o exige.",
+          "Se comprares um passe de apoiante, quem o vende e recebe o pagamento é a Paddle, o nosso revendedor. O Sketchy envia à Paddle o id da tua conta e o teu idioma e guarda o que a Paddle comunica: o número da encomenda, o período, o valor e a moeda. O teu cartão e a tua morada de faturação vão para a Paddle e nunca chegam ao Sketchy. A Paddle trata-os segundo a sua própria política de privacidade.",
+          "Se parares uma renovação sem iniciar sessão, o e-mail que escreves é passado à Paddle para encontrar o passe. A ligação de gorjeta abre o Ko-fi, um site à parte: o Sketchy não lhe envia nada sobre ti, e o que escreveres lá é tratado pelo Ko-fi.",
         ],
       },
       {
@@ -312,6 +314,17 @@ export const LEGAL_PT: LegalDocuments = {
           "O Sketchy é fornecido tal como está, sem qualquer garantia de que " +
             "esteja sempre disponível, funcione sem erros ou guarde para sempre o " +
             "que fizeste. O operador pode alterá-lo, pausá-lo ou encerrá-lo.",
+        ],
+      },
+      {
+        id: "supporter-pass",
+        heading: "O passe de apoiante",
+        body: [
+          "Um passe de apoiante paga o Sketchy. Dá-te uma marca junto ao nome, estilos de nome e rabiscos de avatar, e mais Solo. Não dá nenhuma vantagem num jogo, não tem valor em dinheiro e não pode ser transferido. Um passe vitalício dura enquanto o Sketchy funcionar.",
+          "A Paddle, o nosso revendedor, é o vendedor: recebe o pagamento, cobra os impostos aplicáveis e envia o teu recibo, segundo os seus próprios termos.",
+          "Um passe anual renova todos os anos até cancelares. Podes cancelar a qualquer momento em /support/cancel, com ou sem sessão: o passe dura até ao fim do tempo já pago e recebes uma confirmação por e-mail.",
+          "Se fores consumidor, podes desistir nos catorze dias seguintes à compra e receber de volta a parte que não usaste. Pede-o através do teu recibo da Paddle.",
+          "Quando um passe termina, a marca e o Solo adicional desaparecem, e os estilos e rabiscos que escolheste ficam. Um reembolso ou um estorno termina-o de imediato e retira também essas escolhas. Uma suspensão não é reembolsada. Apagar a tua conta para qualquer renovação. Uma gorjeta no Ko-fi é uma oferta e não inclui nenhum passe.",
         ],
       },
       {

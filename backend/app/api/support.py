@@ -29,6 +29,7 @@ from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
 from app.request_text import ControlFreeModel
+from app.services.inbox import add_entry
 from app.services.supporter import (
     apply_provider_event,
     order_was_reversed,
@@ -127,11 +128,40 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
     )
 
 
+async def _tell_started(
+    session: AsyncSession, provider_name: str, event: ProviderEvent, user_id: UUID | None
+) -> bool:
+    """A pass that begins is an inbox entry; a renewal of one is not news."""
+    if event.kind != SupportPurchaseKind.PURCHASE or user_id is None:
+        return False
+    if event.subscription_id:
+        periods = await session.scalar(
+            select(func.count())
+            .select_from(SupportPurchase)
+            .where(
+                SupportPurchase.provider_subscription_id == event.subscription_id,
+                SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            )
+        )
+        if periods and periods > 1:
+            return False
+    return await add_entry(
+        session,
+        user_id=user_id,
+        kind="supporter_started",
+        params={
+            "until": event.period_end.isoformat() if event.period_end else None,
+            "renews": bool(event.subscription_id),
+        },
+    )
+
+
 def create_support_router(
     session_factory: async_sessionmaker[AsyncSession],
     config: SupportConfig,
     *,
     on_supporter_mark_changed: Callable[[str], Awaitable[None]] | None = None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/support")
     provider: Provider = provider_for(config)
@@ -164,6 +194,24 @@ def create_support_router(
             raise Refusal(
                 429, ErrorCode.TOO_MANY_REQUESTS, "Too many requests. Please wait and try again."
             )
+
+    @router.get("/plans")
+    async def plans() -> dict:
+        """What the pitch shows. Public: a guest sees the pitch too. Absent, like
+        every route here, on a deployment that sells nothing."""
+        return {
+            "year": {"price": config.year_label},
+            "lifetime": {"price": config.lifetime_label},
+            "maxExtraMinor": MAX_EXTRA_MINOR,
+            "tipUrl": config.tip_url or None,
+        }
+
+    @router.get("/status")
+    async def status(request: Request) -> dict:
+        """The caller's own pass, for the pages that open after a checkout."""
+        user = await account(request)
+        async with session_factory() as session:
+            return (await supporter_status(session, user.id)).payload()
 
     @router.post("/checkout")
     async def checkout(body: CheckoutBody, request: Request) -> dict:
@@ -206,6 +254,7 @@ def create_support_router(
                         session, provider.name, event
                     )
                     to_stop: tuple[str, ...] = ()
+                    told = False
                     # A retry finds a duplicate, and is the only second chance a
                     # failed cancellation gets. Nothing written means not ours.
                     if recorded or await _fact_exists(session, provider.name, event):
@@ -214,12 +263,19 @@ def create_support_router(
                                 session, await _subscriptions_to_stop(session, event, user_id)
                             )
                         )
+                    if recorded:
+                        told = await _tell_started(session, provider.name, event, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
             logger.exception("support_webhook_failed")
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
         stopped = await cancel_quietly(session_factory, provider, to_stop)
+        if told and user_id and on_inbox_changed:
+            try:
+                await on_inbox_changed(str(user_id))
+            except Exception:
+                logger.warning("supporter_inbox_push_failed", exc_info=True)
         if recorded and user_id and on_supporter_mark_changed:
             # A heart appears, or a refund takes it, in the rooms they sit in.
             try:

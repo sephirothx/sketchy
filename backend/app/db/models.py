@@ -654,6 +654,10 @@ class UserSettings(Base):
     show_supporter_mark: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
     )
+    # They closed the end-of-game line about the pass, for good (#1475).
+    supporter_nudge_dismissed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     # Which language this player reads the interface in (R-I18N-06). Distinct
     # from `prompt_language`: a Dutch speaker playing an English room is
     # ordinary, and the two registries are allowed to diverge. Stored per

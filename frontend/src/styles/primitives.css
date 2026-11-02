@@ -1171,3 +1171,15 @@ input:focus-visible ~ .switch-track {
 .room-facts[data-columns="2"] .room-fact:nth-child(n + 3) {
   border-top: 1px solid var(--line);
 }
+
+/* A button that reads as a link inside a sentence. */
+.inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary-ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}

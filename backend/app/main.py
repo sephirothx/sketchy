@@ -1289,6 +1289,7 @@ if _support is not None and _support.provider in SUPPORT_PROVIDERS:
             async_session_factory,
             _support,
             on_supporter_mark_changed=refresh_supporter_mark_on_live_surfaces,
+            on_inbox_changed=push_inbox_changed,
         )
     )
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:

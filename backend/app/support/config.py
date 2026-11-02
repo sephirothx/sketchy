@@ -34,6 +34,12 @@ class SupportConfig:
     # and R-PLAT-20 forbids it on this origin, so it lives elsewhere: see
     # `ops/paddle-checkout/`. Unset uses the account's default payment link.
     checkout_url: str = ""
+    # What the pitch shows. Paddle's checkout shows the buyer's real total.
+    year_label: str = "€19"
+    lifetime_label: str = "€69"
+    # An outbound link for a tip with nothing in return. Not a provider: no
+    # script, no webhook, no data, and it never counts toward a pass.
+    tip_url: str = ""
 
 
 def support_config(environ: Mapping[str, str] | None = None) -> SupportConfig | None:
@@ -54,4 +60,7 @@ def support_config(environ: Mapping[str, str] | None = None) -> SupportConfig | 
         price_lifetime=values.get("SUPPORT_PRICE_LIFETIME", "").strip(),
         extra_product_id=values.get("SUPPORT_EXTRA_PRODUCT_ID", "").strip(),
         checkout_url=values.get("SUPPORT_CHECKOUT_URL", "").strip(),
+        year_label=values.get("SUPPORT_YEAR_LABEL", "").strip() or "€19",
+        lifetime_label=values.get("SUPPORT_LIFETIME_LABEL", "").strip() or "€69",
+        tip_url=values.get("SUPPORT_TIP_URL", "").strip(),
     )

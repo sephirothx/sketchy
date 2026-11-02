@@ -649,6 +649,10 @@ INBOX_KINDS = (
     "game_invite",
     "reports_reviewed",
     "role",
+    # The supporter pass (#1475): one when it starts, one fourteen days before it
+    # ends or renews. A value in `params`, never a sentence (R-INBOX-05).
+    "supporter_started",
+    "supporter_ending",
 )
 # The steps a `role` entry can describe: an offer to take up, a role given
 # outright, a role taken away.
