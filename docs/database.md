@@ -3543,7 +3543,7 @@ property was only a convention of the code:
 | Role | Used by | May |
 | --- | --- | --- |
 | `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
-| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events`, `score_events` and `support_purchases` (plus `UPDATE (user_id, gifted_by_user_id)` on the last, which deletion clears), only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events`, `score_events` and `support_purchases` (plus `UPDATE (user_id, gifted_by_user_id, owner_deleted_at)` on the last, which deletion clears and dates), only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
 | `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
 
 The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the
