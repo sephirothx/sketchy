@@ -183,10 +183,17 @@ def _minor(value: object) -> int:
 
 
 def _identifier(value: object) -> str:
-    """One of the provider's ids, as the ledger keeps it."""
-    if not isinstance(value, str) or not 0 < len(value) <= _ID_LENGTH:
+    """One of the provider's ids, as the ledger keeps it. Printable: PostgreSQL
+    refuses a NUL in text, and no provider's id has a control character."""
+    if not is_ledger_id(value):
         raise ValueError("not an id the ledger can keep")
     return value
+
+
+def is_ledger_id(value: object) -> bool:
+    """Whether the ledger could hold this as an id: a request naming anything else
+    names nothing it has."""
+    return isinstance(value, str) and 0 < len(value) <= _ID_LENGTH and value.isprintable()
 
 
 def _currency(value: object) -> str:
@@ -555,7 +562,8 @@ class StubProvider:
 
     def read_checkout_token(self, token: str) -> dict | None:
         parts = token.split(".")
-        if len(parts) != 6 or parts[0] not in PRODUCTS or not parts[2].isdigit():
+        # ASCII digits: `isdigit` also takes "²", which `int` then refuses.
+        if len(parts) != 6 or parts[0] not in PRODUCTS or not (parts[2].isascii() and parts[2].isdigit()):
             return None
         read = {
             "product": parts[0],

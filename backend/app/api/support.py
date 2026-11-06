@@ -55,6 +55,7 @@ from app.support.providers import (
     ProviderEvent,
     ProviderUnavailable,
     StubProvider,
+    is_ledger_id,
     provider_for,
     signature_header,
 )
@@ -290,6 +291,10 @@ def create_support_router(
         Asked at the click, not listed: the provider's link to it is short-lived."""
         user = await account(request)
         throttle(receipt_limiter, str(user.id))
+        if not is_ledger_id(order_id):
+            # Nothing the ledger could hold, so not one of theirs; and PostgreSQL
+            # would refuse a NUL in the lookup rather than find nothing.
+            raise Refusal(404, ErrorCode.SUPPORT_RECEIPT_NOT_FOUND)
         async with session_factory() as session:
             if not await paid_order(session, user.id, order_id):
                 raise Refusal(404, ErrorCode.SUPPORT_RECEIPT_NOT_FOUND)
@@ -538,7 +543,8 @@ def create_support_router(
         @router.post("/stub/pay")
         async def stub_pay(request: Request) -> RedirectResponse:
             """Signs what Paddle would post and takes it through the same door."""
-            token = parse_qs((await request.body()).decode()).get("token", [""])[0]
+            # A form posts text; anything else is no token, not a crash.
+            token = parse_qs((await request.body()).decode(errors="replace")).get("token", [""])[0]
             read = stub.read_checkout_token(token)
             if read is None:
                 raise Refusal(404, ErrorCode.SUPPORT_UNAVAILABLE)
