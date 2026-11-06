@@ -72,7 +72,7 @@ export function InviteFriendsList() {
               size={26}
             />
             <span className="waiting-invite-friend-name">{friend.displayName}</span>
-            {friend.supporterMark && <SupporterMark size={12} />}
+            {friend.supporterMark && <SupporterMark size={15} />}
             {invited.has(friend.userId) ? (
               <span className="waiting-invite-friend-sent">{ui.inviteFriendsList.invited}</span>
             ) : (

@@ -298,6 +298,12 @@
   margin-inline: calc(-1 * var(--ink-overhang));
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css). */
+.game-end-podium-name > .supporter-mark,
+.game-end-standing-name > .supporter-mark {
+  margin-left: calc(0.4px - 5px);
+}
+
 .game-end-standings strong {
   margin-left: auto;
   font-weight: 800;

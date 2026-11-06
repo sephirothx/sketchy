@@ -131,7 +131,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
               >
                 {player.nickname}
               </span>
-              {player.supporterMark && <SupporterMark size={11} />}
+              {player.supporterMark && <SupporterMark size={14} />}
               {player.isHost && <span className="visually-hidden">{ui.publicRoomCard.host}</span>}
             </li>
           ))}

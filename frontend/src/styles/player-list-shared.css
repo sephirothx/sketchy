@@ -18,7 +18,11 @@
   display: inline-flex;
   flex: none;
   align-self: center;
-  margin-left: 4px;
+  /* Close enough to read as part of the name. The heart's ink starts 2.5/24 into
+     its box, so at the 14-16px it is drawn beside a name this leaves 2px. A row
+     that spaces its items apart has the heart take that gap back, in the rule
+     beside the gap, so the two move together. */
+  margin-left: 0.4px;
   vertical-align: -0.1em;
 }
 

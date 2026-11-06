@@ -94,6 +94,17 @@
   border-radius: var(--radius-sm);
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css);
+   the name stops filling the row, and the heart pushes the rest along instead. */
+.friends-row > .supporter-mark {
+  margin-left: calc(0.4px - 10px);
+  margin-right: auto;
+}
+
+.friends-row-name:has(+ .supporter-mark) {
+  flex: 0 1 auto;
+}
+
 .friends-row:hover {
   background: var(--well);
 }

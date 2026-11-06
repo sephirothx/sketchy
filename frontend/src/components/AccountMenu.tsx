@@ -234,7 +234,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         {!compact && (
           <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
         )}
-        {!isGuest && ownMark && <SupporterMark size={12} />}
+        {!isGuest && ownMark && <SupporterMark size={15} />}
         {/* The button's own label already says the name is not saved, so the
             dot stays silent to a screen reader; the title is for a pointer. */}
         {isGuest && (

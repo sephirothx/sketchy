@@ -1039,6 +1039,11 @@
   min-width: 0;
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css). */
+.public-room-roster li > .supporter-mark {
+  margin-left: calc(0.4px - 7px);
+}
+
 .public-room-roster li > .colored-player-name {
   min-width: 0;
   overflow: hidden;
@@ -1201,6 +1206,11 @@
   min-height: 44px;
   padding: 4px 8px;
   border-radius: var(--radius-sm);
+}
+
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css). */
+.online-player-row > .supporter-mark {
+  margin-left: calc(0.4px - 10px);
 }
 
 /* The viewer's own row. Not moved to the top - the list is short and an

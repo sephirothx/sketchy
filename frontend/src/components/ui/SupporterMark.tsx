@@ -7,7 +7,7 @@ import { ui } from "../../content/ui";
  * this never sees a heart its owner hid. The label says what a heart alone does
  * not: on most sites a heart is free.
  */
-export function SupporterMark({ size = 13 }: { size?: number }) {
+export function SupporterMark({ size = 16 }: { size?: number }) {
   return (
     <span className="supporter-mark" role="img" aria-label={ui.supporterMark.label} title={ui.supporterMark.label}>
       <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

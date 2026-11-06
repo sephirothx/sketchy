@@ -3013,6 +3013,17 @@ button.guess-pips {
   min-height: 40px;
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css);
+   the name stops filling the row, and the heart pushes the rest along instead. */
+.waiting-invite-friends-list li > .supporter-mark {
+  margin-left: calc(0.4px - 10px);
+  margin-right: auto;
+}
+
+.waiting-invite-friend-name:has(+ .supporter-mark) {
+  flex: 0 1 auto;
+}
+
 .waiting-invite-friend-name {
   flex: 1;
   min-width: 0;
