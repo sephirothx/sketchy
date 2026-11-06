@@ -129,7 +129,8 @@ from app.domain_values import (
 # `soloBests`, #1434) - without the turn,
 # which would name a stranger's drawing the player saw only anonymously. To 19
 # when the supporter pass's facts joined it (`support`) and settings gained
-# `showSupporterMark` and `supporterNudgeDismissed` (#1472, #1475).
+# `showSupporterMark` and `supporterNudgeDismissed`, and gifts
+# (`supportGiftsGiven`, #1472, #1475, #1540).
 EXPORT_SCHEMA_VERSION = 19
 
 # Events that name the requester only as their **target** and are exported:
@@ -1502,10 +1503,19 @@ async def _write_export_artifact(
             "achievedAt": _timestamp(best.achieved_at),
         },
     )
-    # The account's own ledger rows: the money it paid and got back (R-SUP-04).
+    # The account's own ledger rows: the money it paid and got back, and the time
+    # it was given (R-SUP-04).
     # Including a reversal of an order of theirs that names nobody, because one
     # can land before its purchase: status counts it, so the export must show it.
     own_order = aliased(SupportPurchase)
+    # A refund row carries no gift column, but it is the same order's money.
+    gifted_orders = set(
+        await session.scalars(
+            select(SupportPurchase.provider_order_id).where(
+                SupportPurchase.user_id.in_(identity_ids), SupportPurchase.is_gift
+            )
+        )
+    )
     writer.key("support")
     await _write_rows(
         writer,
@@ -1528,10 +1538,35 @@ async def _write_export_artifact(
             "kind": fact.kind,
             "periodStart": _timestamp(fact.period_start),
             "periodEnd": _timestamp(fact.period_end),
-            "amountMinor": fact.amount_minor,
-            "currency": fact.currency,
-            "orderId": fact.provider_order_id,
+            # What somebody else paid is theirs: a gift shows its period alone.
+            "amountMinor": None if fact.provider_order_id in gifted_orders else fact.amount_minor,
+            "currency": None if fact.provider_order_id in gifted_orders else fact.currency,
+            "orderId": None if fact.provider_order_id in gifted_orders else fact.provider_order_id,
+            "gift": fact.provider_order_id in gifted_orders,
+            # Who gave it, unless they asked not to be named (#1540).
+            "giftedByUserId": (
+                None
+                if fact.gift_anonymous or fact.gifted_by_user_id is None
+                else str(fact.gifted_by_user_id)
+            ),
             "createdAt": _timestamp(fact.created_at),
+        },
+    )
+    writer.key("supportGiftsGiven")
+    await _write_rows(
+        writer,
+        session,
+        select(SupportPurchase)
+        .where(SupportPurchase.gifted_by_user_id.in_(identity_ids))
+        .order_by(SupportPurchase.created_at, SupportPurchase.id),
+        lambda gift: {
+            "recipientUserId": str(gift.user_id) if gift.user_id else None,
+            "periodStart": _timestamp(gift.period_start),
+            "periodEnd": _timestamp(gift.period_end),
+            "amountMinor": gift.amount_minor,
+            "currency": gift.currency,
+            "orderId": gift.provider_order_id,
+            "anonymous": gift.gift_anonymous,
         },
     )
     writer.key("exportRequests")
@@ -1858,6 +1893,11 @@ async def anonymize_account(
                 .where(SupportPurchase.user_id.in_(identity_ids))
                 .values(user_id=None, owner_deleted_at=deleted_at)
             )
+            await session.execute(
+                update(SupportPurchase)
+                .where(SupportPurchase.gifted_by_user_id.in_(identity_ids))
+                .values(gifted_by_user_id=None)
+            )
             # Every drawing row this erasure writes, locked before any row that
             # hangs off one is touched, in one ascending statement: its own
             # drawings, and the other players' drawings it shared or favorited
@@ -2024,6 +2064,15 @@ async def anonymize_account(
                 session,
                 kinds=("friend_request", "friend_accepted", "game_invite"),
                 subject_ids=list(identity_ids),
+            )
+            # A gift they gave stands, and now names nobody.
+            await session.execute(
+                update(InboxEntry)
+                .where(
+                    InboxEntry.kind == "supporter_gifted",
+                    InboxEntry.subject_id.in_(identity_ids),
+                )
+                .values(subject_id=None)
             )
             await session.execute(
                 delete(UserWarning).where(UserWarning.user_id.in_(identity_ids))

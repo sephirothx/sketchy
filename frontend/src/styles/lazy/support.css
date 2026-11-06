@@ -156,7 +156,7 @@ div.support-plan {
   color: var(--primary-ink);
 }
 
-.support-extra-input,
+.support-extra-field,
 .support-cancel-form input {
   min-height: 44px;
   padding: 8px 12px;
@@ -168,8 +168,39 @@ div.support-plan {
   font-size: 16px;
 }
 
-.support-extra-input {
+.support-extra-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   max-width: 120px;
+  cursor: text;
+}
+
+.support-extra-field.is-sign-after {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+}
+
+/* The input inside has no border of its own, so the box shows its focus the
+   way every text field does: the ring's colour on the border (a11y.css). */
+.support-extra-field:focus-within {
+  border-color: var(--focus-ring);
+}
+
+.support-extra-field span {
+  color: var(--muted);
+}
+
+.support-extra-field input {
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
 }
 
 .support-mark-choice {
@@ -295,6 +326,20 @@ div.support-plan {
   text-align: left;
   font-weight: 700;
   font-size: 14px;
+}
+
+.support-gift-terms {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.support-gift-terms strong {
+  color: var(--ink);
+}
+
+.support-gift-actions {
+  justify-content: flex-end;
 }
 
 @media (max-width: 640px) {

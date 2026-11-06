@@ -55,6 +55,14 @@ export type InboxEntry =
   | (EntryBase & { kind: "game_invite"; person: InboxPerson; expiresAt: string | null })
   | (EntryBase & { kind: "reports_reviewed"; count: number })
   | (EntryBase & {
+      kind: "supporter_gifted";
+      until: string | null;
+      /** Their own renewal waits for the gift to end, and then carries on. */
+      renews: boolean;
+      /** Null when the giver asked not to be named, or has left. */
+      person: InboxPerson | null;
+    })
+  | (EntryBase & {
       kind: "supporter_started" | "supporter_ending";
       /** Null on a lifetime pass. */
       until: string | null;
@@ -158,6 +166,8 @@ export function parseInboxEntry(value: unknown): InboxEntry | null {
       const count = typeof row.count === "number" && row.count > 0 ? row.count : 1;
       return { ...base, kind: "reports_reviewed", count };
     }
+    case "supporter_gifted":
+      return { ...base, kind: "supporter_gifted", until: text(row.until), renews: row.renews === true, person: person(row.person) };
     case "supporter_started":
     case "supporter_ending":
       return { ...base, kind: row.kind, until: text(row.until), renews: row.renews === true };

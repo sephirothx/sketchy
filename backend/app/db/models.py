@@ -883,6 +883,7 @@ class SupportPurchase(Base):
         Index("ix_support_purchases_order", "provider", "provider_order_id"),
         Index("ix_support_purchases_user_id", "user_id"),
         Index("ix_support_purchases_subscription", "provider_subscription_id"),
+        Index("ix_support_purchases_gifted_by_user_id", "gifted_by_user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -897,6 +898,22 @@ class SupportPurchase(Base):
     provider_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
     # The transaction; on a cancellation, the subscription it stopped.
     provider_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Who paid, when it was a gift (#1540). `user_id` stays the beneficiary, so
+    # status, the mark and the refund rule need no change.
+    gifted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The giver asked not to be named: to the recipient, or in their export.
+    gift_anonymous: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    # Kept apart from who gave it: deleting the giver clears that, and what they paid
+    # must stay out of the recipient's export all the same.
+    is_gift: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     # What renews this purchase, if anything. A lifetime pass has none.
     provider_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # When deletion cleared `user_id`: how long a renewal nobody owns has been owed a

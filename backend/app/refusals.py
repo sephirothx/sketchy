@@ -246,6 +246,7 @@ class ErrorCode(StrEnum):
     SUPPORT_ALREADY_ACTIVE = "support_already_active"
     SUPPORT_UNAVAILABLE = "support_unavailable"
     SUPPORT_CANCEL_FAILED = "support_cancel_failed"
+    SUPPORT_GIFT_REFUSED = "support_gift_refused"
     SOLO_POOL_EMPTY = "solo_pool_empty"
     # The Daily: a date that is nobody's today, and a day too thin for one.
     SOLO_DATE_OUT_OF_RANGE = "solo_date_out_of_range"

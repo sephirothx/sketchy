@@ -9,9 +9,10 @@ step with the ledger (R-SUP-01).
 """
 from __future__ import annotations
 
+import calendar
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -26,7 +27,7 @@ from app.auth.bans import active_ban_filter
 from app.db.models import InboxEntry, SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
 from app.support.config import support_config
-from app.support.providers import ProviderEvent
+from app.support.providers import PRODUCT_GIFT, ProviderEvent
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,8 @@ def supporter_status_columns(
         .where(*kept, SupportPurchase.period_end > now)
         .scalar_subquery()
     )
+    # Whatever period it is up to: a renewal a gift moved has no period of its own
+    # while the gift runs, and Paddle will still bill it (R-SUP-16).
     renews = (
         select(SupportPurchase.id)
         .where(
@@ -377,6 +380,9 @@ async def record_support_fact(
     period_start: datetime | None = None,
     period_end: datetime | None = None,
     provider_subscription_id: str | None = None,
+    gifted_by_user_id: UUID | None = None,
+    gift_anonymous: bool = False,
+    is_gift: bool = False,
 ) -> bool:
     """Record one provider event; False if it was already recorded.
 
@@ -401,6 +407,9 @@ async def record_support_fact(
             period_start=period_start,
             period_end=period_end,
             provider_subscription_id=provider_subscription_id,
+            gifted_by_user_id=gifted_by_user_id,
+            gift_anonymous=gift_anonymous,
+            is_gift=is_gift,
         )
         .on_conflict_do_nothing(index_elements=["provider", "provider_event_id"])
     )
@@ -467,7 +476,18 @@ async def apply_provider_event(
         )
         if known is None:
             return False, None
+    if event.product == PRODUCT_GIFT and event.account_id:
+        # Written first, because the read below only shares it: two gifts landing
+        # together must not both read the same last period and overlap.
+        try:
+            await session.execute(
+                select(User.id).where(User.id == UUID(event.account_id)).with_for_update()
+            )
+        except ValueError:
+            pass
     user_id = await _attributed_account(session, event)
+    if event.product == PRODUCT_GIFT and event.kind == SupportPurchaseKind.PURCHASE:
+        event = await _with_gift_period(session, event, user_id)
     recorded = await record_support_fact(
         session,
         provider=provider,
@@ -480,8 +500,50 @@ async def apply_provider_event(
         currency=event.currency,
         period_start=event.period_start,
         period_end=event.period_end,
+        gifted_by_user_id=await _gift_giver(session, event),
+        gift_anonymous=event.gift_anonymous,
+        is_gift=event.product == PRODUCT_GIFT and event.kind == SupportPurchaseKind.PURCHASE,
     )
     return recorded, user_id
+
+
+GIFT_MONTHS = 12
+
+
+def months_later(moment: datetime, months: int) -> datetime:
+    index = moment.month - 1 + months
+    year = moment.year + index // 12
+    month = index % 12 + 1
+    return moment.replace(
+        year=year, month=month, day=min(moment.day, calendar.monthrange(year, month)[1])
+    )
+
+
+async def _with_gift_period(
+    session: AsyncSession, event: ProviderEvent, user_id: UUID | None
+) -> ProviderEvent:
+    """A gift starts when the recipient's time ends, so nothing is wasted (#1540)."""
+    start = event.period_start or datetime.now(timezone.utc)
+    if user_id is not None:
+        _, _, until, _ = supporter_status_columns(user_id, start)
+        latest = await session.scalar(select(until))
+        if latest is not None and latest > start:
+            start = latest
+    return replace(event, period_start=start, period_end=months_later(start, GIFT_MONTHS))
+
+
+async def _gift_giver(session: AsyncSession, event: ProviderEvent) -> UUID | None:
+    """The giver, if they still have an account to name."""
+    if not event.giver_id:
+        return None
+    try:
+        giver = UUID(event.giver_id)
+    except ValueError:
+        return None
+    account = await session.get(User, giver, with_for_update={"read": True})
+    if account is None or account.state != AccountState.REGISTERED.value:
+        return None
+    return giver
 
 
 ENDING_NOTICE = timedelta(days=14)
@@ -571,6 +633,16 @@ async def tell_ending_supporters(
     )
 
 
+async def last_gift_end_of(session: AsyncSession, user_id: UUID) -> str | None:
+    """When the last gift still standing ends, as `pass_facts` writes it."""
+    end = await session.scalar(
+        select(func.max(SupportPurchase.period_end)).where(
+            SupportPurchase.user_id == user_id, SupportPurchase.is_gift, _not_reversed()
+        )
+    )
+    return end.isoformat() if end else None
+
+
 async def pass_facts(
     session: AsyncSession, purchase_ids: Iterable[UUID]
 ) -> dict[UUID, tuple[str | None, bool]]:
@@ -581,20 +653,34 @@ async def pass_facts(
     ids = set(purchase_ids)
     if not ids:
         return {}
+    # A gift has no subscription, but its owner's may be waiting for it to end.
+    owned = aliased(SupportPurchase)
+    owner_renews = (
+        select(owned.id)
+        .where(
+            owned.user_id == SupportPurchase.user_id,
+            owned.kind == SupportPurchaseKind.PURCHASE.value,
+            owned.provider_subscription_id.is_not(None),
+            ~_stopped(owned.provider_subscription_id),
+            _not_reversed(owned),
+        )
+        .exists()
+    )
     rows = await session.execute(
         select(
             SupportPurchase.id,
             SupportPurchase.period_end,
             SupportPurchase.provider_subscription_id,
             _stopped(SupportPurchase.provider_subscription_id),
+            owner_renews,
         ).where(SupportPurchase.id.in_(ids), _not_reversed())
     )
     return {
         purchase_id: (
             period_end.isoformat() if period_end else None,
-            bool(subscription_id) and not stopped,
+            not stopped if subscription_id else bool(waiting),
         )
-        for purchase_id, period_end, subscription_id, stopped in rows.all()
+        for purchase_id, period_end, subscription_id, stopped, waiting in rows.all()
     }
 
 

@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Je hebt al een supporterspas.",
   support_unavailable: "De betaalpagina is niet bereikbaar. Er is niets afgeschreven. Probeer het opnieuw.",
   support_cancel_failed: "De verlenging kon niet worden gestopt en staat dus nog aan. Probeer het opnieuw.",
+  support_gift_refused: "Deze speler kan geen cadeau ontvangen.",
   identity_unavailable: "Sketchy kon niet bevestigen wie je bent. Herlaad en probeer het nog eens.",
 
   // Rooms
@@ -441,7 +442,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const NL: Catalogue = {
   supporterMark: { label: "Supporter" },
   support: {
+    giftThanks: "Je cadeau is onderweg. Het is actief zodra de betaling is bevestigd.",
+    giftActionFor: (p: { name: string }) => `Geef ${p.name} een pas cadeau`,
     markNotSaved: "Dat kon niet worden opgeslagen. Probeer het opnieuw.",
+    giftAction: "Pas cadeau geven",
+    giftCancel: "Annuleren",
+    giftTitle: (p: { name: string }) => `Geef ${p.name} een jaar supporterspas`,
+    giftPrice: (p: { price: string }) => `${p.price}, eenmalig.`,
+    giftTerms: (p: { name: string }) => `Hij wordt nooit verlengd en kost ${p.name} niets. Is ${p.name} al supporter, dan begint het jaar wanneer de huidige pas eindigt.`,
+    giftAnonymous: (p: { name: string }) => `Mijn naam niet aan ${p.name} tonen`,
+    inboxGifted: (p: { date: string }) => `Iemand heeft je een jaar supporterspas gegeven. Je pas loopt tot ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} heeft je een jaar supporterspas gegeven. Je pas loopt tot ${p.date}.`,
     title: "Steun Sketchy",
     introLead: "Sketchy wordt gerund door één ontwikkelaar, zonder advertenties en zonder pay-to-win.",
     introPass: "Een supporterspas helpt het draaiende te houden en komt met een paar kleine extra's als bedankje.",
@@ -486,6 +497,7 @@ export const NL: Catalogue = {
     cancelEmail: "Het e-mailadres waarmee je betaalde",
     cancelRequested: "Als dit bij een pas hoort, is de verlenging gestopt en is er een bevestiging onderweg.",
     nudge: "Vind je Sketchy leuk? Supporters houden het gratis voor iedereen.",
+    inboxGiftRenews: "Je verlenging wacht tot dan en gaat daarna door.",
     seePass: "Bekijk de pas",
     dismissNudge: "Niet meer tonen",
     inboxStartedLifetime: "Je levenslange supporterspas is actief. Bedankt!",

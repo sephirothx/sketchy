@@ -30,6 +30,7 @@ from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
 from app.request_text import ControlFreeModel
+from app.services.friends import pair_is_blocked
 from app.services.inbox import add_entry
 from app.services.supporter import (
     apply_provider_event,
@@ -39,9 +40,10 @@ from app.services.supporter import (
     supporter_status,
     unstopped_owners,
 )
-from app.support.cancellation import cancel_quietly, cancel_subscription
+from app.support.cancellation import cancel_quietly, cancel_subscription, postpone_renewals
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
 from app.support.providers import (
+    PRODUCT_GIFT,
     cancellation_event,
     PRODUCT_LIFETIME,
     SIGNATURE_HEADER,
@@ -84,6 +86,14 @@ class CheckoutBody(ControlFreeModel):
     extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
 
 
+class GiftBody(ControlFreeModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    recipient_id: UUID = Field(alias="recipientId")
+    anonymous: bool = False
+    extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
+
+
 # One address, nothing else: Paddle's filter takes a comma-separated list, and an
 # empty one may match everybody. Anything looser could stop renewals in bulk.
 _ONE_ADDRESS = re.compile(r"[^@\s,]+@[^@\s,]+")
@@ -118,8 +128,11 @@ async def _subscriptions_to_stop(
         status = await supporter_status(session, user_id)
         if status.active and status.until is None:
             return (event.subscription_id,)
-    if event.product == PRODUCT_LIFETIME:
-        # The lifetime pass replaces the year it was bought on top of.
+    if event.product == PRODUCT_LIFETIME and not await order_was_reversed(
+        session, event.order_id
+    ):
+        # The lifetime pass replaces the year it was bought on top of. A refunded one
+        # replaces nothing: a retry may find a new year bought since.
         return await renewing_subscriptions(session, [user_id])
     return ()
 
@@ -134,6 +147,22 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
         )
         is not None
     )
+
+
+async def _renewals_to_postpone(
+    session: AsyncSession, event: ProviderEvent, user_id: UUID | None
+) -> tuple[str, ...]:
+    """What a gift pushes back. It starts when the recipient's year ends: left
+    alone, Paddle would charge them for the same twelve months."""
+    if (
+        event.kind != SupportPurchaseKind.PURCHASE
+        or event.product != PRODUCT_GIFT
+        or user_id is None
+        # A refund can land first: there are no months to wait for.
+        or await order_was_reversed(session, event.order_id)
+    ):
+        return ()
+    return await renewing_subscriptions(session, [user_id])
 
 
 async def _tell_started(
@@ -162,6 +191,18 @@ async def _tell_started(
             SupportPurchase.provider_event_id == event.event_id,
         )
     )
+    if event.product == PRODUCT_GIFT:
+        row = await session.get(SupportPurchase, purchase_id)
+        named = None if row is None or row.gift_anonymous else row.gifted_by_user_id
+        return await add_entry(
+            session,
+            user_id=user_id,
+            kind="supporter_gifted",
+            subject_id=named,
+            # Named by giver, so a second gift from them comes back to the top.
+            renew=named is not None,
+            params={"purchase": str(purchase_id)},
+        )
     # The subject is the row: the entry reads what it says from there (R-INBOX-05).
     return await add_entry(session, user_id=user_id, kind="supporter_started", subject_id=purchase_id)
 
@@ -179,6 +220,7 @@ def create_support_router(
     # transactions at once could each miss the other and stop nothing, and both answer
     # 200. One worker, so one at a time in this process is all that takes.
     webhook_turns = asyncio.Lock()
+    renewal_moves = asyncio.Lock()
 
     async def account(request: Request) -> User:
         value = getattr(request.state, "user_id", None)
@@ -212,6 +254,7 @@ def create_support_router(
         return {
             "year": {"price": config.year_label},
             "lifetime": {"price": config.lifetime_label},
+            "gift": {"price": config.gift_label},
             "maxExtraMinor": MAX_EXTRA_MINOR,
             "tipUrl": config.tip_url or None,
         }
@@ -282,6 +325,7 @@ def create_support_router(
                         session, provider.name, event
                     )
                     to_stop: tuple[str, ...] = ()
+                    to_postpone: tuple[str, ...] = ()
                     told = False
                     # A retry finds a duplicate, and is the only second chance a
                     # failed cancellation gets. Nothing written means not ours.
@@ -291,6 +335,7 @@ def create_support_router(
                                 session, await _subscriptions_to_stop(session, event, user_id)
                             )
                         )
+                        to_postpone = await _renewals_to_postpone(session, event, user_id)
                     if recorded:
                         told = await _tell_started(session, provider.name, event, user_id)
         except Exception:
@@ -299,6 +344,13 @@ def create_support_router(
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
         stopped = await cancel_quietly(session_factory, provider, to_stop)
+        if to_postpone and user_id is not None:
+            stopped = (
+                await postpone_renewals(
+                    session_factory, provider, to_postpone, user_id, lock=renewal_moves
+                )
+                and stopped
+            )
         if told and user_id and on_inbox_changed:
             try:
                 await on_inbox_changed(str(user_id))
@@ -315,6 +367,43 @@ def create_support_router(
             support_signals.saw(ERROR, now)
             return Response(status_code=500)
         return JSONResponse({"ok": True})
+
+    @router.post("/gift")
+    async def gift(body: GiftBody, request: Request) -> dict:
+        """Twelve months for somebody else, one charge, never renewing (#1540).
+
+        One refusal for every reason: a blocked pair, a guest and a lifetime pass
+        all read the same, so this cannot find out who holds a pass or who has
+        blocked whom.
+        """
+        giver = await account(request)
+        throttle(checkout_limiter, str(giver.id))
+        throttle(checkout_address_limiter, getattr(request.state, "client_ip_hash", None))
+        async with session_factory() as session:
+            recipient = await session.get(User, body.recipient_id)
+            refused = (
+                recipient is None
+                or recipient.id == giver.id
+                or recipient.state != AccountState.REGISTERED.value
+                or await pair_is_blocked(session, giver.id, recipient.id)
+            )
+            if not refused:
+                status = await supporter_status(session, recipient.id)
+                refused = status.active and status.until is None
+        if refused:
+            raise Refusal(409, ErrorCode.SUPPORT_GIFT_REFUSED)
+        try:
+            url = await provider.create_checkout(
+                product=PRODUCT_GIFT,
+                account_id=str(recipient.id),
+                extra_minor=body.extra_minor,
+                base_url=public_base_url(),
+                giver_id=str(giver.id),
+                gift_anonymous=body.anonymous,
+            )
+        except ProviderUnavailable as error:
+            raise Refusal(502, ErrorCode.SUPPORT_UNAVAILABLE) from error
+        return {"url": url}
 
     @router.post("/webhooks/{provider_name}")
     async def webhook(provider_name: str, request: Request):
@@ -399,7 +488,7 @@ def create_support_router(
             if read is None:
                 raise Refusal(404, ErrorCode.SUPPORT_UNAVAILABLE)
             return HTMLResponse(
-                STUB_PAGE.format(product=html.escape(read[0]), token=html.escape(token))
+                STUB_PAGE.format(product=html.escape(read["product"]), token=html.escape(token))
             )
 
         @router.post("/stub/pay")
@@ -410,13 +499,13 @@ def create_support_router(
             if read is None:
                 raise Refusal(404, ErrorCode.SUPPORT_UNAVAILABLE)
             now = datetime.now(timezone.utc)
-            body = stub.paid_event(
-                product=read[0], account_id=read[1], extra_minor=read[2], now=now
-            )
+            body = stub.paid_event(**read, now=now)
             await receive_webhook(
                 body,
                 {SIGNATURE_HEADER: signature_header(config.webhook_secret, body, now)},
             )
-            return RedirectResponse("/support/thanks", status_code=303)
+            # A giver has no pass to wait for: the page thanks them for the gift.
+            gift = "?gift=1" if read["product"] == PRODUCT_GIFT else ""
+            return RedirectResponse(f"/support/thanks{gift}", status_code=303)
 
     return router

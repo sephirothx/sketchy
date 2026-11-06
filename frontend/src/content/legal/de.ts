@@ -153,6 +153,7 @@ export const LEGAL_DE: LegalDocuments = {
           "An Behörden werden Daten nur herausgegeben, wo das Gesetz es verlangt.",
           "Wenn du einen Unterstützerpass kaufst, verkauft ihn Paddle, unser Wiederverkäufer, und nimmt die Zahlung entgegen. Sketchy sendet Paddle deine Konto-ID und speichert, was Paddle zurückmeldet: Bestellnummer, Zeitraum, Betrag und Währung. Deine Karte und deine Rechnungsadresse gehen an Paddle und erreichen Sketchy nie. Paddle verarbeitet sie nach seiner eigenen Datenschutzerklärung.",
           "Wenn du eine Verlängerung ohne Anmeldung stoppst, wird die eingegebene E-Mail-Adresse an Paddle weitergegeben, um den Pass zu finden. Der Trinkgeld-Link öffnet Ko-fi, eine eigene Website: Sketchy sendet dorthin nichts über dich, und was du dort eingibst, verarbeitet Ko-fi.",
+          "Wenn du einen Pass schenkst, sendet Sketchy Paddle deine Konto-ID und die des Empfängers und speichert, wer ihn geschenkt hat. Der Empfänger erfährt, dass du es warst, außer du möchtest nicht genannt werden.",
         ],
       },
       {
@@ -336,6 +337,7 @@ export const LEGAL_DE: LegalDocuments = {
           "Ein Jahrespass verlängert sich jedes Jahr, bis du kündigst. Du kannst jederzeit unter /support/cancel kündigen, angemeldet oder nicht: Der Pass läuft bis zum Ende der bereits bezahlten Zeit, und du erhältst eine Bestätigung per E-Mail.",
           "Als Verbraucher kannst du innerhalb von vierzehn Tagen nach dem Kauf widerrufen und bekommst den nicht genutzten Teil zurück. Wende dich dazu über deine Quittung an Paddle.",
           "Endet ein Pass, entfallen das Zeichen und das zusätzliche Solo; die gewählten Stile und Doodles bleiben. Eine Erstattung oder Rückbuchung beendet ihn sofort und nimmt auch diese Auswahl zurück. Eine Sperre wird nicht erstattet. Das Löschen deines Kontos stoppt jede Verlängerung. Ein Trinkgeld auf Ko-fi ist ein Geschenk und enthält keinen Pass.",
+          "Du kannst einem anderen Spieler zwölf Monate schenken: eine Abbuchung, keine Verlängerung und keine Kosten für ihn. Sie beginnen, wenn seine aktuelle Zeit endet, und eine laufende Verlängerung wartet, bis das Geschenk endet, und läuft dann weiter, damit er nicht für dieselben Monate zahlt. Er kann sie jederzeit kündigen.",
         ],
       },
       {

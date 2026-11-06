@@ -34,7 +34,8 @@ SIGNATURE_TOLERANCE = timedelta(minutes=5)
 API_TIMEOUT_SECONDS = 10
 PRODUCT_YEAR = "year"
 PRODUCT_LIFETIME = "lifetime"
-PRODUCTS = (PRODUCT_YEAR, PRODUCT_LIFETIME)
+PRODUCT_GIFT = "gift"
+PRODUCTS = (PRODUCT_YEAR, PRODUCT_LIFETIME, PRODUCT_GIFT)
 _STUB_YEAR = timedelta(days=365)
 
 
@@ -66,6 +67,10 @@ class ProviderEvent:
     period_end: datetime | None = None
     amount_minor: int = 0
     currency: str = "EUR"
+    # A gift: `account_id` is who it is for. Its period is decided on arrival
+    # (`apply_provider_event`), because it starts when their time ends.
+    giver_id: str | None = None
+    gift_anonymous: bool = False
 
 
 @dataclass(frozen=True)
@@ -85,9 +90,16 @@ class Provider(Protocol):
         ...
 
     async def create_checkout(
-        self, *, product: str, account_id: str, extra_minor: int, base_url: str
+        self,
+        *,
+        product: str,
+        account_id: str,
+        extra_minor: int,
+        base_url: str,
+        giver_id: str | None = None,
+        gift_anonymous: bool = False,
     ) -> str:
-        """Where to send the buyer."""
+        """Where to send the buyer. `account_id` is who the pass is for."""
         ...
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation: ...
@@ -95,6 +107,10 @@ class Provider(Protocol):
     async def stop_if_unpaid(self, subscription_id: str) -> bool:
         """Stop a subscription that has stopped paying, at once. False for a healthy
         one: its renewal has been paid, or is about to be."""
+        ...
+
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        """Charge next at `when`, and nothing for the change. Raises ProviderUnavailable."""
         ...
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]: ...
@@ -152,9 +168,9 @@ def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
     start = _moment(period.get("starts_at"))
     end = _moment(period.get("ends_at"))
     subscription_id = data.get("subscription_id")
-    if end is None and (subscription_id or product != PRODUCT_LIFETIME):
-        # Only a lifetime pass may have no end: anything else that arrives
-        # without one must not silently become a pass for life.
+    if end is None and (subscription_id or product not in (PRODUCT_LIFETIME, PRODUCT_GIFT)):
+        # Only a lifetime pass may have no end, and a gift gets its end on
+        # arrival: anything else without one must not silently become a pass for life.
         return None
     start = start or _moment(data.get("billed_at")) or _moment(data.get("created_at"))
     if start is None:
@@ -171,6 +187,8 @@ def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
         period_end=end,
         amount_minor=_minor(totals.get("total")),
         currency=str(data.get("currency_code") or "EUR"),
+        giver_id=custom.get("giver_id"),
+        gift_anonymous=custom.get("gift_anonymous") is True,
     )
 
 
@@ -289,13 +307,20 @@ class PaddleProvider:
             raise ProviderUnavailable(type(error).__name__) from error
 
     async def create_checkout(
-        self, *, product: str, account_id: str, extra_minor: int, base_url: str
+        self,
+        *,
+        product: str,
+        account_id: str,
+        extra_minor: int,
+        base_url: str,
+        giver_id: str | None = None,
+        gift_anonymous: bool = False,
     ) -> str:
-        price = (
-            self._config.price_year
-            if product == PRODUCT_YEAR
-            else self._config.price_lifetime
-        )
+        price = {
+            PRODUCT_YEAR: self._config.price_year,
+            PRODUCT_LIFETIME: self._config.price_lifetime,
+            PRODUCT_GIFT: self._config.price_gift,
+        }[product]
         items: list[dict] = [{"price_id": price, "quantity": 1}]
         payload: dict = {
             "items": items,
@@ -303,6 +328,8 @@ class PaddleProvider:
             # The account travels here, never in a query string we wrote.
             "custom_data": {"account_id": account_id, "product": product},
         }
+        if giver_id:
+            payload["custom_data"] |= {"giver_id": giver_id, "gift_anonymous": gift_anonymous}
         if extra_minor:
             # One non-catalog line on this first charge only: a subscription's
             # renewals repeat its catalog prices, not one-time lines.
@@ -367,6 +394,26 @@ class PaddleProvider:
             return True
         return False
 
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        # Refused for a subscription past due or within 30 minutes of renewing. Read
+        # first: a redelivered webhook must not risk that on what has already moved.
+        quoted = urllib.parse.quote(subscription_id, safe="")
+        current = await self._call("GET", f"/subscriptions/{quoted}")
+        try:
+            billed = datetime.fromisoformat(str((current.get("data") or {}).get("next_billed_at")))
+        except ValueError:
+            billed = None
+        if billed is not None and billed >= when.replace(microsecond=0):
+            return
+        await self._call(
+            "PATCH",
+            f"/subscriptions/{quoted}",
+            {
+                "next_billed_at": when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "proration_billing_mode": "do_not_bill",
+            },
+        )
+
     async def _email_of(self, customer_id: object) -> str | None:
         """Best effort: the cancellation has happened whether or not this works."""
         if not isinstance(customer_id, str):
@@ -408,39 +455,75 @@ class StubProvider:
         )
         return parse_paddle_event(body)
 
-    def checkout_token(self, *, product: str, account_id: str, extra_minor: int) -> str:
-        fields = f"{product}.{account_id}.{extra_minor}"
+    def checkout_token(
+        self,
+        *,
+        product: str,
+        account_id: str,
+        extra_minor: int,
+        giver_id: str = "",
+        gift_anonymous: bool = False,
+    ) -> str:
+        fields = f"{product}.{account_id}.{extra_minor}.{giver_id}.{int(gift_anonymous)}"
         proof = hmac.new(
             self._config.webhook_secret.encode(), fields.encode(), hashlib.sha256
         ).hexdigest()
         return f"{fields}.{proof}"
 
-    def read_checkout_token(self, token: str) -> tuple[str, str, int] | None:
+    def read_checkout_token(self, token: str) -> dict | None:
         parts = token.split(".")
-        if len(parts) != 4 or parts[0] not in PRODUCTS or not parts[2].isdigit():
+        if len(parts) != 6 or parts[0] not in PRODUCTS or not parts[2].isdigit():
             return None
-        expected = self.checkout_token(
-            product=parts[0], account_id=parts[1], extra_minor=int(parts[2])
-        )
-        return (parts[0], parts[1], int(parts[2])) if hmac.compare_digest(expected, token) else None
+        read = {
+            "product": parts[0],
+            "account_id": parts[1],
+            "extra_minor": int(parts[2]),
+            "giver_id": parts[3],
+            "gift_anonymous": parts[4] == "1",
+        }
+        return read if hmac.compare_digest(self.checkout_token(**read), token) else None
 
     async def create_checkout(
-        self, *, product: str, account_id: str, extra_minor: int, base_url: str
+        self,
+        *,
+        product: str,
+        account_id: str,
+        extra_minor: int,
+        base_url: str,
+        giver_id: str | None = None,
+        gift_anonymous: bool = False,
     ) -> str:
         token = self.checkout_token(
-            product=product, account_id=account_id, extra_minor=extra_minor
+            product=product,
+            account_id=account_id,
+            extra_minor=extra_minor,
+            giver_id=giver_id or "",
+            gift_anonymous=gift_anonymous,
         )
         return f"{base_url}/api/support/stub/checkout?token={token}"
 
-    def paid_event(self, *, product: str, account_id: str, extra_minor: int, now: datetime) -> bytes:
+    def paid_event(
+        self,
+        *,
+        product: str,
+        account_id: str,
+        extra_minor: int,
+        now: datetime,
+        giver_id: str = "",
+        gift_anonymous: bool = False,
+    ) -> bytes:
         """What Paddle would post once this checkout was paid."""
         order = f"txn_stub_{uuid4().hex}"
-        amount = (1900 if product == PRODUCT_YEAR else 6900) + extra_minor
+        amount = (6900 if product == PRODUCT_LIFETIME else 1900) + extra_minor
         data: dict = {
             "id": order,
             "currency_code": "EUR",
             "billed_at": now.isoformat(),
-            "custom_data": {"account_id": account_id, "product": product},
+            "custom_data": {
+                "account_id": account_id,
+                "product": product,
+                **({"giver_id": giver_id, "gift_anonymous": gift_anonymous} if giver_id else {}),
+            },
             "details": {"totals": {"total": str(amount)}},
         }
         if product == PRODUCT_YEAR:
@@ -462,6 +545,9 @@ class StubProvider:
 
     async def stop_if_unpaid(self, subscription_id: str) -> bool:
         return True
+
+    async def move_renewal(self, subscription_id: str, when: datetime) -> None:
+        return None
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         return ()

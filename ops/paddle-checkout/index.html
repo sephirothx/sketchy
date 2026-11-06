@@ -22,10 +22,14 @@
       Paddle.Initialize({
         token: "REPLACE_WITH_THE_CLIENT_SIDE_TOKEN",
         checkout: {
-          settings: {
-            displayMode: "overlay",
-            successUrl: "REPLACE_WITH_PUBLIC_BASE_URL/support/thanks",
-          },
+          settings: { displayMode: "overlay" },
+        },
+        // Instead of a success URL, so a giver is thanked for the gift rather
+        // than left waiting for a pass of their own.
+        eventCallback: (event) => {
+          if (event.name !== "checkout.completed") return;
+          const gift = event.data?.custom_data?.product === "gift" ? "?gift=1" : "";
+          window.location.href = "REPLACE_WITH_PUBLIC_BASE_URL/support/thanks" + gift;
         },
       });
     </script>

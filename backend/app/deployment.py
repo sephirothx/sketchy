@@ -361,6 +361,7 @@ def validate_support_configuration(environ: Mapping[str, str] | None = None) -> 
             ("SUPPORT_API_KEY", config.api_key),
             ("SUPPORT_PRICE_YEAR", config.price_year),
             ("SUPPORT_PRICE_LIFETIME", config.price_lifetime),
+            ("SUPPORT_PRICE_GIFT", config.price_gift),
             ("SUPPORT_EXTRA_PRODUCT_ID", config.extra_product_id),
         )
         if not value

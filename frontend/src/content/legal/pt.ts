@@ -145,6 +145,7 @@ export const LEGAL_PT: LegalDocuments = {
           "Os dados só são entregues às autoridades quando a lei o exige.",
           "Se comprares um passe de apoiante, quem o vende e recebe o pagamento é a Paddle, o nosso revendedor. O Sketchy envia à Paddle o id da tua conta e guarda o que a Paddle comunica: o número da encomenda, o período, o valor e a moeda. O teu cartão e a tua morada de faturação vão para a Paddle e nunca chegam ao Sketchy. A Paddle trata-os segundo a sua própria política de privacidade.",
           "Se parares uma renovação sem iniciar sessão, o e-mail que escreves é passado à Paddle para encontrar o passe. A ligação de gorjeta abre o Ko-fi, um site à parte: o Sketchy não lhe envia nada sobre ti, e o que escreveres lá é tratado pelo Ko-fi.",
+          "Se ofereceres um passe, o Sketchy envia à Paddle o id da tua conta e o de quem o recebe, e guarda quem o ofereceu. Quem o recebe fica a saber que foste tu, a menos que peças para não seres nomeado.",
         ],
       },
       {
@@ -325,6 +326,7 @@ export const LEGAL_PT: LegalDocuments = {
           "Um passe anual renova todos os anos até cancelares. Podes cancelar a qualquer momento em /support/cancel, com ou sem sessão: o passe dura até ao fim do tempo já pago e recebes uma confirmação por e-mail.",
           "Se fores consumidor, podes desistir nos catorze dias seguintes à compra e receber de volta a parte que não usaste. Pede-o através do teu recibo da Paddle.",
           "Quando um passe termina, a marca e o Solo adicional desaparecem, e os estilos e rabiscos que escolheste ficam. Um reembolso ou um estorno termina-o de imediato e retira também essas escolhas. Uma suspensão não é reembolsada. Apagar a tua conta para qualquer renovação. Uma gorjeta no Ko-fi é uma oferta e não inclui nenhum passe.",
+          "Podes oferecer doze meses a outro jogador: uma única cobrança, sem renovação e sem custos para essa pessoa. Começam quando o tempo atual dela terminar e, se o passe dela fosse renovar, essa renovação espera pelo fim da oferta e depois continua, para que não pague os mesmos meses. Pode cancelá-la a qualquer momento.",
         ],
       },
       {

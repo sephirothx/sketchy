@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Du hast schon einen Unterstützerpass.",
   support_unavailable: "Die Kasse ist gerade nicht erreichbar. Es wurde nichts abgebucht. Bitte versuch es noch einmal.",
   support_cancel_failed: "Die Verlängerung konnte nicht gestoppt werden und läuft noch. Bitte versuch es noch einmal.",
+  support_gift_refused: "Dieser Spieler kann kein Geschenk erhalten.",
   identity_unavailable: "Sketchy konnte nicht bestätigen, wer du bist. Lade neu und versuch es noch einmal.",
 
   // Rooms
@@ -441,7 +442,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const DE: Catalogue = {
   supporterMark: { label: "Unterstützer" },
   support: {
+    giftThanks: "Dein Geschenk ist unterwegs. Es gilt, sobald die Zahlung bestätigt ist.",
+    giftActionFor: (p: { name: string }) => `${p.name} einen Pass schenken`,
     markNotSaved: "Das konnte nicht gespeichert werden. Bitte versuch es noch einmal.",
+    giftAction: "Pass schenken",
+    giftCancel: "Abbrechen",
+    giftTitle: (p: { name: string }) => `Schenke ${p.name} ein Jahr Unterstützerpass`,
+    giftPrice: (p: { price: string }) => `${p.price}, einmalig.`,
+    giftTerms: (p: { name: string }) => `Er verlängert sich nie und kostet ${p.name} nichts. Unterstützt ${p.name} schon, beginnt das Jahr, wenn der aktuelle Pass endet.`,
+    giftAnonymous: (p: { name: string }) => `Meinen Namen nicht an ${p.name} zeigen`,
+    inboxGifted: (p: { date: string }) => `Jemand hat dir ein Jahr Unterstützerpass geschenkt. Dein Pass läuft bis ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} hat dir ein Jahr Unterstützerpass geschenkt. Dein Pass läuft bis ${p.date}.`,
     title: "Sketchy unterstützen",
     introLead: "Sketchy wird von einem einzelnen Entwickler betrieben, ohne Werbung und ohne Pay-to-Win.",
     introPass: "Ein Unterstützerpass hilft, es am Laufen zu halten, und bringt als Dankeschön ein paar kleine Extras mit.",
@@ -486,6 +497,7 @@ export const DE: Catalogue = {
     cancelEmail: "Die E-Mail, mit der du bezahlt hast",
     cancelRequested: "Falls das zu einem Pass passt, ist die Verlängerung gestoppt, und eine Bestätigung ist unterwegs.",
     nudge: "Gefällt dir Sketchy? Unterstützer halten es für alle kostenlos.",
+    inboxGiftRenews: "Deine Verlängerung wartet bis dahin und läuft danach weiter.",
     seePass: "Zum Pass",
     dismissNudge: "Nicht mehr anzeigen",
     inboxStartedLifetime: "Dein lebenslanger Unterstützerpass ist aktiv. Danke!",

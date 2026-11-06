@@ -13,6 +13,7 @@ import {
   SendIcon,
   UserIcon,
   UsersIcon,
+  GiftIcon,
   HeartIcon,
 } from "./icons";
 import { useFriendInviteAnswer } from "../hooks/useFriendInviteAnswer";
@@ -324,6 +325,35 @@ function Row({ entry, onClose }: { entry: InboxEntry; onClose: () => void }) {
       // to the day only so that it sorts.
       meta = "";
       break;
+    case "supporter_gifted": {
+      tone = "is-primary";
+      icon = <GiftIcon size={18} />;
+      const date = entry.until ? formatDate(new Date(entry.until)) : "";
+      const given = entry.person
+        ? fill(ui.support.inboxGiftedBy({ date }), { name: <Name person={entry.person} /> })
+        : ui.support.inboxGifted({ date });
+      text = entry.renews ? (
+        <>
+          {given} {ui.support.inboxGiftRenews}
+        </>
+      ) : (
+        given
+      );
+      actions = (
+        <button
+          type="button"
+          className="inbox-link"
+          onClick={() => {
+            read();
+            onClose();
+            openSettings("support");
+          }}
+        >
+          {ui.support.seePass}
+        </button>
+      );
+      break;
+    }
     case "supporter_started":
     case "supporter_ending": {
       tone = "is-primary";

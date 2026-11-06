@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "Já tens um passe de apoiante.",
   support_unavailable: "Não foi possível abrir o pagamento. Não foi cobrado nada. Tenta novamente.",
   support_cancel_failed: "Não foi possível parar a renovação, por isso continua ativa. Tenta novamente.",
+  support_gift_refused: "Este jogador não pode receber uma oferta.",
   identity_unavailable: "O Sketchy não conseguiu confirmar quem és. Recarrega e tenta de novo.",
 
   // Rooms
@@ -441,7 +442,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const PT: Catalogue = {
   supporterMark: { label: "Apoiante" },
   support: {
+    giftThanks: "A tua oferta vai a caminho. Fica ativa assim que o pagamento for confirmado.",
+    giftActionFor: (p: { name: string }) => `Oferecer um passe a ${p.name}`,
     markNotSaved: "Não foi possível guardar. Tenta novamente.",
+    giftAction: "Oferecer um passe",
+    giftCancel: "Cancelar",
+    giftTitle: (p: { name: string }) => `Oferece a ${p.name} um ano de passe de apoiante`,
+    giftPrice: (p: { price: string }) => `${p.price}, uma única vez.`,
+    giftTerms: (p: { name: string }) => `Nunca renova e nunca cobra nada a ${p.name}. Se ${p.name} já for apoiante, o ano começa quando o passe atual terminar.`,
+    giftAnonymous: (p: { name: string }) => `Não mostrar o meu nome a ${p.name}`,
+    inboxGifted: (p: { date: string }) => `Alguém te ofereceu um ano de passe de apoiante. O teu passe dura até ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} ofereceu-te um ano de passe de apoiante. O teu passe dura até ${p.date}.`,
     title: "Apoia o Sketchy",
     introLead: "O Sketchy é gerido por um único programador, sem anúncios e sem pay-to-win.",
     introPass: "Um passe de apoiante ajuda a mantê-lo a funcionar e traz alguns pequenos extras como agradecimento.",
@@ -486,6 +497,7 @@ export const PT: Catalogue = {
     cancelEmail: "O e-mail com que pagaste",
     cancelRequested: "Se corresponder a um passe, a renovação fica parada e a confirmação vai a caminho.",
     nudge: "Gostas do Sketchy? Os apoiantes mantêm-no gratuito para todos.",
+    inboxGiftRenews: "A tua renovação espera até lá e depois continua.",
     seePass: "Ver o passe",
     dismissNudge: "Não mostrar novamente",
     inboxStartedLifetime: "O teu passe de apoiante vitalício está ativo. Obrigado!",

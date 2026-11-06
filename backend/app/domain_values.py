@@ -653,6 +653,8 @@ INBOX_KINDS = (
     # ends or renews. A value in `params`, never a sentence (R-INBOX-05).
     "supporter_started",
     "supporter_ending",
+    # A pass somebody gave them (#1540). Names the giver unless they asked not to.
+    "supporter_gifted",
 )
 # The steps a `role` entry can describe: an offer to take up, a role given
 # outright, a role taken away.

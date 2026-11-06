@@ -57,3 +57,32 @@ async def test_a_guest_cannot_reach_checkout():
         # The price is known before signing up.
         await pane.get_by_text("Lifetime").wait_for()
         await browser.close()
+
+
+async def test_a_pass_can_be_gifted_from_a_profile_and_lands_in_the_inbox():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        recipient = await (await browser.new_context()).new_page()
+        giver = await (await browser.new_context()).new_page()
+        bruno, marta = unique("Bruno"), unique("Marta")
+        await recipient.goto(BASE_URL)
+        await use_guest_name(recipient, bruno)
+        await register_account(recipient, bruno)
+        bruno_id = (await (await recipient.request.get(f"{BASE_URL}/api/auth/me")).json())["id"]
+        await giver.goto(BASE_URL)
+        await use_guest_name(giver, marta)
+        await register_account(giver, marta)
+
+        await giver.goto(f"{BASE_URL}/profile/{bruno_id}")
+        await giver.get_by_role("button", name="Gift a pass").click()
+        dialog = giver.get_by_test_id("gift-pass-dialog")
+        await dialog.get_by_role("button", name="Continue to checkout").click()
+        await giver.get_by_role("button", name="Pay").click()
+        await giver.wait_for_url("**/support/thanks**")
+
+        await recipient.goto(f"{BASE_URL}/settings/support")
+        await recipient.get_by_test_id("support-pane").get_by_text("You're a supporter").wait_for()
+        inbox = (await (await recipient.request.get(f"{BASE_URL}/api/inbox")).json())["entries"]
+        gift = next(entry for entry in inbox if entry["kind"] == "supporter_gifted")
+        assert gift["person"]["displayName"] == marta
+        await browser.close()

@@ -62,6 +62,8 @@ import "../styles/lazy/profile.css";
 import { SupporterMark } from "../components/ui/SupporterMark";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useSupportStore } from "../store/supportStore";
+import { GiftPassDialog } from "../components/GiftPassDialog";
+import { GiftIcon } from "../components/icons";
 
 /** A game's prompt source mode, named the way the glossary names it. */
 function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
@@ -670,9 +672,13 @@ function ProfileView({ userId }: { userId: string }) {
   const supportPlans = useSupportStore((state) => state.plans);
   const loadSupportPlans = useSupportStore((state) => state.loadPlans);
   const supporterStatus = useSupportStore((state) => state.status);
+  const [giftingPass, setGiftingPass] = useState(false);
+  const mayGift = Boolean(
+    subject && !isOwnProfile && !subject.isAnonymous && currentUser && !currentUser.isAnonymous,
+  );
   useEffect(() => {
-    if (isOwnProfile) void loadSupportPlans();
-  }, [isOwnProfile, loadSupportPlans]);
+    if (isOwnProfile || mayGift) void loadSupportPlans();
+  }, [isOwnProfile, mayGift, loadSupportPlans]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [playLanguages, setPlayLanguages] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -888,6 +894,18 @@ function ProfileView({ userId }: { userId: string }) {
               userId={userId}
               displayName={shownName}
             />
+            {/* Here and in the Friends list, never in a room (#1540). Shown to
+                everyone alike: hiding it for a lifetime pass would say who holds
+                one, which a hidden mark must not. The server refuses instead. */}
+            {mayGift && supportPlans && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact profile-gift"
+                onClick={() => setGiftingPass(true)}
+              >
+                <GiftIcon size={16} /> {ui.support.giftAction}
+              </button>
+            )}
             {/* The other place an account's name and picture are actually
                 looked at, and so the other place they have to be reportable
                 from (R-AVA-06). Offered on the same terms as the lobby's:
@@ -909,6 +927,13 @@ function ProfileView({ userId }: { userId: string }) {
               )}
           </header>
 
+          {giftingPass && subject && (
+            <GiftPassDialog
+              recipientId={subject.id}
+              recipientName={shownName}
+              onClose={() => setGiftingPass(false)}
+            />
+          )}
           {reportingPicture && (
             <ReportAccountDialog
               userId={userId}

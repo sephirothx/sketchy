@@ -28,6 +28,8 @@ class SupportConfig:
     api_url: str = PADDLE_API_URL
     price_year: str = ""
     price_lifetime: str = ""
+    # Twelve months, one charge, never renewing (#1540).
+    price_gift: str = ""
     # The product a non-catalog "extra" line is sold under.
     extra_product_id: str = ""
     # The page Paddle's payment link opens on. Paddle requires Paddle.js there,
@@ -37,6 +39,7 @@ class SupportConfig:
     # What the pitch shows. Paddle's checkout shows the buyer's real total.
     year_label: str = "€19"
     lifetime_label: str = "€69"
+    gift_label: str = "€19"
     # An outbound link for a tip with nothing in return. Not a provider: no
     # script, no webhook, no data, and it never counts toward a pass.
     tip_url: str = ""
@@ -58,9 +61,11 @@ def support_config(environ: Mapping[str, str] | None = None) -> SupportConfig | 
         api_url=values.get("SUPPORT_API_URL", "").strip().rstrip("/") or PADDLE_API_URL,
         price_year=values.get("SUPPORT_PRICE_YEAR", "").strip(),
         price_lifetime=values.get("SUPPORT_PRICE_LIFETIME", "").strip(),
+        price_gift=values.get("SUPPORT_PRICE_GIFT", "").strip(),
         extra_product_id=values.get("SUPPORT_EXTRA_PRODUCT_ID", "").strip(),
         checkout_url=values.get("SUPPORT_CHECKOUT_URL", "").strip(),
         year_label=values.get("SUPPORT_YEAR_LABEL", "").strip() or "€19",
         lifetime_label=values.get("SUPPORT_LIFETIME_LABEL", "").strip() or "€69",
+        gift_label=values.get("SUPPORT_GIFT_LABEL", "").strip() or "€19",
         tip_url=values.get("SUPPORT_TIP_URL", "").strip(),
     )

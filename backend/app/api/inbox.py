@@ -49,7 +49,7 @@ from app.refusals import ErrorCode
 from app.repositories.sqlalchemy import _identity_ids
 from app.request_text import ControlFreeModel
 from app.services.friends import friendship_key
-from app.services.supporter import pass_facts
+from app.services.supporter import last_gift_end_of, pass_facts
 from app.services.inbox import mark_read
 
 #: Entries per read. The bell's panel shows the newest; the rest are a page
@@ -172,8 +172,9 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
 
     people_ids = {
         e.subject_id
-        for kind in ("friend_request", "friend_accepted", "game_invite")
+        for kind in ("friend_request", "friend_accepted", "game_invite", "supporter_gifted")
         for e in by_kind.get(kind, [])
+        if e.subject_id is not None
     }
     people = (
         {
@@ -191,8 +192,14 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             e.subject_id
             for kind in ("supporter_started", "supporter_ending")
             for e in by_kind.get(kind, [])
-        },
+        }
+        | {UUID(e.params["purchase"]) for e in by_kind.get("supporter_gifted", [])},
     )
+    # Only the last gift's end is when a renewal waits for: an earlier one's date has
+    # been passed by, and one already over is waiting for nothing. From the ledger, as
+    # the two can be on different pages of this.
+    gifted = by_kind.get("supporter_gifted", [])
+    last_gift_end = await last_gift_end_of(session, gifted[0].user_id) if gifted else None
     friendships = {}
     pairs = {
         friendship_key(e.user_id, e.subject_id)
@@ -287,6 +294,21 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             if fact is None:
                 continue
             body["until"], body["renews"] = fact
+        elif entry.kind == "supporter_gifted":
+            # The subject is the giver, so the row it is about is in params.
+            fact = passes.get(UUID(entry.params["purchase"]))
+            if fact is None:
+                continue
+            body["until"] = fact[0]
+            body["renews"] = (
+                fact[1]
+                and fact[0] == last_gift_end
+                and last_gift_end is not None
+                and _aware(datetime.fromisoformat(last_gift_end)) > datetime.now(timezone.utc)
+            )
+            # No subject when the giver asked not to be named, and none left
+            # once they have deleted their account.
+            body["person"] = _person(people.get(entry.subject_id))
         elif entry.kind == "role":
             owner = owners.get(entry.user_id)
             role = entry.params.get("role")

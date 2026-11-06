@@ -162,6 +162,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   support_already_active: "You already have a supporter pass.",
   support_unavailable: "The checkout could not be reached. Nothing was charged. Please try again.",
   support_cancel_failed: "The renewal could not be stopped, so it is still on. Please try again.",
+  support_gift_refused: "This player can't receive a gift.",
   identity_unavailable: "Sketchy could not confirm who you are. Reload and try again.",
 
   // Rooms
@@ -453,7 +454,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const EN = {
   supporterMark: { label: "Supporter" },
   support: {
+    giftThanks: "Your gift is on its way. It's live as soon as the payment is confirmed.",
+    giftActionFor: (p: { name: string }) => `Gift ${p.name} a pass`,
     markNotSaved: "That could not be saved. Please try again.",
+    giftAction: "Gift a pass",
+    giftCancel: "Cancel",
+    giftTitle: (p: { name: string }) => `Gift ${p.name} a year of supporter`,
+    giftPrice: (p: { price: string }) => `${p.price}, once.`,
+    giftTerms: (p: { name: string }) => `It never renews and never charges ${p.name}. If ${p.name} is already a supporter, the year starts when their pass ends.`,
+    giftAnonymous: (p: { name: string }) => `Don't show my name to ${p.name}`,
+    inboxGifted: (p: { date: string }) => `Someone gave you a year of supporter. Your pass runs until ${p.date}.`,
+    inboxGiftedBy: (p: { date: string }) => `{name} gave you a year of supporter. Your pass runs until ${p.date}.`,
     title: "Support Sketchy",
     introLead: "Sketchy is run by a single developer, with no ads and no pay-to-win.",
     introPass: "A supporter pass helps keep it running, and comes with a few small extras as a thank-you.",
@@ -498,6 +509,7 @@ export const EN = {
     cancelEmail: "The e-mail you paid with",
     cancelRequested: "If that matches a pass, its renewal is stopped and a confirmation is on its way.",
     nudge: "Like Sketchy? Supporters keep it free for everyone.",
+    inboxGiftRenews: "Your renewal waits until then, and carries on after.",
     seePass: "See the pass",
     dismissNudge: "Don't show this again",
     inboxStartedLifetime: "Your lifetime supporter pass is active. Thank you!",

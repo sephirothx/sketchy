@@ -894,6 +894,47 @@ async def test_paddle_checkout_sends_the_account_in_custom_data_and_the_extra_on
     assert sent["payload"]["checkout"]["url"] == "https://pay.example.test/"
 
 
+async def test_paddle_leaves_alone_a_renewal_already_moved(monkeypatch):
+    sent: list[str] = []
+
+    async def fake_call(self, method, path, payload=None):
+        sent.append(method)
+        return {"data": {"next_billed_at": "2028-03-04T05:06:07Z"}}
+
+    monkeypatch.setattr(PaddleProvider, "_call", fake_call)
+    provider = PaddleProvider(SupportConfig(provider="paddle", webhook_secret="s"))
+    await provider.move_renewal("sub_1", datetime(2028, 3, 4, 5, 6, 7, 500, tzinfo=timezone.utc))
+    assert sent == ["GET"]
+    await provider.move_renewal("sub_1", datetime(2028, 3, 5, tzinfo=timezone.utc))
+    assert sent == ["GET", "GET", "PATCH"]
+
+
+async def test_a_refunded_lifetime_delivered_again_leaves_a_new_year_alone(site):
+    http, factory = site
+    user_id = await _register(http)
+    lifetime = _event(
+        "e1",
+        "transaction.completed",
+        {
+            "id": "o1",
+            "currency_code": "EUR",
+            "billed_at": datetime.now(timezone.utc).isoformat(),
+            "custom_data": {"account_id": str(user_id), "product": "lifetime"},
+            "details": {"totals": {"total": "6900"}},
+        },
+    )
+    await _post(http, lifetime)
+    refund = _event(
+        "e2",
+        "adjustment.updated",
+        {"action": "refund", "status": "approved", "transaction_id": "o1", "totals": {"total": "6900"}},
+    )
+    await _post(http, refund)
+    await _post(http, _paid("e3", "o3", user_id))
+    assert (await _post(http, lifetime)).status_code == 200
+    assert "cancel:sub_1" not in {row.provider_event_id for row in await _rows(factory)}
+
+
 def _paddle_answering(monkeypatch, answers):
     """A Paddle that answers each call in turn, with an exception or a body."""
     calls: list[tuple] = []
@@ -963,6 +1004,26 @@ async def test_paddle_tells_a_no_from_an_outage(monkeypatch):
         assert not isinstance(caught.value, ProviderRefused)
 
 
+async def test_paddle_moves_a_renewal_with_no_charge(monkeypatch):
+    sent: dict = {}
+
+    async def fake_call(self, method, path, payload=None):
+        sent.update(method=method, path=path, payload=payload)
+        return {"data": {}}
+
+    monkeypatch.setattr(PaddleProvider, "_call", fake_call)
+    provider = PaddleProvider(SupportConfig(provider="paddle", webhook_secret="s"))
+    await provider.move_renewal("sub/1", datetime(2028, 3, 4, 5, 6, 7, tzinfo=timezone.utc))
+    assert sent == {
+        "method": "PATCH",
+        "path": "/subscriptions/sub%2F1",
+        "payload": {
+            "next_billed_at": "2028-03-04T05:06:07Z",
+            "proration_billing_mode": "do_not_bill",
+        },
+    }
+
+
 def test_production_refuses_a_tier_that_could_give_passes_away():
     production = {"SKETCHY_ENV": "production"}
     with pytest.raises(RuntimeError, match="stub"):
@@ -983,6 +1044,7 @@ def test_production_refuses_a_tier_that_could_give_passes_away():
             "SUPPORT_API_KEY": "k",
             "SUPPORT_PRICE_YEAR": "pri_y",
             "SUPPORT_PRICE_LIFETIME": "pri_l",
+            "SUPPORT_PRICE_GIFT": "pri_g",
             "SUPPORT_EXTRA_PRODUCT_ID": "pro_e",
             "SUPPORT_TIP_URL": "https://ko-fi.com/sketchy",
         }

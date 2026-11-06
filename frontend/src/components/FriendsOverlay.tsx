@@ -24,6 +24,10 @@ import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/friends.css";
 import "../styles/lazy/settings.css";
 import { SupporterMark } from "./ui/SupporterMark";
+import { useSupportStore } from "../store/supportStore";
+import { GiftPassDialog } from "./GiftPassDialog";
+import { GiftIcon } from "./icons";
+import { useGameStore } from "../store/gameStore";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 
@@ -49,6 +53,13 @@ type Confirming =
   | null;
 
 export function FriendsOverlay() {
+  const [gifting, setGifting] = useState<FriendEntry | null>(null);
+  const seated = useGameStore((state) => Boolean(state.roomId));
+  const supportPlans = useSupportStore((state) => state.plans);
+  const loadSupportPlans = useSupportStore((state) => state.loadPlans);
+  useEffect(() => {
+    void loadSupportPlans();
+  }, [loadSupportPlans]);
   const close = useCloseOverlay();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -217,14 +228,29 @@ export function FriendsOverlay() {
                 entries={surface.friends}
                 testId="friends-accepted"
                 renderActions={(entry) => (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-compact"
-                    disabled={pending === entry.userId}
-                    onClick={() => setConfirming({ kind: "unfriend", entry })}
-                  >
-                    {ui.friendsOverlay.remove}
-                  </button>
+                  <>
+                    {/* Friends also opens over a room, and a gift is never offered
+                        in one (R-SUP-16). */}
+                    {supportPlans && !seated && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-compact friends-gift"
+                        aria-label={ui.support.giftActionFor({ name: entry.displayName })}
+                        title={ui.support.giftAction}
+                        onClick={() => setGifting(entry)}
+                      >
+                        <GiftIcon size={16} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-compact"
+                      disabled={pending === entry.userId}
+                      onClick={() => setConfirming({ kind: "unfriend", entry })}
+                    >
+                      {ui.friendsOverlay.remove}
+                    </button>
+                  </>
                 )}
               />
               <RecentPlayersSection players={suggestions} />
@@ -248,6 +274,13 @@ export function FriendsOverlay() {
           can never ask again - the only way back is asking them yourself.
           Unfriending also revokes a way into your games (R-BLOCK-05's
           reasoning, without the block), and re-making it needs both people. */}
+      {gifting && (
+        <GiftPassDialog
+          recipientId={gifting.userId}
+          recipientName={gifting.displayName}
+          onClose={() => setGifting(null)}
+        />
+      )}
       {confirming?.kind === "decline" && (
         <ConfirmationDialog
           title={ui.friendsOverlay.declineThisRequest}
