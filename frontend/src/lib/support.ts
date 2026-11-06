@@ -92,6 +92,8 @@ export interface SupportPayment {
   at: string;
   product: SupportProduct | "gift";
   amountMinor: number;
+  /** The part of `amountMinor` that was the optional extra; 0 without one. */
+  extraMinor: number;
   currency: string;
   refunded: boolean;
   /** Whom a gift went to, while that account exists. */

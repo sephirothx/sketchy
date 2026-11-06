@@ -1542,6 +1542,7 @@ async def _write_export_artifact(
             "periodEnd": _timestamp(fact.period_end),
             # What somebody else paid is theirs: a gift shows its period alone.
             "amountMinor": None if fact.provider_order_id in gifted_orders else fact.amount_minor,
+            "extraMinor": None if fact.provider_order_id in gifted_orders else fact.extra_minor,
             "currency": None if fact.provider_order_id in gifted_orders else fact.currency,
             "orderId": None if fact.provider_order_id in gifted_orders else fact.provider_order_id,
             "gift": fact.provider_order_id in gifted_orders,
@@ -1566,6 +1567,7 @@ async def _write_export_artifact(
             "periodStart": _timestamp(gift.period_start),
             "periodEnd": _timestamp(gift.period_end),
             "amountMinor": gift.amount_minor,
+            "extraMinor": gift.extra_minor,
             "currency": gift.currency,
             "orderId": gift.provider_order_id,
             "anonymous": gift.gift_anonymous,

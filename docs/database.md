@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`7a9b0c1d2e3f_name_styles.py` (#1476). Both this line and the table
+`61c3239afd30_support_purchase_extra.py` (R-SUP-19). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -893,7 +893,10 @@ when `user_id` was given it, so status, the mark and the refund rule need no cha
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
-(`ck_support_purchases_amount`, not negative) · `currency` · `created_at`.
+(`ck_support_purchases_amount`, not negative) · `extra_minor` (the part of `amount_minor` that
+was the optional extra, tax included, from the transaction's own line items, so the payments
+list can show the split; 0 without one; `ck_support_purchases_extra`: not negative and never
+more than the amount) · `currency` · `created_at`.
 `uq_support_purchases_provider_event` makes a webhook delivered twice one fact.
 `ix_support_purchases_order`, `ix_support_purchases_user_id` and
 `ix_support_purchases_subscription` serve status. A `cancellation` leaves the periods alone:

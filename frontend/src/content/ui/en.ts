@@ -520,6 +520,7 @@ export const EN = {
     paymentsTitle: "Your payments",
     paymentsLast: (p: { amount: string; date: string }) => `Last: ${p.amount} on ${p.date}`,
     paymentYear: "Year pass",
+    paymentSplit: (p: { pass: string; extra: string }) => `${p.pass} + ${p.extra} extra`,
     paymentGiftTo: (p: { name: string }) => `Gift for ${p.name}`,
     paymentGift: "Gift",
     paymentRefunded: "Refunded",

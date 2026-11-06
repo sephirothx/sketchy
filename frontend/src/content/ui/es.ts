@@ -508,6 +508,7 @@ export const ES: Catalogue = {
     paymentsTitle: "Tus pagos",
     paymentsLast: (p: { amount: string; date: string }) => `Último: ${p.amount} el ${p.date}`,
     paymentYear: "Pase anual",
+    paymentSplit: (p: { pass: string; extra: string }) => `${p.pass} + ${p.extra} extra`,
     paymentGiftTo: (p: { name: string }) => `Regalo para ${p.name}`,
     paymentGift: "Regalo",
     paymentRefunded: "Reembolsado",

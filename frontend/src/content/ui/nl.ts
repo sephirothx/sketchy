@@ -508,6 +508,7 @@ export const NL: Catalogue = {
     paymentsTitle: "Je betalingen",
     paymentsLast: (p: { amount: string; date: string }) => `Laatste: ${p.amount} op ${p.date}`,
     paymentYear: "Jaarpas",
+    paymentSplit: (p: { pass: string; extra: string }) => `${p.pass} + ${p.extra} extra`,
     paymentGiftTo: (p: { name: string }) => `Cadeau voor ${p.name}`,
     paymentGift: "Cadeau",
     paymentRefunded: "Terugbetaald",

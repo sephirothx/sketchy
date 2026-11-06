@@ -881,6 +881,9 @@ class SupportPurchase(Base):
             name="ck_support_purchases_period",
         ),
         CheckConstraint("amount_minor >= 0", name="ck_support_purchases_amount"),
+        CheckConstraint(
+            "extra_minor >= 0 AND extra_minor <= amount_minor", name="ck_support_purchases_extra"
+        ),
         # A webhook delivered twice is one fact.
         UniqueConstraint(
             "provider", "provider_event_id", name="uq_support_purchases_provider_event"
@@ -930,6 +933,11 @@ class SupportPurchase(Base):
     # Null on a purchase: a lifetime pass.
     period_end: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The part of `amount_minor` that was the optional extra, tax included, as
+    # the provider's line items say (R-SUP-19). Zero without one.
+    extra_minor: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False

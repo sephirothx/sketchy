@@ -290,25 +290,36 @@ function Payments() {
                   {paymentLabel(payment)}
                   {payment.refunded && <span className="support-refunded">{ui.support.paymentRefunded}</span>}
                 </strong>
-                <small id={`support-payment-${index}-date`}>{formatDate(new Date(payment.at))}</small>
+                <small>
+                  <span id={`support-payment-${index}-date`}>{formatDate(new Date(payment.at))}</span>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="support-receipt"
+                    // Every row's button says "Receipt": this says whose.
+                    aria-describedby={`support-payment-${index}-what support-payment-${index}-date`}
+                    onClick={() => {
+                      setError(null);
+                      openReceipt(payment.orderId).catch((failure) =>
+                        setError(refusalText(failure, ui.support.receiptFailed)),
+                      );
+                    }}
+                  >
+                    <DownloadIcon size={13} />
+                    {ui.support.receipt}
+                  </button>
+                </small>
               </span>
               <span className="support-payment-paid">
                 <span className="support-payment-amount">{formatPaid(payment.amountMinor, payment.currency)}</span>
-                <button
-                  type="button"
-                  className="support-receipt"
-                  // Every row's button says "Receipt": this says whose.
-                  aria-describedby={`support-payment-${index}-what support-payment-${index}-date`}
-                  onClick={() => {
-                    setError(null);
-                    openReceipt(payment.orderId).catch((failure) =>
-                      setError(refusalText(failure, ui.support.receiptFailed)),
-                    );
-                  }}
-                >
-                  <DownloadIcon size={14} />
-                  {ui.support.receipt}
-                </button>
+                {payment.extraMinor > 0 && (
+                  <small>
+                    {ui.support.paymentSplit({
+                      pass: formatPaid(payment.amountMinor - payment.extraMinor, payment.currency),
+                      extra: formatPaid(payment.extraMinor, payment.currency),
+                    })}
+                  </small>
+                )}
               </span>
             </li>
           ))}

@@ -418,6 +418,7 @@ async def record_support_fact(
     user_id: UUID | None,
     amount_minor: int,
     currency: str,
+    extra_minor: int = 0,
     period_start: datetime | None = None,
     period_end: datetime | None = None,
     provider_subscription_id: str | None = None,
@@ -444,6 +445,7 @@ async def record_support_fact(
             kind=kind.value,
             user_id=user_id,
             amount_minor=amount_minor,
+            extra_minor=extra_minor,
             currency=currency,
             period_start=period_start,
             period_end=period_end,
@@ -538,6 +540,7 @@ async def apply_provider_event(
         kind=event.kind,
         user_id=user_id,
         amount_minor=event.amount_minor,
+        extra_minor=event.extra_minor,
         currency=event.currency,
         period_start=event.period_start,
         period_end=event.period_end,
@@ -766,6 +769,8 @@ class Payment:
     at: datetime
     product: str
     amount_minor: int
+    # The part of it that was the optional extra.
+    extra_minor: int
     currency: str
     refunded: bool
     # Whom a gift went to; None for one's own pass, or once that account is gone.
@@ -777,6 +782,7 @@ class Payment:
             "at": self.at.isoformat(),
             "product": self.product,
             "amountMinor": self.amount_minor,
+            "extraMinor": self.extra_minor,
             "currency": self.currency,
             "refunded": self.refunded,
             "giftTo": self.gift_to,
@@ -806,6 +812,7 @@ async def payments_of(session: AsyncSession, user_id: UUID) -> list[Payment]:
             SupportPurchase.is_gift,
             SupportPurchase.period_end,
             SupportPurchase.amount_minor,
+            SupportPurchase.extra_minor,
             SupportPurchase.currency,
             _order_reversed(SupportPurchase),
             recipient.display_name,
@@ -825,11 +832,23 @@ async def payments_of(session: AsyncSession, user_id: UUID) -> list[Payment]:
             at=created_at,
             product=PRODUCT_GIFT if is_gift else PRODUCT_LIFETIME if period_end is None else PRODUCT_YEAR,
             amount_minor=amount_minor,
+            extra_minor=extra_minor,
             currency=currency,
             refunded=bool(reversed_),
             gift_to=name if name and state != AccountState.DELETED.value else None,
         )
-        for order_id, created_at, is_gift, period_end, amount_minor, currency, reversed_, name, state in rows.all()
+        for (
+            order_id,
+            created_at,
+            is_gift,
+            period_end,
+            amount_minor,
+            extra_minor,
+            currency,
+            reversed_,
+            name,
+            state,
+        ) in rows.all()
     ]
 
 

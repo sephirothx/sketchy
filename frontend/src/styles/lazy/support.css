@@ -385,9 +385,20 @@ div.support-plan {
 }
 
 .support-payments-toggle small,
-.support-payment-what small {
+.support-payment-what small,
+.support-payment-paid small {
   font-size: 12.5px;
   color: var(--muted);
+}
+
+/* The date and the receipt share a line, so a payment with an extra stays two
+   lines: the amount column holds only money. */
+.support-payment-what small {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  white-space: nowrap;
 }
 
 .support-payments-toggle svg {
@@ -480,13 +491,12 @@ div.support-plan {
 .support-receipt {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   padding: 0 2px;
   border: 0;
   background: none;
   color: var(--primary-ink);
   font: inherit;
-  font-size: 13.5px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -496,12 +506,6 @@ div.support-plan {
   text-decoration: underline;
 }
 
-/* A phone: the receipt keeps its word and drops its icon. */
-@media (max-width: 480px) {
-  .support-receipt svg {
-    display: none;
-  }
-}
 
 .support-payments .auth-error {
   margin: 0 14px 12px;

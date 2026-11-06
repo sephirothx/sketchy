@@ -2393,6 +2393,7 @@
    "endedAt",
    "eventType",
    "expiresAt",
+   "extraMinor",
    "extraPromptLanguages",
    "giftedByUserId",
    "imageBase64",
@@ -3046,6 +3047,7 @@
   ],
   "services.supporter:payload": [
    "amountMinor",
+   "extraMinor",
    "giftTo",
    "orderId"
   ],

@@ -20,7 +20,12 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
-from app.support.providers import PaddleProvider, ProviderRefused, signature_header
+from app.support.providers import (
+    PaddleProvider,
+    ProviderRefused,
+    parse_paddle_event,
+    signature_header,
+)
 
 from tests.dbfixtures import create_test_db
 
@@ -88,6 +93,7 @@ async def test_a_buyer_sees_their_own_passes_and_the_gifts_they_gave(site):
 
     gift, year = await _payments(http)
     assert (year["product"], year["amountMinor"], year["currency"]) == ("year", 2400, "EUR")
+    assert (year["extraMinor"], gift["extraMinor"]) == (500, 0)
     assert year["giftTo"] is None and year["refunded"] is False
     assert datetime.fromisoformat(year["at"]) <= datetime.now(timezone.utc)
     assert (gift["product"], gift["amountMinor"], gift["giftTo"]) == ("gift", 1900, "Bruno")
@@ -167,3 +173,33 @@ async def test_paddle_receipts_are_asked_for_at_the_click():
 
     provider._call = refused  # type: ignore[method-assign]
     assert await provider.receipt_url("txn_1", base_url="https://sketchy.test") is None
+
+
+def test_the_extra_is_read_from_paddles_line_items():
+    """Paddle's own split, tax included per line: the €26.50 sandbox payment that
+    carried a €7.50 extra."""
+    body = json.dumps(
+        {
+            "event_id": "evt_1",
+            "event_type": "transaction.completed",
+            "data": {
+                "id": "txn_1",
+                "currency_code": "EUR",
+                "billed_at": "2026-11-06T18:41:00Z",
+                "subscription_id": "sub_1",
+                "billing_period": {"starts_at": "2026-11-06T18:41:00Z", "ends_at": "2027-11-06T18:41:00Z"},
+                "custom_data": {"account_id": "a", "product": "year"},
+                "details": {
+                    "totals": {"total": "2650"},
+                    "line_items": [
+                        {"product": {"id": "pro_year"}, "totals": {"total": "1900"}},
+                        {"product": {"id": "pro_extra"}, "totals": {"total": "750"}},
+                    ],
+                },
+            },
+        }
+    ).encode()
+    event = parse_paddle_event(body, "pro_extra")
+    assert event is not None and (event.amount_minor, event.extra_minor) == (2650, 750)
+    # Without the product to look for, nothing is taken for an extra.
+    assert parse_paddle_event(body).extra_minor == 0

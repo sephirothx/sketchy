@@ -66,6 +66,8 @@ class ProviderEvent:
     period_start: datetime | None = None
     period_end: datetime | None = None
     amount_minor: int = 0
+    # The part of it that was the optional extra (R-SUP-19).
+    extra_minor: int = 0
     currency: str = "EUR"
     # A gift: `account_id` is who it is for. Its period is decided on arrival
     # (`apply_provider_event`), because it starts when their time ends.
@@ -166,7 +168,21 @@ def _minor(value: object) -> int:
         return 0
 
 
-def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
+def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
+    """What the extra's line came to, tax included: the transaction's own split,
+    not what was asked for at checkout, because Paddle rounds tax per line."""
+    if not extra_product_id:
+        return 0
+    lines = (data.get("details") or {}).get("line_items") or []
+    extra = sum(
+        _minor((line.get("totals") or {}).get("total"))
+        for line in lines
+        if (line.get("product") or {}).get("id") == extra_product_id
+    )
+    return min(extra, total)
+
+
+def _transaction_event(event_id: str, data: dict, extra_product_id: str = "") -> ProviderEvent | None:
     custom = data.get("custom_data") or {}
     product = custom.get("product")
     period = data.get("billing_period") or {}
@@ -181,6 +197,7 @@ def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
     if start is None:
         return None
     totals = (data.get("details") or {}).get("totals") or {}
+    amount = _minor(totals.get("total"))
     return ProviderEvent(
         event_id=event_id,
         kind=SupportPurchaseKind.PURCHASE,
@@ -190,7 +207,8 @@ def _transaction_event(event_id: str, data: dict) -> ProviderEvent | None:
         product=product,
         period_start=start,
         period_end=end,
-        amount_minor=_minor(totals.get("total")),
+        amount_minor=amount,
+        extra_minor=_extra_of(data, extra_product_id, amount),
         currency=str(data.get("currency_code") or "EUR"),
         giver_id=custom.get("giver_id"),
         gift_anonymous=custom.get("gift_anonymous") is True,
@@ -233,15 +251,16 @@ def cancellation_event(subscription_id: str) -> ProviderEvent:
     )
 
 
-def parse_paddle_event(body: bytes) -> ProviderEvent | None:
-    """Paddle's event, in our words, or None for a kind we do not act on."""
+def parse_paddle_event(body: bytes, extra_product_id: str = "") -> ProviderEvent | None:
+    """Paddle's event, in our words, or None for a kind we do not act on.
+    `extra_product_id` picks the extra's line out of a transaction's."""
     try:
         event = json.loads(body)
         event_id = str(event["event_id"])
         event_type = str(event["event_type"])
         data = event["data"]
         if event_type == "transaction.completed":
-            return _transaction_event(event_id, data)
+            return _transaction_event(event_id, data, extra_product_id)
         if event_type in ("adjustment.created", "adjustment.updated"):
             return _adjustment_event(event_id, data)
         if event_type == "subscription.canceled" or (
@@ -268,7 +287,7 @@ class PaddleProvider:
         verify_signature(
             self._config.webhook_secret, body, headers.get(SIGNATURE_HEADER), now
         )
-        return parse_paddle_event(body)
+        return parse_paddle_event(body, self._config.extra_product_id)
 
     async def _call(self, method: str, path: str, payload: dict | None = None) -> dict:
         request = urllib.request.Request(
@@ -456,6 +475,10 @@ class PaddleProvider:
         return tuple(found)
 
 
+# The product a stub checkout's extra is sold under, as Paddle's would be.
+STUB_EXTRA_PRODUCT = "pro_stub_extra"
+
+
 class StubProvider:
     """Checkout that runs here: a page with a Pay button (`api/support.py`)."""
 
@@ -470,7 +493,7 @@ class StubProvider:
         verify_signature(
             self._config.webhook_secret, body, headers.get(SIGNATURE_HEADER), now
         )
-        return parse_paddle_event(body)
+        return parse_paddle_event(body, STUB_EXTRA_PRODUCT)
 
     def checkout_token(
         self,
@@ -541,7 +564,12 @@ class StubProvider:
                 "product": product,
                 **({"giver_id": giver_id, "gift_anonymous": gift_anonymous} if giver_id else {}),
             },
-            "details": {"totals": {"total": str(amount)}},
+            "details": {
+                "totals": {"total": str(amount)},
+                "line_items": [{"product": {"id": STUB_EXTRA_PRODUCT}, "totals": {"total": str(extra_minor)}}]
+                if extra_minor
+                else [],
+            },
         }
         if product == PRODUCT_YEAR:
             data["subscription_id"] = f"sub_stub_{uuid4().hex}"
