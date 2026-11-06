@@ -155,17 +155,51 @@ def verify_signature(
         raise BadSignature("signature too old")
 
 
+# What a delivery has to fit to be written down: `support_purchases`' columns. One
+# that does not is unreadable - logged and answered 200, like a shape we cannot
+# read - rather than a 500 the provider would retry for days on a row that can
+# never be written.
+_ID_LENGTH = 128
+_MINOR_MAX = 2**31 - 1
+
+
 def _moment(value: object) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # Paddle writes an offset. A time without one is read as UTC: the ledger only
+    # keeps instants, and refusing it would refuse a purchase over a format.
+    return moment if moment.utcoffset() is not None else moment.replace(tzinfo=timezone.utc)
 
 
 def _minor(value: object) -> int:
     try:
-        return max(0, int(str(value)))
+        amount = max(0, int(str(value)))
     except ValueError:
         return 0
+    if amount > _MINOR_MAX:
+        raise ValueError("an amount past what the ledger holds")
+    return amount
+
+
+def _identifier(value: object) -> str:
+    """One of the provider's ids, as the ledger keeps it."""
+    if not isinstance(value, str) or not 0 < len(value) <= _ID_LENGTH:
+        raise ValueError("not an id the ledger can keep")
+    return value
+
+
+def _currency(value: object) -> str:
+    if value is None:
+        return "EUR"
+    if not isinstance(value, str) or len(value) != 3 or not value.isascii() or not value.isalpha():
+        raise ValueError("not a currency code")
+    return value.upper()
+
+
+def _text(value: object) -> str | None:
+    """Ours, from custom data: a string we wrote, or nothing."""
+    return value if isinstance(value, str) else None
 
 
 def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
@@ -177,40 +211,44 @@ def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
     extra = sum(
         _minor((line.get("totals") or {}).get("total"))
         for line in lines
-        if (line.get("product") or {}).get("id") == extra_product_id
+        if isinstance(line, dict) and (line.get("product") or {}).get("id") == extra_product_id
     )
     return min(extra, total)
 
 
 def _transaction_event(event_id: str, data: dict, extra_product_id: str = "") -> ProviderEvent | None:
-    custom = data.get("custom_data") or {}
-    product = custom.get("product")
+    custom = data.get("custom_data")
+    custom = custom if isinstance(custom, dict) else {}
+    product = _text(custom.get("product"))
     period = data.get("billing_period") or {}
     start = _moment(period.get("starts_at"))
     end = _moment(period.get("ends_at"))
     subscription_id = data.get("subscription_id")
+    if subscription_id is not None:
+        subscription_id = _identifier(subscription_id)
     if end is None and (subscription_id or product not in (PRODUCT_LIFETIME, PRODUCT_GIFT)):
         # Only a lifetime pass may have no end, and a gift gets its end on
         # arrival: anything else without one must not silently become a pass for life.
         return None
     start = start or _moment(data.get("billed_at")) or _moment(data.get("created_at"))
-    if start is None:
+    if start is None or (end is not None and end <= start):
+        # A period that ends before it begins pays for nothing.
         return None
     totals = (data.get("details") or {}).get("totals") or {}
     amount = _minor(totals.get("total"))
     return ProviderEvent(
         event_id=event_id,
         kind=SupportPurchaseKind.PURCHASE,
-        order_id=str(data["id"]),
+        order_id=_identifier(data["id"]),
         subscription_id=subscription_id,
-        account_id=custom.get("account_id"),
+        account_id=_text(custom.get("account_id")),
         product=product,
         period_start=start,
         period_end=end,
         amount_minor=amount,
         extra_minor=_extra_of(data, extra_product_id, amount),
-        currency=str(data.get("currency_code") or "EUR"),
-        giver_id=custom.get("giver_id"),
+        currency=_currency(data.get("currency_code")),
+        giver_id=_text(custom.get("giver_id")),
         gift_anonymous=custom.get("gift_anonymous") is True,
     )
 
@@ -231,9 +269,9 @@ def _adjustment_event(event_id: str, data: dict) -> ProviderEvent | None:
     return ProviderEvent(
         event_id=event_id,
         kind=kind,
-        order_id=str(data["transaction_id"]),
+        order_id=_identifier(data["transaction_id"]),
         amount_minor=_minor((data.get("totals") or {}).get("total")),
-        currency=str(data.get("currency_code") or "EUR"),
+        currency=_currency(data.get("currency_code")),
     )
 
 
@@ -241,10 +279,15 @@ def cancellation_event(subscription_id: str) -> ProviderEvent:
     """The one fact a subscription's cancellation leaves.
 
     Keyed by the subscription: our own click and each webhook about it arrive
-    separately, and are one thing that happened.
+    separately, and are one thing that happened. An id too long to key on whole is
+    keyed by its digest, so the key still fits the ledger and is still one per
+    subscription.
     """
+    key = f"cancel:{subscription_id}"
+    if len(key) > _ID_LENGTH:
+        key = f"cancel:{hashlib.sha256(subscription_id.encode()).hexdigest()}"
     return ProviderEvent(
-        event_id=f"cancel:{subscription_id}",
+        event_id=key,
         kind=SupportPurchaseKind.CANCELLATION,
         order_id=subscription_id,
         subscription_id=subscription_id,
@@ -256,7 +299,7 @@ def parse_paddle_event(body: bytes, extra_product_id: str = "") -> ProviderEvent
     `extra_product_id` picks the extra's line out of a transaction's."""
     try:
         event = json.loads(body)
-        event_id = str(event["event_id"])
+        event_id = _identifier(event["event_id"])
         event_type = str(event["event_type"])
         data = event["data"]
         if event_type == "transaction.completed":
@@ -267,7 +310,7 @@ def parse_paddle_event(body: bytes, extra_product_id: str = "") -> ProviderEvent
             event_type == "subscription.updated"
             and (data.get("scheduled_change") or {}).get("action") == "cancel"
         ):
-            return cancellation_event(str(data["id"]))
+            return cancellation_event(_identifier(data["id"]))
     except (KeyError, TypeError, ValueError, AttributeError):
         # Signed, so it is Paddle's; a shape we cannot read must not make it
         # retry for days. Logged by type alone: the body names the buyer.
