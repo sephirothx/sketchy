@@ -506,6 +506,8 @@ export const PL: Catalogue = {
     cancelRenewal: "Anuluj odnowienie",
     receipts: "Potwierdzenia i zwroty: Paddle, nasz sprzedawca.",
     paymentsTitle: "Twoje płatności",
+    paymentsLast: (p: { amount: string; date: string }) => `Ostatnia: ${p.amount}, ${p.date}`,
+    paymentYear: "Przepustka roczna",
     paymentGiftTo: (p: { name: string }) => `Prezent dla ${p.name}`,
     paymentGift: "Prezent",
     paymentRefunded: "Zwrócono",

@@ -35,7 +35,9 @@ async def test_a_pass_bought_through_the_stub_shows_everywhere():
         await pane.get_by_text("You're a supporter. Thank you!").wait_for()
         await pane.get_by_text("renews on").wait_for()
 
-        # What was paid, and its receipt in a tab of its own (R-SUP-19).
+        # What was paid, folded until asked for, and its receipt in a tab of its
+        # own (R-SUP-19).
+        await pane.get_by_role("button", name="Your payments · 1").click()
         payment = pane.locator(".support-payments li")
         await payment.get_by_text("€19.00").wait_for()
         async with page.context.expect_page() as opened:

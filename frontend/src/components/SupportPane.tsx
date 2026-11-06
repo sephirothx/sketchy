@@ -19,7 +19,7 @@ import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { useSupportStore } from "../store/supportStore";
 import { ExtraChoice } from "./ExtraChoice";
-import { CheckIcon } from "./icons";
+import { CheckIcon, ChevronDownIcon, DownloadIcon, GiftIcon, HeartIcon } from "./icons";
 import { TipLink } from "./TipLink";
 import { SupporterMark } from "./ui/SupporterMark";
 import "../styles/lazy/support.css";
@@ -228,14 +228,16 @@ function paymentLabel(payment: SupportPayment): string {
   if (payment.product === "gift") {
     return payment.giftTo ? ui.support.paymentGiftTo({ name: payment.giftTo }) : ui.support.paymentGift;
   }
-  return payment.product === "lifetime" ? ui.support.planLifetime : ui.support.planYear;
+  return payment.product === "lifetime" ? ui.support.lifetimePass : ui.support.paymentYear;
 }
 
-/** What this account has paid, each with the provider's receipt (R-SUP-19). Read
-again when the status changes, which is when a payment may have arrived. */
+/** What this account has paid, each with the provider's receipt (R-SUP-19).
+Folded to one line until asked for: the pane is about the pass, not the bills.
+Read again when the status changes, which is when a payment may have arrived. */
 function Payments() {
   const status = useSupportStore((state) => state.status);
   const [payments, setPayments] = useState<SupportPayment[]>([]);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -251,37 +253,67 @@ function Payments() {
   }, [status]);
 
   if (payments.length === 0) return null;
+  const [last] = payments;
   return (
-    <section className="support-payments" aria-labelledby="support-payments-title">
-      <h4 id="support-payments-title">{ui.support.paymentsTitle}</h4>
-      <ul>
-        {payments.map((payment, index) => (
-          <li key={payment.orderId}>
-            <span className="support-payment-date" id={`support-payment-${index}-date`}>
-              {formatDate(new Date(payment.at))}
-            </span>
-            <span className="support-payment-what" id={`support-payment-${index}-what`}>
-              {paymentLabel(payment)}
-              {payment.refunded && <small> · {ui.support.paymentRefunded}</small>}
-            </span>
-            <span className="support-payment-amount">{formatPaid(payment.amountMinor, payment.currency)}</span>
-            <button
-              type="button"
-              className="support-receipt"
-              // Every row's button says "Receipt": this says whose.
-              aria-describedby={`support-payment-${index}-date support-payment-${index}-what`}
-              onClick={() => {
-                setError(null);
-                openReceipt(payment.orderId).catch((failure) =>
-                  setError(refusalText(failure, ui.support.receiptFailed)),
-                );
-              }}
-            >
-              {ui.support.receipt}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <section className={`support-payments${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="support-payments-toggle"
+        aria-expanded={open}
+        aria-controls="support-payments-list"
+        onClick={() => setOpen(!open)}
+      >
+        <span>
+          <strong>
+            {ui.support.paymentsTitle} · {payments.length}
+          </strong>
+          {!open && (
+            <small>
+              {ui.support.paymentsLast({
+                amount: formatPaid(last.amountMinor, last.currency),
+                date: formatDate(new Date(last.at)),
+              })}
+            </small>
+          )}
+        </span>
+        <ChevronDownIcon size={18} />
+      </button>
+      {open && (
+        <ul id="support-payments-list">
+          {payments.map((payment, index) => (
+            <li key={payment.orderId} className={payment.refunded ? "is-refunded" : undefined}>
+              <span className={`support-payment-icon${payment.product === "gift" ? " is-gift" : ""}`} aria-hidden="true">
+                {payment.product === "gift" ? <GiftIcon size={17} /> : <HeartIcon size={17} />}
+              </span>
+              <span className="support-payment-what">
+                <strong id={`support-payment-${index}-what`}>
+                  {paymentLabel(payment)}
+                  {payment.refunded && <span className="support-refunded">{ui.support.paymentRefunded}</span>}
+                </strong>
+                <small id={`support-payment-${index}-date`}>{formatDate(new Date(payment.at))}</small>
+              </span>
+              <span className="support-payment-paid">
+                <span className="support-payment-amount">{formatPaid(payment.amountMinor, payment.currency)}</span>
+                <button
+                  type="button"
+                  className="support-receipt"
+                  // Every row's button says "Receipt": this says whose.
+                  aria-describedby={`support-payment-${index}-what support-payment-${index}-date`}
+                  onClick={() => {
+                    setError(null);
+                    openReceipt(payment.orderId).catch((failure) =>
+                      setError(refusalText(failure, ui.support.receiptFailed)),
+                    );
+                  }}
+                >
+                  <DownloadIcon size={14} />
+                  {ui.support.receipt}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {error && (
         <p className="auth-error" role="alert">
           {error}

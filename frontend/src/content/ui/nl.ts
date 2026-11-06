@@ -506,6 +506,8 @@ export const NL: Catalogue = {
     cancelRenewal: "Verlenging opzeggen",
     receipts: "Betaalbewijzen en terugbetalingen: Paddle, onze wederverkoper.",
     paymentsTitle: "Je betalingen",
+    paymentsLast: (p: { amount: string; date: string }) => `Laatste: ${p.amount} op ${p.date}`,
+    paymentYear: "Jaarpas",
     paymentGiftTo: (p: { name: string }) => `Cadeau voor ${p.name}`,
     paymentGift: "Cadeau",
     paymentRefunded: "Terugbetaald",

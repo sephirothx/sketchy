@@ -518,6 +518,8 @@ export const EN = {
     cancelRenewal: "Cancel renewal",
     receipts: "Receipts and refunds: Paddle, our reseller.",
     paymentsTitle: "Your payments",
+    paymentsLast: (p: { amount: string; date: string }) => `Last: ${p.amount} on ${p.date}`,
+    paymentYear: "Year pass",
     paymentGiftTo: (p: { name: string }) => `Gift for ${p.name}`,
     paymentGift: "Gift",
     paymentRefunded: "Refunded",
