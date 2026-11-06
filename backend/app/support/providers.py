@@ -115,6 +115,11 @@ class Provider(Protocol):
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]: ...
 
+    async def receipt_url(self, order_id: str, *, base_url: str) -> str | None:
+        """A short-lived link to the order's receipt, or None when there is none.
+        Raises ProviderUnavailable."""
+        ...
+
 
 def _sign(secret: str, timestamp: int, body: bytes) -> str:
     return hmac.new(
@@ -414,6 +419,17 @@ class PaddleProvider:
             },
         )
 
+    async def receipt_url(self, order_id: str, *, base_url: str) -> str | None:
+        # Paddle calls it the invoice; its link lasts an hour, so it is asked for
+        # at each click rather than kept.
+        quoted = urllib.parse.quote(order_id, safe="")
+        try:
+            response = await self._call("GET", f"/transactions/{quoted}/invoice")
+        except ProviderRefused:
+            return None
+        url = (response.get("data") or {}).get("url")
+        return url if isinstance(url, str) and url.startswith("https://") else None
+
     async def _email_of(self, customer_id: object) -> str | None:
         """Best effort: the cancellation has happened whether or not this works."""
         if not isinstance(customer_id, str):
@@ -551,6 +567,9 @@ class StubProvider:
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         return ()
+
+    async def receipt_url(self, order_id: str, *, base_url: str) -> str | None:
+        return f"{base_url}/api/support/stub/receipt"
 
 
 def provider_for(config: SupportConfig) -> Provider:

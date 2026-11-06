@@ -347,3 +347,79 @@ div.support-plan {
     flex-direction: column;
   }
 }
+
+.support-payments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.support-payments h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.support-payments ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-payments li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.support-payments li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.support-payment-date,
+.support-payments li small {
+  color: var(--muted);
+}
+
+.support-payment-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.support-payment-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.support-receipt {
+  justify-self: end;
+  padding: 0 2px;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  color: var(--primary-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* A phone: the date, then what and how much, then the receipt under them. */
+@media (max-width: 480px) {
+  .support-payments li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .support-payment-date {
+    grid-column: 1 / -1;
+  }
+
+  .support-receipt {
+    justify-self: start;
+  }
+}

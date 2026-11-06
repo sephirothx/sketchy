@@ -247,6 +247,8 @@ class ErrorCode(StrEnum):
     SUPPORT_UNAVAILABLE = "support_unavailable"
     SUPPORT_CANCEL_FAILED = "support_cancel_failed"
     SUPPORT_GIFT_REFUSED = "support_gift_refused"
+    # Not a payment of the caller's, or one the provider has no receipt for.
+    SUPPORT_RECEIPT_NOT_FOUND = "support_receipt_not_found"
     SUPPORTER_ONLY = "supporter_only"
     SOLO_POOL_EMPTY = "solo_pool_empty"
     # The Daily: a date that is nobody's today, and a day too thin for one.

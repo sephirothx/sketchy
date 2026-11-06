@@ -5,9 +5,13 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { formatDate } from "../lib/clock";
 import { refusalText } from "../lib/refusals";
 import {
+  fetchPayments,
+  formatPaid,
   isLifetime,
+  openReceipt,
   sendToCheckout,
   startCheckout,
+  type SupportPayment,
   type SupportPlans,
   type SupportProduct,
 } from "../lib/support";
@@ -220,6 +224,67 @@ function SupporterView() {
   );
 }
 
+function paymentLabel(payment: SupportPayment): string {
+  if (payment.product === "gift") {
+    return payment.giftTo ? ui.support.paymentGiftTo({ name: payment.giftTo }) : ui.support.paymentGift;
+  }
+  return payment.product === "lifetime" ? ui.support.planLifetime : ui.support.planYear;
+}
+
+/** What this account has paid, each with the provider's receipt (R-SUP-19). Read
+again when the status changes, which is when a payment may have arrived. */
+function Payments() {
+  const status = useSupportStore((state) => state.status);
+  const [payments, setPayments] = useState<SupportPayment[]>([]);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetchPayments()
+      .then((found) => {
+        if (live) setPayments(found);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [status]);
+
+  if (payments.length === 0) return null;
+  return (
+    <section className="support-payments" aria-labelledby="support-payments-title">
+      <h4 id="support-payments-title">{ui.support.paymentsTitle}</h4>
+      <ul>
+        {payments.map((payment) => (
+          <li key={payment.orderId}>
+            <span className="support-payment-date">{formatDate(new Date(payment.at))}</span>
+            <span className="support-payment-what">
+              {paymentLabel(payment)}
+              {payment.refunded && <small> · {ui.support.paymentRefunded}</small>}
+            </span>
+            <span className="support-payment-amount">{formatPaid(payment.amountMinor, payment.currency)}</span>
+            <button
+              type="button"
+              className="support-receipt"
+              onClick={() => {
+                setFailed(false);
+                openReceipt(payment.orderId).catch(() => setFailed(true));
+              }}
+            >
+              {ui.support.receipt}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {failed && (
+        <p className="auth-error" role="alert">
+          {ui.support.receiptFailed}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /** Settings → Support (#1475): the pitch, the guest's version of it, or a
 supporter's own pass. */
 export function SupportPane() {
@@ -272,6 +337,7 @@ export function SupportPane() {
           </a>
         </div>
       )}
+      {isRegistered && <Payments />}
       {plans.tipUrl && <TipLink url={plans.tipUrl} />}
     </div>
   );

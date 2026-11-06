@@ -795,6 +795,7 @@ export type ErrorCode =
   | "support_unavailable"
   | "support_cancel_failed"
   | "support_gift_refused"
+  | "support_receipt_not_found"
   | "supporter_only"
   | "solo_pool_empty"
   | "solo_date_out_of_range"

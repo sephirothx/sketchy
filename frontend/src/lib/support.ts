@@ -85,6 +85,51 @@ export function setAccountNameStyle(nameStyle: string | null): Promise<AuthUser>
   return apiRequest<AuthUser>("/api/auth/name-style", { method: "POST", body: { nameStyle } });
 }
 
+/** One charge the signed-in account paid (R-SUP-19). A gift it received is not
+one: somebody else paid it. */
+export interface SupportPayment {
+  orderId: string;
+  at: string;
+  product: SupportProduct | "gift";
+  amountMinor: number;
+  currency: string;
+  refunded: boolean;
+  /** Whom a gift went to, while that account exists. */
+  giftTo: string | null;
+}
+
+export async function fetchPayments(): Promise<SupportPayment[]> {
+  const { payments } = await apiRequest<{ payments: SupportPayment[] }>("/api/support/payments");
+  return payments;
+}
+
+/** Open the provider's receipt in a new tab. Its link lasts minutes, so it is
+asked for at the click; the tab opens first, or a browser takes it for a popup. */
+export async function openReceipt(orderId: string): Promise<void> {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  try {
+    const { url } = await apiRequest<{ url: string }>(
+      `/api/support/receipts/${encodeURIComponent(orderId)}`,
+    );
+    if (tab) tab.location.href = url;
+    else window.location.assign(url);
+  } catch (failure) {
+    tab?.close();
+    throw failure;
+  }
+}
+
+/** What was paid, in the currency it was paid in. Paddle counts in each
+currency's smallest unit, which is not a hundredth everywhere (a yen is one). */
+export function formatPaid(minor: number, currency: string, lang?: string): string {
+  const format = new Intl.NumberFormat(lang ?? (document.documentElement.lang || undefined), {
+    style: "currency",
+    currency,
+  });
+  return format.format(minor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2));
+}
+
 export function cancelRenewal(): Promise<SupporterStatus> {
   return apiRequest<SupporterStatus>("/api/support/cancel", { method: "POST" });
 }

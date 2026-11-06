@@ -35,6 +35,8 @@ from app.services.inbox import add_entry
 from app.services.supporter import (
     apply_provider_event,
     order_was_reversed,
+    paid_order,
+    payments_of,
     renewing_subscriptions,
     revert_supporter_choices,
     subscriptions_of_order,
@@ -70,6 +72,13 @@ logger = logging.getLogger(__name__)
 checkout_limiter = RateLimiter(limit=10, window_seconds=60)
 checkout_address_limiter = RateLimiter(limit=30, window_seconds=60)
 cancel_limiter = RateLimiter(limit=5, window_seconds=60)
+# Each receipt is a call to the provider, made for whoever is signed in.
+receipt_limiter = RateLimiter(limit=20, window_seconds=60)
+
+STUB_RECEIPT_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Stub receipt</title></head>
+<body><h1>Stub receipt</h1><p>Paddle's receipt would open here.</p></body></html>
+"""
 
 STUB_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Stub checkout</title></head>
@@ -266,6 +275,31 @@ def create_support_router(
         user = await account(request)
         async with session_factory() as session:
             return (await supporter_status(session, user.id)).payload()
+
+    @router.get("/payments")
+    async def payments(request: Request) -> dict:
+        """What the caller has paid, newest first (R-SUP-19)."""
+        user = await account(request)
+        async with session_factory() as session:
+            return {"payments": [payment.payload() for payment in await payments_of(session, user.id)]}
+
+    @router.get("/receipts/{order_id}")
+    async def receipt(order_id: str, request: Request) -> dict:
+        """Where the provider's receipt for one of the caller's own payments is.
+
+        Asked at the click, not listed: the provider's link to it is short-lived."""
+        user = await account(request)
+        throttle(receipt_limiter, str(user.id))
+        async with session_factory() as session:
+            if not await paid_order(session, user.id, order_id):
+                raise Refusal(404, ErrorCode.SUPPORT_RECEIPT_NOT_FOUND)
+        try:
+            url = await provider.receipt_url(order_id, base_url=public_base_url())
+        except ProviderUnavailable as error:
+            raise Refusal(502, ErrorCode.SUPPORT_UNAVAILABLE) from error
+        if url is None:
+            raise Refusal(404, ErrorCode.SUPPORT_RECEIPT_NOT_FOUND)
+        return {"url": url}
 
     @router.post("/checkout")
     async def checkout(body: CheckoutBody, request: Request) -> dict:
@@ -496,6 +530,10 @@ def create_support_router(
             return HTMLResponse(
                 STUB_PAGE.format(product=html.escape(read["product"]), token=html.escape(token))
             )
+
+        @router.get("/stub/receipt", response_class=HTMLResponse)
+        async def stub_receipt() -> HTMLResponse:
+            return HTMLResponse(STUB_RECEIPT_PAGE)
 
         @router.post("/stub/pay")
         async def stub_pay(request: Request) -> RedirectResponse:
