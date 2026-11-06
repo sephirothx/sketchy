@@ -442,6 +442,12 @@ div.support-plan {
   color: var(--warm-ink);
 }
 
+/* The heart's outline is centred, but its weight is in the lobes: centred by the
+   box it reads high, so it drops by a pixel. The gift's weight is already central. */
+.support-payment-icon:not(.is-gift) svg {
+  translate: 0 1px;
+}
+
 .support-payment-what {
   flex: 1;
   min-width: 0;

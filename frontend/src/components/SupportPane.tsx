@@ -283,7 +283,7 @@ function Payments() {
           {payments.map((payment, index) => (
             <li key={payment.orderId} className={payment.refunded ? "is-refunded" : undefined}>
               <span className={`support-payment-icon${payment.product === "gift" ? " is-gift" : ""}`} aria-hidden="true">
-                {payment.product === "gift" ? <GiftIcon size={17} /> : <HeartIcon size={17} />}
+                {payment.product === "gift" ? <GiftIcon size={21} /> : <HeartIcon size={21} />}
               </span>
               <span className="support-payment-what">
                 <strong id={`support-payment-${index}-what`}>
