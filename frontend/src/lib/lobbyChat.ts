@@ -21,6 +21,9 @@ export interface LobbyChatLine {
   userId: string;
   displayName: string;
   nameColor: string | null;
+  /** A supporter's name style when the line was said (#1476); absent after a
+      server restart, when the line shows its colour. */
+  nameStyle?: string;
   isAnonymous: boolean;
   text: string;
   /** The server's instant, as epoch milliseconds. Rendered, never sorted by. */
@@ -116,6 +119,9 @@ export function parseLine(value: unknown): LobbyChatLine | null {
   };
   if (typeof row.retainedMessageId === "string" && row.retainedMessageId) {
     line.retainedMessageId = row.retainedMessageId;
+  }
+  if (typeof row.nameStyle === "string" && row.nameStyle && !line.isAnonymous) {
+    line.nameStyle = row.nameStyle;
   }
   if (row.hidden === true) {
     line.hidden = true;

@@ -333,6 +333,7 @@ async def send_lobby_chat(ctx: HandlerContext, sid, data):
         text=text,
         sent_at=sent_at,
         retained_message_id=retained_id,
+        name_style=identity.name_style,
     )
     await _emit_lobby_chat(ctx, line, sender_user_id=user_id)
     return {"ok": True}

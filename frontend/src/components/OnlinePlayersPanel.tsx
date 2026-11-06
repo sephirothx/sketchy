@@ -159,7 +159,9 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     Your own row offers nothing either. */}
                 {player.isAnonymous || player.userId === myUserId ? (
                   <span
-                    className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
+                    className={`online-player-name${
+                      player.isAnonymous ? " is-guest" : ` ${nameStyleClass(player.nameStyle) ?? ""}`
+                    }`}
                     style={
                       player.isAnonymous || !player.nameColor
                         ? undefined

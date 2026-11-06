@@ -1253,6 +1253,7 @@ holds (re-read from the retained rows after a restart):
 { "seq": 1208, "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
   "isAnonymous": false, "text": "anyone up for a round?",
   "sentAt": 1788361445,
+  "nameStyle": "aurora",           // a supporter's name style when said (#1476); not kept across a restart
   "retainedMessageId": "0192…",    // present only when retention took the row
   "hidden": true,                  // present only when a moderator hid it; text is then ""
   "visibility": 3 }                // present only on a line hidden or shown again since

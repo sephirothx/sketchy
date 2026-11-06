@@ -94,6 +94,14 @@ def test_the_wire_shape_names_the_account_and_the_instant():
     }
 
 
+def test_a_supporter_line_carries_the_name_style_it_was_said_in():
+    """A chat name wears the style a live name does (#1476); a guest's never does."""
+    log = LobbyChatLog()
+    assert say(log, "ada", "hi", name_style="aurora").payload()["nameStyle"] == "aurora"
+    assert "nameStyle" not in say(log, "bob", "hi").payload()
+    assert "nameStyle" not in say(log, "cy", "hi", name_style="aurora", is_anonymous=True).payload()
+
+
 def test_an_unretained_line_carries_no_identifier_to_cite():
     """The absence is the signal, exactly as room chat says it (R-MOD-08a)."""
     log = LobbyChatLog()

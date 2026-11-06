@@ -110,8 +110,9 @@ NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 # A name wears one look: a colour or a supporter style (#1476), never both, or
 # Settings shows two ticks and the room shows a colour the player no longer
 # sees as theirs. Choosing a style writes its partner here, because a name still
-# needs one colour wherever two cannot be drawn - chat, the Gallery, finished
-# games and colour-safe mode (a live name and its disc wear the style itself). Each partner is the palette hue nearest
+# needs one colour wherever two cannot be drawn - the Gallery, finished games,
+# colour-safe mode and a lobby line read back after a restart (a live name, its
+# disc and chat wear the style itself). Each partner is the palette hue nearest
 # the style's first stop; Silver has no grey to go to, so it borrows indigo.
 NAME_STYLE_COLORS: dict[str, str] = {
     "sunset": "#f97316",

@@ -549,7 +549,7 @@ const NAME_STYLE_LABELS: Record<string, () => string> = {
 /** Styles A: a row under the colour swatches (#1476). Only where a pass is for
 sale. A name wears one look, so only one swatch across both rows is ticked: a
 style brings its own colour (the server's NAME_STYLE_COLORS), shown beneath it
-because chat and history use it, and picking a colour above is the
+because the Gallery and history use it, and picking a colour above is the
 way back. A lapsed supporter keeps what they wear and cannot pick another, so a
 locked swatch can still be the worn one. */
 function NameStyleChoice() {
