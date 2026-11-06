@@ -80,8 +80,11 @@ div.support-plan {
   background: var(--primary-soft);
 }
 
-.support-plan:focus-within {
-  outline: 2px solid var(--primary);
+/* The radio inside is hidden, so the card wears its ring: the one keyboard
+   ring (a11y.css), and only for the keyboard - a click already shows the
+   choice as the selected card's border. */
+.support-plan:has(input:focus-visible) {
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
