@@ -104,18 +104,19 @@ export async function fetchPayments(): Promise<SupportPayment[]> {
 }
 
 /** Open the provider's receipt in a new tab. Its link lasts minutes, so it is
-asked for at the click; the tab opens first, or a browser takes it for a popup. */
+asked for at the click; the tab opens first, or a browser takes it for a popup.
+Never this page instead: Settings may be open over a room in play (R-UX-15). */
 export async function openReceipt(orderId: string): Promise<void> {
   const tab = window.open("", "_blank");
-  if (tab) tab.opener = null;
+  if (!tab) throw new Error("the receipt's tab was blocked");
+  tab.opener = null;
   try {
     const { url } = await apiRequest<{ url: string }>(
       `/api/support/receipts/${encodeURIComponent(orderId)}`,
     );
-    if (tab) tab.location.href = url;
-    else window.location.assign(url);
+    tab.location.href = url;
   } catch (failure) {
-    tab?.close();
+    tab.close();
     throw failure;
   }
 }

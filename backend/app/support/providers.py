@@ -421,10 +421,11 @@ class PaddleProvider:
 
     async def receipt_url(self, order_id: str, *, base_url: str) -> str | None:
         # Paddle calls it the invoice; its link lasts an hour, so it is asked for
-        # at each click rather than kept.
+        # at each click rather than kept. `inline`, or the link is a download and
+        # the tab opened for it stays blank.
         quoted = urllib.parse.quote(order_id, safe="")
         try:
-            response = await self._call("GET", f"/transactions/{quoted}/invoice")
+            response = await self._call("GET", f"/transactions/{quoted}/invoice?disposition=inline")
         except ProviderRefused:
             return None
         url = (response.get("data") or {}).get("url")

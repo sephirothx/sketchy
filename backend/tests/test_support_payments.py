@@ -160,7 +160,7 @@ async def test_paddle_receipts_are_asked_for_at_the_click():
     assert await provider.receipt_url("txn_1", base_url="https://sketchy.test") == (
         "https://receipts.example/txn_1.pdf"
     )
-    assert asked == ["GET /transactions/txn_1/invoice"]
+    assert asked == ["GET /transactions/txn_1/invoice?disposition=inline"]
 
     async def refused(method: str, path: str, payload: dict | None = None) -> dict:
         raise ProviderRefused("400")

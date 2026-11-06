@@ -236,7 +236,7 @@ again when the status changes, which is when a payment may have arrived. */
 function Payments() {
   const status = useSupportStore((state) => state.status);
   const [payments, setPayments] = useState<SupportPayment[]>([]);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -255,10 +255,12 @@ function Payments() {
     <section className="support-payments" aria-labelledby="support-payments-title">
       <h4 id="support-payments-title">{ui.support.paymentsTitle}</h4>
       <ul>
-        {payments.map((payment) => (
+        {payments.map((payment, index) => (
           <li key={payment.orderId}>
-            <span className="support-payment-date">{formatDate(new Date(payment.at))}</span>
-            <span className="support-payment-what">
+            <span className="support-payment-date" id={`support-payment-${index}-date`}>
+              {formatDate(new Date(payment.at))}
+            </span>
+            <span className="support-payment-what" id={`support-payment-${index}-what`}>
               {paymentLabel(payment)}
               {payment.refunded && <small> · {ui.support.paymentRefunded}</small>}
             </span>
@@ -266,9 +268,13 @@ function Payments() {
             <button
               type="button"
               className="support-receipt"
+              // Every row's button says "Receipt": this says whose.
+              aria-describedby={`support-payment-${index}-date support-payment-${index}-what`}
               onClick={() => {
-                setFailed(false);
-                openReceipt(payment.orderId).catch(() => setFailed(true));
+                setError(null);
+                openReceipt(payment.orderId).catch((failure) =>
+                  setError(refusalText(failure, ui.support.receiptFailed)),
+                );
               }}
             >
               {ui.support.receipt}
@@ -276,9 +282,9 @@ function Payments() {
           </li>
         ))}
       </ul>
-      {failed && (
+      {error && (
         <p className="auth-error" role="alert">
-          {ui.support.receiptFailed}
+          {error}
         </p>
       )}
     </section>
