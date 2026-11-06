@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiRequest } from "./api.ts";
 
 /** The supporter pass, as this page talks to it (#1475). Every route here is
 absent on a deployment that sells nothing, which is how the page finds out. */
@@ -82,6 +82,21 @@ export function extraMinorFrom(typed: string, maxExtraMinor: number): number {
   const value = Number(typed.trim().replace(",", "."));
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.min(Math.round(value * 100), maxExtraMinor);
+}
+
+/** Whether `typed` may stand in the extra's box: an amount in whole currency
+with at most two decimals, either separator, and no more than the cap. Anything
+else is refused as it is typed, so the box never holds what cannot be charged. */
+export function extraTypedAllowed(typed: string, maxExtraMinor: number): boolean {
+  if (!/^\d*(?:[.,]\d{0,2})?$/.test(typed)) return false;
+  const value = Number(typed.replace(",", "."));
+  return !Number.isFinite(value) || Math.round(value * 100) <= maxExtraMinor;
+}
+
+/** Whether the page's language writes the euro sign before the amount. */
+export function euroSignFirst(lang: string | undefined): boolean {
+  const parts = new Intl.NumberFormat(lang || undefined, { style: "currency", currency: "EUR" }).formatToParts(1);
+  return parts.findIndex((part) => part.type === "currency") < parts.findIndex((part) => part.type === "integer");
 }
 
 /** `€5` or `5 €`, as the page's language writes it. */

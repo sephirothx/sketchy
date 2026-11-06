@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { ui } from "../content/ui/index.ts";
-import { extraMinorFrom, formatEuros } from "../lib/support";
+import { euroSignFirst, extraMinorFrom, extraTypedAllowed, formatEuros } from "../lib/support";
 
 const EXTRA_CHIPS = [500, 1000, 2000];
 
@@ -19,6 +19,7 @@ export function ExtraChoice({
   const [extra, setExtra] = useState<number | "other">(0);
   const [typed, setTyped] = useState("");
   const extraMinor = extra === "other" ? extraMinorFrom(typed, maxExtraMinor) : extra;
+  const signFirst = euroSignFirst(document.documentElement.lang);
 
   useEffect(() => {
     onChange(extraMinor);
@@ -48,14 +49,19 @@ export function ExtraChoice({
         {chip("other", ui.support.extraOther)}
       </div>
       {extra === "other" && (
-        <input
-          className="support-extra-input"
-          inputMode="decimal"
-          aria-label={ui.support.extraOtherLabel}
-          placeholder="€"
-          value={typed}
-          onChange={(event) => setTyped(event.target.value)}
-        />
+        // The sign sits outside the input, where typing cannot remove it.
+        <label className={`support-extra-field${signFirst ? "" : " is-sign-after"}`}>
+          <span aria-hidden="true">€</span>
+          <input
+            inputMode="decimal"
+            aria-label={ui.support.extraOtherLabel}
+            value={typed}
+            onChange={(event) => {
+              const next = event.target.value.trim();
+              if (extraTypedAllowed(next, maxExtraMinor)) setTyped(next);
+            }}
+          />
+        </label>
       )}
     </div>
   );

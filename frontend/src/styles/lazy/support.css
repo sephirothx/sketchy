@@ -156,7 +156,7 @@ div.support-plan {
   color: var(--primary-ink);
 }
 
-.support-extra-input,
+.support-extra-field,
 .support-cancel-form input {
   min-height: 44px;
   padding: 8px 12px;
@@ -168,8 +168,39 @@ div.support-plan {
   font-size: 16px;
 }
 
-.support-extra-input {
+.support-extra-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   max-width: 120px;
+  cursor: text;
+}
+
+.support-extra-field.is-sign-after {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+}
+
+/* The input inside draws no ring of its own, so the box carries it. */
+.support-extra-field:focus-within {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.support-extra-field span {
+  color: var(--muted);
+}
+
+.support-extra-field input {
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
 }
 
 .support-mark-choice {
