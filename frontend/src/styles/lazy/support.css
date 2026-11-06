@@ -181,10 +181,10 @@ div.support-plan {
   justify-content: flex-end;
 }
 
-/* The input inside draws no ring of its own, so the box carries it. */
+/* The input inside has no border of its own, so the box shows its focus the
+   way every text field does: the ring's colour on the border (a11y.css). */
 .support-extra-field:focus-within {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
+  border-color: var(--focus-ring);
 }
 
 .support-extra-field span {
