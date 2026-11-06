@@ -505,3 +505,90 @@ def test_no_request_to_the_support_router_is_a_500_or_a_quiet_write(signed_in: S
     with stall_guard():
         check()
     assert seen.get(200) and any(400 <= status < 500 for status in seen), seen
+
+
+# ---------------------------------------------------------------- what Paddle's API answers
+
+
+def test_whatever_paddle_answers_is_a_result_or_unavailable():
+    """Every call the site makes to Paddle, fed whatever shape the API might send
+    back: an answer it can use, or `ProviderUnavailable` - which every caller
+    handles - and never another exception, which none does."""
+    from app.support.providers import PaddleProvider, ProviderUnavailable
+
+    provider = PaddleProvider(
+        SupportConfig(provider="paddle", webhook_secret="x", api_key="k", price_year="pri_y",
+                      price_lifetime="pri_l", price_gift="pri_g", extra_product_id="pro_x")
+    )
+    answers = st.one_of(
+        junk,
+        st.fixed_dictionaries({"data": junk}),
+        st.fixed_dictionaries(
+            {
+                "data": st.fixed_dictionaries(
+                    {},
+                    optional={
+                        "status": maybe(st.sampled_from(["active", "canceled", "past_due", "paused"])),
+                        "url": maybe(st.just("https://receipts.example/r.pdf") | st.text(max_size=20)),
+                        "checkout": maybe(st.fixed_dictionaries({"url": maybe(st.text(max_size=20))})),
+                        "customer_id": maybe(st.text(max_size=8)),
+                        "next_billed_at": maybe(iso_times),
+                        "email": maybe(st.emails()),
+                        "id": maybe(st.text(max_size=8)),
+                    },
+                )
+            }
+        ),
+        st.fixed_dictionaries({"data": st.lists(junk | st.fixed_dictionaries({"id": maybe(st.text(max_size=8))}), max_size=3)}),
+    )
+    calls = {
+        "checkout": lambda: provider.create_checkout(product="year", account_id="a", extra_minor=500, base_url="https://x"),
+        "cancel": lambda: provider.cancel_at_period_end("sub_1"),
+        "stop": lambda: provider.stop_if_unpaid("sub_1"),
+        "move": lambda: provider.move_renewal("sub_1", NOW + timedelta(days=30)),
+        "receipt": lambda: provider.receipt_url("txn_1", base_url="https://x"),
+        "by_email": lambda: provider.subscriptions_of_email("someone@example.com"),
+    }
+    loop = asyncio.new_event_loop()
+
+    import urllib.request
+
+    class Answer:
+        """What `urlopen` hands back: Paddle's body, whatever it is."""
+
+        def __init__(self, body: bytes) -> None:
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self) -> bytes:
+            return self.body
+
+    bodies_back = st.one_of(answers.map(lambda value: json.dumps(value).encode()), st.binary(max_size=30))
+
+    @settings(max_examples=budget(1500))
+    @given(call=st.sampled_from(sorted(calls)), replies=st.lists(bodies_back, min_size=1, max_size=4))
+    def check(call, replies):
+        queue = list(replies)
+
+        def fake_urlopen(request, timeout=None):
+            return Answer(queue.pop(0) if queue else replies[-1])
+
+        real = urllib.request.urlopen
+        urllib.request.urlopen = fake_urlopen
+        try:
+            loop.run_until_complete(calls[call]())
+        except ProviderUnavailable:
+            pass
+        finally:
+            urllib.request.urlopen = real
+
+    try:
+        with stall_guard():
+            check()
+    finally:
+        loop.close()

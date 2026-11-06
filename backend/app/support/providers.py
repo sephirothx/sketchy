@@ -209,6 +209,15 @@ def _text(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _object(value: object) -> dict:
+    """A part of the API's answer read as an object, or nothing to read."""
+    return value if isinstance(value, dict) else {}
+
+
+def _objects(value: object) -> list[dict]:
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
 def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
     """What the extra's line came to, tax included: the transaction's own split,
     not what was asked for at checkout, because Paddle rounds tax per line."""
@@ -353,7 +362,12 @@ class PaddleProvider:
 
         def send() -> dict:
             with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
-                return json.loads(response.read())
+                answer = json.loads(response.read())
+            # Every answer of Paddle's is an object; anything else is no answer, and
+            # each caller already knows what to do without one.
+            if not isinstance(answer, dict):
+                raise ValueError("an answer that is not an object")
+            return answer
 
         try:
             return await asyncio.to_thread(send)
@@ -423,10 +437,11 @@ class PaddleProvider:
         if self._config.checkout_url:
             payload["checkout"] = {"url": self._config.checkout_url}
         response = await self._call("POST", "/transactions", payload)
-        try:
-            return str(response["data"]["checkout"]["url"])
-        except (KeyError, TypeError) as error:
-            raise ProviderUnavailable("no checkout link came back") from error
+        url = _object(_object(response.get("data")).get("checkout")).get("url")
+        # The buyer is sent there: Paddle's own page, over https, or nowhere.
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise ProviderUnavailable("no checkout link came back")
+        return url
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation:
         quoted = urllib.parse.quote(subscription_id, safe="")
@@ -441,7 +456,7 @@ class PaddleProvider:
             # asked for, and retrying it would fail for ever. And a paused one has
             # no next period to stop at.
             response = await self._call("GET", f"/subscriptions/{quoted}")
-            status = (response.get("data") or {}).get("status")
+            status = _object(response.get("data")).get("status")
             if status == "paused":
                 response = await self._call(
                     "POST", f"/subscriptions/{quoted}/cancel", {"effective_from": "immediately"}
@@ -450,13 +465,13 @@ class PaddleProvider:
                 raise
         return Cancellation(
             subscription_id=subscription_id,
-            email=await self._email_of((response.get("data") or {}).get("customer_id")),
+            email=await self._email_of(_object(response.get("data")).get("customer_id")),
         )
 
     async def stop_if_unpaid(self, subscription_id: str) -> bool:
         quoted = urllib.parse.quote(subscription_id, safe="")
         response = await self._call("GET", f"/subscriptions/{quoted}")
-        status = (response.get("data") or {}).get("status")
+        status = _object(response.get("data")).get("status")
         if status == "canceled":
             return True
         if status in ("past_due", "paused"):
@@ -474,7 +489,7 @@ class PaddleProvider:
         quoted = urllib.parse.quote(subscription_id, safe="")
         current = await self._call("GET", f"/subscriptions/{quoted}")
         try:
-            billed = datetime.fromisoformat(str((current.get("data") or {}).get("next_billed_at")))
+            billed = _moment(_object(current.get("data")).get("next_billed_at"))
         except ValueError:
             billed = None
         if billed is not None and billed >= when.replace(microsecond=0):
@@ -497,7 +512,7 @@ class PaddleProvider:
             response = await self._call("GET", f"/transactions/{quoted}/invoice?disposition=inline")
         except ProviderRefused:
             return None
-        url = (response.get("data") or {}).get("url")
+        url = _object(response.get("data")).get("url")
         return url if isinstance(url, str) and url.startswith("https://") else None
 
     async def _email_of(self, customer_id: object) -> str | None:
@@ -509,19 +524,24 @@ class PaddleProvider:
             customer = await self._call("GET", f"/customers/{quoted}")
         except ProviderUnavailable:
             return None
-        return (customer.get("data") or {}).get("email")
+        email = _object(customer.get("data")).get("email")
+        return email if isinstance(email, str) else None
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         query = urllib.parse.urlencode({"email": email})
         customers = await self._call("GET", f"/customers?{query}")
         found: list[str] = []
-        for customer in customers.get("data") or []:
+        for customer in _objects(customers.get("data")):
+            if not isinstance(customer.get("id"), str):
+                continue
             query = urllib.parse.urlencode(
                 # `past_due` too: it can still be cancelled, and still charges.
                 {"customer_id": customer["id"], "status": "active,past_due"}
             )
             subscriptions = await self._call("GET", f"/subscriptions?{query}")
-            found += [item["id"] for item in subscriptions.get("data") or []]
+            found += [
+                item["id"] for item in _objects(subscriptions.get("data")) if isinstance(item.get("id"), str)
+            ]
         return tuple(found)
 
 
