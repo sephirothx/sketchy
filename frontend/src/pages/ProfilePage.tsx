@@ -823,6 +823,10 @@ function ProfileView({ userId }: { userId: string }) {
             <span className="avatar-frame" aria-hidden="true">
             <span
               className={`profile-avatar avatar ${subject.isAnonymous ? "avatar-guest" : "avatar-player"}${
+                !subject.isAnonymous && subject.nameStyle
+                  ? ` avatar-styled name-style-${subject.nameStyle}`
+                  : ""
+              }${
                 !subject.isAnonymous && subject.avatarUrl && !doodleNameOf(subject.avatarUrl)
                   ? " has-picture"
                   : ""

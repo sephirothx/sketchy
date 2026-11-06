@@ -56,6 +56,7 @@ import {
   DEFAULT_KEY_BINDINGS,
   formatKey,
   NAME_COLOR_PALETTE,
+  isPaletteColor,
   getSystemTheme,
   useSettingsStore,
   type AppTheme,
@@ -546,37 +547,37 @@ const NAME_STYLE_LABELS: Record<string, () => string> = {
 };
 
 /** Styles A: a row under the colour swatches (#1476). Only where a pass is for
-sale. A lapsed supporter keeps what they wear and cannot pick another, so a
-locked swatch can still be the worn one, and the plain colour is always a choice. */
+sale. A name wears one look, so only one swatch across both rows is ticked: a
+style brings its own colour (the server's NAME_STYLE_COLORS), shown beneath it
+because chat and history use it, and picking a colour above is the
+way back. A lapsed supporter keeps what they wear and cannot pick another, so a
+locked swatch can still be the worn one. */
 function NameStyleChoice() {
   const plans = useSupportStore((state) => state.plans);
   const isSupporter = useSupportStore((state) => Boolean(state.status?.active));
   const worn = useAuthStore((state) => state.user?.nameStyle ?? null);
+  const nameColor = useSettingsStore((state) => state.nameColor);
   const openSettings = useOpenSettings();
   const { notify } = useToast();
   if (!plans) return null;
-  const choose = (style: string | null) => {
+  const choose = (style: string) => {
     if (style === worn) return;
     // Nothing changes on screen until the save lands, so a refusal (the hourly
     // bound, a lapsed pass) has to say so or the swatch just seems dead.
     void setAccountNameStyle(style)
-      .then((updated) => useAuthStore.setState({ user: updated }))
+      .then((updated) => {
+        useAuthStore.setState({ user: updated });
+        // The colour the style brought: this device's avatar and seat use it.
+        if (updated.nameColor && isPaletteColor(updated.nameColor)) {
+          useSettingsStore.getState().setNameColor(updated.nameColor);
+        }
+      })
       .catch((failure) => notify(refusalText(failure, ui.dialog.couldNotSave), "error"));
   };
   return (
     <div className="settings-name-styles">
       <span className="settings-name-styles-title">{ui.support.stylesTitle}</span>
       <span className="settings-swatches" role="group" aria-label={ui.support.stylesTitle}>
-        <button
-          type="button"
-          className={`settings-swatch name-style-none${worn === null ? " is-selected" : ""}`}
-          aria-label={ui.support.stylePlain}
-          aria-pressed={worn === null}
-          title={ui.support.stylePlain}
-          onClick={() => choose(null)}
-        >
-          {worn === null && <CheckIcon size={14} />}
-        </button>
         {NAME_STYLES.map((style) => {
           const locked = !isSupporter && style !== worn;
           return (
@@ -597,6 +598,18 @@ function NameStyleChoice() {
           );
         })}
       </span>
+      {worn !== null && nameColor && isPaletteColor(nameColor) && (
+        <small className="settings-name-styles-fallback">
+          {ui.support.styleFallback}{" "}
+          <span
+            className="settings-name-styles-partner"
+            role="img"
+            aria-label={NAME_COLOR_NAMES[nameColor as (typeof NAME_COLOR_PALETTE)[number]]}
+            title={NAME_COLOR_NAMES[nameColor as (typeof NAME_COLOR_PALETTE)[number]]}
+            style={{ background: nameColor }}
+          />
+        </small>
+      )}
       {!isSupporter && (
         <small>
           {ui.support.lockedHint}{" "}
@@ -628,6 +641,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const activePlayerId = useGameStore((state) => state.playerId);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const setLocalNameColor = useSettingsStore((state) => state.setNameColor);
+  // A name wears one look: while a style is worn its colour is only the
+  // stand-in, so no colour swatch is ticked (NameStyleChoice shows it).
+  const wornColor = user?.nameStyle ? null : nameColor;
 
   const [draftName, setDraftName] = useState(user?.displayName ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -784,6 +800,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   function chooseNameColor(next: string) {
     setLocalNameColor(next);
     if (isGuest) return;
+    // A colour takes a worn style off (one look per name); the server does the
+    // same, and this moves the tick before it answers.
+    if (user?.nameStyle) useAuthStore.setState({ user: { ...user, nameStyle: null } });
     // The socket recolors the room the player is in right now; the account
     // write is what makes the choice outlast it. Neither failing is worth an
     // error over a color: it already applies here.
@@ -863,6 +882,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             <Avatar
               name={user?.displayName ?? ""}
               nameColor={isGuest ? undefined : nameColor}
+            nameStyle={isGuest ? null : user?.nameStyle}
               avatarUrl={user?.avatarUrl}
               isAnonymous={isGuest}
               size={96}
@@ -958,14 +978,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                   <button
                     key={color}
                     type="button"
-                    className={`settings-swatch${color === nameColor ? " is-selected" : ""}`}
+                    className={`settings-swatch${color === wornColor ? " is-selected" : ""}`}
                     style={{ background: color }}
                     aria-label={NAME_COLOR_NAMES[color]}
-                    aria-pressed={color === nameColor}
+                    aria-pressed={color === wornColor}
                     title={NAME_COLOR_NAMES[color]}
                     onClick={() => chooseNameColor(color)}
                   >
-                    {color === nameColor && <CheckIcon size={14} />}
+                    {color === wornColor && <CheckIcon size={14} />}
                   </button>
                 ))}
               </span>

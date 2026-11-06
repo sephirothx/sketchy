@@ -71,7 +71,8 @@ class UserData:
     # Whether others see a supporter mark. Only reads that ask for it fill it in:
     # most need the account, not this (#1474).
     supporter_mark: bool = False
-    # A supporter's two-tone name; `name_color` stays the fallback (#1476).
+    # A supporter's two-tone name. It replaces the colour, which becomes the
+    # style's partner and is shown where two colours cannot be (#1476).
     name_style: str | None = None
 
 
@@ -1037,7 +1038,7 @@ class UserRepository(ABC):
         name_color: str | None = None,
         avatar_key: str | None = None,
     ) -> UserData | None:
-        """Update display settings for a user."""
+        """Update display settings for a user. A name colour replaces a name style."""
         ...
 
     @abstractmethod

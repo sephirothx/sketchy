@@ -173,6 +173,7 @@ export function GameEndOverlay({
                   <Avatar
                     name={entry.nickname}
                     nameColor={entry.nameColor}
+                    nameStyle={entry.nameStyle}
                     avatarUrl={entry.avatarUrl}
                     isAnonymous={entry.isAnonymous}
                     isFriend={friendSeats.has(entry.playerId)}
@@ -207,6 +208,7 @@ export function GameEndOverlay({
                   <Avatar
                     name={score.nickname}
                     nameColor={score.nameColor}
+                    nameStyle={score.nameStyle}
                     avatarUrl={score.avatarUrl}
                     isAnonymous={score.isAnonymous}
                     isFriend={friendSeats.has(score.playerId)}

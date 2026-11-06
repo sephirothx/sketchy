@@ -459,7 +459,7 @@ export const IT: Catalogue = {
     styleLagoon: "Laguna",
     styleOrchid: "Orchidea",
     styleSilver: "Argento",
-    stylePlain: "Colore semplice",
+    styleFallback: "La chat e le partite finite usano questo colore:",
     stylesTitle: "Stili del nome da sostenitore",
     doodlesTitle: "Scarabocchi da sostenitore",
     lockedHint: "Fanno parte del pass sostenitore.",

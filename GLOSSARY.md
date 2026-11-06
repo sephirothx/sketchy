@@ -61,7 +61,7 @@ the rotation itself are counted in *rounds*.
 | **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |
 | **Supporter** | A registered player whose **Supporter pass** is in force. A status derived from what they paid for, never a stored flag. | donor, subscriber, premium, VIP |
 | **Supporter pass** | What a player buys to pay for Sketchy: a year that renews, or a lifetime. It buys recognition, decoration and more of Solo, never an edge in a room. | subscription, membership, premium |
-| **Name style** | A **Supporter**'s two-tone name, chosen under the name colours. The **Name color** stays underneath as the fallback. | gradient name, name effect |
+| **Name style** | A **Supporter**'s two-tone name, chosen instead of a **Name color** from the row under the colours: a name wears one or the other. The avatar's disc wears the style too; each style brings a matching palette color for chat and finished games, which draw one color. | gradient name, name effect |
 | **Gift a pass** | Giving another registered player twelve months of the **Supporter pass**: one charge, never renewing, from their profile or the Friends list. | gift subscription, present |
 | **Tip** | Money given through an outbound link, with nothing in return. It never counts toward a **Supporter pass**. | donation |
 | **Supporter mark** | The small pink heart after a **Supporter**'s name, shown unless they hide it. | badge, tag, flair |

@@ -459,7 +459,7 @@ export const ES: Catalogue = {
     styleLagoon: "Laguna",
     styleOrchid: "Orquídea",
     styleSilver: "Plata",
-    stylePlain: "Color simple",
+    styleFallback: "El chat y las partidas terminadas usan este color:",
     stylesTitle: "Estilos de nombre de apoyo",
     doodlesTitle: "Garabatos de apoyo",
     lockedHint: "Vienen con un pase de apoyo.",

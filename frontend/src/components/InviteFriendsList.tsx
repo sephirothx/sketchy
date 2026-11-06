@@ -67,6 +67,7 @@ export function InviteFriendsList() {
             <Avatar
               name={friend.displayName}
               nameColor={friend.nameColor ?? undefined}
+              nameStyle={friend.nameStyle}
               avatarUrl={friend.avatarUrl}
               isAnonymous={friend.isAnonymous}
               size={26}

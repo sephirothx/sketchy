@@ -459,7 +459,7 @@ export const PL: Catalogue = {
     styleLagoon: "Laguna",
     styleOrchid: "Orchidea",
     styleSilver: "Srebro",
-    stylePlain: "Zwykły kolor",
+    styleFallback: "Czat i zakończone gry używają tego koloru:",
     stylesTitle: "Style nazwy wspierających",
     doodlesTitle: "Doodle wspierających",
     lockedHint: "Są w przepustce wspierającego.",

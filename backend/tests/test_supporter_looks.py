@@ -21,6 +21,8 @@ from app.auth.avatars import SupporterOnly
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import Base, User
+from app.domain_values import NAME_STYLES
+from app.rooms import NAME_COLORS, NAME_STYLE_COLORS
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import choose_doodle
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
@@ -160,6 +162,27 @@ async def test_a_supporter_sees_the_style_on_their_own_account(site):
     chosen = await _style(http, "ocean")
     assert chosen.status_code == 200 and chosen.json()["nameStyle"] == "ocean"
     assert (await http.get("/api/auth/me")).json()["nameStyle"] == "ocean"
+
+
+def test_every_style_stands_in_with_a_palette_colour():
+    assert set(NAME_STYLE_COLORS) == set(NAME_STYLES)
+    assert set(NAME_STYLE_COLORS.values()) <= set(NAME_COLORS)
+
+
+async def test_a_name_wears_a_colour_or_a_style_never_both(site):
+    """One tick in Settings: a style brings its colour, and a colour takes the style off."""
+    http, _ = site
+    user_id = await _register(http)
+    await _buy(http, user_id)
+    assert (await http.post("/api/auth/name-color", json={"nameColor": "#a0522d"})).status_code == 200
+
+    worn = (await _style(http, "sunset")).json()
+    assert (worn["nameStyle"], worn["nameColor"]) == ("sunset", NAME_STYLE_COLORS["sunset"])
+
+    back = await http.post("/api/auth/name-color", json={"nameColor": "#2563eb"})
+    assert (back.json()["nameStyle"], back.json()["nameColor"]) == (None, "#2563eb")
+    me = (await http.get("/api/auth/me")).json()
+    assert (me["nameStyle"], me["nameColor"]) == (None, "#2563eb")
 
 
 async def test_a_lapse_keeps_the_choices_and_stops_new_ones(site):

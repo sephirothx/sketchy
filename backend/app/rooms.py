@@ -107,6 +107,27 @@ NAME_COLORS: tuple[str, ...] = (
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
+# A name wears one look: a colour or a supporter style (#1476), never both, or
+# Settings shows two ticks and the room shows a colour the player no longer
+# sees as theirs. Choosing a style writes its partner here, because a name still
+# needs one colour wherever two cannot be drawn - chat, the Gallery, finished
+# games and colour-safe mode (a live name and its disc wear the style itself). Each partner is the palette hue nearest
+# the style's first stop; Silver has no grey to go to, so it borrows indigo.
+NAME_STYLE_COLORS: dict[str, str] = {
+    "sunset": "#f97316",
+    "ocean": "#2563eb",
+    "aurora": "#16a34a",
+    "ember": "#e11d48",
+    "berry": "#d946ef",
+    "meadow": "#84cc16",
+    "twilight": "#6366f1",
+    "galaxy": "#a855f7",
+    "glacier": "#38bdf8",
+    "lagoon": "#0d9488",
+    "orchid": "#f472b6",
+    "silver": "#6366f1",
+}
+
 # Where a name is read: the player-list panel, which is `--card` in
 # frontend/src/styles/theme.css, once per theme. Mirrored rather than imported
 # because the server has no stylesheet to read; tests/test_name_color.py fails

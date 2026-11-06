@@ -237,6 +237,7 @@ export function PlayerList({
             <Avatar
               name={p.nickname}
               nameColor={p.nameColor}
+              nameStyle={p.nameStyle}
               avatarUrl={p.avatarUrl}
               isAnonymous={p.isAnonymous}
               isHost={p.isHost}

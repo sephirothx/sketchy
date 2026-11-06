@@ -271,7 +271,7 @@ One row per player identity, guest or registered.
 | `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
 | `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
 | `display_name` VARCHAR(32) | |
-| `name_style` | A supporter's two-tone name, a key from a closed list (`ck_users_name_style`). Beside `name_color`, which stays the fallback (R-SUP-17) |
+| `name_style` | A supporter's two-tone name, a key from a closed list (`ck_users_name_style`). It replaces the colour as the name's look: choosing it writes the style's partner into `name_color`, which stays the fallback, and choosing a colour clears it (R-SUP-17) |
 | `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp`, `.png` or `.jpg`, R-AVA-03), `doodle:<name>` for one of the deployment's own doodles (nothing else is stored for one; a claim assigns a random one, R-AVA-09), or null for the initial |
 | `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |

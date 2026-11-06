@@ -459,7 +459,7 @@ export const PT: Catalogue = {
     styleLagoon: "Lagoa",
     styleOrchid: "Orquídea",
     styleSilver: "Prata",
-    stylePlain: "Cor simples",
+    styleFallback: "O chat e as partidas terminadas usam esta cor:",
     stylesTitle: "Estilos de nome de apoiante",
     doodlesTitle: "Rabiscos de apoiante",
     lockedHint: "Vêm com um passe de apoiante.",

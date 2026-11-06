@@ -459,7 +459,7 @@ export const FR: Catalogue = {
     styleLagoon: "Lagon",
     styleOrchid: "Orchidée",
     styleSilver: "Argent",
-    stylePlain: "Couleur simple",
+    styleFallback: "Le chat et les parties terminées utilisent cette couleur :",
     stylesTitle: "Styles de nom de soutien",
     doodlesTitle: "Griffonnages de soutien",
     lockedHint: "Ils viennent avec un pass de soutien.",

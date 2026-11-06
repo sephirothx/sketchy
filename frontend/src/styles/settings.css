@@ -1164,9 +1164,20 @@
   background-image: linear-gradient(135deg, var(--name-style-from), var(--name-style-to));
 }
 
-.name-style-none {
-  background: var(--well);
-  color: var(--ink);
+/* The colour a worn style brought, for where two colours cannot be drawn. */
+.settings-name-styles-fallback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-name-styles-partner {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
 }
 
 .name-style-swatch:disabled {

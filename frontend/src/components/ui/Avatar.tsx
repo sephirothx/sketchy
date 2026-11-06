@@ -8,6 +8,9 @@ interface AvatarProps {
   name: string;
   /** The account color; ignored for guests, who use the theme's guest fill. */
   nameColor?: string;
+  /** A supporter's name style (#1476): the disc wears its two colours, as the
+      name does, with the color underneath for colour-safe mode. */
+  nameStyle?: string | null;
   /** The uploaded picture (#573) or the doodle (#579). Never set for a guest:
       the grey initial is what marks a name as unclaimed (R-ACCT-05). */
   avatarUrl?: string | null;
@@ -46,6 +49,7 @@ interface AvatarProps {
 export function Avatar({
   name,
   nameColor,
+  nameStyle,
   avatarUrl,
   isAnonymous = false,
   isHost = false,
@@ -61,12 +65,13 @@ export function Avatar({
   };
   if (!isAnonymous && nameColor) style["--player-color"] = nameColor;
   const variant = isAnonymous || !nameColor ? "avatar-guest" : "avatar-player";
+  const styled = variant === "avatar-player" && nameStyle ? ` avatar-styled name-style-${nameStyle}` : "";
   const picture = !isAnonymous && avatarUrl ? avatarUrl : null;
   const filled = picture && !doodleNameOf(picture) ? " has-picture" : "";
   const disc = (
     <span
       aria-hidden="true"
-      className={`avatar ${variant}${filled}${isSelf ? " is-self" : ""}`}
+      className={`avatar ${variant}${styled}${filled}${isSelf ? " is-self" : ""}`}
       style={style}
     >
       {picture ? <AvatarPicture url={picture} /> : initial}

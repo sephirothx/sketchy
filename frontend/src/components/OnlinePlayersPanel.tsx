@@ -143,6 +143,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                 <Avatar
                   name={player.displayName}
                   nameColor={player.nameColor ?? undefined}
+                  nameStyle={player.nameStyle}
                   avatarUrl={player.avatarUrl}
                   isAnonymous={player.isAnonymous}
                   isFriend={theyAreAFriend}

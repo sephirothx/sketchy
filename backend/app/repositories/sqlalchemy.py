@@ -2064,7 +2064,10 @@ class SqlAlchemyUserRepository(UserRepository):
                 if display_name is not None:
                     user.display_name = display_name.strip() or user.display_name
                 if name_color is not None:
+                    # A name wears one look (NAME_STYLE_COLORS in rooms.py):
+                    # choosing a colour takes the style off.
                     user.name_color = name_color
+                    user.name_style = None
                 if avatar_key is not None:
                     user.avatar_key = validated_avatar
             return _to_user_data(user)
