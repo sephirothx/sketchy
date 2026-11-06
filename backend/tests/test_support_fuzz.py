@@ -29,6 +29,7 @@ from sqlalchemy import func, select
 from app.api.errors import install_refusal_handler
 from app.api.support import create_support_router
 from app.db.models import SupportPurchase, User
+from app.domain_values import AccountState
 from app.support.config import STUB_WEBHOOK_SECRET, SupportConfig
 from app.support.providers import (
     PRODUCTS,
@@ -260,7 +261,15 @@ class Site:
         self.factory, self.engine = await create_test_db()
         async with self.factory() as session:
             async with session.begin():
-                users = [User(display_name=f"Fuzz{n}") for n in range(2)]
+                users = [
+                    User(
+                        display_name=f"Fuzz{n}",
+                        username=f"fuzz{n}_{uuid4().hex[:8]}",
+                        password_hash="not-a-real-hash",
+                        state=AccountState.REGISTERED.value,
+                    )
+                    for n in range(2)
+                ]
                 session.add_all(users)
         self.accounts = [str(user.id) for user in users]
         app = FastAPI()
