@@ -614,3 +614,13 @@ if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     media.addListener(syncSystemTheme);
   }
 }
+
+/* Colour-safe mode turns a two-tone name back into the plain colour (#1476): a
+   stylesheet can only see it on the document. */
+function applyColorSafe(enabled: boolean) {
+  if (typeof document !== "undefined") {
+    document.documentElement.toggleAttribute("data-color-safe", enabled);
+  }
+}
+applyColorSafe(useSettingsStore.getState().colorblindSafeColors);
+useSettingsStore.subscribe((state) => applyColorSafe(state.colorblindSafeColors));

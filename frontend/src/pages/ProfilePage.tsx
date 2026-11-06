@@ -9,7 +9,7 @@ import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { formatDate } from "../lib/clock";
 import { statisticsLayout, type TurnStat } from "../lib/profileStats";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingViewer } from "../components/DrawingViewer";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
@@ -145,15 +145,17 @@ function StatTile({ label, value }: { label: string; value: string }) {
 function PlayerName({
   name,
   nameColor,
+  nameStyle,
   isAnonymous,
 }: {
   name: string;
   nameColor: string | null;
+  nameStyle?: string | null;
   isAnonymous: boolean;
 }) {
   return (
     <span
-      className={playerNameClass(isAnonymous)}
+      className={playerNameClass(isAnonymous, nameStyleClass(nameStyle))}
       style={playerNameStyle(identityColor(name, isAnonymous, nameColor), isAnonymous)}
     >
       {name}
@@ -855,6 +857,7 @@ function ProfileView({ userId }: { userId: string }) {
                   <PlayerName
                     name={shownName}
                     nameColor={subject.nameColor}
+                    nameStyle={subject.nameStyle}
                     isAnonymous={subject.isAnonymous}
                   />
                 </h1>

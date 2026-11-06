@@ -122,3 +122,15 @@ test("a heart hidden or refunded leaves the recap on screen", () => {
   assert.equal(after[0].supporterMark, false);
   assert.equal(after[1].supporterMark, true, "a seat no longer in the room stays as it was");
 });
+
+test("a name style refunded leaves the recap on screen", () => {
+  const store = useGameStore.getState();
+  store.reset();
+  store.setRoomState(roomState("first", "waiting"));
+  store.applyLastGame({
+    ...recap,
+    scores: [{ playerId: "p1", nickname: "Ann", score: 300, nameStyle: "ocean" }],
+  });
+  store.setRoomState({ ...roomState("first", "waiting"), players: [{ playerId: "p1", nickname: "Ann" }] });
+  assert.equal(useGameStore.getState().finalScores[0].nameStyle, null);
+});

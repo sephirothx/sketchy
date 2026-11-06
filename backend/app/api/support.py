@@ -36,6 +36,7 @@ from app.services.supporter import (
     apply_provider_event,
     order_was_reversed,
     renewing_subscriptions,
+    revert_supporter_choices,
     subscriptions_of_order,
     supporter_status,
     unstopped_owners,
@@ -338,6 +339,11 @@ def create_support_router(
                         to_postpone = await _renewals_to_postpone(session, event, user_id)
                     if recorded:
                         told = await _tell_started(session, provider.name, event, user_id)
+                        if user_id and event.kind in (
+                            SupportPurchaseKind.REFUND,
+                            SupportPurchaseKind.CHARGEBACK,
+                        ):
+                            await revert_supporter_choices(session, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
             logger.exception("support_webhook_failed")

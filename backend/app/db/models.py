@@ -32,6 +32,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.db.types import UTCDateTime
 from app.domain_values import (
+    NAME_STYLES,
     SUPPORT_PROVIDERS,
     SUPPORT_PURCHASE_KINDS,
     BugReportScreenshotStatus,
@@ -319,6 +320,7 @@ class User(Base):
     # will report nothing and mean nothing by it. The baseline revision creates
     # it explicitly and the migration suite checks the database definition.
     __table_args__ = (
+        _values_check("name_style", NAME_STYLES, "ck_users_name_style"),
         Index(
             "ix_users_username_lower",
             func.lower(text("username")),
@@ -371,6 +373,10 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Beside the colour, never instead of it: `name_color` stays the fallback for
+    # colour-safe mode and everything frozen (#1476). Supporter-only to choose,
+    # kept when a pass lapses, cleared by a refund.
+    name_style: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # The content address of the uploaded picture (`<sha256>.webp`, `.png` or `.jpg`), or none.
     # Denormalised from uploaded_avatar_assets so every identity payload can
     # carry the URL without a join (#573).

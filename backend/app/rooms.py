@@ -261,6 +261,8 @@ class Player:
     # (`refresh_supporter_mark_on_live_surfaces`). A pass that lapses mid-game
     # keeps its heart until the next seat: nothing in a room hangs on it (N-21).
     supporter_mark: bool = False
+    # Pushed the same way. The colour stays beside it as the fallback (#1476).
+    name_style: Optional[str] = None
     sid: Optional[str] = None
     score: int = 0
     connected: bool = True
@@ -676,6 +678,7 @@ class Room:
                     **entry,
                     "supporterMark": (seat := self.players.get(entry["playerId"])) is not None
                     and seat.supporter_mark,
+                    "nameStyle": seat.name_style if seat is not None else None,
                 }
                 for entry in self.last_game_scores
             ],
@@ -916,6 +919,7 @@ class Room:
                 "nameColor": player.name_color,
                 "avatarUrl": avatar_url(player.avatar_key),
                 "supporterMark": player.supporter_mark,
+                "nameStyle": player.name_style,
                 "isAnonymous": player.is_anonymous,
                 "isHost": player.is_host,
             }
@@ -985,6 +989,7 @@ class Room:
             "nameColor": player.name_color,
             "avatarUrl": avatar_url(player.avatar_key),
             "supporterMark": player.supporter_mark,
+            "nameStyle": player.name_style,
             "isAnonymous": player.is_anonymous,
             "score": self.standing_score(player, carried),
             "connected": player.connected,
@@ -1176,6 +1181,7 @@ class RoomManager:
         colorblind_safe_colors: bool = False,
         avatar_key: str | None = None,
         supporter_mark: bool = False,
+        name_style: str | None = None,
         prompt_language: str | None = None,
     ) -> Player:
         active_players = room.seated_players()
@@ -1194,6 +1200,7 @@ class RoomManager:
             ),
             avatar_key=None if is_anonymous else avatar_key,
             supporter_mark=supporter_mark and not is_anonymous,
+            name_style=None if is_anonymous else name_style,
             score=0,
             is_host=False,
             is_spectator=is_spectator,

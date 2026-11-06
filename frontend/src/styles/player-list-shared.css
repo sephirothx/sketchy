@@ -26,3 +26,144 @@
   display: block;
   fill: var(--supporter-mark);
 }
+
+/* A supporter's two-tone name (#1476). The fill colour beats the inline name
+   colour, which stays underneath as the fallback. Per theme, because one pair
+   cannot read on both; colour-safe mode paints none of it. */
+.name-style {
+  /* As wide as the name, or a short one shows only the gradient's first colour. */
+  width: fit-content;
+  max-width: 100%;
+  background-image: linear-gradient(90deg, var(--name-style-from), var(--name-style-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+:root[data-color-safe] .name-style {
+  /* As wide as the name, or a short one shows only the gradient's first colour. */
+  width: fit-content;
+  max-width: 100%;
+  background-image: none;
+  -webkit-text-fill-color: currentcolor;
+}
+
+.name-style-sunset {
+  --name-style-from: #c2410c;
+  --name-style-to: #be185d;
+}
+
+[data-theme="dark"] .name-style-sunset {
+  --name-style-from: #fb923c;
+  --name-style-to: #f472b6;
+}
+
+.name-style-ocean {
+  --name-style-from: #0e7490;
+  --name-style-to: #1d4ed8;
+}
+
+[data-theme="dark"] .name-style-ocean {
+  --name-style-from: #22d3ee;
+  --name-style-to: #60a5fa;
+}
+
+.name-style-aurora {
+  --name-style-from: #15803d;
+  --name-style-to: #6d28d9;
+}
+
+[data-theme="dark"] .name-style-aurora {
+  --name-style-from: #4ade80;
+  --name-style-to: #a78bfa;
+}
+
+.name-style-ember {
+  --name-style-from: #b91c1c;
+  --name-style-to: #b45309;
+}
+
+[data-theme="dark"] .name-style-ember {
+  --name-style-from: #f87171;
+  --name-style-to: #fbbf24;
+}
+
+.name-style-berry {
+  --name-style-from: #9d174d;
+  --name-style-to: #4338ca;
+}
+
+[data-theme="dark"] .name-style-berry {
+  --name-style-from: #f472b6;
+  --name-style-to: #818cf8;
+}
+
+.name-style-meadow {
+  --name-style-from: #4d7c0f;
+  --name-style-to: #0f766e;
+}
+
+[data-theme="dark"] .name-style-meadow {
+  --name-style-from: #a3e635;
+  --name-style-to: #2dd4bf;
+}
+
+.name-style-twilight {
+  --name-style-from: #4338ca;
+  --name-style-to: #a21caf;
+}
+
+[data-theme="dark"] .name-style-twilight {
+  --name-style-from: #a5b4fc;
+  --name-style-to: #f0abfc;
+}
+
+.name-style-galaxy {
+  --name-style-from: #6d28d9;
+  --name-style-to: #1d4ed8;
+}
+
+[data-theme="dark"] .name-style-galaxy {
+  --name-style-from: #c084fc;
+  --name-style-to: #60a5fa;
+}
+
+.name-style-glacier {
+  --name-style-from: #0369a1;
+  --name-style-to: #4f46e5;
+}
+
+[data-theme="dark"] .name-style-glacier {
+  --name-style-from: #7dd3fc;
+  --name-style-to: #a5b4fc;
+}
+
+.name-style-lagoon {
+  --name-style-from: #1d4ed8;
+  --name-style-to: #047857;
+}
+
+[data-theme="dark"] .name-style-lagoon {
+  --name-style-from: #60a5fa;
+  --name-style-to: #34d399;
+}
+
+.name-style-orchid {
+  --name-style-from: #a21caf;
+  --name-style-to: #be123c;
+}
+
+[data-theme="dark"] .name-style-orchid {
+  --name-style-from: #e879f9;
+  --name-style-to: #fd8a9b;
+}
+
+.name-style-silver {
+  --name-style-from: #334155;
+  --name-style-to: #526077;
+}
+
+[data-theme="dark"] .name-style-silver {
+  --name-style-from: #e2e8f0;
+  --name-style-to: #94a3b8;
+}

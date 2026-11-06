@@ -216,6 +216,7 @@ def test_the_payload_carries_no_room_identifier():
         "nameColor",
         "avatarUrl",
         "supporterMark",
+        "nameStyle",
         "isAnonymous",
         "status",
     }
@@ -346,6 +347,7 @@ class StubUser:
         self.is_anonymous = guest
         self.avatar_key = None
         self.supporter_mark = False
+        self.name_style = None
 
 
 async def test_warming_reads_once_and_then_answers_from_memory():

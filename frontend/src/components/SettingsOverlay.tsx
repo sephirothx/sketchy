@@ -24,6 +24,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
   DEFAULT_SETTINGS_SECTION,
   SETTINGS_SECTIONS,
+  useOpenSettings,
   sectionFromPath,
   settingsPath,
   type SettingsSection,
@@ -102,6 +103,8 @@ import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 import { ModalHeader } from "./ui/ModalShell";
 import { SupportPane } from "./SupportPane";
 import { useSupportStore } from "../store/supportStore";
+import { nameStyleClass } from "../lib/playerName";
+import { NAME_STYLES, setAccountNameStyle } from "../lib/support";
 import "../styles/lazy/settings.css";
 import "../styles/lazy/toolbar.css";
 
@@ -527,6 +530,82 @@ function SoloOptOutGroup() {
   );
 }
 
+const NAME_STYLE_LABELS: Record<string, () => string> = {
+  sunset: () => ui.support.styleSunset,
+  ocean: () => ui.support.styleOcean,
+  aurora: () => ui.support.styleAurora,
+  ember: () => ui.support.styleEmber,
+  berry: () => ui.support.styleBerry,
+  meadow: () => ui.support.styleMeadow,
+  twilight: () => ui.support.styleTwilight,
+  galaxy: () => ui.support.styleGalaxy,
+  glacier: () => ui.support.styleGlacier,
+  lagoon: () => ui.support.styleLagoon,
+  orchid: () => ui.support.styleOrchid,
+  silver: () => ui.support.styleSilver,
+};
+
+/** Styles A: a row under the colour swatches (#1476). Only where a pass is for
+sale. A lapsed supporter keeps what they wear and cannot pick another, so a
+locked swatch can still be the worn one, and the plain colour is always a choice. */
+function NameStyleChoice() {
+  const plans = useSupportStore((state) => state.plans);
+  const isSupporter = useSupportStore((state) => Boolean(state.status?.active));
+  const worn = useAuthStore((state) => state.user?.nameStyle ?? null);
+  const openSettings = useOpenSettings();
+  if (!plans) return null;
+  const choose = (style: string | null) => {
+    if (style === worn) return;
+    void setAccountNameStyle(style)
+      .then((updated) => useAuthStore.setState({ user: updated }))
+      .catch(() => {});
+  };
+  return (
+    <div className="settings-name-styles">
+      <span className="settings-name-styles-title">{ui.support.stylesTitle}</span>
+      <span className="settings-swatches" role="group" aria-label={ui.support.stylesTitle}>
+        <button
+          type="button"
+          className={`settings-swatch name-style-none${worn === null ? " is-selected" : ""}`}
+          aria-label={ui.support.stylePlain}
+          aria-pressed={worn === null}
+          title={ui.support.stylePlain}
+          onClick={() => choose(null)}
+        >
+          {worn === null && <CheckIcon size={14} />}
+        </button>
+        {NAME_STYLES.map((style) => {
+          const locked = !isSupporter && style !== worn;
+          return (
+            <button
+              key={style}
+              type="button"
+              className={`settings-swatch name-style-swatch name-style-${style}${
+                style === worn ? " is-selected" : ""
+              }`}
+              aria-label={NAME_STYLE_LABELS[style]()}
+              aria-pressed={style === worn}
+              title={NAME_STYLE_LABELS[style]()}
+              disabled={locked}
+              onClick={() => choose(style)}
+            >
+              {style === worn && <CheckIcon size={14} />}
+            </button>
+          );
+        })}
+      </span>
+      {!isSupporter && (
+        <small>
+          {ui.support.lockedHint}{" "}
+          <button type="button" className="inline-link" onClick={() => openSettings("support")}>
+            {ui.support.seePass}
+          </button>
+        </small>
+      )}
+    </div>
+  );
+}
+
 function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -847,7 +926,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               ) : (
                 <>
                   <strong
-                    className={`settings-you-name colored-player-name${isGuest ? " is-guest" : ""}`}
+                    className={`settings-you-name colored-player-name${isGuest ? " is-guest" : ` ${nameStyleClass(user?.nameStyle) ?? ""}`}`}
                     style={isGuest ? undefined : { color: nameColor }}
                   >
                     {user?.displayName}
@@ -888,6 +967,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                 ))}
               </span>
             )}
+            {!isGuest && <NameStyleChoice />}
             {pictureError && (
               <p className="auth-error" role="alert">
                 {pictureError}

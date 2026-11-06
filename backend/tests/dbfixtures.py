@@ -227,3 +227,27 @@ async def create_test_db(
 
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     return factory, engine
+
+
+async def lapse_passes(factory, user_id, end) -> None:
+    """End an account's supporter passes at `end`, which no running code can do. As
+    the owner when the suite runs as the application role, which may not rewrite
+    the ledger (#896)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import SupportPurchase
+
+    owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+    owner = create_test_engine(owner_url) if owner_url else None
+    writing = async_sessionmaker(owner, expire_on_commit=False) if owner is not None else factory
+    try:
+        async with writing() as session:
+            async with session.begin():
+                await session.execute(
+                    SupportPurchase.__table__.update()
+                    .where(SupportPurchase.user_id == user_id)
+                    .values(period_end=end)
+                )
+    finally:
+        if owner is not None:
+            await owner.dispose()

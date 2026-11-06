@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from app.api.avatars import AVATAR_UPLOAD_LIMIT, create_avatar_router
 from app.api.inbox import create_inbox_router
 from app.api.moderation import create_moderation_router
-from app.auth.avatar_doodles import DOODLES
+from app.auth.avatar_doodles import ALL_DOODLES, DOODLES, SUPPORTER_DOODLES
 from app.auth.avatars import (
     AVATAR_REUPLOAD_BLOCKS,
     MAX_AVATAR_BYTES,
@@ -1067,8 +1067,11 @@ def test_the_server_the_client_and_the_sprite_name_the_same_doodles():
     listed = re.search(r"export const DOODLES = \[(.*?)\] as const", client, re.S)
     assert listed is not None, "avatarDoodles.ts no longer declares DOODLES"
     client_names = tuple(re.findall(r'"([a-z]+)"', listed.group(1)))
-    assert symbols == DOODLES
+    supporter = re.search(r"export const SUPPORTER_DOODLES = \[(.*?)\] as const", client, re.S)
+    assert supporter is not None, "avatarDoodles.ts no longer declares SUPPORTER_DOODLES"
+    assert symbols == ALL_DOODLES
     assert client_names == DOODLES
+    assert tuple(re.findall(r'"([a-z]+)"', supporter.group(1))) == SUPPORTER_DOODLES
 
 
 async def test_a_removal_that_leaves_a_doodle_tells_live_seats_the_doodle(env):

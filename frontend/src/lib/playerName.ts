@@ -10,6 +10,13 @@ export function playerNameClass(isAnonymous?: boolean, extra?: string): string {
   return extra ? `${base} ${extra}` : base;
 }
 
+/** The class that paints a supporter's two-tone name (#1476), or nothing. The
+ * stylesheet holds the colours per theme, and in colour-safe mode paints nothing,
+ * so the plain name color shows. */
+export function nameStyleClass(nameStyle?: string | null): string | undefined {
+  return nameStyle ? `name-style name-style-${nameStyle}` : undefined;
+}
+
 export function playerNameStyle(
   nameColor: string | undefined,
   isAnonymous?: boolean,

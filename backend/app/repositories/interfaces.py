@@ -71,6 +71,8 @@ class UserData:
     # Whether others see a supporter mark. Only reads that ask for it fill it in:
     # most need the account, not this (#1474).
     supporter_mark: bool = False
+    # A supporter's two-tone name; `name_color` stays the fallback (#1476).
+    name_style: str | None = None
 
 
 @dataclass(frozen=True)

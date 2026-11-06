@@ -1619,6 +1619,7 @@
    "displayName",
    "isAnonymous",
    "nameColor",
+   "nameStyle",
    "requestedByMe",
    "respondedAt",
    "supporterMark",
@@ -1629,6 +1630,7 @@
    "displayName",
    "lastPlayedAt",
    "nameColor",
+   "nameStyle",
    "supporterMark",
    "userId"
   ],
@@ -1637,6 +1639,7 @@
    "displayName",
    "lastPlayedAt",
    "nameColor",
+   "nameStyle",
    "supporterMark",
    "userId"
   ],
@@ -2125,6 +2128,7 @@
    "isOnline",
    "lastSeenAt",
    "nameColor",
+   "nameStyle",
    "supporterMark"
   ],
   "api.serializers:stats_payload": [
@@ -2145,6 +2149,7 @@
    "isAnonymous",
    "lastLoginAt",
    "nameColor",
+   "nameStyle",
    "pendingRole"
   ],
   "api.solo:create_solo_router": [
@@ -2394,6 +2399,7 @@
    "lastSeenAt",
    "mergedAt",
    "nameColor",
+   "nameStyle",
    "orderId",
    "penPressure",
    "periodEnd",
@@ -2777,6 +2783,7 @@
    "drawerId",
    "isAnonymous",
    "nameColor",
+   "nameStyle",
    "newRank",
    "playerId",
    "previousRank",
@@ -2816,6 +2823,7 @@
    "isHost",
    "isSpectator",
    "nameColor",
+   "nameStyle",
    "playerId",
    "supporterMark"
   ],
@@ -2827,6 +2835,7 @@
   ],
   "rooms:last_game_payload": [
    "isPublic",
+   "nameStyle",
    "scoringMode",
    "seatTokens",
    "supporterMark"
@@ -2862,6 +2871,7 @@
    "isAnonymous",
    "isHost",
    "nameColor",
+   "nameStyle",
    "supporterMark"
   ],
   "rooms:to_public_summary": [
@@ -2928,6 +2938,7 @@
    "avatarUrl",
    "isAnonymous",
    "nameColor",
+   "nameStyle",
    "playerId",
    "supporterMark"
   ],
@@ -3000,6 +3011,7 @@
    "displayName",
    "isAnonymous",
    "nameColor",
+   "nameStyle",
    "onlineCount",
    "supporterMark",
    "userId"
@@ -3088,7 +3100,7 @@
    "displayName"
   ]
  },
- "protocolVersion": 73,
+ "protocolVersion": 74,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -3248,6 +3260,7 @@
    "support_unavailable",
    "support_cancel_failed",
    "support_gift_refused",
+   "supporter_only",
    "solo_pool_empty",
    "solo_date_out_of_range",
    "no_such_daily",

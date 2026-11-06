@@ -41,7 +41,23 @@ export const DOODLES = [
   "icecream",
 ] as const;
 
-export type DoodleName = (typeof DOODLES)[number];
+/** Supporter-only to choose (#1476), and after the first list in the sprite. */
+export const SUPPORTER_DOODLES = [
+  "whale",
+  "octopus",
+  "snail",
+  "bee",
+  "hedgehog",
+  "dino",
+  "unicorn",
+  "planet",
+  "lighthouse",
+  "palette",
+  "cupcake",
+  "bunny",
+] as const;
+
+export type DoodleName = (typeof DOODLES)[number] | (typeof SUPPORTER_DOODLES)[number];
 
 export const DOODLE_SPRITE = "/avatars/doodles.svg";
 
@@ -49,7 +65,8 @@ export const DOODLE_SPRITE = "/avatars/doodles.svg";
 export function doodleNameOf(url: string | null | undefined): DoodleName | null {
   if (!url || !url.startsWith(`${DOODLE_SPRITE}#`)) return null;
   const name = url.slice(DOODLE_SPRITE.length + 1);
-  return (DOODLES as readonly string[]).includes(name) ? (name as DoodleName) : null;
+  const known = [...DOODLES, ...SUPPORTER_DOODLES] as readonly string[];
+  return known.includes(name) ? (name as DoodleName) : null;
 }
 
 /**

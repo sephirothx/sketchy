@@ -30,6 +30,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.services.supporter import renewing_subscriptions
 from app.services.telemetry import database_operation_of, telemetry
@@ -1085,6 +1086,7 @@ async def _write_export_artifact(
             "emailVerifiedAt": _timestamp(account.email_verified_at),
             "displayName": account.display_name,
             "nameColor": account.name_color,
+            "nameStyle": account.name_style,
             "avatarKey": account.avatar_key,
             # The picture itself: the player's own upload, so it is theirs to
             # take with them (R-PRIV-01), as bytes rather than a URL that dies
@@ -2242,6 +2244,10 @@ async def anonymize_account(
                 identity.email_verified_at = None
                 identity.display_name = DELETED_DISPLAY_NAME
                 identity.name_color = None
+                identity.name_style = None
+                # Written whatever was read: on SQLite, which ignores the lock above, a
+                # save in flight can commit what this read as nothing to clear.
+                flag_modified(identity, "name_style")
                 identity.avatar_key = None
                 identity.avatar_upload_blocked_until = None
                 identity.role = UserRole.USER.value

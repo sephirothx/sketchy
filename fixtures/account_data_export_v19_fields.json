@@ -20,6 +20,7 @@
     "account.lastLoginAt",
     "account.lastSeenAt",
     "account.nameColor",
+    "account.nameStyle",
     "account.role",
     "account.state",
     "account.updatedAt",

@@ -61,6 +61,7 @@ export function withOnlineFriends(
       nameColor: friend.nameColor,
       avatarUrl: friend.avatarUrl,
       supporterMark: friend.supporterMark,
+      nameStyle: friend.nameStyle,
       isAnonymous: friend.isAnonymous,
       status,
     });

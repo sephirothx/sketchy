@@ -5,11 +5,15 @@ import os
 import logging
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ConfigDict, Field
+from sqlalchemy import select, update
+
+from app.db.models import User
 from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
@@ -80,6 +84,7 @@ from app.auth.recovery import (
 )
 from app.api.serializers import user_payload
 from app.api.user_settings import settings_of_registered_account
+from app.services.supporter import supporter_status
 from app.support.cancellation import cancel_quietly
 from app.support.config import support_config
 from app.support.providers import provider_for
@@ -273,6 +278,25 @@ class NameColorBody(ControlFreeModel):
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
+class NameStyleBody(ControlFreeModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name_style: Literal[
+        "sunset",
+        "ocean",
+        "aurora",
+        "ember",
+        "berry",
+        "meadow",
+        "twilight",
+        "galaxy",
+        "glacier",
+        "lagoon",
+        "orchid",
+        "silver",
+    ] | None = Field(alias="nameStyle")
+
+
 class ChangePasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -350,6 +374,7 @@ def create_auth_router(
     session_factory,
     *,
     on_account_deleted: Callable[[str], Awaitable[None]] | None = None,
+    on_supporter_look_changed: Callable[[str], Awaitable[None]] | None = None,
     on_identity_merged: Callable[[str, str], None] | None = None,
     # Called with the account whose display name or colour just changed. The
     # lobby's online list shows both, and it reads them from a cache warmed at
@@ -394,6 +419,12 @@ def create_auth_router(
         session_factory,
         scope="register",
         limit=_limit("AUTH_REGISTER_LIMIT", 10),
+        window_seconds=3600,
+    )
+    name_style_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="name_style",
+        limit=_limit("NAME_STYLE_LIMIT", 30),
         window_seconds=3600,
     )
     lookup_limiter = PersistentRateLimiter(
@@ -989,6 +1020,64 @@ def create_auth_router(
         if on_profile_changed is not None:
             on_profile_changed(user.id)
         return user_payload(updated or user)
+
+    @router.post("/name-style")
+    async def set_name_style(body: NameStyleBody, request: Request):
+        """Wear a supporter's two-tone name (#1476), or go back to the colour.
+
+        Going back is always allowed. Choosing needs a pass in force: a lapsed
+        supporter keeps what they wear and cannot pick another, and the page
+        offers only what may be chosen, so this is a stale tab or a made-up
+        request (R-SUP-17).
+        """
+        # Each change is a whole `room_state` to everybody seated with them, so it
+        # has the bound a doodle has, not a lookup's (R-AVA-09).
+        await throttle(name_style_limiter, request)
+        user_id = getattr(request.state, "user_id", None)
+        user = await user_repo.get_by_id(user_id) if user_id else None
+        if user is None:
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
+        if user.is_anonymous:
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to choose a name style.",
+                params={"action": "name_color"},
+            )
+        async with session_factory() as session:
+            async with session.begin():
+                # A write first, holding the row on PostgreSQL and the database on
+                # SQLite, which ignores FOR UPDATE. Read before this, a refund or a
+                # deletion landing in between would be undone by re-picking what it
+                # cleared, or be written onto an erased account.
+                held = await session.execute(
+                    update(User)
+                    .where(
+                        User.id == UUID(user.id),
+                        User.state == AccountState.REGISTERED.value,
+                    )
+                    .values(name_style=User.name_style)
+                )
+                if held.rowcount != 1:
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
+                worn = await session.scalar(
+                    select(User.name_style).where(User.id == UUID(user.id))
+                )
+                if body.name_style is not None and body.name_style != worn:
+                    status = await supporter_status(session, UUID(user.id))
+                    if not status.active:
+                        raise Refusal(403, ErrorCode.SUPPORTER_ONLY)
+                await session.execute(
+                    update(User)
+                    .where(User.id == UUID(user.id))
+                    .values(name_style=body.name_style)
+                )
+        if on_supporter_look_changed is not None:
+            try:
+                await on_supporter_look_changed(user.id)
+            except Exception:
+                logger.warning("supporter_look_push_failed", exc_info=True)
+        return user_payload(await user_repo.get_by_id(user.id) or user)
 
     @router.post("/name-color")
     async def set_name_color(body: NameColorBody, request: Request):
