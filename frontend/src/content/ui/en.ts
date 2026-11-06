@@ -471,7 +471,6 @@ export const EN = {
     styleLagoon: "Lagoon",
     styleOrchid: "Orchid",
     styleSilver: "Silver",
-    styleFallback: "The Gallery and finished games use this color:",
     stylesTitle: "Supporter name styles",
     doodlesTitle: "Supporter doodles",
     lockedHint: "These come with a supporter pass.",

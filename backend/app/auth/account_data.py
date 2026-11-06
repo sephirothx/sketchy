@@ -837,6 +837,7 @@ def _participation_document(row) -> dict:
             "identityId": str(seat.user_id) if seat.user_id else None,
             "displayName": seat.display_name_snapshot,
             "nameColor": seat.name_color_snapshot,
+            "nameStyle": seat.name_style_snapshot,
             "wasAnonymous": seat.is_anonymous_snapshot,
             "finalScore": seat.final_score,
             "finalRank": seat.final_rank,
@@ -1876,6 +1877,7 @@ async def anonymize_account(
                 .values(
                     display_name_snapshot=DELETED_DISPLAY_NAME,
                     name_color_snapshot=None,
+                    name_style_snapshot=None,
                     is_anonymous_snapshot=True,
                 )
             )
@@ -1885,6 +1887,7 @@ async def anonymize_account(
                 .values(
                     drawer_display_name_snapshot=DELETED_DISPLAY_NAME,
                     drawer_name_color_snapshot=None,
+                    drawer_name_style_snapshot=None,
                     drawer_is_anonymous_snapshot=True,
                 )
             )

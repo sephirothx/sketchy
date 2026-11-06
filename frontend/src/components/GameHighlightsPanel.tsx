@@ -1,5 +1,5 @@
 import { useEscapeLayer } from "../hooks/useFocusTrap";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { presentHighlights } from "../lib/gameHighlights";
 import { AlertIcon, BrushIcon, ClockIcon, HeartIcon, XIcon, ZapIcon } from "./icons";
 import { SectionLabel } from "./ui/Card";
@@ -70,7 +70,10 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
                 <p className="game-highlights-subject">
                   {highlight.name ? (
                     <span
-                      className={playerNameClass(highlight.name.isAnonymous)}
+                      className={playerNameClass(
+                        highlight.name.isAnonymous,
+                        nameStyleClass(highlight.name.nameStyle),
+                      )}
                       style={playerNameStyle(
                         highlight.name.nameColor,
                         highlight.name.isAnonymous,

@@ -939,6 +939,7 @@ async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(e
         "turnNumber": 1,
         "drawerDisplayName": "Ann",
         "drawerNameColor": None,
+        "drawerNameStyle": None,
         # `record_game` writes the seat without an account state, so the
         # snapshot says guest: the shelf repeats the snapshot, not the account.
         "drawerIsAnonymous": True,

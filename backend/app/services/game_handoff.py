@@ -110,7 +110,8 @@ logger = logging.getLogger("sketchy.services.game_handoff")
 # each version's `sources`, which is what its facts are credited to now.
 # 4 since #1430: the shares to the Gallery made from the turn results, and
 # the turns whose drawer took theirs back out.
-ENVELOPE_VERSION = 4
+# 5 since #1476: each seat's supporter name style, as worn when the game ended.
+ENVELOPE_VERSION = 5
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -361,6 +362,7 @@ def _participant_out(seat: GameParticipantInput) -> dict:
         "display_name": seat.display_name,
         "name_color": seat.name_color,
         "is_anonymous": seat.is_anonymous,
+        "name_style": seat.name_style,
     }
 
 

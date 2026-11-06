@@ -1193,6 +1193,7 @@ class _ShareCredit:
     is_anonymous: bool
     is_drawer: bool
     shared_by_viewer: bool
+    name_style: str | None = None
 
 
 async def _share_credits(
@@ -1214,6 +1215,7 @@ async def _share_credits(
                 TurnRecord.drawer_participant_id,
                 GameParticipant.display_name_snapshot,
                 GameParticipant.name_color_snapshot,
+                GameParticipant.name_style_snapshot,
                 GameParticipant.is_anonymous_snapshot,
             )
             .join(TurnRecord, TurnRecord.id == TurnDrawingShare.turn_id)
@@ -1244,7 +1246,14 @@ async def _share_credits(
     )
     solo = (
         await session.execute(
-            select(ranked.c.turn_id, ranked.c.user_id, ranked.c.created_at, User.display_name, User.name_color)
+            select(
+                ranked.c.turn_id,
+                ranked.c.user_id,
+                ranked.c.created_at,
+                User.display_name,
+                User.name_color,
+                User.name_style,
+            )
             .join(User, User.id == ranked.c.user_id)
             .where(ranked.c.rank == 1)
         )
@@ -1269,6 +1278,7 @@ async def _share_credits(
                 is_anonymous=row.is_anonymous_snapshot,
                 is_drawer=row.participant_id == row.drawer_participant_id,
                 shared_by_viewer=False,
+                name_style=row.name_style_snapshot,
             ),
         )
         for row in seated
@@ -1281,6 +1291,7 @@ async def _share_credits(
                 is_anonymous=False,
                 is_drawer=False,
                 shared_by_viewer=False,
+                name_style=row.name_style,
             ),
         )
         for row in solo
@@ -1329,6 +1340,8 @@ def _gallery_entry(
         sharer_is_anonymous=False if credit is None or by_drawer else credit.is_anonymous,
         shared_by_drawer=by_drawer,
         shared_by_me=credit is not None and credit.shared_by_viewer,
+        drawer_name_style=turn.drawer_name_style_snapshot,
+        sharer_name_style=None if credit is None or by_drawer else credit.name_style,
     )
 
 
@@ -1626,6 +1639,7 @@ def _to_game_summary(game: GameRecord, *, with_rule_snapshot: bool = True) -> Ga
                 is_anonymous=p.is_anonymous_snapshot,
                 final_score=p.final_score,
                 final_rank=p.final_rank,
+                name_style=p.name_style_snapshot,
             )
             # Ranked seats first by rank, then unranked (abandoned) seats by
             # score; None sorts via the boolean, never compared as a rank.
@@ -2721,19 +2735,26 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         if p.seat_id or participant_user is None
                         else participant_user.is_anonymous
                     )
+                    # A style only ever comes from the seat that wore it: an
+                    # account read here has no game to have worn one in.
+                    name_style_snapshot = (
+                        p.name_style if p.seat_id and not is_anonymous_snapshot else None
+                    )
                     participant_snapshots_by_id[participant_id] = (
-                        TOMBSTONE_SNAPSHOT
+                        (*TOMBSTONE_SNAPSHOT, None)
                         if participant_user_id in erased_user_ids
                         else (
                             display_name_snapshot,
                             name_color_snapshot,
                             is_anonymous_snapshot,
+                            name_style_snapshot,
                         )
                     )
                     (
                         display_name_snapshot,
                         name_color_snapshot,
                         is_anonymous_snapshot,
+                        name_style_snapshot,
                     ) = participant_snapshots_by_id[participant_id]
                     if participant_user_id is not None:
                         participant_ids_by_user[participant_user_id] = participant_id
@@ -2744,6 +2765,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             user_id=participant_user_id,
                             display_name_snapshot=display_name_snapshot,
                             name_color_snapshot=name_color_snapshot,
+                            name_style_snapshot=name_style_snapshot,
                             is_anonymous_snapshot=is_anonymous_snapshot,
                             final_score=p.final_score,
                             final_rank=p.final_rank,
@@ -2815,6 +2837,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             drawer_participant_id=drawer_participant_id,
                             drawer_display_name_snapshot=drawer_snapshot[0],
                             drawer_name_color_snapshot=drawer_snapshot[1],
+                            drawer_name_style_snapshot=drawer_snapshot[3],
                             drawer_is_anonymous_snapshot=drawer_snapshot[2],
                             prompt=r.prompt,
                             prompt_version_id=(
@@ -4660,6 +4683,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     turn_number=turn.turn_number,
                     drawer_display_name=turn.drawer_display_name_snapshot,
                     drawer_name_color=turn.drawer_name_color_snapshot,
+                    drawer_name_style=turn.drawer_name_style_snapshot,
                     drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
                     prompt=turn.prompt,
                     stroke_count=turn.stroke_count,
@@ -4995,6 +5019,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         ),
                         drawer_display_name=r.drawer_display_name_snapshot,
                         drawer_name_color=r.drawer_name_color_snapshot,
+                        drawer_name_style=r.drawer_name_style_snapshot,
                         drawer_is_anonymous=r.drawer_is_anonymous_snapshot,
                         prompt=r.prompt,
                         duration_seconds=r.duration_seconds,

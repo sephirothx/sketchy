@@ -111,6 +111,7 @@
     "gameParticipations[].participation.finalScore",
     "gameParticipations[].participation.identityId",
     "gameParticipations[].participation.nameColor",
+    "gameParticipations[].participation.nameStyle",
     "gameParticipations[].participation.seatId",
     "gameParticipations[].participation.turnsPlayed",
     "gameParticipations[].participation.wasAnonymous",

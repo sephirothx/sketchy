@@ -459,7 +459,6 @@ export const NL: Catalogue = {
     styleLagoon: "Lagune",
     styleOrchid: "Orchidee",
     styleSilver: "Zilver",
-    styleFallback: "De galerij en afgelopen spellen gebruiken deze kleur:",
     stylesTitle: "Naamstijlen voor supporters",
     doodlesTitle: "Doodles voor supporters",
     lockedHint: "Deze horen bij een supporterspas.",

@@ -26,6 +26,7 @@ export interface ProfileFavorite {
   turnNumber: number;
   drawerDisplayName: string;
   drawerNameColor: string | null;
+  drawerNameStyle?: string | null;
   drawerIsAnonymous: boolean;
   prompt: string;
   strokeCount: number;
@@ -172,6 +173,7 @@ export function favoritesAsRecapEntries(favorites: readonly ProfileFavorite[]): 
     drawerId: "",
     drawerNickname: favorite.drawerDisplayName,
     drawerNameColor: favorite.drawerNameColor ?? undefined,
+    ...(favorite.drawerNameStyle ? { drawerNameStyle: favorite.drawerNameStyle } : {}),
     drawerIsAnonymous: favorite.drawerIsAnonymous,
     prompt: favorite.prompt,
     actionCount: favorite.strokeCount,

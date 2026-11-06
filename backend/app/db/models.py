@@ -1276,6 +1276,12 @@ class RoomMessage(Base):
     sender_name_color_snapshot: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )
+    # The supporter name style the line was said in (#1476), as worn then. No
+    # closed-list check, unlike `users.name_style`: a stored key outlives a style
+    # being retired, and a reader that does not know it shows the colour.
+    sender_name_style_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
     sender_is_anonymous_snapshot: Mapped[bool] = mapped_column(
         Boolean, nullable=False
     )
@@ -2980,6 +2986,8 @@ class GameParticipant(Base):
         String(32), default="Unknown", nullable=False
     )
     name_color_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # As worn when the game finished (#1476); see RoomMessage's for why unchecked.
+    name_style_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_anonymous_snapshot: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
@@ -3074,6 +3082,10 @@ class TurnRecord(Base):
         String(32), default="Unknown", nullable=False
     )
     drawer_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    # As worn when the turn was drawn (#1476); see RoomMessage's for why unchecked.
+    drawer_name_style_snapshot: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )
     drawer_is_anonymous_snapshot: Mapped[bool] = mapped_column(

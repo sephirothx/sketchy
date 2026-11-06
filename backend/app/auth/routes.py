@@ -1067,8 +1067,8 @@ def create_auth_router(
                     status = await supporter_status(session, UUID(user.id))
                     if not status.active:
                         raise Refusal(403, ErrorCode.SUPPORTER_ONLY)
-                # A style brings its colour (NAME_STYLE_COLORS): the one the
-                # Gallery and history show, since a name wears one look.
+                # A style brings its colour (NAME_STYLE_COLORS), the one
+                # colour-safe mode shows, since a name wears one look.
                 partner = (
                     {"name_color": NAME_STYLE_COLORS[body.name_style]}
                     if body.name_style is not None

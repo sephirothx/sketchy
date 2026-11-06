@@ -68,8 +68,7 @@ class LobbyChatLine:
     # that, and an earlier one arriving late cannot undo a later one.
     visibility: int = 0
     # A supporter's name style when the line was said (#1476), as a live name
-    # shows it. Kept with the line only: the retained row stores the colour,
-    # so a line read back after a restart shows that.
+    # shows it; the retained row keeps it too, so a restart re-seeds it.
     name_style: str | None = None
 
     def payload(self) -> dict:
@@ -179,6 +178,7 @@ class LobbyChatLog:
                 user_id=str(row.sender_user_id),
                 display_name=row.sender_display_name_snapshot,
                 name_color=row.sender_name_color_snapshot,
+                name_style=row.sender_name_style_snapshot,
                 is_anonymous=row.sender_is_anonymous_snapshot,
                 text=row.text,
                 sent_at=row.created_at,

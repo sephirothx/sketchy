@@ -321,6 +321,7 @@ async def send_lobby_chat(ctx: HandlerContext, sid, data):
             is_anonymous=identity.is_anonymous,
             text=text,
             sent_at=sent_at,
+            name_style=identity.name_style,
         )
         if ctx.message_retention is not None
         else None

@@ -274,6 +274,9 @@ function CanvasOverlay() {
   const drawerIsAnonymous = useGameStore((state) =>
     state.players.find((player) => player.playerId === state.drawerId)?.isAnonymous,
   );
+  const drawerNameStyle = useGameStore((state) =>
+    state.players.find((player) => player.playerId === state.drawerId)?.nameStyle,
+  );
 
   return (
     <>
@@ -281,6 +284,7 @@ function CanvasOverlay() {
         <ChoosingPromptOverlay
           drawerNickname={drawerNickname || ui.gameRoomRegions.theNextPlayer}
           drawerNameColor={drawerNameColor}
+          drawerNameStyle={drawerNameStyle}
           drawerIsAnonymous={drawerIsAnonymous}
         />
       ) : null}

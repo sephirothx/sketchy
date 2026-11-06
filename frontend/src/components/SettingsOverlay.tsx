@@ -548,15 +548,13 @@ const NAME_STYLE_LABELS: Record<string, () => string> = {
 
 /** Styles A: a row under the colour swatches (#1476). Only where a pass is for
 sale. A name wears one look, so only one swatch across both rows is ticked: a
-style brings its own colour (the server's NAME_STYLE_COLORS), shown beneath it
-because the Gallery and history use it, and picking a colour above is the
-way back. A lapsed supporter keeps what they wear and cannot pick another, so a
+style brings its own colour (the server's NAME_STYLE_COLORS), which only
+colour-safe mode shows, and picking a colour above is the way back. A lapsed supporter keeps what they wear and cannot pick another, so a
 locked swatch can still be the worn one. */
 function NameStyleChoice() {
   const plans = useSupportStore((state) => state.plans);
   const isSupporter = useSupportStore((state) => Boolean(state.status?.active));
   const worn = useAuthStore((state) => state.user?.nameStyle ?? null);
-  const nameColor = useSettingsStore((state) => state.nameColor);
   const openSettings = useOpenSettings();
   const { notify } = useToast();
   if (!plans) return null;
@@ -598,18 +596,6 @@ function NameStyleChoice() {
           );
         })}
       </span>
-      {worn !== null && nameColor && isPaletteColor(nameColor) && (
-        <small className="settings-name-styles-fallback">
-          {ui.support.styleFallback}{" "}
-          <span
-            className="settings-name-styles-partner"
-            role="img"
-            aria-label={NAME_COLOR_NAMES[nameColor as (typeof NAME_COLOR_PALETTE)[number]]}
-            title={NAME_COLOR_NAMES[nameColor as (typeof NAME_COLOR_PALETTE)[number]]}
-            style={{ background: nameColor }}
-          />
-        </small>
-      )}
       {!isSupporter && (
         <small>
           {ui.support.lockedHint}{" "}

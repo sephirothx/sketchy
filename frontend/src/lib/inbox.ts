@@ -44,7 +44,12 @@ export type InboxEntry =
         turnId: string;
         prompt: string;
         inGallery: boolean;
-        sharedBy: { displayName: string; nameColor: string | null; isAnonymous: boolean } | null;
+        sharedBy: {
+          displayName: string;
+          nameColor: string | null;
+          nameStyle?: string | null;
+          isAnonymous: boolean;
+        } | null;
       };
     })
   | (EntryBase & {
@@ -145,7 +150,12 @@ export function parseInboxEntry(value: unknown): InboxEntry | null {
           inGallery: body.inGallery === true,
           sharedBy:
             sharer && sharerName !== null
-              ? { displayName: sharerName, nameColor: text(sharer.nameColor), isAnonymous: sharer.isAnonymous === true }
+              ? {
+                  displayName: sharerName,
+                  nameColor: text(sharer.nameColor),
+                  nameStyle: text(sharer.nameStyle),
+                  isAnonymous: sharer.isAnonymous === true,
+                }
               : null,
         },
       };

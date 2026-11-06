@@ -140,6 +140,8 @@ class GameParticipantInput:
     display_name: str = "Unknown"
     name_color: str | None = None
     is_anonymous: bool = True
+    # As worn when the game finished (#1476).
+    name_style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -335,6 +337,7 @@ class GameParticipantSummary:
     is_anonymous: bool
     final_score: int
     final_rank: int | None
+    name_style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -410,6 +413,7 @@ class TurnDetail:
     prompt: str
     duration_seconds: float
     prompt_version_id: str | None = None
+    drawer_name_style: str | None = None
     prompt_source_kind: str = "custom"
     stroke_count: int = 0
     # None when no drawing row exists at all, which is every turn played
@@ -463,6 +467,7 @@ class ProfileFavoriteEntry:
     # facts the shelf needs to offer a picker, disclosing no account id.
     my_reaction: str | None = None
     drawn_by_me: bool = False
+    drawer_name_style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -503,6 +508,10 @@ class GalleryEntry:
     shared_by_drawer: bool = False
     # Whether one of the shares is the viewer's: theirs to take back.
     shared_by_me: bool = False
+    # Supporter name styles as worn then (#1476): the drawer's from the turn,
+    # the sharer's from their seat (or their account, for a Solo share).
+    drawer_name_style: str | None = None
+    sharer_name_style: str | None = None
 
 
 @dataclass(frozen=True)

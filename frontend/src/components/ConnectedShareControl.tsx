@@ -71,7 +71,12 @@ export function ConnectedShareControl({
     nameOf: (token) => {
       const player = players.find((candidate) => candidate.playerId === token);
       return player
-        ? { name: player.nickname, nameColor: player.nameColor ?? null, isAnonymous: player.isAnonymous }
+        ? {
+            name: player.nickname,
+            nameColor: player.nameColor ?? null,
+            nameStyle: player.nameStyle ?? null,
+            isAnonymous: player.isAnonymous,
+          }
         : null;
     },
   });

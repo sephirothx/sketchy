@@ -1656,11 +1656,13 @@
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
+   "drawerNameStyle",
    "drawnByMe",
    "finishedAt",
    "isAnonymous",
    "myReaction",
    "nameColor",
+   "nameStyle",
    "reactionCounts",
    "roundNumber",
    "sharedAt",
@@ -1689,7 +1691,8 @@
   "api.inbox:_sharers": [
    "displayName",
    "isAnonymous",
-   "nameColor"
+   "nameColor",
+   "nameStyle"
   ],
   "api.inbox:create_inbox_router": [
    "unreadCount"
@@ -1943,6 +1946,7 @@
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
+   "drawerNameStyle",
    "drawnByMe",
    "myReaction",
    "reactionCounts",
@@ -2043,6 +2047,7 @@
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
+   "drawerNameStyle",
    "drawerSeatId",
    "drawerUserId",
    "drawingStatus",
@@ -2077,6 +2082,7 @@
    "hintMode",
    "isAnonymous",
    "nameColor",
+   "nameStyle",
    "playerCount",
    "promptSourceMode",
    "roomName",
@@ -2264,6 +2270,7 @@
    "hintMode",
    "identityId",
    "nameColor",
+   "nameStyle",
    "playerCount",
    "promptSourceMode",
    "roomName",
@@ -2850,6 +2857,7 @@
    "drawerId",
    "drawerIsAnonymous",
    "drawerNameColor",
+   "drawerNameStyle",
    "drawerNickname",
    "roundNumber",
    "turnId",
@@ -2986,7 +2994,8 @@
   ],
   "services.game_highlights:_named": [
    "isAnonymous",
-   "nameColor"
+   "nameColor",
+   "nameStyle"
   ],
   "services.lobby_chat:payload": [
    "displayName",

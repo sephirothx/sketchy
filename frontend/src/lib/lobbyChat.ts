@@ -21,8 +21,7 @@ export interface LobbyChatLine {
   userId: string;
   displayName: string;
   nameColor: string | null;
-  /** A supporter's name style when the line was said (#1476); absent after a
-      server restart, when the line shows its colour. */
+  /** A supporter's name style when the line was said (#1476). */
   nameStyle?: string;
   isAnonymous: boolean;
   text: string;

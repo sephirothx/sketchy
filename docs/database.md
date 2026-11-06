@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`61c3239afd30_support_purchase_extra.py` (R-SUP-19). Both this line and the table
+`8d4e2b7c9a1f_name_style_snapshots.py` (R-SUP-17). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1156,6 +1156,11 @@ reached **nobody but its author** — said alone in a room, or with every other 
 blocking them — is not written (#1243): a report cites only a line its reporter
 received, so such a row could never be evidence, and it was storage anybody could fill.
 
+**The author as they were.** `sender_display_name_snapshot`, `sender_name_color_snapshot`,
+`sender_name_style_snapshot` (a supporter's name style, R-SUP-17, unchecked as on
+`game_participants`) and `sender_is_anonymous_snapshot`: the lobby's restart re-seed
+draws a line from these, so it reads as it did when said.
+
 **Hidden lobby lines** (#1435, R-LCHAT-09). `hidden_at`, set by a moderator through
 `PATCH /api/moderation/lobby-messages/{id}` and cleared by showing the line again, with
 `ck_room_messages_hidden_lobby_only`: only a lobby line can carry it, room chat ending
@@ -1718,7 +1723,9 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `game_participants`
 `id` (the **participant seat**) · `game_id` (CASCADE) · `user_id` (`SET NULL`) ·
-`display_name_snapshot` · `name_color_snapshot` · `is_anonymous_snapshot` ·
+`display_name_snapshot` · `name_color_snapshot` · `name_style_snapshot` (the supporter
+name style worn when the game finished, R-SUP-17; nullable and, unlike `users.name_style`,
+unchecked, so a key outlives a retired style and reads as none) · `is_anonymous_snapshot` ·
 `final_score` · `final_rank` (nullable; null for abandoned games, `>= 1` otherwise) ·
 `turns_played` · `created_at`, with `uq_game_participants_game_user`.
 
@@ -1748,7 +1755,8 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `turn_records`
 `id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /
-`drawer_participant_id` (`CASCADE`, NOT NULL) · frozen drawer presentation · `prompt` ·
+`drawer_participant_id` (`CASCADE`, NOT NULL) · frozen drawer presentation (name, colour,
+`drawer_name_style_snapshot` as on `game_participants`, guest flag) · `prompt` ·
 `prompt_version_id` (FK → `prompt_versions`, RESTRICT) · `prompt_source_kind` ·
 `duration_seconds` · `guesser_count` · `prompt_auto_picked` · `stroke_count` ·
 `end_reason` (`all_guessed \| timeout`) · `wrong_guess_count` · `near_miss_count` ·

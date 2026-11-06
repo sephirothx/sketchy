@@ -17,6 +17,7 @@ import {
   type GalleryWindow,
 } from "../lib/gallery";
 import { refusalText } from "../lib/refusals.ts";
+import { nameStyleClass } from "../lib/playerName";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -384,7 +385,7 @@ export function GalleryPage() {
                             <span className="gallery-rail-byline">
                               {ui.galleryPage.byDrawerPrefix}{" "}
                               <strong
-                                className="colored-player-name"
+                                className={`colored-player-name ${nameStyleClass(entry.drawerNameStyle) ?? ""}`}
                                 style={entry.drawerNameColor ? { color: entry.drawerNameColor } : undefined}
                               >{entry.drawerDisplayName}</strong>
                             </span>

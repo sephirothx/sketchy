@@ -509,6 +509,7 @@ export type GameHighlight =
 export interface HighlightName {
   nickname: string;
   nameColor?: string;
+  nameStyle?: string | null;
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
   isAnonymous?: boolean;
@@ -546,6 +547,8 @@ export interface DrawingRecapMetadata {
   drawerId: string;
   drawerNickname: string;
   drawerNameColor?: string;
+  /** The drawer's supporter name style that turn (#1476). */
+  drawerNameStyle?: string | null;
   /** A guest drawer, credited in the guest style (#1279). */
   drawerIsAnonymous?: boolean;
   prompt: string;

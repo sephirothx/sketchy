@@ -22,6 +22,8 @@ export interface GalleryEntry {
   turnNumber: number;
   drawerDisplayName: string;
   drawerNameColor: string | null;
+  /** The drawer's supporter name style, as worn then (#1476). */
+  drawerNameStyle?: string | null;
   drawerIsAnonymous: boolean;
   prompt: string;
   strokeCount: number;
@@ -43,6 +45,7 @@ export interface GalleryEntry {
 export interface GallerySharer {
   displayName: string;
   nameColor: string | null;
+  nameStyle?: string | null;
   isAnonymous: boolean;
 }
 
@@ -116,6 +119,7 @@ export function galleryEntriesAsRecap(entries: readonly GalleryEntry[]): Drawing
     drawerId: "",
     drawerNickname: entry.drawerDisplayName,
     drawerNameColor: entry.drawerNameColor ?? undefined,
+    ...(entry.drawerNameStyle ? { drawerNameStyle: entry.drawerNameStyle } : {}),
     prompt: entry.prompt,
     actionCount: entry.strokeCount,
     available: true,

@@ -410,12 +410,14 @@ function GameRow({
                   <PlayerName
                     name={p.displayName}
                     nameColor={p.nameColor}
+                    nameStyle={p.nameStyle}
                     isAnonymous={p.isAnonymous}
                   />
                 </Link> : (
                   <PlayerName
                     name={p.displayName}
                     nameColor={p.nameColor}
+                    nameStyle={p.nameStyle}
                     isAnonymous={p.isAnonymous}
                   />
                 )}
@@ -455,6 +457,7 @@ function GameRow({
                       ? {
                           name: participant.displayName,
                           nameColor: participant.nameColor,
+                          nameStyle: participant.nameStyle,
                           isAnonymous: participant.isAnonymous,
                         }
                       : null;
@@ -489,6 +492,7 @@ function GameRow({
                 <PlayerName
                   name={participant?.displayName ?? fallbackName}
                   nameColor={participant?.nameColor ?? null}
+                  nameStyle={participant?.nameStyle}
                   isAnonymous={participant?.isAnonymous ?? true}
                 />
               );
@@ -521,6 +525,7 @@ function GameRow({
                 drawerId: turn.drawerSeatId ?? "",
                 drawerNickname: turn.drawerDisplayName,
                 drawerNameColor: turn.drawerNameColor ?? undefined,
+                drawerNameStyle: turn.drawerNameStyle ?? undefined,
                 drawerIsAnonymous: turn.drawerIsAnonymous,
                 prompt: turn.prompt,
                 actionCount: turn.strokeCount,

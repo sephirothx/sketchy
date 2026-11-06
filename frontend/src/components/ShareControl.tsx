@@ -3,7 +3,7 @@ import { ImageIcon } from "./icons";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { useToast } from "../lib/toast";
 import { refusalText } from "../lib/refusals.ts";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { ShareCredit, ShareOffer } from "../lib/shares";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
@@ -242,7 +242,7 @@ function creditLine(credit: ShareCredit) {
       return fill(ui.shareControl.inTheGallerySharedBy, {
         sharer: (
           <strong
-            className={playerNameClass(credit.isAnonymous)}
+            className={playerNameClass(credit.isAnonymous, nameStyleClass(credit.nameStyle))}
             style={playerNameStyle(credit.nameColor ?? undefined, credit.isAnonymous)}
           >
             {credit.name}

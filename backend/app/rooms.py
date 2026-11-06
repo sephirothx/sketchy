@@ -110,9 +110,9 @@ NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 # A name wears one look: a colour or a supporter style (#1476), never both, or
 # Settings shows two ticks and the room shows a colour the player no longer
 # sees as theirs. Choosing a style writes its partner here, because a name still
-# needs one colour wherever two cannot be drawn - the Gallery, finished games,
-# colour-safe mode and a lobby line read back after a restart (a live name, its
-# disc and chat wear the style itself). Each partner is the palette hue nearest
+# needs one colour wherever two cannot be drawn: colour-safe mode, and records
+# made before a style was stored beside the colour (everything else wears the
+# style itself). Each partner is the palette hue nearest
 # the style's first stop; Silver has no grey to go to, so it borrows indigo.
 NAME_STYLE_COLORS: dict[str, str] = {
     "sunset": "#f97316",
@@ -411,6 +411,7 @@ class DepartedSeat:
     # it had all game reads as a different person.
     name_color: str | None = None
     is_anonymous: bool = True
+    name_style: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -452,6 +453,8 @@ class DrawingRecapEntry:
     # from the recap as from history, and the recap says why rather than
     # calling it a drawing the room's budget could not keep.
     removed: bool = False
+    # The drawer's supporter name style as worn that turn (#1476).
+    drawer_name_style: str | None = None
 
     @property
     def is_available(self) -> bool:
@@ -466,6 +469,8 @@ class DrawingRecapEntry:
             "drawerId": self.drawer_id,
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
+            # Only a supporter's, as worn that turn (#1476).
+            **({"drawerNameStyle": self.drawer_name_style} if self.drawer_name_style else {}),
             "drawerIsAnonymous": self.drawer_is_anonymous,
             "prompt": self.prompt,
             # Only where there is more than one spelling to choose from.
@@ -1290,6 +1295,7 @@ class RoomManager:
                 score=departing.score,
                 name_color=departing.name_color,
                 is_anonymous=departing.is_anonymous,
+                name_style=None if departing.is_anonymous else departing.name_style,
             )
         for p in room.players.values():
             p.kick_votes.discard(player_id)
