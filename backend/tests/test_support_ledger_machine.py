@@ -30,7 +30,12 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, 
 from sqlalchemy import select, update
 
 from app.db.models import SupportPurchase, User
-from app.services.supporter import payments_of, supporter_status
+from app.services.supporter import (
+    payments_of,
+    renewals_nothing_pays_for,
+    supporter_status,
+    tell_ending_supporters,
+)
 from app.support.config import STUB_WEBHOOK_SECRET
 from app.support.providers import STUB_EXTRA_PRODUCT, signature_header
 
@@ -255,6 +260,7 @@ class LedgerMachine(RuleBasedStateMachine):
         event_id = event_id or self.next_id("evt")
         if event_id not in self.model.facts:
             user = self.model.owner(order=order)
+            REACHED["reversed before its sale was told"] += user is None
             self.model.facts[event_id] = Fact(kind=kind, order=order, user=user)
             for fact in self.model.purchases():
                 if fact.order == order and fact.subscription:
@@ -302,7 +308,8 @@ class LedgerMachine(RuleBasedStateMachine):
 
     accounts_ = st.integers(min_value=0, max_value=1)
     # Lapsed, running and not yet begun: never a day either side of a boundary.
-    offsets = st.sampled_from([-500, -400, -200, -30, -1, 0, 3])
+    # -355 ends in ten days: inside the fourteen-day ending notice.
+    offsets = st.sampled_from([-500, -400, -355, -200, -30, -1, 0, 3])
     extras = st.sampled_from([0, 0, 0, 1, 750, 50_000])
 
     @rule(who=accounts_, offset=offsets, extra=extras)
@@ -332,6 +339,13 @@ class LedgerMachine(RuleBasedStateMachine):
             first.account, "year", 0, 0, custom=with_custom, subscription=first.subscription, start=start
         )
         self.deliver(renewal)
+
+    @rule(who=accounts_)
+    def a_year_about_to_end(self, who):
+        """Ten days left, then the sweep: the notice goes once, and only if nothing
+        later carries the pass on."""
+        self.deliver(self.sale(self.accounts[who], "year", -355, 0))
+        self.the_hourly_sweep()
 
     @rule(who=accounts_, offset=offsets)
     def bought_but_not_yet_told(self, who, offset):
@@ -402,7 +416,28 @@ class LedgerMachine(RuleBasedStateMachine):
 
         self.site.run(wear())
 
+    @rule()
+    def the_hourly_sweep(self):
+        """Ending notices go once per pass, however often the sweep runs."""
+        first = self.site.run(tell_ending_supporters(self.site.factory))
+        again = self.site.run(tell_ending_supporters(self.site.factory))
+        REACHED["ending noticed"] += int(first)
+        assert int(again) == 0, "a supporter was told their pass is ending twice"
+
     # ------------------------------------------------------------ what must hold
+
+    @invariant()
+    def nothing_is_left_for_the_sweep_to_stop(self):
+        """With a provider that answers, each webhook stops what it should at once
+        (R-SUP-09): the sweep is for outages, so it must find nothing here."""
+        if not hasattr(self, "site"):
+            return
+
+        async def owed():
+            async with self.site.factory() as session:
+                return await renewals_nothing_pays_for(session)
+
+        assert self.site.run(owed()) == [], "a renewal nothing pays for was left running"
 
     @invariant()
     def the_ledger_holds_what_the_model_does(self):
@@ -483,6 +518,6 @@ def test_random_histories_keep_the_ledger_and_the_model_in_step(quiet):
     REACHED.clear()
     with stall_guard():
         machine("runTest").runTest()
-    for reached in ("active", "lifetime", "renews", "styled", "style taken back", "stopped", "purchase", "purchase gift",
-                    "refund", "chargeback", "refund unattributed"):
+    for reached in ("active", "lifetime", "renews", "styled", "style taken back", "ending noticed", "stopped", "purchase", "purchase gift",
+                    "refund", "chargeback", "reversed before its sale was told"):
         assert REACHED[reached], f"no history reached {reached!r}: {dict(REACHED)}"
