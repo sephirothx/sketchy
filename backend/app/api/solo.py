@@ -25,6 +25,8 @@ from app.auth.rate_limit import RateLimiter
 from app.db.models import User
 from app.domain_values import AccountState
 from app.refusals import ErrorCode
+from app.services.supporter import supporter_status
+from app.support.config import support_config
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
 from app.request_text import ControlFreeModel
@@ -154,17 +156,29 @@ def create_solo_router(
     def now() -> datetime:
         return datetime.now(timezone.utc)
 
+    async def has_perks(user: User) -> bool:
+        if support_config() is None:
+            return True
+        async with session_factory() as session:
+            return (await supporter_status(session, user.id)).active
+
+    async def open_door(user: User, door: SoloDoor) -> None:
+        if not solo_door_open(
+            state=user.state,
+            is_anonymous=user.is_anonymous,
+            door=door,
+            perks=await has_perks(user),
+        ):
+            # The page shows the pitch on these doors, so this is a stale tab or
+            # a made-up request (R-SUP-18).
+            raise Refusal(403, ErrorCode.SUPPORTER_ONLY, params={"door": door})
+
     @router.post("/runs", status_code=201)
     async def start_free_run(body: FreeRunBody, request: Request):
         """Start a free run, abandoning the one of its length in play."""
         user = await account(request)
         throttle(run_limiter, user)
-        door = free_run_door(body.length)
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
-            raise Refusal(
-                403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
-                params={"action": "solo"},
-            )
+        await open_door(user, free_run_door(body.length))
         try:
             run = await solo.start_free_run(str(user.id), length=body.length, now=now())
         except SoloRefused as error:
@@ -175,6 +189,8 @@ def create_solo_router(
     async def get_run(run_id: str, request: Request):
         user = await account(request)
         throttle(serve_limiter, user)
+        if await solo.unstarted_past_daily(str(user.id), now=now(), run_id=run_id):
+            await open_door(user, "archive")
         try:
             return run_payload(await solo.get_run(str(user.id), run_id))
         except SoloRefused as error:
@@ -202,6 +218,8 @@ def create_solo_router(
         up, or timed out. Recorded once; the server derives the points."""
         user = await account(request)
         throttle(serve_limiter, user)
+        if await solo.unstarted_past_daily(str(user.id), now=now(), serve_id=serve_id):
+            await open_door(user, "archive")
         try:
             serve, run = await solo.settle(
                 str(user.id), serve_id, outcome=body.outcome, seconds=body.seconds, now=now()
@@ -241,13 +259,6 @@ def create_solo_router(
             )
         return day
 
-    def open_door(user: User, door: SoloDoor) -> None:
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
-            raise Refusal(
-                403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
-                params={"action": "solo"},
-            )
-
     @router.post("/daily/{day}")
     async def open_daily(day: str, request: Request):
         """A date's Daily (#1434): created with its five drawings the first
@@ -261,11 +272,12 @@ def create_solo_router(
         local = parse_date(day)
         archived = not date_is_open(local, now())
         local = past_date(day) if archived else local
-        # A Daily the player finished is only reviewed, and their own: no
-        # gate stands in front of it, as none stands before their history
-        # (#1496 review). Playing a past one late is the archive's.
-        if not (archived and await solo.daily_finished(str(user.id), local)):
-            open_door(user, "archive" if archived else "daily_today")
+        # A Daily the player finished is only reviewed, and their own: no gate
+        # stands in front of it, as none stands before their history (#1496
+        # review). One they started is theirs to finish, whatever has happened to
+        # their pass since (R-SUP-18). Playing another past one is the archive's.
+        if not (archived and await solo.daily_started(str(user.id), local)):
+            await open_door(user, "archive" if archived else "daily_today")
         try:
             run = await solo.open_daily(str(user.id), local, now=now(), archive=archived)
         except SoloRefused as error:
@@ -278,7 +290,13 @@ def create_solo_router(
         to continue, the bests, the streak and the Dailies' totals."""
         user = await account(request)
         throttle(serve_limiter, user)
-        return await solo.summary(str(user.id), local_date(today), now=now())
+        summary = await solo.summary(str(user.id), local_date(today), now=now())
+        perks = await has_perks(user)
+        return {
+            **summary,
+            # Which doors show the pitch instead (R-SUP-18).
+            "doors": {"freeUnlimited": perks, "archive": perks},
+        }
 
     @router.get("/daily/month")
     async def month(request: Request, today: str = Query(), month: str = Query()):
@@ -298,7 +316,12 @@ def create_solo_router(
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That month has not begun.", field="month"
             )
-        archive = solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="archive")
+        archive = solo_door_open(
+            state=user.state,
+            is_anonymous=user.is_anonymous,
+            door="archive",
+            perks=await has_perks(user),
+        )
         return await solo.month(str(user.id), first, local, now=now(), archive=archive)
 
     async def settled(serve_id: str, user: User) -> str:
@@ -396,6 +419,19 @@ def create_solo_router(
             raise Refusal(
                 429, ErrorCode.TOO_MANY_REQUESTS, "Too many requests. Please wait and try again."
             )
+        # A past Daily with nothing answered is the archive door's, here as on its run
+        # and its first result, or saved IDs would stockpile it (R-SUP-18). This route's
+        # every refusal is the same 404, and that covers a 304 too.
+        if await solo.unstarted_past_daily(user_id, now=now(), serve_id=serve_id):
+            async with session_factory() as session:
+                user = await session.get(User, UUID(user_id))
+            if user is None or not solo_door_open(
+                state=user.state,
+                is_anonymous=user.is_anonymous,
+                door="archive",
+                perks=await has_perks(user),
+            ):
+                raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         return await serve_drawing(
             request,
             serve_id,

@@ -443,6 +443,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
 export const ES: Catalogue = {
   supporterMark: { label: "Mecenas" },
   support: {
+    soloPerk: "Ventaja de apoyo",
+    soloArchiveLocked: "Todos los Daily pasados vienen con un pase de apoyo.",
     giftThanks: "Tu regalo va en camino. Se activa en cuanto se confirme el pago.",
     styleSunset: "Atardecer",
     styleOcean: "Océano",

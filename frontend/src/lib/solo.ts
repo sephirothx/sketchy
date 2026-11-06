@@ -162,6 +162,9 @@ export interface SoloSummary {
   bests: Partial<Record<"5" | "10" | "unlimited", number>>;
   streak: number;
   stats: SoloDailyStats;
+  /** False where a supporter pass is on sale and this account holds none: the
+      door shows the pitch instead (R-SUP-18). */
+  doors?: { freeUnlimited: boolean; archive: boolean };
 }
 
 /** One date of the calendar: whether it had a Daily, and the player's result. */

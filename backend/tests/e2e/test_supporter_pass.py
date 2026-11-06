@@ -86,3 +86,33 @@ async def test_a_pass_can_be_gifted_from_a_profile_and_lands_in_the_inbox():
         gift = next(entry for entry in inbox if entry["kind"] == "supporter_gifted")
         assert gift["person"]["displayName"] == marta
         await browser.close()
+
+
+async def test_solo_shows_the_pitch_on_its_two_doors_and_a_pass_opens_them():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await (await browser.new_context()).new_page()
+        name = unique("Marta")
+        await page.goto(BASE_URL)
+        await use_guest_name(page, name)
+        await register_account(page, name)
+
+        await page.goto(f"{BASE_URL}/solo")
+        await page.get_by_test_id("solo-perk-endless").wait_for()
+        await page.get_by_test_id("solo-archive-locked").wait_for()
+        assert await page.get_by_test_id("solo-free-unlimited").count() == 0
+        # The short runs stay everybody's.
+        await page.get_by_test_id("solo-free-5").wait_for()
+
+        response = await page.request.post(
+            f"{BASE_URL}/api/support/checkout", data={"product": "year"}
+        )
+        await page.goto((await response.json())["url"])
+        await page.get_by_role("button", name="Pay").click()
+        await page.get_by_test_id("support-thanks").get_by_text("Thank you").wait_for()
+
+        await page.goto(f"{BASE_URL}/solo")
+        await page.get_by_test_id("solo-free-unlimited").wait_for()
+        assert await page.get_by_test_id("solo-perk-endless").count() == 0
+        assert await page.get_by_test_id("solo-archive-locked").count() == 0
+        await browser.close()

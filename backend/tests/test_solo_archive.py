@@ -158,7 +158,12 @@ async def test_the_calendar_opens_the_dailies_there_were_with_what_the_player_ma
     assert read["earliest"] == days[-1].isoformat()
     # The gate closed, the calendar still shows the days but opens none.
     closed = await _calendar(solo, stranger.id, now=datetime.now(timezone.utc), archive=False)
-    assert not any(day["open"] for day in closed.values())
+    # Closed, only a Daily they started and have not finished is left to finish
+    # (R-SUP-18).
+    assert not any(
+        day["open"] and (day["result"] is None or day["result"]["completed"])
+        for day in closed.values()
+    )
     assert closed[PAST.isoformat()]["result"]["completed"] is True
     # Closed, it still reaches the player's own first Daily, however played:
     # their finished ones stay reviewable (#1496 review).
@@ -172,8 +177,10 @@ async def test_one_gate_closes_every_archive_door_and_leaves_today_s(env, monkey
     http, users, history, solo, factory = env
     # Twice five: a concept is not the Daily twice within sixty days.
     await _candidates(users, history, factory, 12)
+    other = await player(users, factory, "OnTime")
+    await solo.open_daily(other.id, PAST, now=_noon(PAST))
+    # Somebody who has not started it: one already begun stays theirs (R-SUP-18).
     stranger = await player(users, factory, "Stranger")
-    await solo.open_daily(stranger.id, PAST, now=_noon(PAST))
     real = solo_api.solo_door_open
     monkeypatch.setattr(
         solo_api, "solo_door_open", lambda **kwargs: kwargs["door"] != "archive" and real(**kwargs)

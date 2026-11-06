@@ -327,7 +327,7 @@ export const LEGAL_PL: LegalDocuments = {
           "Sprzedawcą jest Paddle, nasz sprzedawca: przyjmuje płatność, nalicza ewentualne podatki i wysyła potwierdzenie, na własnych warunkach.",
           "Przepustka roczna odnawia się co rok, dopóki jej nie anulujesz. Możesz ją anulować w każdej chwili na /support/cancel, zalogowany lub nie: przepustka działa do końca opłaconego okresu, a potwierdzenie przychodzi e-mailem.",
           "Jeśli jesteś konsumentem, możesz odstąpić od umowy w ciągu czternastu dni od zakupu i odzyskać niewykorzystaną część. Zgłoś to przez potwierdzenie od Paddle.",
-          "Gdy przepustka się kończy, znak i dodatkowe Solo znikają, a wybrane style i doodle zostają. Zwrot lub obciążenie zwrotne kończy ją od razu i cofa też te wybory. Zawieszenie nie podlega zwrotowi. Usunięcie konta zatrzymuje każde odnowienie. Napiwek na Ko-fi jest prezentem i nie obejmuje przepustki.",
+          "Gdy przepustka się kończy, znak i dodatkowe Solo znikają, choć rozpoczętą rozgrywkę możesz dokończyć, a wybrane style i doodle zostają. Zwrot lub obciążenie zwrotne kończy ją od razu i cofa też te wybory. Zawieszenie nie podlega zwrotowi. Usunięcie konta zatrzymuje każde odnowienie. Napiwek na Ko-fi jest prezentem i nie obejmuje przepustki.",
           "Możesz podarować innemu graczowi dwanaście miesięcy: jedno obciążenie, bez odnawiania i bez kosztów dla niego. Zaczynają się po końcu jego obecnego okresu, a jeśli jego przepustka miała się odnowić, odnowienie czeka do końca prezentu, a potem działa dalej, aby nie płacił za te same miesiące. Może je anulować w każdej chwili.",
         ],
       },
