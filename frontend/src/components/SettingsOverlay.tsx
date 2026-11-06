@@ -553,12 +553,15 @@ function NameStyleChoice() {
   const isSupporter = useSupportStore((state) => Boolean(state.status?.active));
   const worn = useAuthStore((state) => state.user?.nameStyle ?? null);
   const openSettings = useOpenSettings();
+  const { notify } = useToast();
   if (!plans) return null;
   const choose = (style: string | null) => {
     if (style === worn) return;
+    // Nothing changes on screen until the save lands, so a refusal (the hourly
+    // bound, a lapsed pass) has to say so or the swatch just seems dead.
     void setAccountNameStyle(style)
       .then((updated) => useAuthStore.setState({ user: updated }))
-      .catch(() => {});
+      .catch((failure) => notify(refusalText(failure, ui.dialog.couldNotSave), "error"));
   };
   return (
     <div className="settings-name-styles">
