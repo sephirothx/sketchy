@@ -149,6 +149,8 @@ export const LEGAL_NL: LegalDocuments = {
             "recente activiteit ervan opzoeken als er iets misgaat.",
           "Gegevens worden alleen aan autoriteiten gegeven als de wet dat " +
             "vereist.",
+          "Als je een supporterspas koopt, verkoopt Paddle, onze wederverkoper, die en neemt de betaling aan. Sketchy stuurt Paddle je account-id en bewaart wat Paddle terugmeldt: het bestelnummer, de periode, het bedrag en de valuta. Je kaart en factuuradres gaan naar Paddle en bereiken Sketchy nooit. Paddle verwerkt ze volgens zijn eigen privacyverklaring.",
+          "Als je een verlenging stopt zonder in te loggen, wordt het e-mailadres dat je invult aan Paddle doorgegeven om de pas te vinden. De fooilink opent Ko-fi, een aparte site: Sketchy stuurt die niets over jou, en wat je daar invult, verwerkt Ko-fi.",
         ],
       },
       {
@@ -318,6 +320,17 @@ export const LEGAL_NL: LegalDocuments = {
           "Sketchy wordt geleverd zoals het is, zonder enige garantie dat het " +
             "altijd beschikbaar is, foutloos werkt of wat je maakte voor altijd " +
             "bewaart. De exploitant kan het wijzigen, pauzeren of sluiten.",
+        ],
+      },
+      {
+        id: "supporter-pass",
+        heading: "De supporterspas",
+        body: [
+          "Een supporterspas betaalt voor Sketchy. Je krijgt een teken naast je naam, naamstijlen en avatar-doodles, en meer Solo. Hij geeft geen voordeel in een spel, heeft geen geldwaarde en is niet overdraagbaar. Een levenslange pas geldt zolang Sketchy draait.",
+          "Paddle, onze wederverkoper, is de verkoper: Paddle neemt de betaling aan, rekent eventuele belasting en stuurt je betaalbewijs, onder eigen voorwaarden.",
+          "Een jaarpas wordt elk jaar verlengd tot je opzegt. Je kunt altijd opzeggen op /support/cancel, ingelogd of niet: de pas loopt door tot het einde van de al betaalde tijd en je krijgt een bevestiging per e-mail.",
+          "Als consument kun je binnen veertien dagen na aankoop herroepen en krijg je het ongebruikte deel terug. Vraag dit aan via je betaalbewijs van Paddle.",
+          "Als een pas eindigt, verdwijnen het teken en de extra Solo, en blijven de gekozen stijlen en doodles. Een terugbetaling of chargeback beëindigt hem meteen en neemt ook die keuzes terug. Een schorsing wordt niet terugbetaald. Je account verwijderen stopt elke verlenging. Een fooi op Ko-fi is een cadeau en bevat geen pas.",
         ],
       },
       {

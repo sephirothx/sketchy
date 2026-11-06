@@ -36,6 +36,8 @@ import {
   RulesPage,
   SettingsOverlay,
   SoloPage,
+  SupportCancelPage,
+  SupportThanksPage,
 } from "./routeModules";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
@@ -120,6 +122,8 @@ function AppRoutes() {
         <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/gallery/:turnId" element={<GalleryDrawingPage />} />
         <Route path="/solo" element={<SoloPage />} />
+        <Route path="/support/thanks" element={<SupportThanksPage />} />
+        <Route path="/support/cancel" element={<SupportCancelPage />} />
         <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/profile/:userId" element={<ProfilePage />} />

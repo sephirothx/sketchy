@@ -13,6 +13,8 @@ import type { Locale } from "./interfaceLocale.ts";
 
 /** The preferences that follow a registered player across devices (R-SET-01). */
 export interface AccountSettings {
+  showSupporterMark?: boolean;
+  supporterNudgeDismissed?: boolean;
   theme: AppTheme;
   soundEffects: boolean;
   confettiEffects: boolean;

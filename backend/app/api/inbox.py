@@ -49,6 +49,7 @@ from app.refusals import ErrorCode
 from app.repositories.sqlalchemy import _identity_ids
 from app.request_text import ControlFreeModel
 from app.services.friends import friendship_key
+from app.services.supporter import pass_facts
 from app.services.inbox import mark_read
 
 #: Entries per read. The bell's panel shows the newest; the rest are a page
@@ -184,6 +185,14 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
         if people_ids
         else {}
     )
+    passes = await pass_facts(
+        session,
+        {
+            e.subject_id
+            for kind in ("supporter_started", "supporter_ending")
+            for e in by_kind.get(kind, [])
+        },
+    )
     friendships = {}
     pairs = {
         friendship_key(e.user_id, e.subject_id)
@@ -270,6 +279,14 @@ async def _render(session: AsyncSession, entries: list[InboxEntry]) -> list[dict
             body["expiresAt"] = entry.params.get("expiresAt")
         elif entry.kind == "reports_reviewed":
             body["count"] = int(entry.params.get("count", 1))
+        elif entry.kind in ("supporter_started", "supporter_ending"):
+            # What it says now, not what it said when written (R-INBOX-05): a
+            # renewal cancelled since must not still read "renews". A reversed
+            # pass has nothing left to say.
+            fact = passes.get(entry.subject_id)
+            if fact is None:
+                continue
+            body["until"], body["renews"] = fact
         elif entry.kind == "role":
             owner = owners.get(entry.user_id)
             role = entry.params.get("role")

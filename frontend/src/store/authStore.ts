@@ -13,7 +13,9 @@ import {
   type AccountSettings,
 } from "../lib/userSettings";
 import { loadCatalogue, ui } from "../content/ui/index.ts";
+import type { SupporterStatus } from "../lib/support";
 import { usePlayLanguagesQuestionStore } from "./playLanguagesQuestionStore";
+import { useSupportStore } from "./supportStore";
 
 export interface AuthUser {
   id: string;
@@ -38,6 +40,8 @@ export interface AuthUser {
       refusal with `name_in_use` sets it; choosing a new name clears it,
       because the account the server hands back carries no such flag. */
   nameInUse?: boolean;
+  /** With a provider configured, a registered account's own pass (#1472). */
+  supporter?: SupporterStatus;
 }
 
 /** Thrown when an action needs a name and the draft cannot supply one. */
@@ -206,6 +210,8 @@ async function loadRegisteredSettings(
   if (!user || user.isAnonymous) return;
   try {
     const settings = known ?? await fetchUserSettings();
+    // A sign-in, not a page load: `/me` was not there to say so.
+    if (!known) void useSupportStore.getState().refresh();
     // Fetched before they are applied, so an account's language is in place
     // by the time the paint this read is holding goes ahead (R-I18N-06).
     // Not while a page's address names the language (#1462): the account's
@@ -315,6 +321,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         set({ user: account, isLoading: false, hasResolved: true });
         reconcileNameColor(account);
         await loadRegisteredSettings(account, settings);
+        useSupportStore.getState().applyAccount(account?.supporter, settings);
         return account;
       } catch {
         // Offline or the server is down. The app still works: play continues

@@ -272,6 +272,7 @@
     "settings.showSupporterMark",
     "settings.soloOptOut",
     "settings.soundEffects",
+    "settings.supporterNudgeDismissed",
     "settings.theme",
     "settings.timeFormat",
     "settings.updatedAt",

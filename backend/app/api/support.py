@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Literal
@@ -29,6 +30,7 @@ from app.deployment import public_base_url
 from app.domain_values import AccountState, AuditTargetType, SupportPurchaseKind
 from app.refusals import ErrorCode
 from app.request_text import ControlFreeModel
+from app.services.inbox import add_entry
 from app.services.supporter import (
     apply_provider_event,
     order_was_reversed,
@@ -40,6 +42,7 @@ from app.services.supporter import (
 from app.support.cancellation import cancel_quietly, cancel_subscription
 from app.support.config import MAX_EXTRA_MINOR, SupportConfig
 from app.support.providers import (
+    cancellation_event,
     PRODUCT_LIFETIME,
     SIGNATURE_HEADER,
     BadSignature,
@@ -81,9 +84,15 @@ class CheckoutBody(ControlFreeModel):
     extra_minor: int = Field(default=0, ge=0, le=MAX_EXTRA_MINOR, alias="extraMinor")
 
 
+# One address, nothing else: Paddle's filter takes a comma-separated list, and an
+# empty one may match everybody. Anything looser could stop renewals in bulk.
+_ONE_ADDRESS = re.compile(r"[^@\s,]+@[^@\s,]+")
+
+
 class CancelRequestBody(ControlFreeModel):
-    # A username or the e-mail the provider has: §312k asks for no login.
-    identifier: str = Field(min_length=1, max_length=254)
+    # The e-mail the provider has: §312k asks for no login. Never a username, which
+    # is public and would let anybody stop anybody's renewal.
+    email: str = Field(min_length=1, max_length=254)
 
 
 async def _subscriptions_to_stop(
@@ -127,11 +136,42 @@ async def _fact_exists(session: AsyncSession, provider_name: str, event: Provide
     )
 
 
+async def _tell_started(
+    session: AsyncSession, provider_name: str, event: ProviderEvent, user_id: UUID | None
+) -> bool:
+    """A pass that begins is an inbox entry; a renewal of one is not news."""
+    if event.kind != SupportPurchaseKind.PURCHASE or user_id is None:
+        return False
+    if event.subscription_id:
+        periods = await session.scalar(
+            select(func.count())
+            .select_from(SupportPurchase)
+            .where(
+                SupportPurchase.provider_subscription_id == event.subscription_id,
+                SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+            )
+        )
+        if periods and periods > 1:
+            return False
+    # A refund can land first: there is no pass to announce.
+    if await order_was_reversed(session, event.order_id):
+        return False
+    purchase_id = await session.scalar(
+        select(SupportPurchase.id).where(
+            SupportPurchase.provider == provider_name,
+            SupportPurchase.provider_event_id == event.event_id,
+        )
+    )
+    # The subject is the row: the entry reads what it says from there (R-INBOX-05).
+    return await add_entry(session, user_id=user_id, kind="supporter_started", subject_id=purchase_id)
+
+
 def create_support_router(
     session_factory: async_sessionmaker[AsyncSession],
     config: SupportConfig,
     *,
     on_supporter_mark_changed: Callable[[str], Awaitable[None]] | None = None,
+    on_inbox_changed: Callable[[str], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/support")
     provider: Provider = provider_for(config)
@@ -165,6 +205,24 @@ def create_support_router(
                 429, ErrorCode.TOO_MANY_REQUESTS, "Too many requests. Please wait and try again."
             )
 
+    @router.get("/plans")
+    async def plans() -> dict:
+        """What the pitch shows. Public: a guest sees the pitch too. Absent, like
+        every route here, on a deployment that sells nothing."""
+        return {
+            "year": {"price": config.year_label},
+            "lifetime": {"price": config.lifetime_label},
+            "maxExtraMinor": MAX_EXTRA_MINOR,
+            "tipUrl": config.tip_url or None,
+        }
+
+    @router.get("/status")
+    async def status(request: Request) -> dict:
+        """The caller's own pass, for the pages that open after a checkout."""
+        user = await account(request)
+        async with session_factory() as session:
+            return (await supporter_status(session, user.id)).payload()
+
     @router.post("/checkout")
     async def checkout(body: CheckoutBody, request: Request) -> dict:
         user = await account(request)
@@ -175,8 +233,26 @@ def create_support_router(
         lifetime = status.active and status.until is None
         # A year on top of a renewing year is a second charge for nothing.
         # Moving up to a lifetime pass is fine: the webhook stops the year.
-        if lifetime or (status.renews and body.product != PRODUCT_LIFETIME):
+        if lifetime or (status.active and status.renews and body.product != PRODUCT_LIFETIME):
             raise Refusal(409, ErrorCode.SUPPORT_ALREADY_ACTIVE)
+        if status.renews and not status.active:
+            # Out of paid time, with a subscription still on the books. Paddle knows
+            # which kind: unpaid, it could still collect, so it stops first or this is
+            # a second charge for the same months, and a player with no pass must not
+            # be told they hold one. Healthy, its renewal's webhook is on its way.
+            async with session_factory() as session:
+                lapsed = await renewing_subscriptions(session, [user.id])
+            try:
+                for subscription_id in lapsed:
+                    if not await provider.stop_if_unpaid(subscription_id):
+                        raise Refusal(409, ErrorCode.SUPPORT_ALREADY_ACTIVE)
+                    async with session_factory() as session:
+                        async with session.begin():
+                            await apply_provider_event(
+                                session, provider.name, cancellation_event(subscription_id)
+                            )
+            except ProviderUnavailable as error:
+                raise Refusal(502, ErrorCode.SUPPORT_CANCEL_FAILED) from error
         try:
             url = await provider.create_checkout(
                 product=body.product,
@@ -206,6 +282,7 @@ def create_support_router(
                         session, provider.name, event
                     )
                     to_stop: tuple[str, ...] = ()
+                    told = False
                     # A retry finds a duplicate, and is the only second chance a
                     # failed cancellation gets. Nothing written means not ours.
                     if recorded or await _fact_exists(session, provider.name, event):
@@ -214,12 +291,19 @@ def create_support_router(
                                 session, await _subscriptions_to_stop(session, event, user_id)
                             )
                         )
+                    if recorded:
+                        told = await _tell_started(session, provider.name, event, user_id)
         except Exception:
             support_signals.saw(ERROR, now)
             logger.exception("support_webhook_failed")
             return Response(status_code=500)
         support_signals.saw(RECORDED if recorded else DUPLICATE, now)
         stopped = await cancel_quietly(session_factory, provider, to_stop)
+        if told and user_id and on_inbox_changed:
+            try:
+                await on_inbox_changed(str(user_id))
+            except Exception:
+                logger.warning("supporter_inbox_push_failed", exc_info=True)
         if recorded and user_id and on_supporter_mark_changed:
             # A heart appears, or a refund takes it, in the rooms they sit in.
             try:
@@ -256,30 +340,18 @@ def create_support_router(
             status = await supporter_status(session, user.id)
         return status.payload()
 
-    async def carry_out_cancel_request(identifier: str) -> None:
+    async def carry_out_cancel_request(email: str) -> None:
         """After the answer has gone: what it found must not show in how long it
         took, or in whether the provider happened to be up (R-SUP-09). So a failure
         cannot reach the person who asked, and is left for the operator."""
+        if not _ONE_ADDRESS.fullmatch(email):
+            return
         try:
-            if "@" in identifier:
-                named = await provider.subscriptions_of_email(identifier)
-                async with session_factory() as session:
-                    owners = await unstopped_owners(session, named)
-            else:
-                async with session_factory() as session:
-                    user_id = await session.scalar(
-                        select(User.id).where(
-                            func.lower(User.username) == identifier.lower(),
-                            User.state == AccountState.REGISTERED.value,
-                        )
-                    )
-                    owners = (
-                        dict.fromkeys(await renewing_subscriptions(session, [user_id]), user_id)
-                        if user_id is not None
-                        else {}
-                    )
+            named = await provider.subscriptions_of_email(email)
+            async with session_factory() as session:
+                owners = await unstopped_owners(session, named)
         except Exception:
-            # Nothing safe to name: the identifier may be the buyer's address.
+            # Nothing safe to name: this is the buyer's address.
             logger.error("support_cancel_request_lookup_failed", exc_info=True)
             return
         for subscription_id, owner in owners.items():
@@ -315,7 +387,7 @@ def create_support_router(
         """Signed out (§312k). The answer is the same whatever matched, so the
         form cannot be used to find out who holds a pass."""
         throttle(cancel_limiter, getattr(request.state, "client_ip_hash", None))
-        tasks.add_task(carry_out_cancel_request, body.identifier.strip())
+        tasks.add_task(carry_out_cancel_request, body.email.strip())
         return {"ok": True}
 
     if isinstance(provider, StubProvider):

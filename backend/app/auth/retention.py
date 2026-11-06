@@ -459,6 +459,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
     from app.services.runtime_metrics import purge_expired_events
     from app.services.shutdown import purge_expired_shutdown_abandonments
     from app.repositories.sqlalchemy import release_held_solo_shares
+    from app.services.supporter import tell_ending_supporters
 
     from app.support.cancellation import stop_renewals_nothing_pays_for
 
@@ -500,6 +501,11 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             "unpaid_for_renewals",
             stop_renewals_nothing_pays_for,
             exempt="nothing is removed: a renewal that should have stopped is tried again",
+        ),
+        Sweep(
+            "supporter_ending_notices",
+            tell_ending_supporters,
+            exempt="nothing is removed: each pass due to end gets one inbox entry",
         ),
         Sweep(
             "bug_report_screenshots",

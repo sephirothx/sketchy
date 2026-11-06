@@ -311,13 +311,17 @@ async def test_a_signed_in_cancel_mails_a_confirmation(site):
     ]
 
 
-async def test_the_signed_out_form_answers_the_same_whatever_it_finds(site):
+async def test_the_signed_out_form_answers_the_same_whatever_it_finds(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)
     await _post(http, _paid("e1", "o1", user_id))
     http.cookies.clear()
-    named = await http.post("/api/support/cancel/request", json={"identifier": "marta"})
-    nobody = await http.post("/api/support/cancel/request", json={"identifier": "nobody"})
+    async def known(self, email):
+        return ("sub_1",) if email == "m@example.test" else ()
+
+    monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
+    named = await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
+    nobody = await http.post("/api/support/cancel/request", json={"email": "n@example.test"})
     assert named.status_code == nobody.status_code == 200
     assert named.json() == nobody.json()
     async with factory() as session:
@@ -498,7 +502,7 @@ async def test_a_failed_cancel_says_the_renewal_is_still_on(site, monkeypatch):
         assert (await supporter_status(session, user_id)).renews
     # The signed-out form says nothing either way.
     http.cookies.clear()
-    assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 200
+    assert (await http.post("/api/support/cancel/request", json={"email": "m@example.test"})).status_code == 200
 
 
 async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site, monkeypatch):
@@ -520,10 +524,10 @@ async def test_the_signed_out_form_by_email_cancels_each_subscription_once(site,
     monkeypatch.setattr(StubProvider, "cancel_at_period_end", counted)
     monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
     http.cookies.clear()
-    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
     # Sending it again cancels nothing, and so mails nobody.
-    await http.post("/api/support/cancel/request", json={"identifier": "m@example.test"})
+    await http.post("/api/support/cancel/request", json={"email": "m@example.test"})
     assert sorted(calls) == ["sub_a", "sub_b"]
 
 
@@ -700,6 +704,68 @@ async def test_with_nothing_on_sale_the_sweep_does_nothing(site, monkeypatch):
     assert await stop_renewals_nothing_pays_for(factory) == 0
 
 
+async def test_a_period_past_and_unstopped_can_still_be_cancelled(site):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    later = datetime.now(timezone.utc) + timedelta(days=800)
+    async with factory() as session:
+        lapsed = await supporter_status(session, user_id, now=later)
+    # No pass, but Paddle may still collect it, so the page must offer the stop.
+    assert not lapsed.active and lapsed.renews
+    assert (await http.post("/api/support/cancel")).status_code == 200
+    async with factory() as session:
+        assert not (await supporter_status(session, user_id, now=later)).renews
+
+
+async def _lapsed_year(http, user_id: UUID) -> None:
+    now = datetime.now(timezone.utc)
+    await _post(
+        http,
+        _event(
+            "e1",
+            "transaction.completed",
+            {
+                "id": "o1",
+                "subscription_id": "sub_1",
+                "currency_code": "EUR",
+                "custom_data": {"account_id": str(user_id), "product": "year"},
+                "billing_period": {
+                    "starts_at": (now - timedelta(days=400)).isoformat(),
+                    "ends_at": (now - timedelta(days=35)).isoformat(),
+                },
+                "details": {"totals": {"total": "1900"}},
+            },
+        ),
+    )
+
+
+async def test_a_lapsed_year_can_buy_again_once_the_old_one_is_stopped(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _lapsed_year(http, user_id)
+
+    async def down(self, subscription_id):
+        raise ProviderUnavailable("down")
+
+    async def healthy(self, subscription_id):
+        return False
+
+    monkeypatch.setattr(StubProvider, "stop_if_unpaid", down)
+    # Never two charges for the same months: nothing to pay until it stops.
+    refused = await http.post("/api/support/checkout", json={"product": "year"})
+    assert refused.status_code == 502
+    assert refused.json()["errorCode"] == "support_cancel_failed"
+    # Paid, with its webhook still on the way: not stopped, and no second year.
+    monkeypatch.setattr(StubProvider, "stop_if_unpaid", healthy)
+    late = await http.post("/api/support/checkout", json={"product": "year"})
+    assert late.status_code == 409
+    assert "cancel:sub_1" not in {row.provider_event_id for row in await _rows(factory)}
+    monkeypatch.undo()
+    assert (await http.post("/api/support/checkout", json={"product": "year"})).status_code == 200
+    assert "cancel:sub_1" in {row.provider_event_id for row in await _rows(factory)}
+
+
 async def test_a_year_arriving_after_the_lifetime_pass_is_stopped(site, monkeypatch):
     http, factory = site
     user_id = await _register(http)
@@ -739,6 +805,29 @@ async def test_a_webhook_recording_the_stop_first_does_not_lose_the_mail(site, m
     assert len(mail) == 1
     # Asked again, nothing renews and nobody is mailed twice.
     assert (await http.post("/api/support/cancel")).status_code == 200
+
+
+async def test_a_public_username_stops_nothing_at_the_signed_out_form(site, monkeypatch):
+    http, factory = site
+    user_id = await _register(http)
+    await _post(http, _paid("e1", "o1", user_id))
+    asked: list[str] = []
+
+    async def known(self, email):
+        asked.append(email)
+        return ()
+
+    monkeypatch.setattr(StubProvider, "subscriptions_of_email", known)
+    http.cookies.clear()
+    # Only one address ever reaches the provider: its filter takes a list, and an
+    # empty one may match everybody.
+    for value in ("marta", "   ", "a@example.test,b@example.test", "a@b@example.test"):
+        response = await http.post("/api/support/cancel/request", json={"email": value})
+        assert response.status_code == 200
+    assert asked == []
+    assert (await http.post("/api/support/cancel/request", json={"identifier": "marta"})).status_code == 422
+    async with factory() as session:
+        assert (await supporter_status(session, user_id)).renews
 
 
 def test_signature_checks_are_exact():
@@ -836,6 +925,17 @@ async def test_a_paused_subscription_is_cancelled_at_once(monkeypatch):
     assert calls[-1][2] == {"effective_from": "immediately"}
 
 
+async def test_only_an_unpaid_subscription_is_stopped_at_once(monkeypatch):
+    for status, answer in (("past_due", True), ("paused", True), ("canceled", True), ("active", False)):
+        provider, calls = _paddle_answering(monkeypatch, [{"data": {"status": status}}, {"data": {}}])
+        assert await provider.stop_if_unpaid("sub_1") is answer
+        stopped = [call for call in calls if call[0] == "POST"]
+        if status in ("past_due", "paused"):
+            assert stopped[0][2] == {"effective_from": "immediately"}
+        else:
+            assert stopped == []
+
+
 async def test_a_real_refusal_to_cancel_still_fails(monkeypatch):
     provider, _ = _paddle_answering(
         monkeypatch, [ProviderRefused("400"), {"data": {"status": "active"}}]
@@ -856,7 +956,7 @@ async def test_paddle_tells_a_no_from_an_outage(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", answering(400))
     with pytest.raises(ProviderRefused):
         await provider._call("GET", "/subscriptions/sub_1")
-    for code in (429, 503):
+    for code in (408, 409, 429, 503):
         monkeypatch.setattr(urllib.request, "urlopen", answering(code))
         with pytest.raises(ProviderUnavailable) as caught:
             await provider._call("GET", "/subscriptions/sub_1")
@@ -871,6 +971,22 @@ def test_production_refuses_a_tier_that_could_give_passes_away():
         validate_support_configuration({**production, "SUPPORT_PROVIDER": "paddle"})
     with pytest.raises(RuntimeError, match="must be one of"):
         validate_support_configuration({"SUPPORT_PROVIDER": "lemonsqueezy"})
+    with pytest.raises(RuntimeError, match="https"):
+        validate_support_configuration(
+            {"SUPPORT_PROVIDER": "stub", "SUPPORT_TIP_URL": "javascript:alert(1)"}
+        )
+    validate_support_configuration(
+        {
+            **production,
+            "SUPPORT_PROVIDER": "paddle",
+            "SUPPORT_WEBHOOK_SECRET": "s",
+            "SUPPORT_API_KEY": "k",
+            "SUPPORT_PRICE_YEAR": "pri_y",
+            "SUPPORT_PRICE_LIFETIME": "pri_l",
+            "SUPPORT_EXTRA_PRODUCT_ID": "pro_e",
+            "SUPPORT_TIP_URL": "https://ko-fi.com/sketchy",
+        }
+    )
     validate_support_configuration({**production})
     validate_support_configuration({"SUPPORT_PROVIDER": "stub"})
     assert support_config({}) is None

@@ -44,8 +44,8 @@ their history. `reference` is a SHA-256 of the English text, the reference:
 date cannot go stale by being forgotten. A change to a translation alone
 leaves both as they are - it says the same thing better. */
 export const LEGAL_REVISION = {
-  date: "2026-10-15",
-  reference: "173130f08ad06434da4e6042bc328f7adb6cae29e635d746b0adce9b63ed7ef4",
+  date: "2026-11-02",
+  reference: "548c069c4d78380b1b28f0f3e9f8a0be90b06b74ba51e320c0472fe430df903a",
 } as const;
 
 /** The public history of the documents in *locale*, every change with its

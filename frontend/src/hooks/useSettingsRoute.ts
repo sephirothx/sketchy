@@ -17,7 +17,7 @@ import { useOpenOverlay } from "./useOverlayRoute";
  * Friends shares (R-FRIEND-10). What stays here is what only Settings has:
  * sections, and the URL that names one.
  */
-export const SETTINGS_SECTIONS = ["account", "appearance", "sound", "shortcuts"] as const;
+export const SETTINGS_SECTIONS = ["account", "appearance", "sound", "shortcuts", "support"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = "account";
 

@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e0f1a2b3c4d7_support_subscriptions.py` (#1473). Both this line and the table
+`9c1d2e3f4a5b_support_pitch.py` (#1475). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -605,7 +605,8 @@ plays in, in their order — never the default, never twice, at most seven; #120
 `email_reminder_last_shown_at` · `solo_opt_out` (false by default: the drawer said no to
 Solo serving any of their drawings, #1434; `soloOptOut` on the settings routes, R-SOLO-16) ·
 `show_supporter_mark` (true by default: a supporter's mark shows beside their name;
-`showSupporterMark` on the settings routes, R-SUP-05) ·
+`showSupporterMark` on the settings routes, R-SUP-05) · `supporter_nudge_dismissed` (they closed
+the end-of-game line about the pass, for good, R-SUP-12) ·
 timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
@@ -919,7 +920,11 @@ the webhook reads the account's state first, and a late renewal or refund names 
 `id` · `user_id` (→ `users`, **CASCADE**, NOT NULL) · `kind` · `subject_id` (nullable, no
 foreign key) · `params` (JSON / `JSONB`) · `created_at` · `read_at`, with
 `ck_inbox_entries_kind` (`warning`, `drawing_shared`, `friend_request`,
-`friend_accepted`, `game_invite`, `reports_reviewed`, `role`),
+`friend_accepted`, `game_invite`, `reports_reviewed`, `role`, `supporter_started`,
+`supporter_ending`), (the two `supporter_*` kinds name their `support_purchases` row as the subject and read
+what they say from it, so a later cancellation or refund changes or removes them; `supporter_started`
+is written with the fact, and `supporter_ending` by the hourly `supporter_ending_notices` sweep,
+which pushes nothing, so it arrives on the next read),
 `ix_inbox_entries_user_created` on (`user_id`, `created_at`) for the newest-first page,
 `ix_inbox_entries_created_at` for the sweep, the partial `ix_inbox_entries_user_unread`
 on `user_id` `WHERE read_at IS NULL` for the bell's count, and the partial unique
@@ -3025,6 +3030,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | --- | --- | --- | --- | --- | --- |
 | Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block | — |
 | Renewals nothing pays for | Stopped, not removed: an account gone, an order refunded, or a lifetime pass on top | 6 h | Nothing is removed | A provider call per subscription, within the sweep's row and time budget and at most 20 a run. Late from when it came due: the deletion, the refund or the lifetime pass. What fails counts as a failed attempt on the loop's health and comes up next run | `unpaid_for_renewals` |
+| `supporter_ending` inbox notices | Written, not removed: one per pass, fourteen days before it ends | 6 h | Nothing is removed | Hourly retention sweep (`tell_ending_supporters`) | `supporter_ending_notices` |
 | Supporter pass facts (`support_purchases`) | Indefinite: the provider keeps the invoice, and a later refund has to find its order | — | — | Never removed; `user_id` is nulled when the account is deleted | — |
 | Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |

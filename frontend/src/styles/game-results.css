@@ -154,3 +154,32 @@
 }
 
 
+
+/* The one line about the supporter pass at the end of a game (#1475). */
+.game-end-support {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--line);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.game-end-support p {
+  flex: 1;
+  margin: 0;
+}
+
+.game-end-support .supporter-mark {
+  margin-left: 0;
+}
+
+.game-end-support-close {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+}

@@ -61,6 +61,7 @@ the rotation itself are counted in *rounds*.
 | **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |
 | **Supporter** | A registered player whose **Supporter pass** is in force. A status derived from what they paid for, never a stored flag. | donor, subscriber, premium, VIP |
 | **Supporter pass** | What a player buys to pay for Sketchy: a year that renews, or a lifetime. It buys recognition, decoration and more of Solo, never an edge in a room. | subscription, membership, premium |
+| **Tip** | Money given through an outbound link, with nothing in return. It never counts toward a **Supporter pass**. | donation |
 | **Supporter mark** | The small pink heart after a **Supporter**'s name, shown unless they hide it. | badge, tag, flair |
 | **Spectator** | Someone watching a room without playing. Never draws, never scores, never votes, and is never a moderation target. | observer, viewer, lurker |
 | **Host** | The player who created the room and can start the game and change its **Room rules**. Marked by a gold crown on the corner of their **Avatar** wherever players are listed. | owner, admin, leader |

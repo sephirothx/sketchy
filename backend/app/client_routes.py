@@ -63,6 +63,8 @@ CLIENT_ROUTE_TABLE: tuple[tuple[str, bool], ...] = (
     ("/settings", False),
     ("/settings/:section", False),
     ("/friends", False),
+    ("/support/thanks", False),
+    ("/support/cancel", False),
     ("/forgot-password", False),
     ("/reset-password", False),
     ("/verify-email", False),

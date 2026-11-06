@@ -13,6 +13,9 @@ import { ui } from "../content/ui/index.ts";
 import { useRoomAnnouncement } from "../hooks/useRoomAnnouncement";
 import { fill } from "../content/ui/slots.tsx";
 import { SupporterMark } from "./ui/SupporterMark";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useSupportStore } from "../store/supportStore";
+import { XIcon } from "./icons";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
@@ -66,6 +69,19 @@ export function GameEndOverlay({
   // The strongest moment to ask: their result is on screen and there is now
   // something to lose.
   const isUnclaimedGuest = Boolean(user?.isAnonymous && user.displayName);
+  // One line, never a modal or a timer, and closed for good once closed (#1475).
+  const openSettings = useOpenSettings();
+  const plans = useSupportStore((state) => state.plans);
+  const loadPlans = useSupportStore((state) => state.loadPlans);
+  const supporterStatus = useSupportStore((state) => state.status);
+  const nudgeDismissed = useSupportStore((state) => state.nudgeDismissed);
+  const dismissNudge = useSupportStore((state) => state.dismissNudge);
+  const isRegistered = Boolean(user && !user.isAnonymous);
+  useEffect(() => {
+    if (isRegistered && !nudgeDismissed) void loadPlans();
+  }, [isRegistered, nudgeDismissed, loadPlans]);
+  const showSupportNudge =
+    isRegistered && Boolean(plans) && !supporterStatus?.active && !nudgeDismissed;
 
   useEffect(() => {
     // Hold the countdown while the claim form is open, or the overlay would
@@ -212,6 +228,26 @@ export function GameEndOverlay({
         </>
       ) : (
         <p className="game-end-no-score">{ui.gameEndOverlay.noScoresThisTimeJustRoom}</p>
+      )}
+      {showSupportNudge && (
+        <aside className="game-end-support" data-testid="support-nudge">
+          <SupporterMark size={14} />
+          <p>
+            {ui.support.nudge}{" "}
+            <button type="button" className="inline-link" onClick={() => openSettings("support")}>
+              {ui.support.seePass}
+            </button>
+          </p>
+          <button
+            type="button"
+            className="game-end-support-close"
+            aria-label={ui.support.dismissNudge}
+            title={ui.support.dismissNudge}
+            onClick={() => void dismissNudge()}
+          >
+            <XIcon size={14} />
+          </button>
+        </aside>
       )}
       {isUnclaimedGuest && (
         <aside className="game-end-claim">

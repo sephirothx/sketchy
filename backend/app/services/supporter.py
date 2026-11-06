@@ -9,20 +9,21 @@ step with the ledger (R-SUP-01).
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, false, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import func
 
 from app.auth.bans import active_ban_filter
-from app.db.models import SupportPurchase, User, UserBan, UserSettings
+from app.db.models import InboxEntry, SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
 from app.support.config import support_config
 from app.support.providers import ProviderEvent
@@ -34,7 +35,9 @@ class SupporterStatus:
     # When the last known period ends. None while inactive, and on a lifetime
     # pass, which has no end to name.
     until: datetime | None = None
-    # A subscription will charge again at `until`. False once told not to.
+    # A subscription we have not stopped can still charge: while the pass runs, at
+    # `until`; a period past and unpaid may still be collected, so it can be cancelled
+    # whether or not a pass is active. False once told not to.
     renews: bool = False
 
     @classmethod
@@ -43,9 +46,9 @@ class SupporterStatus:
     ) -> "SupporterStatus":
         """Read the values `supporter_status_columns` selected."""
         if not active:
-            return cls()
+            return cls(renews=renews)
         if lifetime:
-            return cls(active=True)
+            return cls(active=True, renews=renews)
         return cls(active=True, until=until, renews=renews)
 
     def payload(self) -> dict:
@@ -108,13 +111,28 @@ def supporter_status_columns(
         select(SupportPurchase.id)
         .where(
             *kept,
-            SupportPurchase.period_end > now,
             SupportPurchase.provider_subscription_id.is_not(None),
             ~_stopped(SupportPurchase.provider_subscription_id),
         )
         .exists()
     )
     return active, lifetime, until, renews
+
+
+def _not_reversed(purchase: type[SupportPurchase] = SupportPurchase) -> ColumnElement:
+    """This purchase's order has no refund or chargeback, under any account."""
+    reversal = aliased(SupportPurchase)
+    return ~(
+        select(reversal.id)
+        .where(
+            reversal.provider == purchase.provider,
+            reversal.provider_order_id == purchase.provider_order_id,
+            reversal.kind.in_(
+                (SupportPurchaseKind.REFUND.value, SupportPurchaseKind.CHARGEBACK.value)
+            ),
+        )
+        .exists()
+    )
 
 
 def _stopped(subscription_id: ColumnElement) -> ColumnElement:
@@ -464,6 +482,120 @@ async def apply_provider_event(
         period_end=event.period_end,
     )
     return recorded, user_id
+
+
+ENDING_NOTICE = timedelta(days=14)
+ENDING_BATCH = 500
+
+
+async def tell_ending_supporters(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget=None,
+):
+    """Tell each supporter, once, fourteen days before their last period ends.
+
+    A retention-loop sweep, so it runs hourly and reports like one. Removes
+    nothing. The subject is the purchase row, so the inbox's unique index makes
+    a second pass over the same period a no-op. A period something later
+    extends is not an ending, and a reversed order was never going to end.
+    """
+    from app.services.inbox import add_entry
+    from app.services.sweeps import SweepReport
+
+    moment = now or datetime.now(timezone.utc)
+    started = time.monotonic()
+    reversal = aliased(SupportPurchase)
+    later = aliased(SupportPurchase)
+    told_entry = aliased(InboxEntry)
+    told = 0
+    async with session_factory() as session:
+        async with session.begin():
+            rows = await session.execute(
+                select(SupportPurchase.id, SupportPurchase.user_id)
+                .where(
+                    SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+                    SupportPurchase.user_id.is_not(None),
+                    SupportPurchase.period_end > moment,
+                    SupportPurchase.period_end <= moment + ENDING_NOTICE,
+                    ~select(reversal.id)
+                    .where(
+                        reversal.provider == SupportPurchase.provider,
+                        reversal.provider_order_id == SupportPurchase.provider_order_id,
+                        reversal.kind.in_(
+                            (
+                                SupportPurchaseKind.REFUND.value,
+                                SupportPurchaseKind.CHARGEBACK.value,
+                            )
+                        ),
+                    )
+                    .exists(),
+                    ~select(later.id)
+                    .where(
+                        later.user_id == SupportPurchase.user_id,
+                        later.kind == SupportPurchaseKind.PURCHASE.value,
+                        or_(
+                            later.period_end.is_(None),
+                            later.period_end > SupportPurchase.period_end,
+                        ),
+                        # Refunded time extends nothing.
+                        _not_reversed(later),
+                    )
+                    .exists(),
+                    ~select(told_entry.id)
+                    .where(
+                        told_entry.kind == "supporter_ending",
+                        told_entry.subject_id == SupportPurchase.id,
+                    )
+                    .exists(),
+                )
+                .limit(ENDING_BATCH)
+            )
+            for purchase_id, user_id in rows.all():
+                if await add_entry(
+                    session,
+                    user_id=user_id,
+                    kind="supporter_ending",
+                    subject_id=purchase_id,
+                ):
+                    told += 1
+    return SweepReport(
+        told,
+        name="supporter_ending_notices",
+        batches=1,
+        seconds=time.monotonic() - started,
+        exhausted=told >= ENDING_BATCH,
+        # Everything due was told in this run, unless the batch ran out.
+        oldest_overdue_seconds=0.0,
+    )
+
+
+async def pass_facts(
+    session: AsyncSession, purchase_ids: Iterable[UUID]
+) -> dict[UUID, tuple[str | None, bool]]:
+    """What the inbox should say about these purchases now: `(until, renews)`.
+
+    A purchase whose order was reversed is left out, and its entry with it.
+    """
+    ids = set(purchase_ids)
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(
+            SupportPurchase.id,
+            SupportPurchase.period_end,
+            SupportPurchase.provider_subscription_id,
+            _stopped(SupportPurchase.provider_subscription_id),
+        ).where(SupportPurchase.id.in_(ids), _not_reversed())
+    )
+    return {
+        purchase_id: (
+            period_end.isoformat() if period_end else None,
+            bool(subscription_id) and not stopped,
+        )
+        for purchase_id, period_end, subscription_id, stopped in rows.all()
+    }
 
 
 async def active_supporters(session: AsyncSession, *, now: datetime | None = None) -> int:

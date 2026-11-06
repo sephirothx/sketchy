@@ -23,6 +23,8 @@ const load = {
   gallery: () => import("./pages/GalleryPage"),
   galleryDrawing: () => import("./pages/GalleryDrawingPage"),
   solo: () => import("./pages/SoloPage"),
+  supportThanks: () => import("./pages/SupportThanksPage"),
+  supportCancel: () => import("./pages/SupportCancelPage"),
   myPromptLists: () => import("./pages/MyPromptListsPage"),
   profile: () => import("./pages/ProfilePage"),
   accountRecovery: () => import("./pages/AccountRecoveryPage"),
@@ -47,6 +49,12 @@ export const GalleryDrawingPage = lazy(() =>
   load.galleryDrawing().then((m) => ({ default: m.GalleryDrawingPage })),
 );
 export const SoloPage = lazy(() => load.solo().then((m) => ({ default: m.SoloPage })));
+export const SupportThanksPage = lazy(() =>
+  load.supportThanks().then((m) => ({ default: m.SupportThanksPage })),
+);
+export const SupportCancelPage = lazy(() =>
+  load.supportCancel().then((m) => ({ default: m.SupportCancelPage })),
+);
 export const MyPromptListsPage = lazy(() => load.myPromptLists().then((m) => ({ default: m.MyPromptListsPage })));
 export const ProfilePage = lazy(() => load.profile().then((m) => ({ default: m.ProfilePage })));
 export const AccountRecoveryPage = lazy(() =>

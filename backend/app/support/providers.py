@@ -92,6 +92,11 @@ class Provider(Protocol):
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation: ...
 
+    async def stop_if_unpaid(self, subscription_id: str) -> bool:
+        """Stop a subscription that has stopped paying, at once. False for a healthy
+        one: its renewal has been paid, or is about to be."""
+        ...
+
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]: ...
 
 
@@ -267,7 +272,8 @@ class PaddleProvider:
                 path.partition("?")[0],
                 error.code,
             )
-            if 400 <= error.code < 500 and error.code != 429:
+            # Not a timeout, a lock on a change in progress, or a rate limit.
+            if 400 <= error.code < 500 and error.code not in (408, 409, 425, 429):
                 raise ProviderRefused(str(error.code)) from error
             raise ProviderUnavailable(str(error.code)) from error
         # OSError covers URLError and timeouts; HTTPException a connection that
@@ -345,6 +351,21 @@ class PaddleProvider:
             subscription_id=subscription_id,
             email=await self._email_of((response.get("data") or {}).get("customer_id")),
         )
+
+    async def stop_if_unpaid(self, subscription_id: str) -> bool:
+        quoted = urllib.parse.quote(subscription_id, safe="")
+        response = await self._call("GET", f"/subscriptions/{quoted}")
+        status = (response.get("data") or {}).get("status")
+        if status == "canceled":
+            return True
+        if status in ("past_due", "paused"):
+            # At the end of the period would be too late: Paddle goes on trying to
+            # collect a past-due one until then.
+            await self._call(
+                "POST", f"/subscriptions/{quoted}/cancel", {"effective_from": "immediately"}
+            )
+            return True
+        return False
 
     async def _email_of(self, customer_id: object) -> str | None:
         """Best effort: the cancellation has happened whether or not this works."""
@@ -438,6 +459,9 @@ class StubProvider:
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation:
         return Cancellation(subscription_id=subscription_id)
+
+    async def stop_if_unpaid(self, subscription_id: str) -> bool:
+        return True
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         return ()

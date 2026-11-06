@@ -205,6 +205,9 @@ class UserSettingsPatch(ControlFreeModel):
     # Whether a supporter's mark shows beside their name (#1472). Also the
     # account's choice alone.
     show_supporter_mark: bool | None = Field(default=None, alias="showSupporterMark")
+    supporter_nudge_dismissed: bool | None = Field(
+        default=None, alias="supporterNudgeDismissed"
+    )
 
     @field_validator("key_bindings")
     @classmethod
@@ -240,6 +243,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "locale": settings.locale,
         "soloOptOut": settings.solo_opt_out,
         "showSupporterMark": settings.show_supporter_mark,
+        "supporterNudgeDismissed": settings.supporter_nudge_dismissed,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

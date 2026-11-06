@@ -153,6 +153,8 @@ export const LEGAL_FR: LegalDocuments = {
             "va pas.",
           "Les données ne sont transmises aux autorités que lorsque la loi " +
             "l'exige.",
+          "Si tu achètes un pass de soutien, c'est Paddle, notre revendeur, qui le vend et encaisse le paiement. Sketchy envoie à Paddle l'identifiant de ton compte et conserve ce que Paddle lui renvoie : le numéro de commande, la période, le montant et la devise. Ta carte et ton adresse de facturation vont à Paddle et n'arrivent jamais à Sketchy. Paddle les traite selon sa propre politique de confidentialité.",
+          "Si tu arrêtes un renouvellement sans te connecter, l'adresse e-mail saisie est transmise à Paddle pour retrouver le pass. Le lien de pourboire ouvre Ko-fi, un site distinct : Sketchy ne lui envoie rien sur toi, et ce que tu y saisis relève de Ko-fi.",
         ],
       },
       {
@@ -326,6 +328,17 @@ export const LEGAL_FR: LegalDocuments = {
             "toujours disponible, qu'il fonctionne sans erreur ou qu'il conserve " +
             "pour toujours ce que tu as fait. L'opérateur peut le modifier, le " +
             "mettre en pause ou le fermer.",
+        ],
+      },
+      {
+        id: "supporter-pass",
+        heading: "Le pass de soutien",
+        body: [
+          "Un pass de soutien finance Sketchy. Il te donne une marque à côté de ton nom, des styles de nom et des griffonnages d'avatar, et plus de Solo. Il ne donne aucun avantage en partie, n'a aucune valeur monétaire et ne peut pas être transféré. Un pass à vie dure aussi longtemps que Sketchy fonctionne.",
+          "Paddle, notre revendeur, est le vendeur : il encaisse le paiement, applique les taxes éventuelles et envoie ton reçu, selon ses propres conditions.",
+          "Un pass annuel se renouvelle chaque année jusqu'à ce que tu l'annules. Tu peux l'annuler à tout moment sur /support/cancel, connecté ou non : le pass court jusqu'à la fin de la période déjà payée et tu reçois une confirmation par e-mail.",
+          "Si tu es un consommateur, tu peux te rétracter dans les quatorze jours suivant l'achat et récupérer la partie non utilisée. Fais-en la demande via ton reçu de Paddle.",
+          "Quand un pass prend fin, la marque et le Solo supplémentaire disparaissent, et les styles et griffonnages choisis restent. Un remboursement ou une contestation de paiement y met fin aussitôt et retire aussi ces choix. Une suspension n'est pas remboursée. Supprimer ton compte arrête tout renouvellement. Un pourboire sur Ko-fi est un cadeau et n'inclut aucun pass.",
         ],
       },
       {

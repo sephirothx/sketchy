@@ -60,6 +60,8 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { PlayLanguageFlags } from "../components/PlayLanguageFlags";
 import "../styles/lazy/profile.css";
 import { SupporterMark } from "../components/ui/SupporterMark";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useSupportStore } from "../store/supportStore";
 
 /** A game's prompt source mode, named the way the glossary names it. */
 function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
@@ -664,6 +666,13 @@ function ProfileView({ userId }: { userId: string }) {
   // profile API resolves to the account. Judged by the route, the owner
   // following such a link would find their own shelf read-only.
   const isOwnProfile = Boolean(subject && currentUser && subject.id === currentUser.id);
+  const openSettings = useOpenSettings();
+  const supportPlans = useSupportStore((state) => state.plans);
+  const loadSupportPlans = useSupportStore((state) => state.loadPlans);
+  const supporterStatus = useSupportStore((state) => state.status);
+  useEffect(() => {
+    if (isOwnProfile) void loadSupportPlans();
+  }, [isOwnProfile, loadSupportPlans]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [playLanguages, setPlayLanguages] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -909,6 +918,15 @@ function ProfileView({ userId }: { userId: string }) {
             />
           )}
 
+          {/* Your own profile only, never anybody else's (#1471). */}
+          {isOwnProfile && !subject.isAnonymous && supportPlans && !supporterStatus?.active && (
+            <p className="profile-support-line" data-testid="profile-support-line">
+              {ui.support.nudge}{" "}
+              <button type="button" className="inline-link" onClick={() => openSettings("support")}>
+                {ui.support.seePass}
+              </button>
+            </p>
+          )}
           {isOwnProfile && subject.isAnonymous && (
             <section className="surface-card panel profile-claim">
               <h2>{ui.profilePage.claimYourAccount}</h2>
