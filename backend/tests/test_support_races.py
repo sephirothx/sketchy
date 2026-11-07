@@ -104,6 +104,19 @@ async def _post(http, body: bytes) -> int:
     return response.status_code
 
 
+async def _renew_after(http, renewal: bytes, wait: float, finished: list[str]) -> int:
+    await asyncio.sleep(wait)
+    answer = await _post(http, renewal)
+    finished.append("renewed")
+    return answer
+
+
+async def _delete_after(factory, account: UUID, wait: float, finished: list[str]) -> None:
+    await asyncio.sleep(wait)
+    await anonymize_account(factory, user_id=account)
+    finished.append("deleted")
+
+
 @pytest.mark.skipif(
     not os.environ.get("TEST_DATABASE_URL"),
     # The webhook reads the account under a shared row lock, which is what makes a
@@ -133,19 +146,11 @@ async def test_a_renewal_landing_beside_a_deletion_names_nobody_and_does_not_ren
         # Either may start first, by a few milliseconds: about what either takes.
         delay = rng.uniform(-0.008, 0.008)
 
-        async def delete() -> None:
-            await asyncio.sleep(max(delay, 0))
-            await anonymize_account(factory, user_id=account)
-            finished.append("deleted")
-
-        async def renew() -> int:
-            await asyncio.sleep(max(-delay, 0))
-            answer = await _post(http, renewal)
-            finished.append("renewed")
-            return answer
-
         finished: list[str] = []
-        status, _ = await asyncio.gather(renew(), delete())
+        status, _ = await asyncio.gather(
+            _renew_after(http, renewal, max(-delay, 0), finished),
+            _delete_after(factory, account, max(delay, 0), finished),
+        )
         FIRST[finished[0]] = FIRST.get(finished[0], 0) + 1
         assert status in (200, 500)
         if status == 500:

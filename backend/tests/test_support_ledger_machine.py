@@ -29,7 +29,7 @@ from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 from sqlalchemy import select, update
 
-from app.db.models import SupportPurchase, User
+from app.db.models import User
 from app.services.supporter import (
     payments_of,
     renewals_nothing_pays_for,
@@ -384,6 +384,14 @@ class LedgerMachine(RuleBasedStateMachine):
     def bought_but_not_yet_told(self, who, offset):
         """A sale whose webhook is still on its way: a refund may beat it."""
         self.pending.append(self.sale(self.accounts[who], "year", offset, 0))
+
+    @rule(who=accounts_, kind=st.sampled_from(["refund", "chargeback"]))
+    def reversed_before_its_sale_is_told(self, who, kind):
+        """Paddle's webhooks race each other: the refund can land first, and the sale
+        it reverses must still end no pass and stop its renewal (R-SUP-09)."""
+        sale = self.sale(self.accounts[who], "year", 0, 0)
+        self.reverse(sale.order, kind)
+        self.deliver(sale)
 
     @precondition(lambda self: self.pending)
     @rule(data=st.data())
