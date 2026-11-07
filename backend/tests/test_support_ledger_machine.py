@@ -36,8 +36,14 @@ from app.services.supporter import (
     supporter_status,
     tell_ending_supporters,
 )
+from app.support.cancellation import stop_renewals_nothing_pays_for
 from app.support.config import STUB_WEBHOOK_SECRET
-from app.support.providers import STUB_EXTRA_PRODUCT, signature_header
+from app.support.providers import (
+    STUB_EXTRA_PRODUCT,
+    ProviderUnavailable,
+    StubProvider,
+    signature_header,
+)
 
 from tests.fuzzing import FUZZ_SCALE, budget
 from tests.test_support_fuzz import Site
@@ -46,6 +52,8 @@ YEAR = timedelta(days=365)
 # What the histories reached, across every one a run plays: a generator that
 # drifted into, say, never attributing a purchase would pass while testing little.
 REACHED: Counter = Counter()
+# While true the stub provider is down: it cannot cancel or move a renewal.
+OUTAGE = [False]
 
 
 def _months_later(moment: datetime, months: int) -> datetime:
@@ -148,6 +156,7 @@ class Sale:
 class LedgerMachine(RuleBasedStateMachine):
     def __init__(self) -> None:
         super().__init__()
+        OUTAGE[0] = False
         self.site = Site()
         self.accounts = self.site.accounts
         self.model = Model(styles={account: None for account in self.accounts})
@@ -157,6 +166,11 @@ class LedgerMachine(RuleBasedStateMachine):
         self.orders: list[str] = []
         self.subscriptions: dict[str, Sale] = {}
         self.serial = 0
+        # A stop that failed in an outage and nothing has retried yet.
+        self.unsettled = False
+        # Stops an outage left for the sweep, with whom a lifetime pass replaced
+        # them for (None: a reversal or no owner, which hold for good).
+        self.deferred: dict[str, str | None] = {}
 
     def next_id(self, prefix: str) -> str:
         """Numbered, not random: a failing history has to replay to shrink."""
@@ -174,6 +188,11 @@ class LedgerMachine(RuleBasedStateMachine):
         status = self.site.run(
             self.site.post(body, signature_header(STUB_WEBHOOK_SECRET, body, datetime.now(timezone.utc)))
         )
+        if OUTAGE[0] and status == 500:
+            # The fact stands; the provider is asked to come back (R-SUP-09).
+            self.unsettled = True
+            REACHED["answered 500 in an outage"] += 1
+            return
         assert status == 200, f"{envelope['event_type']} answered {status}: {envelope}"
 
     def deliver(self, sale: Sale) -> None:
@@ -243,15 +262,29 @@ class LedgerMachine(RuleBasedStateMachine):
         )
         # What the webhook stops on its own (R-SUP-09).
         if sale.subscription and (user is None or self.model.reversed(sale.order)):
-            self.model.stopped.add(sale.subscription)
+            self.stop(sale.subscription, None)
         elif sale.subscription and user is not None:
             active, until, _ = self.model.status(user, datetime.now(timezone.utc))
             if active and until is None and not self._lifetime_is(sale.order):
-                self.model.stopped.add(sale.subscription)
+                self.stop(sale.subscription, user)
         if sale.product == "lifetime" and user is not None and not self.model.reversed(sale.order):
             for fact in self.model.kept(user):
                 if fact.subscription:
-                    self.model.stopped.add(fact.subscription)
+                    self.stop(fact.subscription, user)
+
+    def stop(self, subscription: str, replaced_for: str | None) -> None:
+        """A stop the webhook makes. In an outage it fails and waits for the sweep,
+        which makes it only if its reason still holds: a reversal holds for good,
+        a lifetime pass replacing the year only while that pass stands."""
+        if OUTAGE[0]:
+            self.deferred[subscription] = replaced_for
+        else:
+            self.model.stopped.add(subscription)
+
+    def still_owed(self, subscription: str, replaced_for: str | None) -> bool:
+        if replaced_for is None:
+            return True
+        return any(fact.end is None for fact in self.model.kept(replaced_for))
 
     def _lifetime_is(self, order: str) -> bool:
         return any(f.order == order and f.end is None for f in self.model.purchases())
@@ -264,7 +297,7 @@ class LedgerMachine(RuleBasedStateMachine):
             self.model.facts[event_id] = Fact(kind=kind, order=order, user=user)
             for fact in self.model.purchases():
                 if fact.order == order and fact.subscription:
-                    self.model.stopped.add(fact.subscription)
+                    self.stop(fact.subscription, None)
             if user is not None and not self.model.still_paid(user, datetime.now(timezone.utc)):
                 if self.model.styles[user] is not None:
                     REACHED["style taken back"] += 1
@@ -396,7 +429,11 @@ class LedgerMachine(RuleBasedStateMachine):
         status = self.site.run(
             self.site.post(body, signature_header(STUB_WEBHOOK_SECRET, body, datetime.now(timezone.utc)))
         )
-        assert status == 200
+        if OUTAGE[0] and status == 500:
+            # A retry that still cannot reach the provider asks to come back again.
+            self.unsettled = True
+        else:
+            assert status == 200
         assert self.site.run(self.site.count()) == before, "a redelivery wrote a second fact"
 
     @rule(who=accounts_)
@@ -416,6 +453,28 @@ class LedgerMachine(RuleBasedStateMachine):
 
         self.site.run(wear())
 
+    @precondition(lambda self: not OUTAGE[0])
+    @rule()
+    def the_provider_goes_down(self):
+        OUTAGE[0] = True
+
+    @precondition(lambda self: OUTAGE[0])
+    @rule()
+    def the_provider_comes_back(self):
+        """The stop sweep then stops what the outage left running: the ledger ends
+        where it would have without one."""
+        OUTAGE[0] = False
+        for _ in range(10):
+            if not int(self.site.run(stop_renewals_nothing_pays_for(self.site.factory))):
+                break
+        for subscription, replaced_for in self.deferred.items():
+            if self.still_owed(subscription, replaced_for):
+                self.model.stopped.add(subscription)
+            else:
+                REACHED["a deferred stop no longer owed"] += 1
+        self.deferred.clear()
+        self.unsettled = False
+
     @rule()
     def the_hourly_sweep(self):
         """Ending notices go once per pass, however often the sweep runs."""
@@ -430,14 +489,13 @@ class LedgerMachine(RuleBasedStateMachine):
     def nothing_is_left_for_the_sweep_to_stop(self):
         """With a provider that answers, each webhook stops what it should at once
         (R-SUP-09): the sweep is for outages, so it must find nothing here."""
-        if not hasattr(self, "site"):
+        if not hasattr(self, "site") or OUTAGE[0] or self.unsettled:
             return
+        assert self.site.run(self._owed()) == [], "a renewal nothing pays for was left running"
 
-        async def owed():
-            async with self.site.factory() as session:
-                return await renewals_nothing_pays_for(session)
-
-        assert self.site.run(owed()) == [], "a renewal nothing pays for was left running"
+    async def _owed(self):
+        async with self.site.factory() as session:
+            return await renewals_nothing_pays_for(session)
 
     @invariant()
     def the_ledger_holds_what_the_model_does(self):
@@ -467,6 +525,15 @@ class LedgerMachine(RuleBasedStateMachine):
                 assert (row.amount_minor, row.extra_minor) == (fact.amount, fact.extra)
                 assert row.is_gift == fact.gift
         stopped = {row.provider_subscription_id for row in rows if row.kind == "cancellation"}
+        if OUTAGE[0] or self.unsettled:
+            # Every stop the outage cost, while its reason holds, is one the sweep
+            # can see and will make; nothing else is stopped.
+            owed = {sub for sub, _ in self.site.run(self._owed())}
+            due = {sub for sub, why in self.deferred.items() if self.still_owed(sub, why)}
+            assert self.model.stopped <= stopped, self.model.stopped - stopped
+            assert stopped <= self.model.stopped | set(self.deferred), stopped - self.model.stopped
+            assert due - stopped <= owed, f"left running and out of the sweep's sight: {due - stopped - owed}"
+            return
         assert stopped == self.model.stopped, (
             f"stopped but should renew: {stopped - self.model.stopped}, "
             f"renewing but should be stopped: {self.model.stopped - stopped}"
@@ -488,6 +555,10 @@ class LedgerMachine(RuleBasedStateMachine):
         for account in self.accounts:
             status, payments, style = self.site.run(read(account))
             active, until, renews = self.model.status(account, now)
+            if OUTAGE[0] or self.unsettled:
+                # A stop the outage cost still renews until the sweep makes it:
+                # the status is right to say so.
+                renews = status.renews
             assert (status.active, status.until, status.renews) == (active, until, renews), account
             assert style == self.model.styles[account], account
             paid = sorted(
@@ -504,7 +575,23 @@ class LedgerMachine(RuleBasedStateMachine):
 def quiet(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "support-ledger-machine-secret")
     monkeypatch.setenv("SUPPORT_PROVIDER", "stub")
-    logging.getLogger("app.support.providers").setLevel(logging.ERROR)
+    for name in ("app.support.providers", "app.support.cancellation", "app.api.support"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
+    real_cancel, real_move = StubProvider.cancel_at_period_end, StubProvider.move_renewal
+
+    async def cancel(self, subscription_id):
+        if OUTAGE[0]:
+            raise ProviderUnavailable("down")
+        return await real_cancel(self, subscription_id)
+
+    async def move(self, subscription_id, when):
+        if OUTAGE[0]:
+            raise ProviderUnavailable("down")
+        return await real_move(self, subscription_id, when)
+
+    monkeypatch.setattr(StubProvider, "cancel_at_period_end", cancel)
+    monkeypatch.setattr(StubProvider, "move_renewal", move)
+    OUTAGE[0] = False
 
 
 def test_random_histories_keep_the_ledger_and_the_model_in_step(quiet):
@@ -518,6 +605,6 @@ def test_random_histories_keep_the_ledger_and_the_model_in_step(quiet):
     REACHED.clear()
     with stall_guard():
         machine("runTest").runTest()
-    for reached in ("active", "lifetime", "renews", "styled", "style taken back", "ending noticed", "stopped", "purchase", "purchase gift",
+    for reached in ("active", "lifetime", "renews", "styled", "style taken back", "ending noticed", "answered 500 in an outage", "stopped", "purchase", "purchase gift",
                     "refund", "chargeback", "reversed before its sale was told"):
         assert REACHED[reached], f"no history reached {reached!r}: {dict(REACHED)}"
