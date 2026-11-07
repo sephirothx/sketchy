@@ -82,7 +82,7 @@ export type ShareCredit =
   | { kind: "none" }
   | { kind: "you" }
   | { kind: "drawer" }
-  | { kind: "player"; name: string; nameColor?: string | null; isAnonymous?: boolean }
+  | { kind: "player"; name: string; nameColor?: string | null; nameStyle?: string | null; isAnonymous?: boolean }
   /** In the Gallery, by somebody the viewer cannot name (a seat that left). */
   | { kind: "someone" };
 
@@ -91,7 +91,12 @@ export function shareCredit(
   context: {
     mine: string | null;
     drawer: string | null;
-    nameOf: (id: string) => { name: string; nameColor?: string | null; isAnonymous?: boolean } | null;
+    nameOf: (id: string) => {
+      name: string;
+      nameColor?: string | null;
+      nameStyle?: string | null;
+      isAnonymous?: boolean;
+    } | null;
     /** The server's word that it is in the Gallery: a Solo player's share
         holds it with no seat to name (#1434). */
     inGallery?: boolean;

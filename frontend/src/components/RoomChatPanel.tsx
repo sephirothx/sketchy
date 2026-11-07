@@ -8,7 +8,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sendGuess } from "../lib/guessSender";
 import { inputPurposeFor } from "../lib/chatPurpose";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { chatLineText } from "../lib/announcements.ts";
@@ -522,6 +522,7 @@ const ChatMessageList = memo(function ChatMessageList({
         message={message}
         isAnonymous={player?.isAnonymous}
         nameColor={message.nameColor ?? player?.nameColor ?? undefined}
+        nameStyle={player?.nameStyle}
         locale={locale}
       />
     );
@@ -532,10 +533,14 @@ const ChatLine = memo(function ChatLine({
   message,
   isAnonymous,
   nameColor,
+  nameStyle,
 }: {
   message: ChatMessage;
   isAnonymous: boolean | undefined;
   nameColor: string | undefined;
+  /** The sender's seat's style (#1476): a line follows the name as it is now,
+      and a sender who has left keeps the colour the line carries. */
+  nameStyle?: string | null;
   /** Unused in the body; there so memo sees a language switch (R-I18N-03). */
   locale: string;
 }) {
@@ -549,7 +554,7 @@ const ChatLine = memo(function ChatLine({
       ) : (
         <>
           <strong
-            className={playerNameClass(isAnonymous)}
+            className={playerNameClass(isAnonymous, nameStyleClass(nameStyle))}
             style={playerNameStyle(nameColor, isAnonymous)}
           >
             {message.nickname}:{" "}

@@ -151,6 +151,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <Avatar
           name={player.nickname}
           nameColor={player.nameColor}
+          nameStyle={player.nameStyle}
           avatarUrl={player.avatarUrl}
           isAnonymous={player.isAnonymous}
           isHost={player.isHost}

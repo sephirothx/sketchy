@@ -109,6 +109,7 @@ def favorite_entry_payload(favorite: ProfileFavoriteEntry) -> dict:
         "turnNumber": favorite.turn_number,
         "drawerDisplayName": favorite.drawer_display_name,
         "drawerNameColor": favorite.drawer_name_color,
+        "drawerNameStyle": favorite.drawer_name_style,
         "drawerIsAnonymous": favorite.drawer_is_anonymous,
         "prompt": favorite.prompt,
         "strokeCount": favorite.stroke_count,

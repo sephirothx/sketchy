@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { euroSignFirst, extraTypedAllowed } from "../src/lib/support.ts";
+import { euroSignFirst, extraTypedAllowed, formatPaid } from "../src/lib/support.ts";
 
 test("the extra's box takes amounts as they are typed, and nothing else", () => {
   for (const typed of ["", "5", "12", "7.", "7,5", "7.50", ".5", "500"]) {
@@ -19,4 +19,9 @@ test("the euro sign goes where the page's language writes it", () => {
   for (const lang of ["de", "fr", "es", "it", "pl"]) {
     assert.equal(euroSignFirst(lang), false, lang);
   }
+});
+
+test("an amount paid is shown in its own currency's units", () => {
+  assert.equal(formatPaid(2650, "EUR", "en"), "€26.50");
+  assert.equal(formatPaid(2650, "JPY", "en"), "¥2,650");
 });

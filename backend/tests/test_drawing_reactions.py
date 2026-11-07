@@ -98,6 +98,8 @@ async def record_game(
     shared_by="public",
     stroke_count=12,
     notify_drawer=False,
+    drawer_name_style=None,
+    reactor_name_style=None,
 ) -> Recorded:
     """One finished two-seat game with one drawn turn.
 
@@ -162,6 +164,7 @@ async def record_game(
                 seat_id=drawer_seat,
                 display_name="Drawer",
                 is_anonymous=False,
+                name_style=drawer_name_style,
             ),
             GameParticipantInput(
                 user_id=reactor,
@@ -170,6 +173,7 @@ async def record_game(
                 seat_id=reactor_seat,
                 display_name="Reactor",
                 is_anonymous=reactor_is_anonymous,
+                name_style=reactor_name_style,
             ),
         ],
         [

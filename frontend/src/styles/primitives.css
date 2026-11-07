@@ -657,6 +657,14 @@ input:focus-visible ~ .switch-track {
   background: color-mix(in srgb, var(--player-color, var(--guest-avatar)) 55%, #fff);
 }
 
+/* A supporter's name style fills the disc as it fills the name (#1476), in the
+   swatch's direction. Each theme's pair already reads under that theme's ink:
+   light's is deep under white, dark's is light under the dark ink, so it needs
+   no softening. Colour-safe mode keeps the plain colour, as the name does. */
+:root:not([data-color-safe]) .avatar-player.avatar-styled {
+  background: linear-gradient(135deg, var(--name-style-from), var(--name-style-to));
+}
+
 .avatar-guest {
   background: var(--guest-avatar);
 }

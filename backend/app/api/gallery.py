@@ -56,6 +56,7 @@ def gallery_entry_payload(entry: GalleryEntry) -> dict:
         "turnNumber": entry.turn_number,
         "drawerDisplayName": entry.drawer_display_name,
         "drawerNameColor": entry.drawer_name_color,
+        "drawerNameStyle": entry.drawer_name_style,
         "drawerIsAnonymous": entry.drawer_is_anonymous,
         "prompt": entry.prompt,
         "strokeCount": entry.stroke_count,
@@ -70,6 +71,7 @@ def gallery_entry_payload(entry: GalleryEntry) -> dict:
             else {
                 "displayName": entry.sharer_display_name,
                 "nameColor": entry.sharer_name_color,
+                "nameStyle": entry.sharer_name_style,
                 "isAnonymous": entry.sharer_is_anonymous,
             }
         ),

@@ -220,8 +220,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
       >
         <span
           className={`identity-avatar ${isGuest ? "avatar-guest" : "avatar-player"}${
-            !isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""
-          }`}
+            !isGuest && user.nameStyle ? ` avatar-styled name-style-${user.nameStyle}` : ""
+          }${!isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""}`}
           aria-hidden="true"
           style={{ "--player-color": identityColor(shownName, isGuest, user.nameColor) } as CSSProperties}
         >
@@ -234,7 +234,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         {!compact && (
           <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
         )}
-        {!isGuest && ownMark && <SupporterMark size={12} />}
+        {!isGuest && ownMark && <SupporterMark size={15} />}
         {/* The button's own label already says the name is not saved, so the
             dot stays silent to a screen reader; the title is for a pointer. */}
         {isGuest && (

@@ -881,6 +881,9 @@ class SupportPurchase(Base):
             name="ck_support_purchases_period",
         ),
         CheckConstraint("amount_minor >= 0", name="ck_support_purchases_amount"),
+        CheckConstraint(
+            "extra_minor >= 0 AND extra_minor <= amount_minor", name="ck_support_purchases_extra"
+        ),
         # A webhook delivered twice is one fact.
         UniqueConstraint(
             "provider", "provider_event_id", name="uq_support_purchases_provider_event"
@@ -930,6 +933,11 @@ class SupportPurchase(Base):
     # Null on a purchase: a lifetime pass.
     period_end: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The part of `amount_minor` that was the optional extra, tax included, as
+    # the provider's line items say (R-SUP-19). Zero without one.
+    extra_minor: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
@@ -1266,6 +1274,12 @@ class RoomMessage(Base):
         String(32), nullable=False
     )
     sender_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    # The supporter name style the line was said in (#1476), as worn then. No
+    # closed-list check, unlike `users.name_style`: a stored key outlives a style
+    # being retired, and a reader that does not know it shows the colour.
+    sender_name_style_snapshot: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )
     sender_is_anonymous_snapshot: Mapped[bool] = mapped_column(
@@ -2972,6 +2986,8 @@ class GameParticipant(Base):
         String(32), default="Unknown", nullable=False
     )
     name_color_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # As worn when the game finished (#1476); see RoomMessage's for why unchecked.
+    name_style_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_anonymous_snapshot: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
@@ -3066,6 +3082,10 @@ class TurnRecord(Base):
         String(32), default="Unknown", nullable=False
     )
     drawer_name_color_snapshot: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    # As worn when the turn was drawn (#1476); see RoomMessage's for why unchecked.
+    drawer_name_style_snapshot: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )
     drawer_is_anonymous_snapshot: Mapped[bool] = mapped_column(

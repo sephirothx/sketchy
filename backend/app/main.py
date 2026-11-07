@@ -60,6 +60,7 @@ from app.auth.bans import suspension_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket_origins
+from app.rooms import normalize_name_color
 from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
 from app.auth.routes import create_auth_router, guest_day_ceiling, guest_network_share
@@ -1187,13 +1188,17 @@ async def refresh_supporter_mark_on_live_surfaces(user_id: str) -> None:
     for room in list(room_manager.rooms.values()):
         changed = False
         for player in room.players.values():
-            if player.user_id == user_id and not player.is_anonymous and (
-                player.supporter_mark,
-                player.name_style,
-                player.avatar_key,
-            ) != look:
+            if player.user_id != user_id or player.is_anonymous:
+                continue
+            # A style brings its colour, and a colour takes a style off (one look
+            # per name), so the seat's colour follows the account's here too.
+            color = normalize_name_color(account.name_color) or player.name_color
+            if (player.supporter_mark, player.name_style, player.avatar_key) != look or (
+                player.name_color != color
+            ):
                 # The picture too: a refund can take a supporter doodle back.
                 player.supporter_mark, player.name_style, player.avatar_key = look
+                player.name_color = color
                 changed = True
         if changed:
             await handler_context.game_flow._emit_room_state(room)

@@ -837,6 +837,7 @@ def _participation_document(row) -> dict:
             "identityId": str(seat.user_id) if seat.user_id else None,
             "displayName": seat.display_name_snapshot,
             "nameColor": seat.name_color_snapshot,
+            "nameStyle": seat.name_style_snapshot,
             "wasAnonymous": seat.is_anonymous_snapshot,
             "finalScore": seat.final_score,
             "finalRank": seat.final_rank,
@@ -1542,6 +1543,7 @@ async def _write_export_artifact(
             "periodEnd": _timestamp(fact.period_end),
             # What somebody else paid is theirs: a gift shows its period alone.
             "amountMinor": None if fact.provider_order_id in gifted_orders else fact.amount_minor,
+            "extraMinor": None if fact.provider_order_id in gifted_orders else fact.extra_minor,
             "currency": None if fact.provider_order_id in gifted_orders else fact.currency,
             "orderId": None if fact.provider_order_id in gifted_orders else fact.provider_order_id,
             "gift": fact.provider_order_id in gifted_orders,
@@ -1566,6 +1568,7 @@ async def _write_export_artifact(
             "periodStart": _timestamp(gift.period_start),
             "periodEnd": _timestamp(gift.period_end),
             "amountMinor": gift.amount_minor,
+            "extraMinor": gift.extra_minor,
             "currency": gift.currency,
             "orderId": gift.provider_order_id,
             "anonymous": gift.gift_anonymous,
@@ -1874,6 +1877,7 @@ async def anonymize_account(
                 .values(
                     display_name_snapshot=DELETED_DISPLAY_NAME,
                     name_color_snapshot=None,
+                    name_style_snapshot=None,
                     is_anonymous_snapshot=True,
                 )
             )
@@ -1883,6 +1887,7 @@ async def anonymize_account(
                 .values(
                     drawer_display_name_snapshot=DELETED_DISPLAY_NAME,
                     drawer_name_color_snapshot=None,
+                    drawer_name_style_snapshot=None,
                     drawer_is_anonymous_snapshot=True,
                 )
             )

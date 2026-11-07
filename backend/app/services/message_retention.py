@@ -201,6 +201,7 @@ class MessageRetentionService:
             ),
             sender_display_name_snapshot=player.nickname,
             sender_name_color_snapshot=player.name_color,
+            sender_name_style_snapshot=None if player.is_anonymous else player.name_style,
             sender_is_anonymous_snapshot=player.is_anonymous,
             is_spectator=player.is_spectator,
             message_kind=message_kind,
@@ -222,6 +223,7 @@ class MessageRetentionService:
         is_anonymous: bool,
         text: str,
         sent_at: datetime,
+        name_style: str | None = None,
     ) -> str | None:
         """Take one lobby line for retention and return its UUIDv7.
 
@@ -246,6 +248,7 @@ class MessageRetentionService:
             sender_seat_id=None,
             sender_display_name_snapshot=display_name,
             sender_name_color_snapshot=name_color,
+            sender_name_style_snapshot=None if is_anonymous else name_style,
             sender_is_anonymous_snapshot=is_anonymous,
             is_spectator=False,
             message_kind="chat",

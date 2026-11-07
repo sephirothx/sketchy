@@ -190,6 +190,11 @@
   box-shadow: var(--shadow);
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css). */
+.identity-chip:not(.is-compact) > .supporter-mark {
+  margin-left: calc(0.4px - 8px);
+}
+
 .identity-chip:hover {
   border-color: var(--line-strong);
 }
@@ -198,6 +203,11 @@
   padding: 4px;
   gap: 0;
   min-height: 36px;
+}
+
+/* No name to sit by: the heart keeps clear of the avatar. */
+.identity-chip.is-compact > .supporter-mark {
+  margin-left: 4px;
 }
 
 .identity-avatar {

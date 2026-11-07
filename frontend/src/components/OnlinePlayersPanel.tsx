@@ -143,6 +143,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                 <Avatar
                   name={player.displayName}
                   nameColor={player.nameColor ?? undefined}
+                  nameStyle={player.nameStyle}
                   avatarUrl={player.avatarUrl}
                   isAnonymous={player.isAnonymous}
                   isFriend={theyAreAFriend}
@@ -158,7 +159,9 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                     Your own row offers nothing either. */}
                 {player.isAnonymous || player.userId === myUserId ? (
                   <span
-                    className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
+                    className={`online-player-name${
+                      player.isAnonymous ? " is-guest" : ` ${nameStyleClass(player.nameStyle) ?? ""}`
+                    }`}
                     style={
                       player.isAnonymous || !player.nameColor
                         ? undefined
@@ -205,7 +208,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
                 )}
                 {/* Beside the name, not in it: a long name's ellipsis must not
                     take the heart with it. */}
-                {player.supporterMark && <SupporterMark size={12} />}
+                {player.supporterMark && <SupporterMark size={15} />}
 
                 <span className="online-player-actions">
                   {/* Only a friend gets a way in, and only when there is

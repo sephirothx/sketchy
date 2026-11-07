@@ -45,6 +45,7 @@ class _Name:
     nickname: str
     name_color: str | None
     is_anonymous: bool
+    name_style: str | None = None
 
 
 def _resolve_names(room: Room) -> dict[str, _Name]:
@@ -65,6 +66,7 @@ def _resolve_names(room: Room) -> dict[str, _Name]:
             nickname=player.nickname,
             name_color=player.name_color,
             is_anonymous=player.is_anonymous,
+            name_style=None if player.is_anonymous else player.name_style,
         )
     for token, seat in room.departed_seats.items():
         names.setdefault(
@@ -73,6 +75,7 @@ def _resolve_names(room: Room) -> dict[str, _Name]:
                 nickname=seat.nickname,
                 name_color=seat.name_color,
                 is_anonymous=seat.is_anonymous,
+                name_style=seat.name_style,
             ),
         )
     return names
@@ -84,6 +87,7 @@ def _named(highlight: dict, name: _Name) -> dict:
         **highlight,
         "nickname": name.nickname,
         "nameColor": name.name_color,
+        "nameStyle": None if name.is_anonymous else name.name_style,
         "isAnonymous": name.is_anonymous,
     }
 
@@ -222,6 +226,7 @@ def _most_reacted_drawing(room: Room, names: dict[str, _Name]) -> dict | None:
             nickname=entry.drawer_nickname,
             name_color=entry.drawer_name_color,
             is_anonymous=entry.drawer_is_anonymous,
+            name_style=entry.drawer_name_style,
         )
     )
     return _named(

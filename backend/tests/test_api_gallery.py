@@ -124,7 +124,7 @@ async def test_the_gallery_is_for_any_session_and_no_session_gets_nothing(env):
     [entry] = page["entries"]
     assert set(entry) == {
         "turnId", "roundNumber", "turnNumber", "drawerDisplayName", "drawerNameColor",
-        "drawerIsAnonymous", "prompt", "strokeCount", "finishedAt", "reactionCounts",
+        "drawerNameStyle", "drawerIsAnonymous", "prompt", "strokeCount", "finishedAt", "reactionCounts",
         "myReaction", "drawnByMe", "sharedAt", "sharedBy", "sharedByMe",
     }
     assert "gameId" not in entry and entry["reactionCounts"] == {"heart": 1}
@@ -150,6 +150,26 @@ async def test_the_gallery_is_for_any_session_and_no_session_gets_nothing(env):
         assert answer.json()["errorCode"] == "unknown_sort"
     assert (await http.get("/api/gallery?limit=0")).status_code == 422
     assert (await http.get("/api/gallery?limit=25")).status_code == 422
+
+
+async def test_a_name_wears_in_the_gallery_the_style_it_wore_in_the_game(env):
+    """Snapshotted beside the colour (R-SUP-17): the drawer's from the turn, the
+    sharer's from their seat, and a guest seat never carries one."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    game = await record_game(
+        history, drawer=ann.id, reactor=bob.id, visibility="public", shared_by="reactor",
+        drawer_name_style="sunset", reactor_name_style="ocean", finished_at=NOW - timedelta(hours=1),
+    )
+    await sign_in_as(http, factory, bob.id)
+    [entry] = (await http.get("/api/gallery")).json()["entries"]
+    assert entry["turnId"] == game.turn_id
+    assert entry["drawerNameStyle"] == "sunset"
+    assert entry["sharedBy"]["nameStyle"] == "ocean"
+    detail = (await http.get(f"/api/games/{game.game_id}")).json()
+    assert {p["nameStyle"] for p in detail["participants"]} == {"sunset", "ocean"}
+    assert detail["turns"][0]["drawerNameStyle"] == "sunset"
 
 
 async def test_the_third_door_closes_with_the_predicate(env):

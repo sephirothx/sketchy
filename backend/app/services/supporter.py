@@ -28,7 +28,7 @@ from app.auth.bans import active_ban_filter
 from app.db.models import InboxEntry, SupportPurchase, User, UserBan, UserSettings
 from app.domain_values import AccountState, SupportPurchaseKind
 from app.support.config import support_config
-from app.support.providers import PRODUCT_GIFT, ProviderEvent
+from app.support.providers import PRODUCT_GIFT, PRODUCT_LIFETIME, PRODUCT_YEAR, ProviderEvent
 
 
 @dataclass(frozen=True)
@@ -418,6 +418,7 @@ async def record_support_fact(
     user_id: UUID | None,
     amount_minor: int,
     currency: str,
+    extra_minor: int = 0,
     period_start: datetime | None = None,
     period_end: datetime | None = None,
     provider_subscription_id: str | None = None,
@@ -444,6 +445,7 @@ async def record_support_fact(
             kind=kind.value,
             user_id=user_id,
             amount_minor=amount_minor,
+            extra_minor=extra_minor,
             currency=currency,
             period_start=period_start,
             period_end=period_end,
@@ -538,6 +540,7 @@ async def apply_provider_event(
         kind=event.kind,
         user_id=user_id,
         amount_minor=event.amount_minor,
+        extra_minor=event.extra_minor,
         currency=event.currency,
         period_start=event.period_start,
         period_end=event.period_end,
@@ -751,3 +754,109 @@ async def active_supporters(session: AsyncSession, *, now: datetime | None = Non
         )
         or 0
     )
+
+
+# The most payments Settings → Support lists: decades of yearly renewals, and a
+# bound on what one request reads however many gifts an account has bought.
+PAYMENTS_SHOWN = 100
+
+
+@dataclass(frozen=True)
+class Payment:
+    """One charge, as the account that paid it sees it."""
+
+    order_id: str
+    at: datetime
+    product: str
+    amount_minor: int
+    # The part of it that was the optional extra.
+    extra_minor: int
+    currency: str
+    refunded: bool
+    # Whom a gift went to; None for one's own pass, or once that account is gone.
+    gift_to: str | None
+
+    def payload(self) -> dict:
+        return {
+            "orderId": self.order_id,
+            "at": self.at.isoformat(),
+            "product": self.product,
+            "amountMinor": self.amount_minor,
+            "extraMinor": self.extra_minor,
+            "currency": self.currency,
+            "refunded": self.refunded,
+            "giftTo": self.gift_to,
+        }
+
+
+def _paid_by(user_id: UUID) -> ColumnElement:
+    """The charges this account paid: its own passes, and the gifts it gave. A gift
+    it received was paid by somebody else, whose amount is not this account's to see."""
+    return and_(
+        SupportPurchase.kind == SupportPurchaseKind.PURCHASE.value,
+        SupportPurchase.amount_minor > 0,
+        or_(
+            and_(SupportPurchase.user_id == user_id, ~SupportPurchase.is_gift),
+            SupportPurchase.gifted_by_user_id == user_id,
+        ),
+    )
+
+
+async def payments_of(session: AsyncSession, user_id: UUID) -> list[Payment]:
+    """What this account has paid, newest first (R-SUP-19)."""
+    recipient = aliased(User)
+    rows = await session.execute(
+        select(
+            SupportPurchase.provider_order_id,
+            SupportPurchase.created_at,
+            SupportPurchase.is_gift,
+            SupportPurchase.period_end,
+            SupportPurchase.amount_minor,
+            SupportPurchase.extra_minor,
+            SupportPurchase.currency,
+            _order_reversed(SupportPurchase),
+            recipient.display_name,
+            recipient.state,
+        )
+        .outerjoin(
+            recipient,
+            and_(SupportPurchase.is_gift, recipient.id == SupportPurchase.user_id),
+        )
+        .where(_paid_by(user_id))
+        .order_by(SupportPurchase.created_at.desc(), SupportPurchase.id.desc())
+        .limit(PAYMENTS_SHOWN)
+    )
+    return [
+        Payment(
+            order_id=order_id,
+            at=created_at,
+            product=PRODUCT_GIFT if is_gift else PRODUCT_LIFETIME if period_end is None else PRODUCT_YEAR,
+            amount_minor=amount_minor,
+            extra_minor=extra_minor,
+            currency=currency,
+            refunded=bool(reversed_),
+            gift_to=name if name and state != AccountState.DELETED.value else None,
+        )
+        for (
+            order_id,
+            created_at,
+            is_gift,
+            period_end,
+            amount_minor,
+            extra_minor,
+            currency,
+            reversed_,
+            name,
+            state,
+        ) in rows.all()
+    ]
+
+
+async def paid_order(session: AsyncSession, user_id: UUID, order_id: str) -> bool:
+    """Whether this account paid this order, so may have its receipt."""
+    found = await session.scalar(
+        select(SupportPurchase.id)
+        .where(_paid_by(user_id), SupportPurchase.provider_order_id == order_id)
+        .limit(1)
+    )
+    return found is not None

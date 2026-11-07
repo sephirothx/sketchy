@@ -332,6 +332,7 @@ def test_the_most_reacted_drawing_is_the_biggest_count_then_the_earliest():
         "turnId": second.id,
         "nickname": "Bo",
         "nameColor": players["Bo"].name_color,
+        "nameStyle": None,
         "isAnonymous": players["Bo"].is_anonymous,
     }
 

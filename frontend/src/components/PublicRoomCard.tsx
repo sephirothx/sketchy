@@ -120,6 +120,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
               <Avatar
                 name={player.nickname}
                 nameColor={player.nameColor}
+                nameStyle={player.nameStyle}
                 avatarUrl={player.avatarUrl}
                 isAnonymous={player.isAnonymous}
                 isHost={player.isHost}
@@ -131,7 +132,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
               >
                 {player.nickname}
               </span>
-              {player.supporterMark && <SupporterMark size={11} />}
+              {player.supporterMark && <SupporterMark size={14} />}
               {player.isHost && <span className="visually-hidden">{ui.publicRoomCard.host}</span>}
             </li>
           ))}

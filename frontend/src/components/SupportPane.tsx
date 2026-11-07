@@ -5,9 +5,13 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { formatDate } from "../lib/clock";
 import { refusalText } from "../lib/refusals";
 import {
+  fetchPayments,
+  formatPaid,
   isLifetime,
+  openReceipt,
   sendToCheckout,
   startCheckout,
+  type SupportPayment,
   type SupportPlans,
   type SupportProduct,
 } from "../lib/support";
@@ -15,7 +19,7 @@ import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { useSupportStore } from "../store/supportStore";
 import { ExtraChoice } from "./ExtraChoice";
-import { CheckIcon } from "./icons";
+import { CheckIcon, ChevronDownIcon, DownloadIcon, GiftIcon, HeartIcon } from "./icons";
 import { TipLink } from "./TipLink";
 import { SupporterMark } from "./ui/SupporterMark";
 import "../styles/lazy/support.css";
@@ -220,6 +224,116 @@ function SupporterView() {
   );
 }
 
+function paymentLabel(payment: SupportPayment): string {
+  if (payment.product === "gift") {
+    return payment.giftTo ? ui.support.paymentGiftTo({ name: payment.giftTo }) : ui.support.paymentGift;
+  }
+  return payment.product === "lifetime" ? ui.support.lifetimePass : ui.support.paymentYear;
+}
+
+/** What this account has paid, each with the provider's receipt (R-SUP-19).
+Folded to one line until asked for: the pane is about the pass, not the bills.
+Read again when the status changes, which is when a payment may have arrived. */
+function Payments() {
+  const status = useSupportStore((state) => state.status);
+  const [payments, setPayments] = useState<SupportPayment[]>([]);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetchPayments()
+      .then((found) => {
+        if (live) setPayments(found);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [status]);
+
+  if (payments.length === 0) return null;
+  const [last] = payments;
+  return (
+    <section className={`support-payments${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="support-payments-toggle"
+        aria-expanded={open}
+        aria-controls="support-payments-list"
+        onClick={() => setOpen(!open)}
+      >
+        <span>
+          <strong>
+            {ui.support.paymentsTitle} · {payments.length}
+          </strong>
+          {!open && (
+            <small>
+              {ui.support.paymentsLast({
+                amount: formatPaid(last.amountMinor, last.currency),
+                date: formatDate(new Date(last.at)),
+              })}
+            </small>
+          )}
+        </span>
+        <ChevronDownIcon size={18} />
+      </button>
+      {open && (
+        <ul id="support-payments-list">
+          {payments.map((payment, index) => (
+            <li key={payment.orderId} className={payment.refunded ? "is-refunded" : undefined}>
+              <span className={`support-payment-icon${payment.product === "gift" ? " is-gift" : ""}`} aria-hidden="true">
+                {payment.product === "gift" ? <GiftIcon size={21} /> : <HeartIcon size={21} />}
+              </span>
+              <span className="support-payment-what">
+                <strong id={`support-payment-${index}-what`}>
+                  {paymentLabel(payment)}
+                  {payment.refunded && <span className="support-refunded">{ui.support.paymentRefunded}</span>}
+                </strong>
+                <small>
+                  <span id={`support-payment-${index}-date`}>{formatDate(new Date(payment.at))}</span>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="support-receipt"
+                    // Every row's button says "Receipt": this says whose.
+                    aria-describedby={`support-payment-${index}-what support-payment-${index}-date`}
+                    onClick={() => {
+                      setError(null);
+                      openReceipt(payment.orderId).catch((failure) =>
+                        setError(refusalText(failure, ui.support.receiptFailed)),
+                      );
+                    }}
+                  >
+                    <DownloadIcon size={13} />
+                    {ui.support.receipt}
+                  </button>
+                </small>
+              </span>
+              <span className="support-payment-paid">
+                <span className="support-payment-amount">{formatPaid(payment.amountMinor, payment.currency)}</span>
+                {payment.extraMinor > 0 && (
+                  <small>
+                    {ui.support.paymentSplit({
+                      pass: formatPaid(payment.amountMinor - payment.extraMinor, payment.currency),
+                      extra: formatPaid(payment.extraMinor, payment.currency),
+                    })}
+                  </small>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /** Settings → Support (#1475): the pitch, the guest's version of it, or a
 supporter's own pass. */
 export function SupportPane() {
@@ -272,6 +386,7 @@ export function SupportPane() {
           </a>
         </div>
       )}
+      {isRegistered && <Payments />}
       {plans.tipUrl && <TipLink url={plans.tipUrl} />}
     </div>
   );

@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { chatTimeLabel, reportableLine, type LobbyChatLine } from "../lib/lobbyChat";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { IdentityRequiredError, needsIdentity, useAuthStore, type AuthUser } from "../store/authStore";
 import { formatDateTime, type TimeFormat } from "../lib/clock";
@@ -208,7 +208,7 @@ const LobbyChatLineRow = memo(function LobbyChatLineRow({
   onReport: (line: LobbyChatLine) => void;
 }) {
   const at = new Date(line.sentAt);
-  const nameClass = playerNameClass(line.isAnonymous);
+  const nameClass = playerNameClass(line.isAnonymous, nameStyleClass(line.nameStyle));
   const nameStyle = playerNameStyle(line.nameColor ?? undefined, line.isAnonymous);
   return (
     <div className="chat-message lobby-chat-line">

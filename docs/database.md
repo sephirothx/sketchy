@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`7a9b0c1d2e3f_name_styles.py` (#1476). Both this line and the table
+`8d4e2b7c9a1f_name_style_snapshots.py` (R-SUP-17). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -271,7 +271,7 @@ One row per player identity, guest or registered.
 | `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
 | `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
 | `display_name` VARCHAR(32) | |
-| `name_style` | A supporter's two-tone name, a key from a closed list (`ck_users_name_style`). Beside `name_color`, which stays the fallback (R-SUP-17) |
+| `name_style` | A supporter's two-tone name, a key from a closed list (`ck_users_name_style`). It replaces the colour as the name's look: choosing it writes the style's partner into `name_color`, which stays the fallback, and choosing a colour clears it (R-SUP-17) |
 | `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp`, `.png` or `.jpg`, R-AVA-03), `doodle:<name>` for one of the deployment's own doodles (nothing else is stored for one; a claim assigns a random one, R-AVA-09), or null for the initial |
 | `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |
@@ -893,7 +893,10 @@ when `user_id` was given it, so status, the mark and the refund rule need no cha
 (`purchase \| refund \| chargeback \| cancellation`, `ck_support_purchases_kind`) · `period_start`,
 `period_end` (`ck_support_purchases_period`: a purchase has a start, and an end unless it
 is a lifetime pass; a refund, a chargeback or a cancellation has neither) · `amount_minor`
-(`ck_support_purchases_amount`, not negative) · `currency` · `created_at`.
+(`ck_support_purchases_amount`, not negative) · `extra_minor` (the part of `amount_minor` that
+was the optional extra, tax included, from the transaction's own line items, so the payments
+list can show the split; 0 without one; `ck_support_purchases_extra`: not negative and never
+more than the amount) · `currency` · `created_at`.
 `uq_support_purchases_provider_event` makes a webhook delivered twice one fact.
 `ix_support_purchases_order`, `ix_support_purchases_user_id` and
 `ix_support_purchases_subscription` serve status. A `cancellation` leaves the periods alone:
@@ -1152,6 +1155,11 @@ in an audience-aware store — and, since #533, the lobby's chat too. A room lin
 reached **nobody but its author** — said alone in a room, or with every other seat
 blocking them — is not written (#1243): a report cites only a line its reporter
 received, so such a row could never be evidence, and it was storage anybody could fill.
+
+**The author as they were.** `sender_display_name_snapshot`, `sender_name_color_snapshot`,
+`sender_name_style_snapshot` (a supporter's name style, R-SUP-17, unchecked as on
+`game_participants`) and `sender_is_anonymous_snapshot`: the lobby's restart re-seed
+draws a line from these, so it reads as it did when said.
 
 **Hidden lobby lines** (#1435, R-LCHAT-09). `hidden_at`, set by a moderator through
 `PATCH /api/moderation/lobby-messages/{id}` and cleared by showing the line again, with
@@ -1715,7 +1723,9 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `game_participants`
 `id` (the **participant seat**) · `game_id` (CASCADE) · `user_id` (`SET NULL`) ·
-`display_name_snapshot` · `name_color_snapshot` · `is_anonymous_snapshot` ·
+`display_name_snapshot` · `name_color_snapshot` · `name_style_snapshot` (the supporter
+name style worn when the game finished, R-SUP-17; nullable and, unlike `users.name_style`,
+unchecked, so a key outlives a retired style and reads as none) · `is_anonymous_snapshot` ·
 `final_score` · `final_rank` (nullable; null for abandoned games, `>= 1` otherwise) ·
 `turns_played` · `created_at`, with `uq_game_participants_game_user`.
 
@@ -1745,7 +1755,8 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `turn_records`
 `id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /
-`drawer_participant_id` (`CASCADE`, NOT NULL) · frozen drawer presentation · `prompt` ·
+`drawer_participant_id` (`CASCADE`, NOT NULL) · frozen drawer presentation (name, colour,
+`drawer_name_style_snapshot` as on `game_participants`, guest flag) · `prompt` ·
 `prompt_version_id` (FK → `prompt_versions`, RESTRICT) · `prompt_source_kind` ·
 `duration_seconds` · `guesser_count` · `prompt_auto_picked` · `stroke_count` ·
 `end_reason` (`all_guessed \| timeout`) · `wrong_guess_count` · `near_miss_count` ·

@@ -94,7 +94,7 @@ async def test_a_participant_shares_from_history_and_the_drawer_is_told(env):
         "turnId": game.turn_id,
         "prompt": "lighthouse",
         "inGallery": True,
-        "sharedBy": {"displayName": "Reactor", "nameColor": None, "isAnonymous": False},
+        "sharedBy": {"displayName": "Reactor", "nameColor": None, "nameStyle": None, "isAnonymous": False},
     }
     assert "gameId" not in str(entry)
 
@@ -145,7 +145,7 @@ async def test_the_drawer_takes_a_drawing_out_from_the_gallery(env):
     await sign_in_as(http, factory, ann.id)
     [entry] = (await http.get("/api/gallery")).json()["entries"]
     assert entry["drawnByMe"] and not entry["sharedByMe"]
-    assert entry["sharedBy"] == {"displayName": "Reactor", "nameColor": None, "isAnonymous": False}
+    assert entry["sharedBy"] == {"displayName": "Reactor", "nameColor": None, "nameStyle": None, "isAnonymous": False}
     assert entry["sharedAt"] is not None
 
     assert (await http.get("/api/inbox")).json()["unreadCount"] == 1

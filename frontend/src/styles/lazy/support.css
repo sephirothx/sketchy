@@ -347,3 +347,172 @@ div.support-plan {
     flex-direction: column;
   }
 }
+
+/* Your payments (R-SUP-19): one bordered box, folded to a summary line, opening
+   into a row per payment - an icon for what it was, two lines, then the amount
+   over its receipt. */
+.support-payments {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.support-payments-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-payments-toggle > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.support-payments-toggle strong {
+  font-size: 14px;
+}
+
+.support-payments-toggle small,
+.support-payment-what small,
+.support-payment-paid small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* The date and the receipt share a line, so a payment with an extra stays two
+   lines: the amount column holds only money. */
+.support-payment-what small {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  white-space: nowrap;
+}
+
+.support-payments-toggle svg {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.support-payments.is-open .support-payments-toggle svg {
+  transform: rotate(180deg);
+}
+
+.support-payments ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 14px 4px;
+  list-style: none;
+}
+
+.support-payments li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1.5px solid var(--line);
+}
+
+.support-payment-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+.support-payment-icon.is-gift {
+  background: var(--warm-soft);
+  color: var(--warm-ink);
+}
+
+/* The heart's outline is centred, but its weight is in the lobes: centred by the
+   box it reads high, so it drops by a pixel. The gift's weight is already central. */
+.support-payment-icon:not(.is-gift) svg {
+  translate: 0 1px;
+}
+
+.support-payment-what {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.support-payment-what strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.support-refunded {
+  padding: 1px 7px;
+  border: 1px solid var(--warning-edge);
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.support-payment-paid {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.support-payment-amount {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-refunded .support-payment-amount {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.support-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--primary-ink);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.support-receipt:hover {
+  text-decoration: underline;
+}
+
+
+.support-payments .auth-error {
+  margin: 0 14px 12px;
+}

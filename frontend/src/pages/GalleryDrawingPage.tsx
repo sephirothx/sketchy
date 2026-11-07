@@ -23,6 +23,7 @@ import { ShareControl } from "../components/ShareControl";
 import { setGalleryReaction } from "../lib/profile";
 import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
+import { nameStyleClass } from "../lib/playerName";
 import { useAuthStore } from "../store/authStore";
 import { useFavoritesStore } from "../store/favoritesStore";
 import { ui } from "../content/ui/index.ts";
@@ -224,7 +225,7 @@ export function GalleryDrawingPage() {
                   <span className="gallery-post-byline">
                     {ui.galleryPage.byDrawerPrefix}{" "}
                     <strong
-                      className="colored-player-name"
+                      className={`colored-player-name ${nameStyleClass(shown.drawerNameStyle) ?? ""}`}
                       style={shown.drawerNameColor ? { color: shown.drawerNameColor } : undefined}
                     >
                       {shown.drawerDisplayName}

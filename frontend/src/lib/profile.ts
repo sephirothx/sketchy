@@ -48,6 +48,8 @@ export interface GameParticipant {
   userId: string | null;
   displayName: string;
   nameColor: string | null;
+  /** The supporter name style as worn when the game finished (#1476). */
+  nameStyle?: string | null;
   avatarUrl?: string | null;
   isAnonymous: boolean;
   finalScore: number;
@@ -103,6 +105,7 @@ export interface GameTurn {
   drawerSeatId: string | null;
   drawerDisplayName: string;
   drawerNameColor: string | null;
+  drawerNameStyle?: string | null;
   drawerIsAnonymous: boolean;
   prompt: string;
   durationSeconds: number;

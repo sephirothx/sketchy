@@ -94,6 +94,14 @@ def test_the_wire_shape_names_the_account_and_the_instant():
     }
 
 
+def test_a_supporter_line_carries_the_name_style_it_was_said_in():
+    """A chat name wears the style a live name does (#1476); a guest's never does."""
+    log = LobbyChatLog()
+    assert say(log, "ada", "hi", name_style="aurora").payload()["nameStyle"] == "aurora"
+    assert "nameStyle" not in say(log, "bob", "hi").payload()
+    assert "nameStyle" not in say(log, "cy", "hi", name_style="aurora", is_anonymous=True).payload()
+
+
 def test_an_unretained_line_carries_no_identifier_to_cite():
     """The absence is the signal, exactly as room chat says it (R-MOD-08a)."""
     log = LobbyChatLog()
@@ -124,7 +132,7 @@ from app.db.models import RoomMessage, User, UserBan  # noqa: E402
 from app.services.lobby_chat import recent_lobby_lines, restore_lobby_backlog  # noqa: E402
 
 
-def retained(author: UUID, text: str, *, at: datetime, audience="lobby", expired=False):
+def retained(author: UUID, text: str, *, at: datetime, audience="lobby", expired=False, style=None):
     return RoomMessage(
         id=uuid4(),
         room_instance_id=None if audience == "lobby" else uuid4(),
@@ -132,6 +140,7 @@ def retained(author: UUID, text: str, *, at: datetime, audience="lobby", expired
         sender_player_id=None if audience == "lobby" else uuid4(),
         sender_display_name_snapshot="Someone",
         sender_name_color_snapshot="#4f9",
+        sender_name_style_snapshot=style,
         sender_is_anonymous_snapshot=False,
         is_spectator=False,
         message_kind="chat",
@@ -174,7 +183,7 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
                     + [
                         retained(bob, "expired", at=RECENT + timedelta(hours=2), expired=True),
                         retained(bob, "in a room", at=RECENT + timedelta(hours=2), audience="room"),
-                        retained(banned, "still suspended", at=RECENT + timedelta(hours=2)),
+                        retained(banned, "still suspended", at=RECENT + timedelta(hours=2), style="aurora"),
                     ]
                 )
 
@@ -185,6 +194,8 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
         assert [line.text for line in held] == [f"line {i}" for i in range(11, 60)] + ["still suspended"]
         assert [line.seq for line in held] == list(range(1, LOBBY_CHAT_BACKLOG + 1))
         assert held[0].user_id == str(ada)
+        # A supporter's line comes back in the style it was said in (R-SUP-17).
+        assert (held[0].name_style, held[-1].payload()["nameStyle"]) == (None, "aurora")
         assert held[0].sent_at == RECENT + timedelta(minutes=11)
         # Every restored line can still be cited: it is the retained row.
         async with factory() as session:

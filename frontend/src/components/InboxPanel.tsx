@@ -21,7 +21,7 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { galleryAge, withdrawFromGallery } from "../lib/gallery";
 import { invitationExpired, invitationStillOpen, type InboxEntry, type InboxPerson } from "../lib/inbox";
 import { roleNoticeText } from "../lib/operatorAccess";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { useToast } from "../lib/toast";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { useFriendsStore } from "../store/friendsStore";
@@ -130,10 +130,14 @@ function Group({ label, entries, onClose }: { label: string; entries: InboxEntry
   );
 }
 
-function Name({ person }: { person: Pick<InboxPerson, "displayName" | "nameColor"> & { isAnonymous?: boolean } }) {
+function Name({
+  person,
+}: {
+  person: Pick<InboxPerson, "displayName" | "nameColor"> & { isAnonymous?: boolean; nameStyle?: string | null };
+}) {
   return (
     <strong
-      className={playerNameClass(person.isAnonymous)}
+      className={playerNameClass(person.isAnonymous, nameStyleClass(person.nameStyle))}
       style={playerNameStyle(person.nameColor ?? undefined, person.isAnonymous)}
     >
       {person.displayName}

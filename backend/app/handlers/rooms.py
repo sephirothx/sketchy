@@ -1240,6 +1240,9 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
                 # it is told, and nothing reaches the room or the account.
                 return {"ok": False, "errorCode": ErrorCode.INVALID_NAME_COLOR, "error": "Invalid player name color"}
             player.name_color = chosen
+            # One look per name: the account drops the style below, and so does
+            # the seat, in the same broadcast.
+            player.name_style = None
         # Keep the account in step with the seat, so the color this player is
         # using right now is the one their profile shows. A failure here must not
         # cost the room its update: the seat has already changed color, and

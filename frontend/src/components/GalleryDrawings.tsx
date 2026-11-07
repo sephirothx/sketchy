@@ -3,7 +3,7 @@ import { GalleryFavoriteControl } from "./GalleryFavoriteControl";
 import { ReactionTally } from "./ReactionTally";
 import { FlagIcon } from "./icons";
 import { fetchGalleryDrawing, galleryAge, type GalleryEntry } from "../lib/gallery";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/gallery.css";
@@ -39,7 +39,7 @@ export function GalleryCard({
         <span className="gallery-card-prompt">{entry.prompt}</span>
         <span className="gallery-card-byline">
           <strong
-            className="colored-player-name"
+            className={`colored-player-name ${nameStyleClass(entry.drawerNameStyle) ?? ""}`}
             style={entry.drawerNameColor ? { color: entry.drawerNameColor } : undefined}
           >
             {entry.drawerDisplayName}
@@ -71,7 +71,7 @@ export function GallerySharedBy({ entry }: { entry: GalleryEntry }) {
         {fill(ui.galleryPage.sharedBy, {
           sharer: (
             <strong
-              className={playerNameClass(entry.sharedBy.isAnonymous)}
+              className={playerNameClass(entry.sharedBy.isAnonymous, nameStyleClass(entry.sharedBy.nameStyle))}
               style={playerNameStyle(entry.sharedBy.nameColor ?? undefined, entry.sharedBy.isAnonymous)}
             >
               {entry.sharedBy.displayName}
@@ -113,7 +113,7 @@ export function GalleryPost({
           <span className="gallery-post-byline">
             {ui.galleryPage.byDrawerPrefix}{" "}
             <strong
-              className="colored-player-name"
+              className={`colored-player-name ${nameStyleClass(entry.drawerNameStyle) ?? ""}`}
               style={entry.drawerNameColor ? { color: entry.drawerNameColor } : undefined}
             >
               {entry.drawerDisplayName}

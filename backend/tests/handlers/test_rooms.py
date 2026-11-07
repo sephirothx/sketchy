@@ -1002,6 +1002,32 @@ async def test_changing_colour_in_a_room_also_stores_it_on_the_account():
     assert user_repo.users["user-1"].name_color == "#a761e5"
 
 
+async def test_choosing_a_colour_in_a_room_takes_the_style_off_the_seat():
+    """A name wears one look (#1476): the seat drops its style with the account."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    user_repo = FakeUserRepository()
+    user_repo.add_registered("user-1", "Painter")
+    player = room_manager.add_player(
+        room, "Painter", user_id="user-1", is_anonymous=False
+    )
+    player.sid = "sid-1"
+    player.name_style = "sunset"
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id})
+    sio.save_session = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["update_player_settings"](
+        "sid-1", {"nameColor": "#2563eb"}
+    )
+
+    assert response == {"ok": True}
+    assert (player.name_color, player.name_style) == ("#2563eb", None)
+
+
 async def test_a_failed_colour_write_still_updates_the_room():
     """The seat has already changed colour; skipping the broadcast would leave
     everyone else looking at the old one."""

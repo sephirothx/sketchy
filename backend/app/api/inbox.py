@@ -86,6 +86,7 @@ async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
             TurnRecord.drawer_participant_id,
             GameParticipant.display_name_snapshot,
             GameParticipant.name_color_snapshot,
+            GameParticipant.name_style_snapshot,
             GameParticipant.is_anonymous_snapshot,
         )
         .join(TurnRecord, TurnRecord.id == TurnDrawingShare.turn_id)
@@ -100,6 +101,7 @@ async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
             {
                 "displayName": share.display_name_snapshot,
                 "nameColor": share.name_color_snapshot,
+                "nameStyle": share.name_style_snapshot,
                 "isAnonymous": share.is_anonymous_snapshot,
             },
         ))
@@ -122,14 +124,26 @@ async def _sharers(session: AsyncSession, turn_ids: list[UUID]) -> dict:
         .subquery()
     )
     solo = await session.execute(
-        select(ranked.c.turn_id, ranked.c.created_at, ranked.c.user_id, User.display_name, User.name_color)
+        select(
+            ranked.c.turn_id,
+            ranked.c.created_at,
+            ranked.c.user_id,
+            User.display_name,
+            User.name_color,
+            User.name_style,
+        )
         .join(User, User.id == ranked.c.user_id)
         .where(ranked.c.rank == 1)
     )
     for share in solo.all():
         found.append((
             share.turn_id, _aware(share.created_at), 1, str(share.user_id),
-            {"displayName": share.display_name, "nameColor": share.name_color, "isAnonymous": False},
+            {
+                "displayName": share.display_name,
+                "nameColor": share.name_color,
+                "nameStyle": share.name_style,
+                "isAnonymous": False,
+            },
         ))
     named: dict = {}
     for turn_id, *_order, credit in sorted(found, key=lambda entry: entry[:4]):

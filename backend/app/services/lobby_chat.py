@@ -67,6 +67,9 @@ class LobbyChatLine:
     # holding a later change for it - one that beat this backlog - keeps
     # that, and an earlier one arriving late cannot undo a later one.
     visibility: int = 0
+    # A supporter's name style when the line was said (#1476), as a live name
+    # shows it; the retained row keeps it too, so a restart re-seeds it.
+    name_style: str | None = None
 
     def payload(self) -> dict:
         """The wire shape, `LobbyChatMessage` in the wire protocol.
@@ -91,6 +94,8 @@ class LobbyChatLine:
         }
         if self.retained_message_id is not None:
             payload["retainedMessageId"] = self.retained_message_id
+        if self.name_style is not None and not self.is_anonymous:
+            payload["nameStyle"] = self.name_style
         if self.hidden:
             payload["hidden"] = True
         if self.visibility:
@@ -130,6 +135,7 @@ class LobbyChatLog:
         sent_at: datetime,
         retained_message_id: str | None = None,
         hidden: bool = False,
+        name_style: str | None = None,
     ) -> LobbyChatLine:
         """Number one accepted line and keep it.
 
@@ -149,6 +155,7 @@ class LobbyChatLog:
             sent_at=sent_at,
             retained_message_id=retained_message_id,
             hidden=hidden,
+            name_style=name_style,
         )
         self._lines.append(line)
         return line
@@ -171,6 +178,7 @@ class LobbyChatLog:
                 user_id=str(row.sender_user_id),
                 display_name=row.sender_display_name_snapshot,
                 name_color=row.sender_name_color_snapshot,
+                name_style=row.sender_name_style_snapshot,
                 is_anonymous=row.sender_is_anonymous_snapshot,
                 text=row.text,
                 sent_at=row.created_at,

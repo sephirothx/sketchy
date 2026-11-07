@@ -16,7 +16,7 @@ import { renderCanvasActionsUpTo } from "../lib/canvasRenderer";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { drawThumbnail } from "../lib/thumbnailQueue";
 import { socketRequestErrorMessage } from "../lib/socket";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import {
   ARROWS_SHOWN_MS,
@@ -702,7 +702,7 @@ export function DrawingViewer({
                     {fill(ui.drawingRecapGallery.drawnBy, {
                       drawer: (
                         <strong
-                          className={playerNameClass(entry.drawerIsAnonymous)}
+                          className={playerNameClass(entry.drawerIsAnonymous, nameStyleClass(entry.drawerNameStyle))}
                           style={playerNameStyle(entry.drawerNameColor, entry.drawerIsAnonymous)}
                         >
                           {entry.drawerNickname}

@@ -82,6 +82,7 @@ class _Seat:
     is_anonymous: bool
     score: int
     present: bool
+    name_style: str | None = None
     turns_played: int = 0
     # Seated and connected at the end: there to see what happened in the room.
     connected: bool = False
@@ -104,6 +105,7 @@ def _resolve_seats(room: Room, game: Game) -> dict[str, _Seat]:
                 is_anonymous=player.is_anonymous,
                 score=player.score,
                 present=True,
+                name_style=None if player.is_anonymous else player.name_style,
                 connected=player.connected,
             )
             continue
@@ -118,6 +120,7 @@ def _resolve_seats(room: Room, game: Game) -> dict[str, _Seat]:
             is_anonymous=departed.is_anonymous,
             score=departed.score,
             present=False,
+            name_style=departed.name_style,
         )
     return seats
 
@@ -191,6 +194,7 @@ def _participants(
                 display_name=seat.display_name,
                 name_color=seat.name_color,
                 is_anonymous=seat.is_anonymous,
+                name_style=seat.name_style,
             )
         )
     return participants

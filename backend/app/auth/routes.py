@@ -114,7 +114,7 @@ from app.auth.second_factor import (
     second_factor_state,
     verify_second_factor,
 )
-from app.rooms import normalize_name_color
+from app.rooms import NAME_STYLE_COLORS, normalize_name_color
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     IdentityMergeError,
@@ -1067,10 +1067,17 @@ def create_auth_router(
                     status = await supporter_status(session, UUID(user.id))
                     if not status.active:
                         raise Refusal(403, ErrorCode.SUPPORTER_ONLY)
+                # A style brings its colour (NAME_STYLE_COLORS), the one
+                # colour-safe mode shows, since a name wears one look.
+                partner = (
+                    {"name_color": NAME_STYLE_COLORS[body.name_style]}
+                    if body.name_style is not None
+                    else {}
+                )
                 await session.execute(
                     update(User)
                     .where(User.id == UUID(user.id))
-                    .values(name_style=body.name_style)
+                    .values(name_style=body.name_style, **partner)
                 )
         if on_supporter_look_changed is not None:
             try:
@@ -1113,8 +1120,15 @@ def create_auth_router(
                 params={"action": "name_color"},
             )
 
+        # A colour takes a style off (one look per name), so a worn style has
+        # to leave the seats and lobby showing it, as a refund's would.
         updated = await user_repo.update_profile(user.id, name_color=color)
-        if on_profile_changed is not None:
+        if user.name_style is not None and on_supporter_look_changed is not None:
+            try:
+                await on_supporter_look_changed(user.id)
+            except Exception:
+                logger.warning("supporter_look_push_failed", exc_info=True)
+        elif on_profile_changed is not None:
             on_profile_changed(user.id)
         return user_payload(updated or user)
 

@@ -342,6 +342,7 @@ function FriendsSection({
             <Avatar
               name={entry.displayName}
               nameColor={entry.nameColor ?? undefined}
+              nameStyle={entry.nameStyle}
               avatarUrl={entry.avatarUrl}
               isAnonymous={entry.isAnonymous}
               size={32}
@@ -382,6 +383,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
             <Avatar
               name={player.displayName}
               nameColor={player.nameColor ?? undefined}
+              nameStyle={player.nameStyle}
               avatarUrl={player.avatarUrl}
               isAnonymous={false}
               size={32}

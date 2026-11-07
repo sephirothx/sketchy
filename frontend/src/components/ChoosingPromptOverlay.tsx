@@ -1,9 +1,10 @@
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { nameStyleClass, playerNameClass, playerNameStyle } from "../lib/playerName";
 interface ChoosingPromptOverlayProps {
   drawerNickname: string;
   drawerNameColor?: string;
+  drawerNameStyle?: string | null;
   /** A guest drawer wears the guest style here as everywhere (#1279): the
       bare name showed upright in #888, 3.54:1, on every turn. */
   drawerIsAnonymous?: boolean;
@@ -12,6 +13,7 @@ interface ChoosingPromptOverlayProps {
 export function ChoosingPromptOverlay({
   drawerNickname,
   drawerNameColor,
+  drawerNameStyle,
   drawerIsAnonymous,
 }: ChoosingPromptOverlayProps) {
   return (
@@ -32,7 +34,7 @@ export function ChoosingPromptOverlay({
           {fill(ui.choosingPromptOverlay.isChoosingPrompt, {
             drawer: (
               <strong
-                className={playerNameClass(drawerIsAnonymous)}
+                className={playerNameClass(drawerIsAnonymous, nameStyleClass(drawerNameStyle))}
                 style={playerNameStyle(drawerNameColor, drawerIsAnonymous)}
               >
                 {drawerNickname}

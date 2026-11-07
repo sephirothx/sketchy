@@ -20,6 +20,7 @@ import {
 } from "../lib/favorites";
 import type { ProfileFavorite } from "../lib/favorites";
 import { reactionEligibility } from "../lib/reactions";
+import { nameStyleClass } from "../lib/playerName";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/profile.css";
 
@@ -576,7 +577,7 @@ export function FavoritesShelf({
                       <span className="profile-shelf-drawer">
                         {ui.galleryPage.byDrawerPrefix}{" "}
                         <strong
-                          className="colored-player-name"
+                          className={`colored-player-name ${nameStyleClass(favorite.drawerNameStyle) ?? ""}`}
                           style={favorite.drawerNameColor ? { color: favorite.drawerNameColor } : undefined}
                         >
                           {favorite.drawerDisplayName}

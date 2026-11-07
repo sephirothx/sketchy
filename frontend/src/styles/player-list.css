@@ -108,6 +108,11 @@
   margin-inline: calc(-1 * var(--ink-overhang));
 }
 
+/* The supporter heart takes this gap back to sit by the name (player-list-shared.css). */
+.player-name > .supporter-mark {
+  margin-left: calc(0.4px - 6px);
+}
+
 .player-name .colored-player-name {
   flex: 0 1 auto;
   font-weight: 800;
