@@ -155,17 +155,67 @@ def verify_signature(
         raise BadSignature("signature too old")
 
 
+# What a delivery has to fit to be written down: `support_purchases`' columns. One
+# that does not is unreadable - logged and answered 200, like a shape we cannot
+# read - rather than a 500 the provider would retry for days on a row that can
+# never be written.
+_ID_LENGTH = 128
+_MINOR_MAX = 2**31 - 1
+
+
 def _moment(value: object) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # Paddle writes an offset. A time without one is read as UTC: the ledger only
+    # keeps instants, and refusing it would refuse a purchase over a format.
+    return moment if moment.utcoffset() is not None else moment.replace(tzinfo=timezone.utc)
 
 
 def _minor(value: object) -> int:
     try:
-        return max(0, int(str(value)))
+        amount = max(0, int(str(value)))
     except ValueError:
         return 0
+    if amount > _MINOR_MAX:
+        raise ValueError("an amount past what the ledger holds")
+    return amount
+
+
+def _identifier(value: object) -> str:
+    """One of the provider's ids, as the ledger keeps it. Printable: PostgreSQL
+    refuses a NUL in text, and no provider's id has a control character."""
+    if not is_ledger_id(value):
+        raise ValueError("not an id the ledger can keep")
+    return value
+
+
+def is_ledger_id(value: object) -> bool:
+    """Whether the ledger could hold this as an id: a request naming anything else
+    names nothing it has."""
+    return isinstance(value, str) and 0 < len(value) <= _ID_LENGTH and value.isprintable()
+
+
+def _currency(value: object) -> str:
+    if value is None:
+        return "EUR"
+    if not isinstance(value, str) or len(value) != 3 or not value.isascii() or not value.isalpha():
+        raise ValueError("not a currency code")
+    return value.upper()
+
+
+def _text(value: object) -> str | None:
+    """Ours, from custom data: a string we wrote, or nothing."""
+    return value if isinstance(value, str) else None
+
+
+def _object(value: object) -> dict:
+    """A part of the API's answer read as an object, or nothing to read."""
+    return value if isinstance(value, dict) else {}
+
+
+def _objects(value: object) -> list[dict]:
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
 
 def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
@@ -177,40 +227,44 @@ def _extra_of(data: dict, extra_product_id: str, total: int) -> int:
     extra = sum(
         _minor((line.get("totals") or {}).get("total"))
         for line in lines
-        if (line.get("product") or {}).get("id") == extra_product_id
+        if isinstance(line, dict) and (line.get("product") or {}).get("id") == extra_product_id
     )
     return min(extra, total)
 
 
 def _transaction_event(event_id: str, data: dict, extra_product_id: str = "") -> ProviderEvent | None:
-    custom = data.get("custom_data") or {}
-    product = custom.get("product")
+    custom = data.get("custom_data")
+    custom = custom if isinstance(custom, dict) else {}
+    product = _text(custom.get("product"))
     period = data.get("billing_period") or {}
     start = _moment(period.get("starts_at"))
     end = _moment(period.get("ends_at"))
     subscription_id = data.get("subscription_id")
+    if subscription_id is not None:
+        subscription_id = _identifier(subscription_id)
     if end is None and (subscription_id or product not in (PRODUCT_LIFETIME, PRODUCT_GIFT)):
         # Only a lifetime pass may have no end, and a gift gets its end on
         # arrival: anything else without one must not silently become a pass for life.
         return None
     start = start or _moment(data.get("billed_at")) or _moment(data.get("created_at"))
-    if start is None:
+    if start is None or (end is not None and end <= start):
+        # A period that ends before it begins pays for nothing.
         return None
     totals = (data.get("details") or {}).get("totals") or {}
     amount = _minor(totals.get("total"))
     return ProviderEvent(
         event_id=event_id,
         kind=SupportPurchaseKind.PURCHASE,
-        order_id=str(data["id"]),
+        order_id=_identifier(data["id"]),
         subscription_id=subscription_id,
-        account_id=custom.get("account_id"),
+        account_id=_text(custom.get("account_id")),
         product=product,
         period_start=start,
         period_end=end,
         amount_minor=amount,
         extra_minor=_extra_of(data, extra_product_id, amount),
-        currency=str(data.get("currency_code") or "EUR"),
-        giver_id=custom.get("giver_id"),
+        currency=_currency(data.get("currency_code")),
+        giver_id=_text(custom.get("giver_id")),
         gift_anonymous=custom.get("gift_anonymous") is True,
     )
 
@@ -231,9 +285,9 @@ def _adjustment_event(event_id: str, data: dict) -> ProviderEvent | None:
     return ProviderEvent(
         event_id=event_id,
         kind=kind,
-        order_id=str(data["transaction_id"]),
+        order_id=_identifier(data["transaction_id"]),
         amount_minor=_minor((data.get("totals") or {}).get("total")),
-        currency=str(data.get("currency_code") or "EUR"),
+        currency=_currency(data.get("currency_code")),
     )
 
 
@@ -241,10 +295,15 @@ def cancellation_event(subscription_id: str) -> ProviderEvent:
     """The one fact a subscription's cancellation leaves.
 
     Keyed by the subscription: our own click and each webhook about it arrive
-    separately, and are one thing that happened.
+    separately, and are one thing that happened. An id too long to key on whole is
+    keyed by its digest, so the key still fits the ledger and is still one per
+    subscription.
     """
+    key = f"cancel:{subscription_id}"
+    if len(key) > _ID_LENGTH:
+        key = f"cancel:{hashlib.sha256(subscription_id.encode()).hexdigest()}"
     return ProviderEvent(
-        event_id=f"cancel:{subscription_id}",
+        event_id=key,
         kind=SupportPurchaseKind.CANCELLATION,
         order_id=subscription_id,
         subscription_id=subscription_id,
@@ -256,7 +315,7 @@ def parse_paddle_event(body: bytes, extra_product_id: str = "") -> ProviderEvent
     `extra_product_id` picks the extra's line out of a transaction's."""
     try:
         event = json.loads(body)
-        event_id = str(event["event_id"])
+        event_id = _identifier(event["event_id"])
         event_type = str(event["event_type"])
         data = event["data"]
         if event_type == "transaction.completed":
@@ -267,7 +326,7 @@ def parse_paddle_event(body: bytes, extra_product_id: str = "") -> ProviderEvent
             event_type == "subscription.updated"
             and (data.get("scheduled_change") or {}).get("action") == "cancel"
         ):
-            return cancellation_event(str(data["id"]))
+            return cancellation_event(_identifier(data["id"]))
     except (KeyError, TypeError, ValueError, AttributeError):
         # Signed, so it is Paddle's; a shape we cannot read must not make it
         # retry for days. Logged by type alone: the body names the buyer.
@@ -303,7 +362,12 @@ class PaddleProvider:
 
         def send() -> dict:
             with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
-                return json.loads(response.read())
+                answer = json.loads(response.read())
+            # Every answer of Paddle's is an object; anything else is no answer, and
+            # each caller already knows what to do without one.
+            if not isinstance(answer, dict):
+                raise ValueError("an answer that is not an object")
+            return answer
 
         try:
             return await asyncio.to_thread(send)
@@ -373,10 +437,11 @@ class PaddleProvider:
         if self._config.checkout_url:
             payload["checkout"] = {"url": self._config.checkout_url}
         response = await self._call("POST", "/transactions", payload)
-        try:
-            return str(response["data"]["checkout"]["url"])
-        except (KeyError, TypeError) as error:
-            raise ProviderUnavailable("no checkout link came back") from error
+        url = _object(_object(response.get("data")).get("checkout")).get("url")
+        # The buyer is sent there: Paddle's own page, over https, or nowhere.
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise ProviderUnavailable("no checkout link came back")
+        return url
 
     async def cancel_at_period_end(self, subscription_id: str) -> Cancellation:
         quoted = urllib.parse.quote(subscription_id, safe="")
@@ -391,7 +456,7 @@ class PaddleProvider:
             # asked for, and retrying it would fail for ever. And a paused one has
             # no next period to stop at.
             response = await self._call("GET", f"/subscriptions/{quoted}")
-            status = (response.get("data") or {}).get("status")
+            status = _object(response.get("data")).get("status")
             if status == "paused":
                 response = await self._call(
                     "POST", f"/subscriptions/{quoted}/cancel", {"effective_from": "immediately"}
@@ -400,13 +465,13 @@ class PaddleProvider:
                 raise
         return Cancellation(
             subscription_id=subscription_id,
-            email=await self._email_of((response.get("data") or {}).get("customer_id")),
+            email=await self._email_of(_object(response.get("data")).get("customer_id")),
         )
 
     async def stop_if_unpaid(self, subscription_id: str) -> bool:
         quoted = urllib.parse.quote(subscription_id, safe="")
         response = await self._call("GET", f"/subscriptions/{quoted}")
-        status = (response.get("data") or {}).get("status")
+        status = _object(response.get("data")).get("status")
         if status == "canceled":
             return True
         if status in ("past_due", "paused"):
@@ -424,7 +489,7 @@ class PaddleProvider:
         quoted = urllib.parse.quote(subscription_id, safe="")
         current = await self._call("GET", f"/subscriptions/{quoted}")
         try:
-            billed = datetime.fromisoformat(str((current.get("data") or {}).get("next_billed_at")))
+            billed = _moment(_object(current.get("data")).get("next_billed_at"))
         except ValueError:
             billed = None
         if billed is not None and billed >= when.replace(microsecond=0):
@@ -447,7 +512,7 @@ class PaddleProvider:
             response = await self._call("GET", f"/transactions/{quoted}/invoice?disposition=inline")
         except ProviderRefused:
             return None
-        url = (response.get("data") or {}).get("url")
+        url = _object(response.get("data")).get("url")
         return url if isinstance(url, str) and url.startswith("https://") else None
 
     async def _email_of(self, customer_id: object) -> str | None:
@@ -459,19 +524,24 @@ class PaddleProvider:
             customer = await self._call("GET", f"/customers/{quoted}")
         except ProviderUnavailable:
             return None
-        return (customer.get("data") or {}).get("email")
+        email = _object(customer.get("data")).get("email")
+        return email if isinstance(email, str) else None
 
     async def subscriptions_of_email(self, email: str) -> tuple[str, ...]:
         query = urllib.parse.urlencode({"email": email})
         customers = await self._call("GET", f"/customers?{query}")
         found: list[str] = []
-        for customer in customers.get("data") or []:
+        for customer in _objects(customers.get("data")):
+            if not isinstance(customer.get("id"), str):
+                continue
             query = urllib.parse.urlencode(
                 # `past_due` too: it can still be cancelled, and still charges.
                 {"customer_id": customer["id"], "status": "active,past_due"}
             )
             subscriptions = await self._call("GET", f"/subscriptions?{query}")
-            found += [item["id"] for item in subscriptions.get("data") or []]
+            found += [
+                item["id"] for item in _objects(subscriptions.get("data")) if isinstance(item.get("id"), str)
+            ]
         return tuple(found)
 
 
@@ -512,7 +582,8 @@ class StubProvider:
 
     def read_checkout_token(self, token: str) -> dict | None:
         parts = token.split(".")
-        if len(parts) != 6 or parts[0] not in PRODUCTS or not parts[2].isdigit():
+        # ASCII digits: `isdigit` also takes "²", which `int` then refuses.
+        if len(parts) != 6 or parts[0] not in PRODUCTS or not (parts[2].isascii() and parts[2].isdigit()):
             return None
         read = {
             "product": parts[0],
