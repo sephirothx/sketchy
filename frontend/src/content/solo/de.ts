@@ -92,6 +92,7 @@ export const SOLO_DE: SoloCopy = {
     backToSolo: "Zurück zu Solo",
     couldNotLoad: "Solo konnte nicht geladen werden.",
     couldNotLoadDrawing: "Diese Zeichnung konnte nicht geladen werden.",
+    dailyEnded: "Der Tag dieses Tagesrätsels ist überall vorbei, deshalb kann es nicht mehr beendet werden.",
     cannotBeNamed: "Diese kann nicht mehr erraten werden, du kannst nur noch aufgeben.",
     promptGone: "Nicht mehr verfügbar",
     couldNotSaveAnswer: "Deine Antwort konnte nicht gespeichert werden.",

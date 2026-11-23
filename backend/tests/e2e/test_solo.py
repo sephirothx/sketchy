@@ -1,15 +1,18 @@
-"""Solo (#1434) end to end: the Daily and a free run, played in the browser.
+"""Solo (#1434) end to end: the Daily, played in the browser, as it launches.
 
 The drawings are written straight into the server's database as finished
 public games, with prompts from the official lists the server seeds - what
 matters is that Solo serves them, not how a test could draw them. A player
 names the first Daily drawing (the prompt read back from their own serve,
 since play is local and the answer never shows), misses one with a wrong
-guess and gives it up, reloads mid-Daily and carries on where they were,
-finishes it, and then plays a five-drawing free run. The page also has to
-hold together at phone width, and a guest is told what an account unlocks.
-A past day picked in the calendar (#1470) is played late, and then, finished,
-opens as a review of its five.
+guess and gives it up, reloads mid-Daily and carries on where they were, and
+finishes it, with no free run offered. The page also has to hold together at
+phone width, and a guest is told what an account unlocks. A past Daily
+finished on its date opens from the calendar as a review of its five, and one
+whose date ends while it is open returns to the page saying so.
+
+Free runs and playing a past day late are closed at launch (R-SOLO-07,
+R-SOLO-18); their tests stay, skipped by `CLOSED_AT_LAUNCH`.
 """
 from __future__ import annotations
 
@@ -331,6 +334,45 @@ async def test_a_free_run_is_played_through():
             for _ in range(4):
                 await give_up_and_continue(page)
             await expect(page.get_by_test_id("solo-summary")).to_contain_text("Run over")
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_daily_whose_date_ends_while_it_is_open_returns_to_the_page():
+    """A Daily left open in a tab past its date: the server refuses the late
+    answer as the closed archive's (R-SOLO-18), and the page goes back to Solo
+    saying the day is over, rather than offering to send it again for ever.
+    The date cannot be made to end mid-test, so the refusal is the server's
+    as it would answer, put in front of the page."""
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
+    await settle_open_dailies()
+    username = f"solo{uuid4().hex[:8]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await page.goto(f"{BASE_URL}/solo")
+            await page.get_by_test_id("solo-play-daily").click()
+            await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
+            await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
+            await page.route(
+                "**/api/solo/serves/*/result",
+                lambda route: route.fulfill(
+                    status=403,
+                    content_type="application/json",
+                    body=json.dumps({"errorCode": "solo_door_closed", "detail": "That part of Solo is not open."}),
+                ),
+            )
+            await page.get_by_test_id("solo-give-up").click()
+            await expect(page.get_by_role("alert")).to_contain_text("has ended everywhere")
+            await expect(page.get_by_test_id("solo-daily")).to_be_visible()
+            await expect(page.get_by_test_id("solo-unsaved")).to_have_count(0)
+            await expect(page.get_by_test_id("solo-card")).to_have_count(0)
         finally:
             await context.close()
             await browser.close()

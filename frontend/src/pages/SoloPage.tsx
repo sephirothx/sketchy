@@ -227,7 +227,7 @@ function SoloSession() {
         forgetServeStart(serve.serveId);
         setCard(null);
         setRun(null);
-        setError(refusalText(failure, words().couldNotLoad));
+        setError(words().dailyEnded);
         void loadSummary();
         return;
       }

@@ -93,6 +93,7 @@ export const SOLO_PL: SoloCopy = {
     backToSolo: "Wróć do Solo",
     couldNotLoad: "Nie udało się wczytać Solo.",
     couldNotLoadDrawing: "Nie udało się wczytać tego rysunku.",
+    dailyEnded: "Dzień tego Wyzwania dnia minął już wszędzie, więc nie da się go dokończyć.",
     cannotBeNamed: "Tego nie da się już odgadnąć, możesz się tylko poddać.",
     promptGone: "Już niedostępne",
     couldNotSaveAnswer: "Nie udało się zapisać twojej odpowiedzi.",

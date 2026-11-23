@@ -92,6 +92,7 @@ export const SOLO_FR: SoloCopy = {
     backToSolo: "Retour à Solo",
     couldNotLoad: "Solo n’a pas pu être chargé.",
     couldNotLoadDrawing: "Ce dessin n’a pas pu être chargé.",
+    dailyEnded: "La journée de ce Défi du jour est terminée partout : il ne peut plus être fini.",
     cannotBeNamed: "Celui-ci ne peut plus être trouvé : tu ne peux qu’abandonner.",
     promptGone: "Plus disponible",
     couldNotSaveAnswer: "Ta réponse n’a pas pu être enregistrée.",

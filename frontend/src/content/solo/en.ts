@@ -96,6 +96,7 @@ export const SOLO_EN = {
     backToSolo: "Back to Solo",
     couldNotLoad: "Solo could not be loaded.",
     couldNotLoadDrawing: "This drawing could not be loaded.",
+    dailyEnded: "That Daily's day has ended everywhere, so it can no longer be finished.",
     cannotBeNamed: "This one can no longer be named, so it can only be given up.",
     promptGone: "No longer available",
     couldNotSaveAnswer: "Your answer could not be saved.",

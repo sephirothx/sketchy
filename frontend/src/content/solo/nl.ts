@@ -92,6 +92,7 @@ export const SOLO_NL: SoloCopy = {
     backToSolo: "Terug naar Solo",
     couldNotLoad: "Solo kon niet geladen worden.",
     couldNotLoadDrawing: "Deze tekening kon niet geladen worden.",
+    dailyEnded: "De dag van deze Dagpuzzel is overal voorbij, dus hij kan niet meer worden afgemaakt.",
     cannotBeNamed: "Deze kan niet meer geraden worden, je kunt alleen opgeven.",
     promptGone: "Niet meer beschikbaar",
     couldNotSaveAnswer: "Je antwoord kon niet worden opgeslagen.",
