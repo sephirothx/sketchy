@@ -123,3 +123,13 @@ def _empty_runtime_metrics_buffer():
     metrics.drain()
     yield
     metrics.drain()
+
+
+@pytest.fixture
+def every_solo_door(monkeypatch):
+    """Solo's closed doors opened: the free runs and the Daily archive stay
+    built behind the gate (services/solo_access), and their tests keep them
+    working for the day a door opens again."""
+    from app.services import solo_access
+
+    monkeypatch.setattr(solo_access, "OPEN_DOORS", solo_access.ALL_DOORS)

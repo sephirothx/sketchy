@@ -437,8 +437,9 @@ function SoloSession() {
   );
 }
 
-/** What Solo opens on: today's Daily, a row for each free-run length with
-    the run in play and the best, and the calendar of the player's Dailies. */
+/** What Solo opens on: today's Daily, a row for each free-run length whose
+    door is open with the run in play and the best, and the calendar of the
+    player's Dailies. */
 function SoloHome({
   summary,
   today,
@@ -462,6 +463,9 @@ function SoloHome({
   onFree: (length: SoloLength) => void;
   onContinue: (runId: string) => void;
 }) {
+  // Only the lengths whose door is open, and none until the page knows which:
+  // a closed door is not shown (R-SOLO-09).
+  const freeLengths = summary === null ? [] : FREE_LENGTHS.filter((length) => freeDoorOpen(summary, length));
   return (
     <div className="solo-home" aria-busy={summary === null && !error}>
       <h1 className="visually-hidden">{ui.solo.solo}</h1>
@@ -469,20 +473,22 @@ function SoloHome({
       <div className="solo-columns">
         <div className="solo-main">
           <DailyCard summary={summary} busy={busy} onDaily={onDaily} />
-          <section className="surface-card solo-free" data-testid="solo-free" aria-labelledby="solo-free-title">
-            <h2 id="solo-free-title">{words().freeRun}</h2>
-            {FREE_LENGTHS.map((length) => (
-              <FreeRunRow
-                key={lengthKey(length)}
-                length={length}
-                run={summary?.activeRuns.find((active) => active.length === length) ?? null}
-                best={summary?.bests[lengthKey(length)]}
-                disabled={busy || summary === null}
-                onStart={() => onFree(length)}
-                onContinue={onContinue}
-              />
-            ))}
-          </section>
+          {freeLengths.length > 0 && (
+            <section className="surface-card solo-free" data-testid="solo-free" aria-labelledby="solo-free-title">
+              <h2 id="solo-free-title">{words().freeRun}</h2>
+              {freeLengths.map((length) => (
+                <FreeRunRow
+                  key={lengthKey(length)}
+                  length={length}
+                  run={summary?.activeRuns.find((active) => active.length === length) ?? null}
+                  best={summary?.bests[lengthKey(length)]}
+                  disabled={busy || summary === null}
+                  onStart={() => onFree(length)}
+                  onContinue={onContinue}
+                />
+              ))}
+            </section>
+          )}
         </div>
         <SoloCalendar
           today={today}
@@ -498,6 +504,10 @@ function SoloHome({
 }
 
 type SoloLength = 5 | 10 | null;
+
+function freeDoorOpen(summary: SoloSummary, length: SoloLength): boolean {
+  return length === null ? summary.doors.freeUnlimited : length === 5 ? summary.doors.free5 : summary.doors.free10;
+}
 
 /** Quick, Classic, Endless: the page's order, and the keys bests use. */
 const FREE_LENGTHS: SoloLength[] = [5, 10, null];

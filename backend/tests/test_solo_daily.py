@@ -37,6 +37,9 @@ from tests.dbfixtures import create_test_db
 from tests.solo_fixtures import player, record_turn, seed_concept
 from tests.test_api_profiles import sign_in_as
 
+# Free runs and the archive are closed at launch; these test them behind the gate.
+pytestmark = pytest.mark.usefixtures("every_solo_door")
+
 DAY = date(2026, 10, 15)
 NOON = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
 

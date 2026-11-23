@@ -162,6 +162,9 @@ export interface SoloSummary {
   bests: Partial<Record<"5" | "10" | "unlimited", number>>;
   streak: number;
   stats: SoloDailyStats;
+  /** Which of the page's doors are open (R-SOLO-09): a closed one is not
+      shown. At launch only today's Daily is, so these are all false. */
+  doors: { free5: boolean; free10: boolean; freeUnlimited: boolean; archive: boolean };
 }
 
 /** One date of the calendar: whether it had a Daily, and the player's result. */

@@ -20,6 +20,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from playwright.async_api import Page, async_playwright, expect
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -53,6 +54,10 @@ from tests.e2e.lobby_helpers import (
     use_guest_name,
 )
 from tests.e2e.staff_helpers import database_url
+
+# Free runs and the Daily archive are closed at launch (services/solo_access.OPEN_DOORS):
+# their browser tests wait, built, for a door to open again.
+CLOSED_AT_LAUNCH = pytest.mark.skip(reason="closed at launch: services/solo_access.OPEN_DOORS")
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "fill_replay_100.json"
 
@@ -207,10 +212,8 @@ async def give_up_and_continue(page: Page) -> None:
     await page.get_by_test_id("solo-next").click()
 
 
-async def test_a_daily_and_a_free_run_are_played_through():
-    # One more than the open Dailies can hold, for the free run - which
-    # never serves an open Daily's concept.
-    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS + 1)
+async def test_a_daily_is_played_through_and_nothing_else_is_offered():
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
     await settle_open_dailies()
     username = f"solo{uuid4().hex[:8]}"
     async with async_playwright() as playwright:
@@ -285,6 +288,29 @@ async def test_a_daily_and_a_free_run_are_played_through():
             await expect(cell).to_have_class(re.compile(r"\bis-finished\b"))
             await expect(page.get_by_test_id("solo-stats")).to_contain_text("1")
 
+            # Only today's Daily is open: no free runs, and no bests.
+            await expect(page.get_by_test_id("solo-free")).to_have_count(0)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+@CLOSED_AT_LAUNCH
+async def test_a_free_run_is_played_through():
+    # One more than the open Dailies can hold, for the free run - which
+    # never serves an open Daily's concept.
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS + 1)
+    await settle_open_dailies()
+    username = f"solo{uuid4().hex[:8]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await page.goto(f"{BASE_URL}/solo")
             # A five-drawing free run: the Daily's drawings stay out of it
             # while the Daily is open, so the one seeded past every open
             # Daily is played, and repeats fill the rest.
@@ -311,7 +337,7 @@ async def test_a_daily_and_a_free_run_are_played_through():
 
 
 async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
-    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS + 1)
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
     await settle_open_dailies()
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -343,9 +369,9 @@ async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
             await page.goto(BASE_URL)
             await answer_play_languages_question(page)
             await page.goto(f"{BASE_URL}/solo")
-            await expect(page.get_by_test_id("solo-free")).to_be_visible()
+            await expect(page.get_by_test_id("solo-daily")).to_be_visible()
             await fits("home")
-            await page.get_by_test_id("solo-free-5").click()
+            await page.get_by_test_id("solo-play-daily").click()
             await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
             await fits("play")
             await page.get_by_test_id("solo-give-up").click()
@@ -398,6 +424,7 @@ async def show_month(page: Page, day: date) -> None:
     await expect(calendar).to_have_attribute("data-month", month)
 
 
+@CLOSED_AT_LAUNCH
 async def test_a_missed_daily_is_played_from_the_calendar_and_then_reviewed():
     # Within sixty days, so no Daily open now can take its concepts - one
     # that did would hold it back, rightly, until today's had ended (R-SOLO-18)

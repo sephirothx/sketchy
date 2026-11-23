@@ -2140,6 +2140,7 @@
    "pendingRole"
   ],
   "api.solo:create_solo_router": [
+   "freeUnlimited",
    "heldUntil",
    "inGallery",
    "myReaction",
@@ -2165,6 +2166,9 @@
    "inGallery",
    "shareWithdrawn",
    "sharedByMe"
+  ],
+  "api.solo:summary": [
+   "freeUnlimited"
   ],
   "api.solo:write_reaction": [
    "myReaction",
@@ -3210,6 +3214,7 @@
    "no_such_solo_run",
    "solo_conflict",
    "solo_pool_empty",
+   "solo_door_closed",
    "solo_date_out_of_range",
    "no_such_daily",
    "favorites_full",

@@ -325,8 +325,9 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_solo_run: "That Solo run is not there any more.",
   solo_conflict: "That changed in the meantime. Reload Solo and carry on.",
   solo_pool_empty: "There is no drawing left to play right now. Try again later.",
+  solo_door_closed: "That part of Solo isn't open. Reload Solo to see what you can play.",
   solo_date_out_of_range: "That day's Daily is not open.",
-  no_such_daily: "There is no Daily today. Try a free run.",
+  no_such_daily: "There is no Daily that day.",
   favorites_full: "You already have six favorites. Remove one from your profile first.",
 
   // Prompt lists
