@@ -92,7 +92,7 @@ export const SOLO_PT: SoloCopy = {
     backToSolo: "Voltar ao Solo",
     couldNotLoad: "Não foi possível carregar o Solo.",
     couldNotLoadDrawing: "Não foi possível carregar este desenho.",
-    dailyEnded: "O dia deste Desafio do dia já terminou em todo o lado, por isso já não pode ser acabado.",
+    dailyEnded: "O dia deste Desafio do dia terminou em todo o lado, por isso já não pode ser concluído.",
     cannotBeNamed: "Este já não pode ser acertado: só podes desistir.",
     promptGone: "Já não está disponível",
     couldNotSaveAnswer: "Não foi possível guardar a tua resposta.",
