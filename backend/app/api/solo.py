@@ -28,12 +28,13 @@ from app.refusals import ErrorCode
 from app.repositories.solo import RunView, ServeView, SoloRefused, SoloRepository
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
 from app.request_text import ControlFreeModel
-from app.services.solo_access import SoloDoor, free_run_door, solo_door_open
+from app.services.solo_access import SoloDoor, free_run_door, solo_account, solo_door_open
 from app.solo_rules import (
     CLOCK_SECONDS,
     MAX_OPEN_SERVES,
     OUTCOMES,
     daily_release_at,
+    date_ends_at,
     date_is_open,
 )
 
@@ -88,6 +89,13 @@ def run_payload(run: RunView) -> dict:
         "solved": run.solved,
         "points": run.points,
         "dailyDate": run.daily_date,
+        # When a Daily's date ends everywhere: past it, an answer is late,
+        # which only the archive takes (R-SOLO-18), so the page stops
+        # offering the next drawing rather than letting one be played for
+        # nothing.
+        "dailyEndsAt": (
+            date_ends_at(date.fromisoformat(run.daily_date)).isoformat() if run.daily_date is not None else None
+        ),
         "serves": [serve_payload(serve) for serve in run.serves],
     }
 
@@ -140,11 +148,28 @@ def create_solo_router(
                 429, ErrorCode.TOO_MANY_REQUESTS, "Too many requests. Please wait and try again."
             )
 
+    def door_closed() -> Refusal:
+        return Refusal(403, ErrorCode.SOLO_DOOR_CLOSED, "That part of Solo is not open.")
+
+    def open_door(user: User, door: SoloDoor) -> None:
+        """A guest is asked for an account; a registered player at a door that
+        is closed to everybody is told it is closed (R-SOLO-09)."""
+        if solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
+            return
+        if solo_account(state=user.state, is_anonymous=user.is_anonymous):
+            raise door_closed()
+        raise Refusal(
+            403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
+            params={"action": "solo"},
+        )
+
     def refused(error: SoloRefused, *, missing: ErrorCode = ErrorCode.NO_SUCH_SOLO_RUN) -> Refusal:
         if error.kind == "missing":
             return Refusal(404, missing, "Not found.")
         if error.kind == "empty":
             return Refusal(409, ErrorCode.SOLO_POOL_EMPTY, "Nothing left to serve right now.")
+        if error.kind == "closed":
+            return door_closed()
         if error.kind == "erased":
             # Deleted while the request was on its way: signed out, as every
             # other write answers an erased account (moderation, lists).
@@ -159,12 +184,7 @@ def create_solo_router(
         """Start a free run, abandoning the one of its length in play."""
         user = await account(request)
         throttle(run_limiter, user)
-        door = free_run_door(body.length)
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
-            raise Refusal(
-                403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
-                params={"action": "solo"},
-            )
+        open_door(user, free_run_door(body.length))
         try:
             run = await solo.start_free_run(str(user.id), length=body.length, now=now())
         except SoloRefused as error:
@@ -204,7 +224,13 @@ def create_solo_router(
         throttle(serve_limiter, user)
         try:
             serve, run = await solo.settle(
-                str(user.id), serve_id, outcome=body.outcome, seconds=body.seconds, now=now()
+                str(user.id),
+                serve_id,
+                outcome=body.outcome,
+                seconds=body.seconds,
+                now=now(),
+                # Answering a past Daily is playing it late: the archive's.
+                late=solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door="archive"),
             )
         except SoloRefused as error:
             raise refused(error, missing=ErrorCode.NO_SUCH_DRAWING) from error
@@ -241,13 +267,6 @@ def create_solo_router(
             )
         return day
 
-    def open_door(user: User, door: SoloDoor) -> None:
-        if not solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=door):
-            raise Refusal(
-                403, ErrorCode.ACCOUNT_REQUIRED, "Create an account to play Solo.",
-                params={"action": "solo"},
-            )
-
     @router.post("/daily/{day}")
     async def open_daily(day: str, request: Request):
         """A date's Daily (#1434): created with its five drawings the first
@@ -275,10 +294,24 @@ def create_solo_router(
     @router.get("/me")
     async def summary(request: Request, today: str = Query()):
         """What Solo's page opens on: today's Daily, the free runs there are
-        to continue, the bests, the streak and the Dailies' totals."""
+        to continue, the bests, the streak, the Dailies' totals, and which
+        doors it offers: a closed one is not shown (R-SOLO-09)."""
         user = await account(request)
         throttle(serve_limiter, user)
-        return await solo.summary(str(user.id), local_date(today), now=now())
+        page = await solo.summary(str(user.id), local_date(today), now=now())
+
+        def door(name: SoloDoor) -> bool:
+            return solo_door_open(state=user.state, is_anonymous=user.is_anonymous, door=name)
+
+        return {
+            **page,
+            "doors": {
+                "free5": door("free_5"),
+                "free10": door("free_10"),
+                "freeUnlimited": door("free_unlimited"),
+                "archive": door("archive"),
+            },
+        }
 
     @router.get("/daily/month")
     async def month(request: Request, today: str = Query(), month: str = Query()):

@@ -11,7 +11,7 @@ export const SEO_ES: SeoCopy = {
   rules: "Las reglas que hacen divertido Sketchy: cómo tratas a los demás, qué dibujas y escribes, el juego limpio y qué pasa si alguien rompe una regla.",
   terms: "Las condiciones para jugar a Sketchy: quién puede jugar, las cuentas, lo que dibujas y escribes, la moderación y cómo irte.",
   privacy: "Qué guarda Sketchy sobre ti, por qué, durante cuánto tiempo y qué puedes hacer al respecto. Sin publicidad, y nada sobre ti se vende.",
-  solo: "Adivina dibujos de partidas reales tú solo: un nuevo Reto diario cada día y partidas libres cuando quieras.",
+  solo: "Adivina dibujos de partidas reales tú solo: un nuevo Reto diario cada día, con tu racha y tu calendario.",
   promptList: (p) =>
     `${counted(p.count, { one: "palabra", other: "palabras" })} de ${p.name} para juegos de dibujar y adivinar como Pictionary, con la frecuencia con que los jugadores adivinan cada una.`,
 };

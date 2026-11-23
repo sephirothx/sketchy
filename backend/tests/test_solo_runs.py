@@ -44,6 +44,9 @@ from tests.dbfixtures import create_test_db
 from tests.solo_fixtures import player, record_turn, seed_concept
 from tests.test_api_profiles import sign_in_as
 
+# Free runs and the archive are closed at launch; these test them behind the gate.
+pytestmark = pytest.mark.usefixtures("every_solo_door")
+
 
 @pytest_asyncio.fixture
 async def env():

@@ -120,12 +120,11 @@ keyboard that takes half the screen, and one thumb.
   The **Daily** is five drawings, the same for everybody in every language, picked from
   drawings that most of their room could name, easiest first; it rolls over at your own
   midnight, is resumed rather than restarted, keeps its progress if you leave it half
-  played, and can be copied as a row of squares; a past day in its calendar can be played
-  too - a missed one late, an unfinished one finished - and a finished one reviewed, its
-  five drawings with what each was. A **Free run** is **Quick** (5 drawings),
-  **Classic** (10) or **Endless**, which ends at the first miss; one of each can be in
-  play at once, each with how far it got and its own **Continue** or **Start over**. A
-  personal best is kept for each length, and a streak of days in a row, its flame
+  played, and can be copied as a row of squares; a finished day in its calendar opens its
+  review, its five drawings with what each was. At launch the Daily is all Solo offers:
+  the **Free runs** - **Quick** (5 drawings), **Classic** (10) and **Endless**, which ends
+  at the first miss, each with a personal best - and playing a past day late stay built
+  but closed (`services/solo_access.OPEN_DOORS`). A streak of days in a row, its flame
   growing at a week, a month and a year; a calendar shows
   each Daily you played as a ring of its five - filled once finished, with a gold star
   when you named all five, hollow while under way - with the totals and your longest
@@ -1901,7 +1900,7 @@ backend/
       drawing_shares.py Who may share which drawing from the room, and the room broadcast
       gallery_ranking.py The Gallery's counts, first share and Hot score on each drawing, and their rebuild
       solo_pool.py  Which recorded drawings Solo may serve, written with each game, and their rebuild
-      solo_access.py Who may open which of Solo's doors: the one gate the supporter pass narrows
+      solo_access.py Who may open which of Solo's doors: the one gate; today's Daily alone at launch
       gallery_shelf.py The gallery's This week: one snapshot a minute, shared by every reader
       inbox.py     Writing to an account's inbox, in the transaction of the fact it is about
       incidents.py Pure grouping of reports of one incident, and their merged thread
@@ -2817,10 +2816,9 @@ includes the saved configuration and archive state.
 
 ### Solo
 
-1. **Solo** (`/solo`, from the lobby's **Solo** button or the header): choose the
-   **Daily** or a **Free run**: **Quick** (5 drawings), **Classic** (10) or **Endless**. A
-   run left half-way waits in its row with **Continue**; **Start over** begins that
-   length again. A guest is asked to create an account first.
+1. **Solo** (`/solo`, from the lobby's **Solo** button or the header): play today's
+   **Daily**. A guest is asked to create an account first. (The **Free runs** - **Quick**,
+   **Classic** and **Endless** - are closed at launch.)
 2. Each drawing replays over 20 seconds inside a 30-second clock; the last ten seconds show
    it finished. Type guesses as in a room: a wrong one is not a miss, and a near one says
    so. Name it to score `round(100 + 200 × remaining / 30)` points; run out of time or press
@@ -2829,12 +2827,11 @@ includes the saved configuration and archive state.
 3. After each drawing, the drawing stays on screen, finished, framed green or red: under
    it the prompt, the time it took or why it ended, the points, and **React**, **Share**
    and **Report**. A share of a Daily drawing waits until that Daily is over everywhere.
-4. A run ends with its last drawing, or an Endless one with its first miss: its total,
-   whether it beat your best, and for the Daily a result to copy and the time until the
-   next one.
-5. Pick a day in the calendar: one you missed is played late (it counts for no streak), one
-   you left is finished, and one you finished - today's too - opens its review: the five
+4. The Daily ends with its fifth drawing: its total, a result to copy and the time until
+   the next one.
+5. Pick a day you finished in the calendar - today's too - to open its review: the five
    drawings in a strip, and the one you pick large, with what it was, your time and points.
+   A missed or unfinished day can't be played late while the archive is closed.
 
 ### Scoring
 

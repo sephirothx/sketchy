@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta, timezone
 from uuid import UUID
 
+import pytest
 from sqlalchemy import func, select, update
 
 from app.api import solo as solo_api
@@ -18,6 +19,9 @@ from app.db.models import PromptVersion, SoloDailyDay, SoloDailyResult, SoloDail
 from tests.solo_fixtures import player
 from tests.test_api_profiles import sign_in_as
 from tests import test_solo_daily
+
+# Free runs and the archive are closed at launch; these test them behind the gate.
+pytestmark = pytest.mark.usefixtures("every_solo_door")
 
 TODAY = datetime.now(timezone.utc).date()
 # Ended everywhere, whatever the clock says when the suite runs.

@@ -249,7 +249,8 @@ class SoloRefused(Exception):
     """A Solo write that cannot apply: `missing` for a run or serve that is
     not the caller's (always a 404 outside), `conflict` for one whose state
     refuses it, `empty` when there is nothing left to serve, `erased` for an
-    account deleted since the request was let in."""
+    account deleted since the request was let in, `closed` for a past Daily's
+    drawing answered while the archive door is shut."""
 
     def __init__(self, kind: str) -> None:
         super().__init__(kind)
@@ -1111,11 +1112,13 @@ class SoloRepository:
         outcome: str,
         seconds: float,
         now: datetime,
+        late: bool = True,
     ) -> tuple[ServeView, RunView]:
         """Record what a served drawing came to, once (#1434: play is local,
         so this is the client's word). The server bounds the time and derives
         the points; a run settles in order, and ends with its last drawing or,
-        unlimited, its first miss."""
+        unlimited, its first miss. Without `late`, a Daily whose date has ended
+        everywhere is not played on: that is the archive door's (#1470)."""
         async with self._session_factory() as session:
             async with session.begin():
                 await require_live_player(session, user_id)
@@ -1138,6 +1141,8 @@ class SoloRepository:
                 )
                 if serve is None or serve.outcome is not None or run.state != "active":
                     raise SoloRefused("conflict")
+                if not late and run.mode == "daily" and not date_is_open(run.daily_date, now):
+                    raise SoloRefused("closed")
                 if outcome == SOLVED and not serve.forms:
                     # Nothing to name it by: it can only be given up.
                     raise SoloRefused("conflict")

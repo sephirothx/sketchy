@@ -11,7 +11,7 @@ export const SEO_IT: SeoCopy = {
   rules: "Le regole che rendono Sketchy divertente: come tratti gli altri, cosa disegni e scrivi, il gioco corretto e cosa succede se una regola viene infranta.",
   terms: "Le condizioni per giocare a Sketchy: chi può giocare, gli account, cosa disegni e scrivi, la moderazione e come andartene.",
   privacy: "Cosa conserva Sketchy su di te, perché, per quanto tempo e cosa puoi fare. Niente pubblicità, e nulla su di te viene venduto.",
-  solo: "Indovina da solo i disegni di partite vere: una nuova Sfida del giorno ogni giorno e partite libere quando vuoi.",
+  solo: "Indovina da solo i disegni di partite vere: una nuova Sfida del giorno ogni giorno, con la tua serie e il tuo calendario.",
   promptList: (p) =>
     `${counted(p.count, { one: "parola", other: "parole" })} da ${p.name} per giochi di disegno e indovinelli come Pictionary, con quanto spesso i giocatori indovinano davvero ciascuna.`,
 };

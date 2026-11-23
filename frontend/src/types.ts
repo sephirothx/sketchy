@@ -784,6 +784,7 @@ export type ErrorCode =
   | "no_such_solo_run"
   | "solo_conflict"
   | "solo_pool_empty"
+  | "solo_door_closed"
   | "solo_date_out_of_range"
   | "no_such_daily"
   | "favorites_full"

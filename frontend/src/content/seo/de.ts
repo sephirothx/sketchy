@@ -11,7 +11,7 @@ export const SEO_DE: SeoCopy = {
   rules: "Die Regeln, die Sketchy unterhaltsam halten: Umgang mit anderen, was du zeichnest und schreibst, Fairness, und was bei einem Regelverstoß passiert.",
   terms: "Die Bedingungen für Sketchy: wer spielen darf, Konten, was du zeichnest und schreibst, Moderation und wie du aufhörst.",
   privacy: "Was Sketchy über dich speichert, warum, wie lange und was du dagegen tun kannst. Keine Werbung, und nichts über dich wird verkauft.",
-  solo: "Errate allein Zeichnungen aus echten Spielen: jeden Tag ein neues Tagesrätsel und freie Runden, wann immer du willst.",
+  solo: "Errate allein Zeichnungen aus echten Spielen: jeden Tag ein neues Tagesrätsel, mit deiner Serie und deinem Kalender.",
   promptList: (p) =>
     `${counted(p.count, { one: "Begriff", other: "Begriffe" })} aus ${p.name} für Zeichen- und Ratespiele wie Montagsmaler, mit der Angabe, wie oft jeder tatsächlich erraten wird.`,
 };

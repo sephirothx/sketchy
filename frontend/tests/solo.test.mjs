@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeSoloForms } from "../src/lib/solo.ts";
+import { dailyHasEnded, decodeSoloForms } from "../src/lib/solo.ts";
 
 test("the client reads the forms the server encoded (#1434)", () => {
   // Encoded by `encode_answers` in backend/app/solo_rules.py.
@@ -40,4 +40,11 @@ test("Solo's page copy is written in every interface language, none of it blank"
   }
   assert.equal(soloCopyFor("pt-BR"), soloCopyFor("pt"), "a regional tag reads its base");
   assert.equal(soloCopyFor("xx"), soloCopyFor("en"));
+});
+
+test("a Daily has ended once its date has ended everywhere, a free run never", () => {
+  const ends = { dailyEndsAt: "2026-11-24T14:00:00+00:00" };
+  assert.equal(dailyHasEnded(ends, Date.parse("2026-11-24T13:59:59Z")), false);
+  assert.equal(dailyHasEnded(ends, Date.parse("2026-11-24T14:00:00Z")), true);
+  assert.equal(dailyHasEnded({ dailyEndsAt: null }, Date.parse("2100-01-01T00:00:00Z")), false);
 });
