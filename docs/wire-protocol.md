@@ -2296,6 +2296,12 @@ the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach
 statement without a body model are checked by hand: the community catalogue's `tag`
 and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
 filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
+An id in the path is parsed before any statement sees it (R-ENG-02). A segment that
+spells no UUID — a NUL, a few hundred characters, a typo — is FastAPI's 422 where the
+parameter is typed `UUID`, and elsewhere names no row and is answered as an id that is
+not there, by [`parse_entity_id`](../backend/app/identifiers.py) or the repository's own
+parse. Bound raw, it raised out of the statement as a 500 on every dialect;
+`DELETE /api/auth/passkeys/{id}` was the last route that did.
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
@@ -2379,7 +2385,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/passkeys/options` | Staff, or an account with a role waiting on it → `{ options }`, WebAuthn's own creation JSON as a string. Asks for a **discoverable** credential with `userVerification: required`, and excludes what the account already holds so an authenticator already registered says so instead of silently making a second credential (R-AUTH-23) |
 | `POST` | `/api/auth/passkeys` | `{ credential, password, label? }` → `{ passkey, roleGranted }`. The password is what says this credential is being added by the account's owner rather than by a stolen cookie, exactly as R-AUTH-20 asks of an authenticator app — and it takes up a waiting offer the same way, cookie and all |
 | `GET` | `/api/auth/passkeys` | `{ passkeys, canHold }`. `canHold` is false for an account that is neither staff nor holding an offer, which is also what makes the control invisible to every other player |
-| `DELETE` | `/api/auth/passkeys/{id}` | `{ password }`. Refused when it is a staff account's **last** way in, the way removing the last second factor is: giving up the role is what removes the requirement |
+| `DELETE` | `/api/auth/passkeys/{id}` | `{ password }`. Refused when it is a staff account's **last** way in, the way removing the last second factor is: giving up the role is what removes the requirement. An `{id}` that names none of the caller's passkeys — stale, somebody else's, or no UUID at all — is **404** `passkey_not_found` |
 | `POST` | `/api/auth/passkeys/challenge` | `{ options }`, WebAuthn's request JSON. Answered to anybody: signing in happens before anybody has said who they are, and the challenge is a random number this server will remember for five minutes. Names no credentials, so it tells an unauthenticated caller nothing about which accounts hold what |
 | `POST` | `/api/auth/passkeys/verify` | `{ credential }` → `{ ok, user, steppedUp }`. One act, two uses: a caller already holding a session on the account that signed is **stepped up** (R-AUTH-21); anybody else is **signed in**, which does everything `POST /api/auth/login` does after the password check — the guest is merged (R-ACCT-04), its sessions revoked, the login stamped — plus the step-up recorded, since the assertion is that proof and it is one request old |
 | `POST` | `/api/auth/second-factor/recovery-codes` | `{ password }` → a fresh set, invalidating every previous code |

@@ -64,6 +64,7 @@ from webauthn.helpers.structs import (
 
 from app.auth.sessions import STAFF_ROLES
 from app.deployment import public_base_url
+from app.identifiers import parse_entity_id
 from app.db.models import (
     User,
     UserPasskey,
@@ -440,7 +441,13 @@ async def remove_passkey(
     to sign in with.
     """
     owner = UUID(user_id)
-    conditions = [UserPasskey.id == UUID(passkey_id), UserPasskey.user_id == owner]
+    credential = parse_entity_id(passkey_id)
+    if credential is None:
+        # The path segment is anything a client sent. One that is no UUID
+        # names no credential, and binding it would raise out of the
+        # statement - a 500, where a stale id is answered "no such passkey".
+        return False
+    conditions = [UserPasskey.id == credential, UserPasskey.user_id == owner]
     if required:
         # The rule travels inside the DELETE rather than being read first and
         # trusted afterwards. Both halves of this are needed, and each covers
@@ -491,7 +498,7 @@ async def remove_passkey(
             # read inside the same transaction.
             still_there = await session.scalar(
                 select(UserPasskey.credential_id).where(
-                    UserPasskey.id == UUID(passkey_id),
+                    UserPasskey.id == credential,
                     UserPasskey.user_id == owner,
                 )
             )

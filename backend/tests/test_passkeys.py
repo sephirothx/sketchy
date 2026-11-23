@@ -823,6 +823,31 @@ async def test_removing_a_passkey_that_is_not_there_says_so(env):
     assert await _passkey_count(factory, account["id"]) == 2
 
 
+@pytest.mark.parametrize(
+    "passkey_id",
+    ["%00", "a%00b", "x" * 300, "not-a-passkey"],
+    ids=["nul", "embedded-nul", "over-long", "not-a-uuid"],
+)
+async def test_an_id_that_could_name_no_passkey_is_not_found(env, passkey_id):
+    """Any path segment may arrive, and the id column is a UUID.
+
+    An unparseable id used to raise out of the statement it was bound for:
+    a 500 on every dialect, and a NUL is one PostgreSQL refuses outright.
+    It names no credential, so it is answered like a stale one."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Malformed")
+    await offer_a_role(factory, account["id"])
+    await add_passkey(client, SoftAuthenticator())
+
+    refused = await client.request(
+        "DELETE", f"/api/auth/passkeys/{passkey_id}", json={"password": PASSWORD}
+    )
+    assert refused.status_code == 404, refused.text
+    assert refused.json()["detail"] == "No such passkey."
+    assert await _passkey_count(factory, account["id"]) == 1
+
+
 def _client_data_json(challenge: str) -> str:
     from webauthn.helpers import bytes_to_base64url
 

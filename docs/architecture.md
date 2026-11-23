@@ -2081,7 +2081,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/payloads.py`](../backend/app/handlers/payloads.py) | Typed validation for every client-originated Socket.IO command. |
 | [`app/handlers/restart.py`](../backend/app/handlers/restart.py) | Socket.IO handlers for majority-approved active-game restarts. |
 | [`app/handlers/rooms.py`](../backend/app/handlers/rooms.py) | Socket.IO handlers for the rooms domain. |
-| [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
+| [`app/identifiers.py`](../backend/app/identifiers.py) | Central policy for durable entity identifiers: how one is made, and how one that arrived as text is read. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
 | [`app/compression.py`](../backend/app/compression.py) | What the server compresses on its own loop, and what it serves already compressed. |
