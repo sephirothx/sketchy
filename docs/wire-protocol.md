@@ -2296,11 +2296,11 @@ the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach
 statement without a body model are checked by hand: the community catalogue's `tag`
 and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
 filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
-An id in the path is parsed before any statement sees it (R-ENG-02). A segment that
+An id in the path is parsed before any statement sees it. A segment that
 spells no UUID — a NUL, a few hundred characters, a typo — is FastAPI's 422 where the
 parameter is typed `UUID`, and elsewhere names no row and is answered as an id that is
-not there, by [`parse_entity_id`](../backend/app/identifiers.py) or the repository's own
-parse. Bound raw, it raised out of the statement as a 500 on every dialect;
+not there, by [`parse_entity_id`](../backend/app/identifiers.py) or a parse of the
+route's or repository's own. Bound raw, it raised out of the statement as a 500 on every dialect;
 `DELETE /api/auth/passkeys/{id}` was the last route that did.
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):

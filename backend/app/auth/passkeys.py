@@ -64,7 +64,6 @@ from webauthn.helpers.structs import (
 
 from app.auth.sessions import STAFF_ROLES
 from app.deployment import public_base_url
-from app.identifiers import parse_entity_id
 from app.db.models import (
     User,
     UserPasskey,
@@ -72,6 +71,7 @@ from app.db.models import (
     WebauthnChallenge,
     generate_uuid,
 )
+from app.identifiers import parse_entity_id
 
 # How long a handed-out challenge is worth anything. Long enough to find a
 # fingerprint reader, short enough that a collected one is useless by the time

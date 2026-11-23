@@ -1,5 +1,4 @@
-"""Central policy for durable entity identifiers: how one is made, and how one
-that arrived as text is read."""
+"""Central policy for durable entity identifiers: how one is made and read."""
 from __future__ import annotations
 
 from uuid import UUID, uuid7
@@ -28,8 +27,8 @@ def parse_entity_id(value: object) -> UUID | None:
     For ids that arrive from outside - a path segment, above all - and are
     about to be bound into a statement. A route's path parameter is any text
     at all; `UUID(value)` raises on most of it, and that ValueError escaping
-    a handler is a 500. A NUL is the sharpest case: PostgreSQL refuses it in
-    any text it is handed. An id that parses to nothing names no row, so the
+    a handler is a 500 on every dialect - "%00", a few hundred characters, a
+    typo. An id that parses to nothing names no row, so the
     caller answers it as it answers an id that is simply not there - before
     the statement, never from it.
     """
