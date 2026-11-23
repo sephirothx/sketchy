@@ -220,6 +220,17 @@ function SoloSession() {
     try {
       answer = await settleServe(serve.serveId, outcome, seconds);
     } catch (failure) {
+      if (failure instanceof ApiError && failure.errorCode === "solo_door_closed") {
+        // The Daily's date ended everywhere while it was open, and playing it
+        // late is the archive's, which is closed (R-SOLO-18): back to the page,
+        // saying so, rather than a save to try again for ever.
+        forgetServeStart(serve.serveId);
+        setCard(null);
+        setRun(null);
+        setError(refusalText(failure, words().couldNotLoad));
+        void loadSummary();
+        return;
+      }
       // A report that reached the server and lost its answer is refused the
       // second time (R-SOLO-06), and so is one for a run ended in another
       // tab: the server's run says which it was.

@@ -22,8 +22,8 @@ export const SEO_EN: SeoCopy = {
     "What Sketchy keeps about you, why, for how long, and what you can do about it. No " +
     "advertising, and nothing about you is sold.",
   solo:
-    "Guess drawings from real games on your own: a new Daily every day, and free runs " +
-    "whenever you like.",
+    "Guess drawings from real games on your own: a new Daily every day, with your streak " +
+    "and your calendar.",
   promptList: (p) =>
     `${counted(p.count, { one: "word", other: "words" })} from ${p.name} for drawing and ` +
     "guessing games like Pictionary, with how often players actually guess each one.",

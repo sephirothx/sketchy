@@ -37,7 +37,7 @@ from app.db.models import (
     User,
 )
 from app.domain_values import PROMPT_LANGUAGES
-from app.repositories.solo import daily_set, ensure_open_dailies
+from app.repositories.solo import SoloRepository, daily_set, ensure_open_dailies
 from app.solo_rules import DAILY_LENGTH, open_dates
 from app.repositories.interfaces import (
     GameParticipantInput,
@@ -422,6 +422,59 @@ async def show_month(page: Page, day: date) -> None:
             break
         await page.get_by_test_id("solo-calendar-previous").click()
     await expect(calendar).to_have_attribute("data-month", month)
+
+
+async def finish_past_daily(username: str, day: date) -> None:
+    """Play `day`'s Daily through as `username` on its own date, giving each
+    drawing up: a finished past Daily, which the calendar reviews."""
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            user_id = await session.scalar(select(User.id).where(User.username == username))
+        noon = datetime.combine(day, time(12), tzinfo=timezone.utc)
+        solo = SoloRepository(factory)
+        run = await solo.open_daily(str(user_id), day, now=noon)
+        for serve in run.serves:
+            await solo.settle(str(user_id), serve.serve_id, outcome="given_up", seconds=9, now=noon)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_finished_past_daily_is_reviewed_from_the_calendar():
+    # The one past day the calendar opens at launch: a Daily the player
+    # finished on its date. Far enough back to need the arrows.
+    day = datetime.now(timezone.utc).date() - timedelta(days=40)
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
+    await settle_open_dailies()
+    await seed_solo_drawings(DAILY_LENGTH, finished=datetime.combine(day, time(0), tzinfo=timezone.utc) - timedelta(days=1))
+    await open_past_daily(day)
+    username = f"review{uuid4().hex[:8]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        pick = page.locator(f'[data-testid="solo-calendar-day"][data-date="{day.isoformat()}"]').get_by_test_id(
+            "solo-calendar-play"
+        )
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await finish_past_daily(username, day)
+            await page.goto(f"{BASE_URL}/solo")
+            # The calendar reaches back to the player's first Daily, and opens
+            # it to review, never to play again.
+            await show_month(page, day)
+            await expect(pick).to_have_attribute("aria-label", re.compile(r"\. Review$"))
+            await pick.click()
+            review = page.get_by_test_id("solo-review")
+            await expect(review.get_by_test_id("solo-review-thumb")).to_have_count(5)
+            await review.get_by_test_id("solo-card-drawing").locator("canvas").wait_for()
+            await expect(page.get_by_test_id("solo-play")).to_have_count(0)
+        finally:
+            await context.close()
+            await browser.close()
 
 
 @CLOSED_AT_LAUNCH

@@ -3,9 +3,10 @@
 Solo launches with today's Daily alone (owner's decision, 2026-11-23). The free
 runs - 5, 10 and unlimited - and the Daily archive stay built and tested, closed
 by `OPEN_DOORS`, so opening one again is a change to that set alone. Every door
-asks this when a run is created or a Daily opened, and a past Daily's also when
-one of its drawings is answered, since that is playing it late. Never in the
-middle of a run, so closing a door never cuts one short.
+asks this when a run is created or a Daily opened, never in the middle of a run,
+so closing a door never cuts one short - with one exception: answering a drawing
+of a Daily whose date has ended everywhere is playing it late, the archive's, so
+a Daily left unfinished past its date stops there while that door is closed.
 """
 from __future__ import annotations
 
