@@ -34,6 +34,7 @@ from app.solo_rules import (
     MAX_OPEN_SERVES,
     OUTCOMES,
     daily_release_at,
+    date_ends_at,
     date_is_open,
 )
 
@@ -88,6 +89,13 @@ def run_payload(run: RunView) -> dict:
         "solved": run.solved,
         "points": run.points,
         "dailyDate": run.daily_date,
+        # When a Daily's date ends everywhere: past it, an answer is late,
+        # which only the archive takes (R-SOLO-18), so the page stops
+        # offering the next drawing rather than letting one be played for
+        # nothing.
+        "dailyEndsAt": (
+            date_ends_at(date.fromisoformat(run.daily_date)).isoformat() if run.daily_date is not None else None
+        ),
         "serves": [serve_payload(serve) for serve in run.serves],
     }
 

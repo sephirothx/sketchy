@@ -378,6 +378,49 @@ async def test_a_daily_whose_date_ends_while_it_is_open_returns_to_the_page():
             await browser.close()
 
 
+async def test_next_does_not_start_a_drawing_of_a_daily_whose_date_has_ended():
+    """The result card left up until the Daily's date ends everywhere: Next
+    goes back to the page, saying the day is over, rather than starting a
+    drawing whose answer the server would refuse. The date cannot be made to
+    end mid-test, so the run is shown as one whose date has already ended."""
+    await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
+    await settle_open_dailies()
+    username = f"solo{uuid4().hex[:8]}"
+
+    async def ended(route):
+        # The run as the server sends it - opened, and again with each
+        # result - with its date already over.
+        response = await route.fetch()
+        body = await response.json()
+        run = body.get("run", body)
+        run["dailyEndsAt"] = "2000-01-01T14:00:00+00:00"
+        await route.fulfill(response=response, json=body)
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username.capitalize())
+            await register_account(page, username)
+            await page.goto(f"{BASE_URL}/solo")
+            await page.route(re.compile(r"/api/solo/daily/\d{4}-\d{2}-\d{2}$"), ended)
+            await page.route("**/api/solo/serves/*/result", ended)
+            await page.get_by_test_id("solo-play-daily").click()
+            await expect(page.get_by_text("Drawing 1 of 5")).to_be_visible()
+            await page.get_by_test_id("solo-canvas").locator("canvas").wait_for()
+            await page.get_by_test_id("solo-give-up").click()
+            await expect(page.get_by_test_id("solo-card")).to_be_visible()
+            await page.get_by_test_id("solo-next").click()
+            await expect(page.get_by_role("alert")).to_contain_text("has ended everywhere")
+            await expect(page.get_by_test_id("solo-daily")).to_be_visible()
+            await expect(page.get_by_text("Drawing 2 of 5")).to_have_count(0)
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def test_solo_holds_together_on_a_phone_and_asks_a_guest_for_an_account():
     await seed_solo_drawings(OPEN_DAILIES_DRAWINGS)
     await settle_open_dailies()

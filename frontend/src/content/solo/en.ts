@@ -21,7 +21,7 @@ export const SOLO_EN = {
     named: "Named",
     missed: "Missed",
     dailyDone: (p: { points: number }) => `Done for today: ${number(p.points)} points`,
-    noDailyToday: "No Daily today: there are not enough drawings yet. Come back tomorrow.",
+    noDailyToday: "No Daily yet today: there are not enough drawings. Check back later today.",
     nextDailyIn: (p: { time: string }) => `Next Daily in ${p.time}`,
     freeRun: "Free run",
     quick: "Quick",

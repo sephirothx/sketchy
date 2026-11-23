@@ -42,6 +42,7 @@ import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import { DecodedDrawings } from "../lib/soloDrawings";
 import {
+  dailyHasEnded,
   decodeSoloForms,
   fetchSoloDrawing,
   fetchSoloMonth,
@@ -214,6 +215,15 @@ function SoloSession() {
     }
   };
 
+  // A Daily whose date has ended everywhere while the archive is closed
+  // (R-SOLO-18): back to the page, saying the day is over.
+  const leaveEndedDaily = () => {
+    setCard(null);
+    setRun(null);
+    setError(words().dailyEnded);
+    void loadSummary();
+  };
+
   const settled = async (serve: SoloServe, outcome: SoloOutcome, seconds: number) => {
     if (!run) return;
     let answer: { serve: SoloServe; run: SoloRun };
@@ -225,10 +235,7 @@ function SoloSession() {
         // late is the archive's, which is closed (R-SOLO-18): back to the page,
         // saying so, rather than a save to try again for ever.
         forgetServeStart(serve.serveId);
-        setCard(null);
-        setRun(null);
-        setError(words().dailyEnded);
-        void loadSummary();
+        leaveEndedDaily();
         return;
       }
       // A report that reached the server and lost its answer is refused the
@@ -281,6 +288,12 @@ function SoloSession() {
       setSummaryOf(run);
       setRun(null);
       void loadSummary();
+      return;
+    }
+    // Its date ended while the card was up: the next drawing could only be
+    // played for an answer the server would refuse.
+    if (summary?.doors.archive === false && dailyHasEnded(run)) {
+      leaveEndedDaily();
       return;
     }
     const open = run.serves.filter((serve) => serve.outcome === null).length;

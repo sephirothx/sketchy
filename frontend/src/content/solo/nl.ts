@@ -17,7 +17,7 @@ export const SOLO_NL: SoloCopy = {
     named: "Geraden",
     missed: "Gemist",
     dailyDone: (p: { points: number }) => `Klaar voor vandaag: ${counted(p.points, { one: "punt", other: "punten" })}`,
-    noDailyToday: "Vandaag geen Dagpuzzel: er zijn nog niet genoeg tekeningen. Kom morgen terug.",
+    noDailyToday: "Nog geen Dagpuzzel vandaag: er zijn nog niet genoeg tekeningen. Kijk later vandaag nog eens.",
     nextDailyIn: (p: { time: string }) => `Volgende Dagpuzzel over ${p.time}`,
     freeRun: "Vrij spel",
     quick: "Snel",

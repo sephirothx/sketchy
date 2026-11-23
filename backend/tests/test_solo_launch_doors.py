@@ -48,9 +48,12 @@ async def test_a_free_run_is_refused_as_closed_and_the_page_is_told(env):
         assert answer.json()["errorCode"] == "solo_door_closed"
     me = (await http.get("/api/solo/me", params={"today": TODAY.isoformat()})).json()
     assert me["doors"] == {"free5": False, "free10": False, "freeUnlimited": False, "archive": False}
-    # Today's Daily is still everybody's.
+    # Today's Daily is still everybody's, and says when its date ends
+    # everywhere: 14 h after the next UTC midnight.
     today = await http.post(f"/api/solo/daily/{TODAY.isoformat()}")
     assert today.status_code == 200, today.text
+    ends = datetime.fromisoformat(today.json()["dailyEndsAt"])
+    assert ends == datetime.combine(TODAY + timedelta(days=1), time(14), tzinfo=timezone.utc)
 
 
 async def test_a_past_daily_is_not_played_late(env):

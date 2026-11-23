@@ -56,7 +56,16 @@ export interface SoloRun {
   points: number;
   /** The player's local date a Daily is for. */
   dailyDate: string | null;
+  /** When a Daily's date ends everywhere (ISO): past it, an answer is late,
+      which only the archive takes (R-SOLO-18). Null for a free run. */
+  dailyEndsAt: string | null;
   serves: SoloServe[];
+}
+
+/** Whether a Daily's date has ended everywhere by `now`: a free run's never
+    does. */
+export function dailyHasEnded(run: Pick<SoloRun, "dailyEndsAt">, now: number = Date.now()): boolean {
+  return run.dailyEndsAt !== null && now >= Date.parse(run.dailyEndsAt);
 }
 
 /** Undo `encode_answers` (backend/app/solo_rules.py): base64, then XOR with

@@ -125,11 +125,15 @@ DAY_EDGE = timedelta(hours=14)
 SKIPPED_RETRY = timedelta(minutes=5)
 
 
+def date_ends_at(day: date) -> datetime:
+    """The instant `day` stops being today anywhere."""
+    return datetime.combine(day + timedelta(days=1), time.min, tzinfo=timezone.utc) + DAY_EDGE
+
+
 def date_is_open(day: date, now: datetime) -> bool:
     """Whether `day` is still today somewhere at `now`."""
     start = datetime.combine(day, time.min, tzinfo=timezone.utc) - DAY_EDGE
-    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=timezone.utc) + DAY_EDGE
-    return start <= now < end
+    return start <= now < date_ends_at(day)
 
 
 def open_dates(now: datetime) -> tuple[date, ...]:
