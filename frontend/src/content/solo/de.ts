@@ -17,7 +17,7 @@ export const SOLO_DE: SoloCopy = {
     named: "Erraten",
     missed: "Verpasst",
     dailyDone: (p: { points: number }) => `Für heute erledigt: ${counted(p.points, { one: "Punkt", other: "Punkte" })}`,
-    noDailyToday: "Noch kein Tagesrätsel heute: Es gibt noch nicht genug Zeichnungen. Schau später am Tag wieder vorbei.",
+    noDailyToday: "Heute noch kein Tagesrätsel: Es gibt noch nicht genug Zeichnungen. Schau später noch mal vorbei.",
     nextDailyIn: (p: { time: string }) => `Nächstes Tagesrätsel in ${p.time}`,
     freeRun: "Freies Spiel",
     quick: "Schnell",

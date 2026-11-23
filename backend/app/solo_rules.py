@@ -195,4 +195,4 @@ def longest_daily_streak(started_dates: list[date], *, skipped: list[date] | tup
 def daily_release_at(day: date) -> datetime:
     """When `day` has ended everywhere: the moment a Solo share of one of its
     drawings, held meanwhile, enters the Gallery."""
-    return datetime.combine(day + timedelta(days=1), time.min, tzinfo=timezone.utc) + DAY_EDGE
+    return date_ends_at(day)

@@ -2448,20 +2448,22 @@ reporting and reading runs 120, one bucket; drawing bytes 240 (`429 too_many_req
 
 A **run** is `{runId, mode: free | daily, length: 5 | 10 | null, state: active | ended |
 abandoned, endReason: completed | missed | abandoned | null, position, solved, points,
-dailyDate, dailyEndsAt, serves}`: `dailyEndsAt` is when a Daily's date ends everywhere (ISO 8601, `null` for a free run), after which an answer is late and, with the archive closed, refused; the page stops offering the next drawing there. A **serve** is `{serveId, position, forms, outcome: solved | given_up |
-timed_out | null, points, prompt, promptLanguage}`: `forms` while it is open, `prompt` and
-`promptLanguage` once it is settled, never both. An open serve with `forms: null` is one
-nothing can name for the player any more - a Daily's position whose concept lost its
-wording in their languages with no replacement, or a past date's, R-SOLO-13 - and is given
-up, never named (`solved` is `409 solo_conflict`); settled, its `prompt` and
-`promptLanguage` are `null` too. `forms` is the JSON
-`{language, own: {prompt, aliases}, others: {lang: {prompt, aliases}}, taken}` — the
-player's first-ranked language that has the concept (the one `zxx` answer, folded in the
-player's first language, for an agnostic concept), their other play languages' forms,
-and the spellings the false-friend guard takes out (#1367) — UTF-8, XOR'd byte by byte
-with the serve id's sixteen bytes, base64'd (`solo_rules.encode_answers`,
-`lib/solo.ts decodeSoloForms`). Not a secret (R-SOLO-05): it keeps a glance at the network
-panel from spoiling the drawing.
+dailyDate, dailyEndsAt, serves}`: `dailyEndsAt` is when a Daily's date ends everywhere
+(ISO 8601, `null` for a free run), after which an answer is late and, with the archive
+closed, refused; the page stops offering the next drawing there. A **serve** is `{serveId,
+position, forms, outcome: solved | given_up | timed_out | null, points, prompt,
+promptLanguage}`: `forms` while it is open, `prompt` and `promptLanguage` once it is
+settled, never both. An open serve with `forms: null` is one nothing can name for the
+player any more - a Daily's position whose concept lost its wording in their languages
+with no replacement, or a past date's, R-SOLO-13 - and is given up, never named (`solved`
+is `409 solo_conflict`); settled, its `prompt` and `promptLanguage` are `null` too.
+`forms` is the JSON `{language, own: {prompt, aliases}, others: {lang: {prompt, aliases}},
+taken}` — the player's first-ranked language that has the concept (the one `zxx` answer,
+folded in the player's first language, for an agnostic concept), their other play
+languages' forms, and the spellings the false-friend guard takes out (#1367) — UTF-8,
+XOR'd byte by byte with the serve id's sixteen bytes, base64'd
+(`solo_rules.encode_answers`, `lib/solo.ts decodeSoloForms`). Not a secret (R-SOLO-05): it
+keeps a glance at the network panel from spoiling the drawing.
 
 | Method | Route | Purpose |
 | --- | --- | --- |

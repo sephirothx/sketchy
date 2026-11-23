@@ -17,7 +17,7 @@ export const SOLO_ES: SoloCopy = {
     named: "Acertado",
     missed: "Fallado",
     dailyDone: (p: { points: number }) => `Hecho por hoy: ${counted(p.points, { one: "punto", other: "puntos" })}`,
-    noDailyToday: "Todavía no hay Reto diario hoy: no hay suficientes dibujos. Vuelve a mirar más tarde.",
+    noDailyToday: "Todavía no hay Reto diario hoy: no hay suficientes dibujos. Vuelve más tarde.",
     nextDailyIn: (p: { time: string }) => `Próximo Reto diario en ${p.time}`,
     freeRun: "Partida libre",
     quick: "Rápida",
