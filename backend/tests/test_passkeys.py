@@ -99,6 +99,20 @@ async def assertion_options(client: AsyncClient) -> dict:
     return json.loads(response.json()["options"])
 
 
+def _encoded(raw: bytes) -> str:
+    from webauthn.helpers import bytes_to_base64url
+
+    return bytes_to_base64url(raw)
+
+
+def _client_data_json(challenge: str) -> str:
+    from webauthn.helpers import bytes_to_base64url
+
+    return bytes_to_base64url(
+        json.dumps({"type": "webauthn.get", "challenge": challenge}).encode("utf-8")
+    )
+
+
 async def add_passkey(client: AsyncClient, authenticator: SoftAuthenticator) -> dict:
     options = await registration_options(client)
     return (
@@ -758,6 +772,79 @@ async def test_a_response_that_is_not_one_is_refused_rather_than_parsed(env):
         assert refused.json()["detail"]
 
 
+@pytest.mark.parametrize(
+    "client_data",
+    [
+        # JSON that is no object: `.get` on it raised, a 500.
+        _encoded(b"[1]"),
+        _encoded(b'"s"'),
+        # Challenges no server minted. The NUL is behind base64, out of
+        # ControlFreeModel's sight, and PostgreSQL refused it in the lookup.
+        _client_data_json("\x00"),
+        _client_data_json("a\x00b"),
+        _client_data_json("x" * 300),
+        _client_data_json("not base64url!"),
+    ],
+    ids=["array", "string", "nul", "embedded-nul", "over-long", "not-base64url"],
+)
+async def test_client_data_naming_no_minted_challenge_is_refused(env, client_data):
+    """Both ceremonies read the challenge out of `clientDataJSON` before
+    anything is verified, and look it up. What decodes to no challenge this
+    server could have minted is a ceremony that did not check out."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Unminted")
+    await offer_a_role(factory, account["id"])
+    credential = {"response": {"clientDataJSON": client_data}}
+
+    # Not "That request has expired.": a lookup that merely missed answers the
+    # same status, so only the reason says the challenge was refused before it.
+    refused = await client.post("/api/auth/passkeys/verify", json={"credential": credential})
+    assert refused.status_code == 401, refused.text
+    assert refused.json()["detail"] == "That response could not be read."
+    refused = await client.post(
+        "/api/auth/passkeys", json={"credential": credential, "password": PASSWORD}
+    )
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["detail"] == "That response could not be read."
+    assert await _passkey_count(factory, account["id"]) == 0
+
+
+@pytest.mark.parametrize("value", [None, 5], ids=["missing", "not-a-string"])
+async def test_a_signed_challenge_with_a_malformed_body_is_refused(env, value):
+    """The challenge is real and claimed; what py_webauthn then parses is not.
+    Its InvalidJSONStructure is no InvalidRegistrationResponse nor
+    InvalidAuthenticationResponse, so it escaped both ceremonies as a 500."""
+    new_client, factory = env
+    owner = new_client()
+    account = await register(owner, "Misshapen")
+    await offer_a_role(factory, account["id"])
+    authenticator = SoftAuthenticator()
+
+    credential = authenticator.register(await registration_options(owner), origin=ORIGIN)
+    _set_or_drop(credential["response"], "attestationObject", value)
+    refused = await owner.post(
+        "/api/auth/passkeys", json={"credential": credential, "password": PASSWORD}
+    )
+    assert refused.status_code == 400, refused.text
+    assert await _passkey_count(factory, account["id"]) == 0
+
+    await add_passkey(owner, authenticator)
+    stranger = new_client()
+    credential = authenticator.sign(await assertion_options(stranger), origin=ORIGIN)
+    _set_or_drop(credential["response"], "authenticatorData", value)
+    refused = await stranger.post("/api/auth/passkeys/verify", json={"credential": credential})
+    assert refused.status_code == 401, refused.text
+    assert ((await stranger.get("/api/auth/me")).json() or {}).get("id") != account["id"]
+
+
+def _set_or_drop(fields: dict, key: str, value) -> None:
+    if value is None:
+        fields.pop(key)
+    else:
+        fields[key] = value
+
+
 async def test_the_same_authenticator_is_not_registered_twice(env):
     """`exclude_credentials` tells the browser, and the server checks anyway.
 
@@ -846,14 +933,6 @@ async def test_an_id_that_could_name_no_passkey_is_not_found(env, passkey_id):
     assert refused.status_code == 404, refused.text
     assert refused.json()["detail"] == "No such passkey."
     assert await _passkey_count(factory, account["id"]) == 1
-
-
-def _client_data_json(challenge: str) -> str:
-    from webauthn.helpers import bytes_to_base64url
-
-    return bytes_to_base64url(
-        json.dumps({"type": "webauthn.get", "challenge": challenge}).encode("utf-8")
-    )
 
 
 async def _passkey_count(factory, user_id: str) -> int:

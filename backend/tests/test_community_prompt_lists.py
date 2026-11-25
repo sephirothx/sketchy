@@ -453,6 +453,29 @@ async def test_the_starred_filter_is_this_account_s_shortlist(env):
     assert shortlist.json()["lists"][0]["starredByMe"] is True
 
 
+async def test_a_shortlist_cursor_too_large_to_bind_reads_as_page_one(env):
+    """The shortlist is exempt from the catalogue's depth ceiling, so a forged
+    cursor of thirty digits reached OFFSET unbounded and the statement raised
+    - a 500. A cursor no page could have issued reads as page one, as any
+    other mangled cursor does."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    reader = await account(users, "Reader")
+    kept = await published(prompts, factory, owner.id, "Kept", users=users)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptListStar(user_id=UUID(reader.id), prompt_list_id=UUID(kept.id))
+            )
+    issued = await create_session(factory, user_id=reader.id, device_label="Test")
+    http.cookies.set(COOKIE_NAME, issued.token)
+
+    for cursor in ("9" * 30, str(2**63)):
+        shortlist = await http.get(f"/api/prompt-lists/community?starred=true&cursor={cursor}")
+        assert shortlist.status_code == 200, shortlist.text
+        assert [row["name"] for row in shortlist.json()["lists"]] == ["Kept"]
+
+
 async def test_the_starred_filter_needs_an_account(env):
     """Nobody's shortlist is not everybody's stars."""
     http, users, prompts, factory = env

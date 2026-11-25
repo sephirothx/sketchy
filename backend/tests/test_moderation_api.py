@@ -2817,6 +2817,28 @@ async def test_the_closed_stream_shows_one_entry_per_decision(env):
     assert len({entry["decisionGroupId"] for entry in mine}) == 2
 
 
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/api/moderation/reports",
+        "/api/moderation/prompt-content-reports",
+        "/api/moderation/prompt-lists",
+        "/api/moderation/bans",
+    ],
+)
+async def test_a_queue_offset_too_large_to_bind_is_refused(env, route):
+    """An offset past a signed 64-bit integer cannot be bound into OFFSET: the
+    held publications and the bans raised and answered 500. The report queues
+    page in memory and only answered an empty page, but share the ceiling."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "DeepMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    assert (await moderator_http.get(route)).status_code == 200
+    refused = await moderator_http.get(f"{route}?offset={2**63}")
+    assert refused.status_code == 422, refused.text
+
+
 async def test_closed_pages_count_decisions_not_reports(env):
     """`limit` and `offset` page decisions, so a pile-on cannot swallow a page
     (R-MOD-15, #620). A three-report incident takes one slot, not three, and

@@ -35,6 +35,7 @@ gives an attacker a verifier and no way to produce a signature.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
@@ -51,10 +52,7 @@ from webauthn import (
     verify_registration_response,
 )
 from webauthn.helpers import bytes_to_base64url
-from webauthn.helpers.exceptions import (
-    InvalidAuthenticationResponse,
-    InvalidRegistrationResponse,
-)
+from webauthn.helpers.exceptions import WebAuthnException
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
     PublicKeyCredentialDescriptor,
@@ -260,7 +258,10 @@ async def register_passkey(
                     expected_origin=expected_origin(environ),
                     require_user_verification=True,
                 )
-            except InvalidRegistrationResponse as error:
+            # The library's base, not only the verification failure: a
+            # response missing a field it parses is InvalidJSONStructure,
+            # a sibling, and it escaped as a 500.
+            except WebAuthnException as error:
                 raise PasskeyError(
                     "That passkey could not be verified. Please try again."
                 ) from error
@@ -364,7 +365,10 @@ async def verify_assertion(
                     credential_current_sign_count=row.sign_count,
                     require_user_verification=True,
                 )
-            except InvalidAuthenticationResponse as error:
+            # The library's base, not only the verification failure: a
+            # response missing a field it parses is InvalidJSONStructure,
+            # a sibling, and it escaped as a 500.
+            except WebAuthnException as error:
                 raise PasskeyError(
                     "That passkey could not be verified. Please try again."
                 ) from error
@@ -510,6 +514,11 @@ async def remove_passkey(
             )
 
 
+# What `bytes_to_base64url` makes of a challenge, at most as long as
+# `WebauthnChallenge.challenge` holds.
+_MINTED_CHALLENGE = re.compile(r"[A-Za-z0-9_-]{1,255}")
+
+
 def _client_challenge(credential: dict) -> str:
     """The challenge the browser says it signed, read without trusting it.
 
@@ -526,8 +535,13 @@ def _client_challenge(credential: dict) -> str:
         parsed = json.loads(base64url_to_bytes(client_data))
     except (ValueError, TypeError) as error:
         raise PasskeyError("That response could not be read.") from error
-    challenge = parsed.get("challenge")
-    if not isinstance(challenge, str):
+    challenge = parsed.get("challenge") if isinstance(parsed, dict) else None
+    # Every challenge this server mints is base64url and fits its column. One
+    # that is not names no row, and it is refused before the lookup: the NUL
+    # a client hides behind base64 is out of ControlFreeModel's sight, and
+    # PostgreSQL refuses it in the statement - a 500, where a stale challenge
+    # is answered as a ceremony that did not check out.
+    if not isinstance(challenge, str) or not _MINTED_CHALLENGE.fullmatch(challenge):
         raise PasskeyError("That response could not be read.")
     return challenge
 

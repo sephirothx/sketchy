@@ -218,6 +218,7 @@ from app.repositories.interfaces import (
     PromptUsage,
     ResolvedPromptSelection,
 )
+from app.identifiers import parse_entity_id
 from app.prompt_content import (
     LIST_TAG_SLUG_ORDER,
     LIST_TAG_VOCABULARY,
@@ -251,6 +252,9 @@ FAVORITE_WRITE_LOCK_RETRIES = 3
 # filter is the better answer than a longer scroll.
 MAX_COMMUNITY_PAGE = 48
 MAX_COMMUNITY_OFFSET = 480
+# The deepest offset a catalogue cursor may carry: far past any shortlist, far
+# short of what OFFSET can bind.
+MAX_CATALOGUE_CURSOR_OFFSET = 1_000_000
 
 
 def _playable_in(language: str) -> ColumnElement[bool]:
@@ -374,9 +378,16 @@ def _decode_catalogue_cursor(cursor: str | None) -> int:
     if not cursor:
         return 0
     try:
-        return max(0, int(cursor))
+        offset = int(cursor)
     except ValueError:
         return 0
+    # The shortlist is exempt from MAX_COMMUNITY_OFFSET, so this is the only
+    # bound on what reaches OFFSET there: a forged thirty-digit cursor could
+    # not be bound and raised out of the statement as a 500. No page issues an
+    # offset this deep, so one is as mangled as any other.
+    if not 0 <= offset <= MAX_CATALOGUE_CURSOR_OFFSET:
+        return 0
+    return offset
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
@@ -403,10 +414,7 @@ def _entity_id(value: str | UUID) -> UUID:
 
 
 def _optional_entity_id(value: str | UUID) -> UUID | None:
-    try:
-        return _entity_id(value)
-    except (ValueError, AttributeError, TypeError):
-        return None
+    return parse_entity_id(value)
 
 
 def _public_id(value: UUID) -> str:
