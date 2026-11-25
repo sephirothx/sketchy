@@ -35,6 +35,7 @@ gives an attacker a verifier and no way to produce a signature.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -51,8 +52,11 @@ from webauthn import (
     verify_authentication_response,
     verify_registration_response,
 )
-from webauthn.helpers import bytes_to_base64url
-from webauthn.helpers.exceptions import WebAuthnException
+from webauthn.helpers import bytes_to_base64url, decode_credential_public_key
+from webauthn.helpers.decoded_public_key_to_cryptography import (
+    decoded_public_key_to_cryptography,
+)
+from webauthn.helpers.exceptions import InvalidAuthenticationResponse, WebAuthnException
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
     PublicKeyCredentialDescriptor,
@@ -70,6 +74,8 @@ from app.db.models import (
     generate_uuid,
 )
 from app.identifiers import parse_entity_id
+
+logger = logging.getLogger(__name__)
 
 # How long a handed-out challenge is worth anything. Long enough to find a
 # fingerprint reader, short enough that a collected one is useless by the time
@@ -248,25 +254,45 @@ async def register_passkey(
     expected = await _claim_challenge(
         session_factory, challenge=challenge, purpose=REGISTER, user_id=user_id
     )
+    # Outside the catch below, so a misconfigured PUBLIC_BASE_URL is loud
+    # rather than a ceremony that merely did not check out.
+    rp_id, origin = relying_party_id(environ), expected_origin(environ)
     async with session_factory() as session:
         async with session.begin():
             try:
                 verified = verify_registration_response(
                     credential=credential,
                     expected_challenge=expected,
-                    expected_rp_id=relying_party_id(environ),
-                    expected_origin=expected_origin(environ),
+                    expected_rp_id=rp_id,
+                    expected_origin=origin,
                     require_user_verification=True,
                 )
+                # A "none" attestation keeps whatever key the client sends.
+                # The library checks its structure here but builds it only at
+                # sign-in, where one off the curve raised for anybody holding
+                # the id. Built here too, so a key it cannot load is never
+                # stored.
+                decoded_public_key_to_cryptography(
+                    decode_credential_public_key(verified.credential_public_key)
+                )
             # The library's base, not only the verification failure: a
-            # response missing a field it parses is InvalidJSONStructure,
-            # a sibling, and it escaped as a 500.
-            except WebAuthnException as error:
+            # response missing a field it parses is InvalidJSONStructure, a
+            # sibling, and it escaped as a 500. A key that is no COSE map
+            # raises plain KeyError, IndexError or TypeError from the
+            # decoder, and one off the curve ValueError.
+            except (WebAuthnException, LookupError, TypeError, ValueError) as error:
                 raise PasskeyError(
                     "That passkey could not be verified. Please try again."
                 ) from error
 
             credential_id = bytes_to_base64url(verified.credential_id)
+            # Bounds the columns set, which PostgreSQL enforces in the
+            # INSERT: past them the statement raised and answered 500.
+            if (
+                len(credential_id) > MAX_CREDENTIAL_ID_LENGTH
+                or verified.sign_count > MAX_SIGN_COUNT
+            ):
+                raise PasskeyError("That passkey could not be verified. Please try again.")
             if await session.get(UserPasskey, credential_id) is not None:
                 raise PasskeyError("That passkey is already registered.")
             now = datetime.now(timezone.utc)
@@ -366,12 +392,21 @@ async def verify_assertion(
                     require_user_verification=True,
                 )
             # The library's base, not only the verification failure: a
-            # response missing a field it parses is InvalidJSONStructure,
-            # a sibling, and it escaped as a 500.
+            # response missing a field it parses is InvalidJSONStructure, a
+            # sibling, and it escaped as a 500.
             except WebAuthnException as error:
+                if not isinstance(error, InvalidAuthenticationResponse):
+                    # Possibly no fault of the client's: a stored key whose
+                    # alg the library cannot verify with. Refused all the
+                    # same, but said.
+                    logger.warning(
+                        "passkey assertion refused by %s", type(error).__name__
+                    )
                 raise PasskeyError(
                     "That passkey could not be verified. Please try again."
                 ) from error
+            if verified.new_sign_count > MAX_SIGN_COUNT:
+                raise PasskeyError("That passkey could not be verified. Please try again.")
             # Compare and swap, not read-then-write. Two assertions verified
             # against the same stored counter each pass their own check and
             # then race to write: the later write wins, and if it carried the
@@ -514,6 +549,16 @@ async def remove_passkey(
             )
 
 
+# The longest `clientDataJSON` accepted, in base64url characters: ten times
+# what a browser sends, which is its type, challenge, origin and a flag or two.
+MAX_CLIENT_DATA_LENGTH = 4096
+# The widest counter `UserPasskey.sign_count`, a signed 32-bit column, holds.
+# The authenticator's is unsigned, and one past this PostgreSQL refused at
+# bind - a 500 on the INSERT, or on a later sign-in's compare-and-swap.
+MAX_SIGN_COUNT = 2**31 - 1
+# The longest credential id `UserPasskey.credential_id` holds, in base64url.
+MAX_CREDENTIAL_ID_LENGTH = 255
+
 # What `bytes_to_base64url` makes of a challenge, at most as long as
 # `WebauthnChallenge.challenge` holds.
 _MINTED_CHALLENGE = re.compile(r"[A-Za-z0-9_-]{1,255}")
@@ -529,11 +574,15 @@ def _client_challenge(credential: dict) -> str:
     if not isinstance(response, dict):
         raise PasskeyError("That response could not be read.")
     client_data = response.get("clientDataJSON")
-    if not isinstance(client_data, str):
+    # A browser's is a few hundred bytes. Behind base64 the JSON's depth is
+    # out of ControlFreeModel's sight, and enough brackets made `json.loads`
+    # raise RecursionError - a 500 needing no account - so the length is
+    # bounded before anything is decoded.
+    if not isinstance(client_data, str) or len(client_data) > MAX_CLIENT_DATA_LENGTH:
         raise PasskeyError("That response could not be read.")
     try:
         parsed = json.loads(base64url_to_bytes(client_data))
-    except (ValueError, TypeError) as error:
+    except (ValueError, TypeError, RecursionError) as error:
         raise PasskeyError("That response could not be read.") from error
     challenge = parsed.get("challenge") if isinstance(parsed, dict) else None
     # Every challenge this server mints is base64url and fits its column. One
