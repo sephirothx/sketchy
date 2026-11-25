@@ -1009,6 +1009,37 @@ async def test_a_wrong_code_at_enrolment_stores_nothing(env):
     assert (await http.get("/api/auth/second-factor")).json()["enrolled"] is False
 
 
+@pytest.mark.parametrize(
+    "secret",
+    ["", "!!!!!!!!", "A", "AAAAAAAAA", "18181818", "JBSWY3DPEHPK3PXP"],
+    ids=["empty", "not-base32", "one-char", "bad-padding", "digits", "short"],
+)
+async def test_a_secret_the_server_did_not_mint_is_refused_at_enrolment(env, secret):
+    """The secret is echoed back from the offer, so it is always the 32
+    base32 characters the server minted. One that is not raised out of the
+    base32 decoder - a 500 - or, empty, enrolled a factor with no key, whose
+    codes anybody can compute and which R-AUTH-20 would then count."""
+    new_client, _, _ = env
+    http = new_client()
+    await register(http, "Unminted")
+    refused = await http.post(
+        "/api/auth/second-factor/confirm",
+        json={"secret": secret, "code": _code_or_zeros(secret), "password": GOOD_PASSWORD},
+    )
+    assert refused.status_code == 422, refused.text
+    assert [error["loc"] for error in refused.json()["detail"]] == [["body", "secret"]]
+    assert (await http.get("/api/auth/second-factor")).json()["enrolled"] is False
+
+
+def _code_or_zeros(secret: str) -> str:
+    """The right code where the secret decodes at all, so only the secret
+    itself is what can be refused."""
+    try:
+        return code_at(secret, current_step(time.time()))
+    except ValueError:
+        return "000000"
+
+
 async def test_a_step_up_without_a_second_factor_is_a_conflict(env):
     new_client, _, _ = env
     http = new_client()

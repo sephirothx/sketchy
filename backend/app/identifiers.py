@@ -1,4 +1,4 @@
-"""Central generation policy for durable entity identifiers."""
+"""Central policy for durable entity identifiers: how one is made and read."""
 from __future__ import annotations
 
 from uuid import UUID, uuid7
@@ -19,3 +19,24 @@ def generate_uuid7() -> UUID:
     tokens, room codes, and invitation tokens stay cryptographically random.
     """
     return uuid7()
+
+
+def parse_entity_id(value: object) -> UUID | None:
+    """The UUID that `value` spells, or None when it spells none.
+
+    For ids that arrive from outside - a path segment, above all - and are
+    about to be bound into a statement. A route's path parameter is any text
+    at all; `UUID(value)` raises on most of it, and that ValueError escaping
+    a handler is a 500 on every dialect - "%00", a few hundred characters, a
+    typo. An id that parses to nothing names no row, so the
+    caller answers it as it answers an id that is simply not there - before
+    the statement, never from it.
+    """
+    if isinstance(value, UUID):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        return None

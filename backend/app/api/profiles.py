@@ -46,6 +46,10 @@ from app.repositories.interfaces import (
 # is never itself clamped away.
 MAX_PAGE_SIZE = 50
 DEFAULT_PAGE_SIZE = 20
+# How deep a player's history can be paged. Unbounded, an offset past a signed
+# 64-bit integer could not be bound into OFFSET and the statement raised - a
+# 500 to a route that needs no session. A million games is past any history.
+MAX_HISTORY_OFFSET = 1_000_000
 
 # These endpoints need no session. Statistics now read a bounded daily
 # projection rather than scanning lifetime game/turn/guess facts, but the
@@ -504,7 +508,7 @@ def create_profile_router(
         user_id: str,
         request: Request,
         limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-        offset: int = Query(default=0, ge=0),
+        offset: int = Query(default=0, ge=0, le=MAX_HISTORY_OFFSET),
         include_abandoned: bool = Query(default=False, alias="includeAbandoned"),
     ):
         """A page of games this player took part in, newest first.

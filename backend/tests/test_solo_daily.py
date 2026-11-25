@@ -306,12 +306,17 @@ async def test_a_date_that_is_nobody_s_today_is_refused(env):
     await sign_in_as(http, factory, stranger.id)
     real_today = datetime.now(timezone.utc).date()
     # A past date is the archive's (#1470, tests/test_solo_archive.py).
-    for day in (real_today + timedelta(days=2), "2026-13-40"):
+    # The calendar's two ends parse, but have no day either side of them to
+    # reckon "today somewhere" from: the arithmetic overflowed, a 500.
+    for day in (real_today + timedelta(days=2), "2026-13-40", "0001-01-01", "9999-12-31"):
         refused = await http.post(f"/api/solo/daily/{day}")
-        assert refused.status_code == 422
+        assert refused.status_code == 422, (day, refused.text)
         assert refused.json()["errorCode"] == "solo_date_out_of_range"
-    refused = await http.get("/api/solo/me", params={"today": str(real_today + timedelta(days=3))})
-    assert refused.status_code == 422
+    for today in (str(real_today + timedelta(days=3)), "0001-01-01", "9999-12-31"):
+        refused = await http.get("/api/solo/me", params={"today": today})
+        assert refused.status_code == 422, (today, refused.text)
+        refused = await http.get("/api/solo/daily/month", params={"today": today, "month": "9999-12"})
+        assert refused.status_code == 422, (today, refused.text)
 
 
 async def test_a_drawing_played_after_its_date_is_marked_late_and_the_streak_counts_dates(env):

@@ -43,6 +43,9 @@ ALLOWED_DRIFT_STEPS = 1
 # 160 bits, the RFC 4226 recommendation, and a whole number of base32
 # characters so the string a person may have to type has no padding in it.
 SECRET_BYTES = 20
+# What `generate_secret` makes of them: 32 base32 characters, no padding.
+# Lower case is accepted because the decoder folds case.
+MINTED_SECRET_PATTERN = rf"^[A-Za-z2-7]{{{SECRET_BYTES * 8 // 5}}}$"
 
 RECOVERY_CODE_COUNT = 10
 # Ten characters of Crockford-ish base32 is about 50 bits - far past guessing,

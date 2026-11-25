@@ -457,16 +457,19 @@ def create_bug_report_router(
 
         # The client's clock against this server's, because "it happened at
         # 09:41" is worth nothing if the two disagree by an hour.
+        # A time with no offset names no instant to compare - and subtracting
+        # it from an aware one raised TypeError, a 500 - so it is no skew.
         reported_at = client_context.get("clientTime")
         if isinstance(reported_at, str):
             try:
-                skew = (
-                    datetime.now(timezone.utc)
-                    - datetime.fromisoformat(reported_at.replace("Z", "+00:00"))
-                ).total_seconds()
-                server_context["clockSkewSeconds"] = round(skew, 1)
+                sent = datetime.fromisoformat(reported_at.replace("Z", "+00:00"))
             except ValueError:
-                server_context["clockSkewSeconds"] = None
+                sent = None
+            server_context["clockSkewSeconds"] = (
+                round((datetime.now(timezone.utc) - sent).total_seconds(), 1)
+                if sent is not None and sent.utcoffset() is not None
+                else None
+            )
 
         async with admitting(screenshot), session_factory() as session:
             async with session.begin():

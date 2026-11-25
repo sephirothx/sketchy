@@ -135,6 +135,13 @@ MAX_OPEN_QUEUE_REPORTS = 5_000
 # to the page asked for; forty pages of twenty-five is further back than a
 # case is looked for, and past that the ledger is the record.
 MAX_CLOSED_CASES_OFFSET = 1_000
+# How deep every other queue can be paged. Not a judgement about how far back
+# a moderator looks - only a bound. The held publications and the bans page in
+# SQL, where an offset past a signed 64-bit integer could not be bound into
+# OFFSET and answered 500; the two report queues slice in memory and never
+# did, but share the ceiling so no queue's paging differs. `hasMore` is not
+# capped at it: no queue holds a hundred thousand rows.
+MAX_QUEUE_OFFSET = 100_000
 OnUserBanned = Callable[[str], Awaitable[None]]
 OnInboxChanged = Callable[[str], Awaitable[None]]
 
@@ -2069,7 +2076,7 @@ def create_moderation_router(
         request: Request,
         status: ReportStatus | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
+        offset: int = Query(default=0, ge=0, le=MAX_QUEUE_OFFSET),
     ):
         """The queue as incidents: reports of one thing, read once (#620).
 
@@ -2427,7 +2434,7 @@ def create_moderation_router(
         request: Request,
         status: ReportStatus | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
+        offset: int = Query(default=0, ge=0, le=MAX_QUEUE_OFFSET),
     ):
         """The content queue as incidents, on the key the target already is.
 
@@ -3091,7 +3098,7 @@ def create_moderation_router(
     async def list_publications_awaiting_review(
         request: Request,
         limit: int = Query(default=50, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
+        offset: int = Query(default=0, ge=0, le=MAX_QUEUE_OFFSET),
     ):
         """Editions the operator switch held back (R-LIST-13).
 
@@ -3499,7 +3506,7 @@ def create_moderation_router(
         request: Request,
         active: bool | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=100),
-        offset: int = Query(default=0, ge=0),
+        offset: int = Query(default=0, ge=0, le=MAX_QUEUE_OFFSET),
     ):
         now = datetime.now(timezone.utc)
         async with session_factory() as session:

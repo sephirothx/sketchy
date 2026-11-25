@@ -212,11 +212,20 @@ def create_solo_router(
 
     def parse_date(value: str) -> date:
         try:
-            return date.fromisoformat(value)
+            day = date.fromisoformat(value)
         except ValueError as error:
             raise Refusal(
                 422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a date.", field="date"
             ) from error
+        # Every rule about a date reckons from the days either side of it
+        # (whether it is today somewhere, when it has ended everywhere). The
+        # calendar's first and last years have no such day at their ends, and
+        # the arithmetic raises - a 500 for "0001-01-01". No Daily lives there.
+        if not 1 < day.year < 9999:
+            raise Refusal(
+                422, ErrorCode.SOLO_DATE_OUT_OF_RANGE, "That is not a date.", field="date"
+            )
+        return day
 
     def local_date(value: str) -> date:
         """A player's local date, accepted only while it is today somewhere

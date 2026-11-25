@@ -346,6 +346,10 @@ async def test_history_page_size_is_bounded(env):
     ann = await users.create_anonymous(display_name="Ann")
     assert (await http.get(f"/api/users/{ann.id}/games?limit=500")).status_code == 422
     assert (await http.get(f"/api/users/{ann.id}/games?offset=-1")).status_code == 422
+    # Past a signed 64-bit integer the offset cannot be bound at all: the
+    # statement raised (OverflowError, asyncpg's DataError) and answered 500,
+    # to a route that needs no session.
+    assert (await http.get(f"/api/users/{ann.id}/games?offset={2**63}")).status_code == 422
 
 
 async def test_participants_see_the_turn_by_turn_detail(env):
