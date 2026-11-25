@@ -32,6 +32,7 @@ from app.auth.middleware import (
     set_session_cookie,
 )
 from app.auth.step_up import require_step_up
+from app.auth.totp import MINTED_SECRET_PATTERN
 from app.auth.sessions import (
     STAFF_ROLES,
     STEP_UP_WINDOW,
@@ -286,8 +287,15 @@ class SecondFactorConfirmBody(ControlFreeModel):
 
     # Echoed back from the enrolment offer, because nothing was stored: the
     # secret lives in the browser between the two calls and becomes a
-    # credential only when this code proves it arrived intact.
-    secret: str = Field(max_length=64)
+    # credential only when this code proves it arrived intact. Nothing kept
+    # says which secret was offered, so what is checked is its shape - what
+    # `generate_secret` mints, 32 base32 characters - and anything else is
+    # refused: a string the base32 decoder could not read raised out of it as
+    # a 500, and an empty one enrolled a factor with no key, whose codes
+    # anybody can compute and which R-AUTH-20 would then count as the
+    # owner's. A caller who echoes a well-shaped key of their own choosing
+    # holds it already; that is theirs to weaken, not a third party's.
+    secret: str = Field(pattern=MINTED_SECRET_PATTERN)
     code: str = Field(max_length=16)
     # Always required: what this writes is later taken as proof the account's
     # owner holds the factor (R-AUTH-20).

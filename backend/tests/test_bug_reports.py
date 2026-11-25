@@ -283,6 +283,34 @@ async def test_a_route_never_keeps_what_follows_the_path(env, sent, stored):
         assert "secret-code" not in str(report.client_context)
 
 
+@pytest.mark.parametrize(
+    ("sent", "skewed"),
+    [
+        ("2026-01-01T00:00:00Z", True),
+        ("2026-01-01T00:00:00+02:00", True),
+        # No offset: no instant to compare with this server's. Subtracting a
+        # naive time from an aware one raised TypeError - a 500 for a guest.
+        ("2026-01-01T00:00:00", False),
+        ("2026-01-01", False),
+        ("yesterday", False),
+    ],
+)
+async def test_a_client_time_is_compared_only_when_it_names_an_instant(env, sent, skewed):
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http)
+
+    response = await http.post(
+        "/api/bug-reports",
+        json=a_report(clientContext={"buildSha": "a299f80", "clientTime": sent}),
+    )
+    assert response.status_code == 201, response.text
+    async with factory() as session:
+        report = await session.get(BugReport, UUID(response.json()["id"]))
+        skew = report.server_context["clockSkewSeconds"]
+        assert (skew is not None) is skewed, skew
+
+
 async def test_an_oversized_context_is_refused(env):
     new_client, _, _ = env
     http = new_client()

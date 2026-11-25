@@ -1378,7 +1378,8 @@ browser said about itself — build, viewport, browser, accessibility preference
 connection telemetry, heap, and the last 20 client errors — and is reporter-supplied
 evidence. `server_context` is what this server observed of their **live seat**, resolved
 by walking the live rooms for that account rather than trusting the room code sent, plus
-the clock skew between the two. Only the second half is fact. Neither ever carries the
+the clock skew between the two (`null` when the `clientTime` sent names no instant —
+unparseable, or without an offset — and absent when none was sent). Only the second half is fact. Neither ever carries the
 prompt in play, chat text, or a query string.
 
 **Screenshots** follow `turn_drawings` rather than inventing storage:

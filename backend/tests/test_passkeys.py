@@ -796,8 +796,8 @@ async def test_client_data_naming_no_minted_challenge_is_refused(env, client_dat
     client = new_client()
     account = await register(client, "Unminted")
     await offer_a_role(factory, account["id"])
-    # An id, so /verify gets past its rawId check to the challenge: without
-    # one it is refused before the lookup this test is about.
+    # An id, so that without the challenge guard /verify would get past its
+    # rawId check to the lookup this test is about, rather than stop there.
     credential = {"id": "AAAA", "rawId": "AAAA", "response": {"clientDataJSON": client_data}}
 
     # Not "That request has expired.": a lookup that merely missed answers the
@@ -958,16 +958,29 @@ async def test_client_data_nested_past_the_parser_s_depth_is_refused(env):
     client = new_client()
     account = await register(client, "Bracketed")
     await offer_a_role(factory, account["id"])
-    credential = {"response": {"clientDataJSON": _encoded(b"[" * 200_000)}}
-
+    # The bound itself, too: a well-formed object one character past it.
+    padded = json.dumps({"type": "webauthn.get", "challenge": "AAAA", "pad": ""}).encode()
+    at_bound = _encoded(padded[:-2] + b"x" * (3072 - len(padded)) + b'"}')
+    assert len(at_bound) == 4096
+    past_bound = _encoded(padded[:-2] + b"x" * (3075 - len(padded)) + b'"}')
+    assert len(past_bound) > 4096
+    for client_data in (_encoded(b"[" * 200_000), past_bound):
+        credential = {"id": "AAAA", "rawId": "AAAA", "response": {"clientDataJSON": client_data}}
+        refused = await client.post(
+            "/api/auth/passkeys/verify", json={"credential": credential}
+        )
+        assert refused.status_code == 401, refused.text
+        assert refused.json()["detail"] == "That response could not be read."
+        refused = await client.post(
+            "/api/auth/passkeys", json={"credential": credential, "password": PASSWORD}
+        )
+        assert refused.status_code == 400, refused.text
+        assert refused.json()["detail"] == "That response could not be read."
+    # At the bound it is read: the lookup misses, which is a different refusal.
+    credential = {"id": "AAAA", "rawId": "AAAA", "response": {"clientDataJSON": at_bound}}
     refused = await client.post("/api/auth/passkeys/verify", json={"credential": credential})
     assert refused.status_code == 401, refused.text
-    assert refused.json()["detail"] == "That response could not be read."
-    refused = await client.post(
-        "/api/auth/passkeys", json={"credential": credential, "password": PASSWORD}
-    )
-    assert refused.status_code == 400, refused.text
-    assert refused.json()["detail"] == "That response could not be read."
+    assert refused.json()["detail"] != "That response could not be read."
 
 
 class _KeyedAuthenticator(SoftAuthenticator):
